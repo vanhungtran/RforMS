@@ -72,19 +72,19 @@ git add sitemap.xml
 git add search.json
 git add .nojekyll
 
-# Add site_libs (but exclude CSS files)
+# Add site_libs (including CSS files)
 git add site_libs/ --force
-git reset site_libs/**/*.css
 
 # Add zoom-controls.html
 if (Test-Path "zoom-controls.html") {
     git add zoom-controls.html
 }
 
-# Add custom.scss (source file, not compiled CSS)
+# Add custom.scss and all CSS/SCSS files
 if (Test-Path "custom.scss") {
     git add custom.scss
 }
+git add *.css *.scss 2>$null
 
 # Add _quarto.yml if modified
 git add _quarto.yml

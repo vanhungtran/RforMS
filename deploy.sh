@@ -81,19 +81,19 @@ git add *.html
 # Add necessary deployment files (but not CSS/SCSS)
 git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null
 
-# Add site_libs but exclude CSS files
-git add site_libs/ 2>/dev/null
-git reset site_libs/**/*.css 2>/dev/null || true
+# Add site_libs (including CSS files)
+git add site_libs/ 2>/dev/null || true
 
 # Add zoom-controls.html
 if [ -f "zoom-controls.html" ]; then
     git add zoom-controls.html
 fi
 
-# Add custom.scss (source file, not compiled CSS)
+# Add custom.scss and all CSS/SCSS files
 if [ -f "custom.scss" ]; then
     git add custom.scss
 fi
+git add *.css *.scss 2>/dev/null || true
 
 # Add _quarto.yml if modified
 git add _quarto.yml

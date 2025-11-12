@@ -1,4 +1,4 @@
-name: Render Quarto site and deploy to docs
+name: Render Quarto site and deploy to GitHub Pages
 
 on:
   push:
@@ -21,16 +21,53 @@ jobs:
         run: |
           quarto render
 
-      - name: Commit rendered site to master
+      - name: Copy HTML files from docs/ to root
+        run: |
+          # Copy all HTML files
+          cp docs/*.html . || true
+          
+          # Copy additional necessary files
+          cp docs/robots.txt . 2>/dev/null || true
+          cp docs/sitemap.xml . 2>/dev/null || true
+          cp docs/search.json . 2>/dev/null || true
+          cp docs/.nojekyll . 2>/dev/null || true
+          
+          # Copy site_libs directory
+          if [ -d "docs/site_libs" ]; then
+            rm -rf site_libs || true
+            cp -r docs/site_libs .
+          fi
+          
+          echo "✓ HTML files copied from docs/ to root"
+
+      - name: Commit and push to GitHub Pages
         run: |
           git config user.name "vanhungtran"
           git config user.email "tranhungydhcm@gmail.com"
-          # Add docs (Quarto's output-dir) if present
-          if [ -d "docs" ]; then
-            git add docs
-            git commit -m "Render site to docs [skip ci]" || echo "no changes to commit"
-            git push origin HEAD:master || echo "push failed"
+          
+          # Stage HTML files
+          git add *.html
+          
+          # Stage necessary deployment files (but not CSS/SCSS)
+          git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null || true
+          
+          # Add site_libs but exclude CSS files
+          git add site_libs/ 2>/dev/null || true
+          git reset site_libs/**/*.css 2>/dev/null || true
+          
+          # Add zoom-controls.html if present
+          git add zoom-controls.html 2>/dev/null || true
+          
+          # Add custom.scss (source file, not compiled CSS)
+          git add custom.scss 2>/dev/null || true
+          
+          # Add _quarto.yml if modified
+          git add _quarto.yml 2>/dev/null || true
+          
+          # Commit and push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
           else
-            echo "No docs directory found after render"
-            exit 1
+            git commit -m "Deploy book: Update HTML files from docs/ to root [skip ci]" || echo "no changes to commit"
+            git push origin HEAD:master || echo "push failed"
           fi

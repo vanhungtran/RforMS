@@ -72,7 +72,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-0815c480559380816a4d1ea211a47e91.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-723e720168d758bedb1389a9dbd7daff.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
+<link href="site_libs/bootstrap/bootstrap-23d003e80a5415bcd382f8d57091344b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
   "collapse-after": 3,
@@ -613,7 +613,191 @@ Charge state distribution:
 
 <!-- -->
 
-</section></main><!-- /main --><script id="quarto-html-after-body" type="application/javascript">
+</section></main><!-- /main --><script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script><script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
     const icon = "";
     const anchorJS = new window.AnchorJS();

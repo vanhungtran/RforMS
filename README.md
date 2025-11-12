@@ -103,11 +103,10 @@ This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licens
 
 ## 🙏 Acknowledgments
 
-Built on the R for Mass Spectrometry ecosystem developed by:
+This ebook were developed based on Built on the R for Mass Spectrometry ecosystem developed by:
 - Laurent Gatto
 - Johannes Rainer
 - Sebastian Gibb
-- And the entire RforMassSpectrometry community
 
 ## 📧 Contact
 

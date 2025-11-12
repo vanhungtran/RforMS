@@ -1,0 +1,36 @@
+name: Render Quarto site and deploy to docs
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-action@v2
+
+      - name: Render site
+        run: |
+          quarto render
+
+      - name: Commit rendered site to master
+        run: |
+          git config user.name "vanhungtran"
+          git config user.email "tranhungydhcm@gmail.com"
+          # Add docs (Quarto's output-dir) if present
+          if [ -d "docs" ]; then
+            git add docs
+            git commit -m "Render site to docs [skip ci]" || echo "no changes to commit"
+            git push origin HEAD:master || echo "push failed"
+          else
+            echo "No docs directory found after render"
+            exit 1
+          fi

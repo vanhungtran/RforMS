@@ -1,0 +1,2302 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.29">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>5&nbsp; Spectral Data Preprocessing – R for Mass Spectrometry</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./05-peak-detection-quantification.html" rel="next">
+<link href="./03-data-formats-import-bis.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-0815c480559380816a4d1ea211a47e91.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-23d003e80a5415bcd382f8d57091344b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./02-r-fundamentals.html">Core Techniques</a></li><li class="breadcrumb-item"><a href="./04-spectral-preprocessing-bis.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Spectral Data Preprocessing</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">R for Mass Spectrometry</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./intro.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Introduction - Principles of Mass Spectrometry and Strategies for Data Acquisition</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./01-Introduction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Introduction to Mass Spectrometry in R</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-open-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Accessing Open MS Data with MsDataHub</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Core Techniques</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-r-fundamentals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">R Fundamentals for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-data-formats-import-bis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Mass Spectrometry Data Formats, Standards, and Import Workflows: A Comprehensive Technical Guide</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-spectral-preprocessing-bis.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Spectral Data Preprocessing</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-peak-detection-quantification.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Analysis &amp; Visualization</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-visualization.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Data Visualization for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-statistical-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Statistical Analysis of MS Data</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Applications</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-metabolomics-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Metabolomics Data Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-proteomics-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Proteomics Data Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-qfeatures-quantitative.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Quantitative Proteomics with QFeatures</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Advanced Topics</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-advanced-topics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Advanced Topics and Applications</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introduction-the-stochastic-and-deterministic-nature-of-spectral-interference" id="toc-introduction-the-stochastic-and-deterministic-nature-of-spectral-interference" class="nav-link active" data-scroll-target="#introduction-the-stochastic-and-deterministic-nature-of-spectral-interference"><span class="header-section-number">5.1</span> Introduction: The Stochastic and Deterministic Nature of Spectral Interference</a></li>
+  <li><a href="#theoretical-mechanics-of-signal-smoothing-and-denoising" id="toc-theoretical-mechanics-of-signal-smoothing-and-denoising" class="nav-link" data-scroll-target="#theoretical-mechanics-of-signal-smoothing-and-denoising"><span class="header-section-number">5.2</span> Theoretical Mechanics of Signal Smoothing and Denoising</a>
+  <ul class="collapse">
+  <li><a href="#the-savitzky-golay-filter-polynomial-convolution" id="toc-the-savitzky-golay-filter-polynomial-convolution" class="nav-link" data-scroll-target="#the-savitzky-golay-filter-polynomial-convolution"><span class="header-section-number">5.2.1</span> The Savitzky-Golay Filter: Polynomial Convolution</a></li>
+  <li><a href="#wavelet-transform-denoising" id="toc-wavelet-transform-denoising" class="nav-link" data-scroll-target="#wavelet-transform-denoising"><span class="header-section-number">5.2.2</span> Wavelet Transform Denoising</a></li>
+  <li><a href="#cosmic-ray-removal-strategies" id="toc-cosmic-ray-removal-strategies" class="nav-link" data-scroll-target="#cosmic-ray-removal-strategies"><span class="header-section-number">5.2.3</span> Cosmic Ray Removal Strategies</a></li>
+  <li><a href="#z-score-and-nearest-neighbor-algorithms" id="toc-z-score-and-nearest-neighbor-algorithms" class="nav-link" data-scroll-target="#z-score-and-nearest-neighbor-algorithms"><span class="header-section-number">5.2.4</span> Z-Score and Nearest Neighbor Algorithms</a></li>
+  </ul></li>
+  <li><a href="#baseline-correction-geometric-and-iterative-approaches" id="toc-baseline-correction-geometric-and-iterative-approaches" class="nav-link" data-scroll-target="#baseline-correction-geometric-and-iterative-approaches"><span class="header-section-number">5.3</span> Baseline Correction: Geometric and Iterative Approaches</a></li>
+  <li><a href="#modified-polynomial-fitting-modpoly" id="toc-modified-polynomial-fitting-modpoly" class="nav-link" data-scroll-target="#modified-polynomial-fitting-modpoly"><span class="header-section-number">5.4</span> Modified Polynomial Fitting (ModPoly)</a>
+  <ul class="collapse">
+  <li><a href="#asymmetric-least-squares-als-smoothing" id="toc-asymmetric-least-squares-als-smoothing" class="nav-link" data-scroll-target="#asymmetric-least-squares-als-smoothing"><span class="header-section-number">5.4.1</span> Asymmetric Least Squares (ALS) Smoothing</a></li>
+  <li><a href="#adaptive-iteratively-reweighted-pls-airpls" id="toc-adaptive-iteratively-reweighted-pls-airpls" class="nav-link" data-scroll-target="#adaptive-iteratively-reweighted-pls-airpls"><span class="header-section-number">5.4.2</span> Adaptive Iteratively Reweighted PLS (airPLS)</a></li>
+  <li><a href="#improved-asymmetric-least-squares-iasls" id="toc-improved-asymmetric-least-squares-iasls" class="nav-link" data-scroll-target="#improved-asymmetric-least-squares-iasls"><span class="header-section-number">5.4.3</span> Improved Asymmetric Least Squares (IAsLS)</a></li>
+  </ul></li>
+  <li><a href="#scatter-correction-and-normalization-architectures" id="toc-scatter-correction-and-normalization-architectures" class="nav-link" data-scroll-target="#scatter-correction-and-normalization-architectures"><span class="header-section-number">5.5</span> Scatter Correction and Normalization Architectures</a>
+  <ul class="collapse">
+  <li><a href="#standard-normal-variate-snv" id="toc-standard-normal-variate-snv" class="nav-link" data-scroll-target="#standard-normal-variate-snv"><span class="header-section-number">5.5.1</span> Standard Normal Variate (SNV)</a></li>
+  <li><a href="#multiplicative-scatter-correction-msc" id="toc-multiplicative-scatter-correction-msc" class="nav-link" data-scroll-target="#multiplicative-scatter-correction-msc"><span class="header-section-number">5.5.2</span> Multiplicative Scatter Correction (MSC)</a></li>
+  <li><a href="#extended-multiplicative-scatter-correction-emsc" id="toc-extended-multiplicative-scatter-correction-emsc" class="nav-link" data-scroll-target="#extended-multiplicative-scatter-correction-emsc"><span class="header-section-number">5.5.3</span> Extended Multiplicative Scatter Correction (EMSC)</a></li>
+  <li><a href="#probabilistic-quotient-normalization-pqn" id="toc-probabilistic-quotient-normalization-pqn" class="nav-link" data-scroll-target="#probabilistic-quotient-normalization-pqn"><span class="header-section-number">5.5.4</span> Probabilistic Quotient Normalization (PQN)</a></li>
+  </ul></li>
+  <li><a href="#feature-enhancement-the-calculus-of-derivatives" id="toc-feature-enhancement-the-calculus-of-derivatives" class="nav-link" data-scroll-target="#feature-enhancement-the-calculus-of-derivatives"><span class="header-section-number">5.6</span> Feature Enhancement: The Calculus of Derivatives</a>
+  <ul class="collapse">
+  <li><a href="#savitzky-golay-vs.-norris-williams-derivatives" id="toc-savitzky-golay-vs.-norris-williams-derivatives" class="nav-link" data-scroll-target="#savitzky-golay-vs.-norris-williams-derivatives"><span class="header-section-number">5.6.1</span> Savitzky-Golay vs.&nbsp;Norris-Williams Derivatives</a></li>
+  <li><a href="#norris-williams-nw-derivatives-gap-segment" id="toc-norris-williams-nw-derivatives-gap-segment" class="nav-link" data-scroll-target="#norris-williams-nw-derivatives-gap-segment"><span class="header-section-number">5.6.2</span> Norris-Williams (NW) Derivatives (Gap-Segment)</a></li>
+  <li><a href="#interpretability-and-risks" id="toc-interpretability-and-risks" class="nav-link" data-scroll-target="#interpretability-and-risks"><span class="header-section-number">5.6.3</span> Interpretability and Risks</a></li>
+  </ul></li>
+  <li><a href="#domain-specific-preprocessing-pipelines" id="toc-domain-specific-preprocessing-pipelines" class="nav-link" data-scroll-target="#domain-specific-preprocessing-pipelines"><span class="header-section-number">5.7</span> Domain-Specific Preprocessing Pipelines</a>
+  <ul class="collapse">
+  <li><a href="#near-infrared-nir-pipeline-the-scattering-problem" id="toc-near-infrared-nir-pipeline-the-scattering-problem" class="nav-link" data-scroll-target="#near-infrared-nir-pipeline-the-scattering-problem"><span class="header-section-number">5.7.1</span> Near-Infrared (NIR) Pipeline: The Scattering Problem</a></li>
+  <li><a href="#raman-pipeline-the-fluorescence-problem" id="toc-raman-pipeline-the-fluorescence-problem" class="nav-link" data-scroll-target="#raman-pipeline-the-fluorescence-problem"><span class="header-section-number">5.7.2</span> Raman Pipeline: The Fluorescence Problem</a></li>
+  <li><a href="#mass-spectrometry-metabolomics-pipeline" id="toc-mass-spectrometry-metabolomics-pipeline" class="nav-link" data-scroll-target="#mass-spectrometry-metabolomics-pipeline"><span class="header-section-number">5.7.3</span> Mass Spectrometry (Metabolomics) Pipeline</a></li>
+  </ul></li>
+  <li><a href="#software-implementation-and-ecosystems" id="toc-software-implementation-and-ecosystems" class="nav-link" data-scroll-target="#software-implementation-and-ecosystems"><span class="header-section-number">5.8</span> Software Implementation and Ecosystems</a></li>
+  <li><a href="#python-ecosystem" id="toc-python-ecosystem" class="nav-link" data-scroll-target="#python-ecosystem"><span class="header-section-number">5.9</span> Python Ecosystem</a>
+  <ul class="collapse">
+  <li><a href="#r-ecosystem" id="toc-r-ecosystem" class="nav-link" data-scroll-target="#r-ecosystem"><span class="header-section-number">5.9.1</span> R Ecosystem</a></li>
+  </ul></li>
+  <li><a href="#applied-r-implementations-vibrational-spectroscopy" id="toc-applied-r-implementations-vibrational-spectroscopy" class="nav-link" data-scroll-target="#applied-r-implementations-vibrational-spectroscopy"><span class="header-section-number">5.10</span> Applied R Implementations: Vibrational Spectroscopy</a>
+  <ul class="collapse">
+  <li><a href="#smoothing-and-derivatives-savitzky-golay" id="toc-smoothing-and-derivatives-savitzky-golay" class="nav-link" data-scroll-target="#smoothing-and-derivatives-savitzky-golay"><span class="header-section-number">5.10.1</span> Smoothing and Derivatives: Savitzky-Golay</a></li>
+  <li><a href="#scatter-correction-snv-and-msc" id="toc-scatter-correction-snv-and-msc" class="nav-link" data-scroll-target="#scatter-correction-snv-and-msc"><span class="header-section-number">5.10.2</span> Scatter Correction: SNV and MSC</a></li>
+  <li><a href="#baseline-correction-airpls" id="toc-baseline-correction-airpls" class="nav-link" data-scroll-target="#baseline-correction-airpls"><span class="header-section-number">5.10.3</span> Baseline Correction: airPLS</a></li>
+  </ul></li>
+  <li><a href="#comprehensive-r-workflow-for-mass-spectrometry" id="toc-comprehensive-r-workflow-for-mass-spectrometry" class="nav-link" data-scroll-target="#comprehensive-r-workflow-for-mass-spectrometry"><span class="header-section-number">5.11</span> Comprehensive R Workflow for Mass Spectrometry</a>
+  <ul class="collapse">
+  <li><a href="#loading-required-libraries" id="toc-loading-required-libraries" class="nav-link" data-scroll-target="#loading-required-libraries"><span class="header-section-number">5.11.1</span> Loading Required Libraries</a></li>
+  <li><a href="#understanding-raw-spectral-data-loading-and-inspecting-spectra" id="toc-understanding-raw-spectral-data-loading-and-inspecting-spectra" class="nav-link" data-scroll-target="#understanding-raw-spectral-data-loading-and-inspecting-spectra"><span class="header-section-number">5.11.2</span> Understanding Raw Spectral Data: Loading and Inspecting Spectra</a></li>
+  <li><a href="#visualizing-raw-data" id="toc-visualizing-raw-data" class="nav-link" data-scroll-target="#visualizing-raw-data"><span class="header-section-number">5.11.3</span> Visualizing Raw Data</a></li>
+  <li><a href="#baseline-correction" id="toc-baseline-correction" class="nav-link" data-scroll-target="#baseline-correction"><span class="header-section-number">5.11.4</span> Baseline Correction</a></li>
+  <li><a href="#smoothing-techniques" id="toc-smoothing-techniques" class="nav-link" data-scroll-target="#smoothing-techniques"><span class="header-section-number">5.11.5</span> Smoothing Techniques</a></li>
+  <li><a href="#peak-detection" id="toc-peak-detection" class="nav-link" data-scroll-target="#peak-detection"><span class="header-section-number">5.11.6</span> Peak Detection</a></li>
+  <li><a href="#normalization" id="toc-normalization" class="nav-link" data-scroll-target="#normalization"><span class="header-section-number">5.11.7</span> Normalization</a></li>
+  <li><a href="#processing-multiple-spectra-batch-processing-function" id="toc-processing-multiple-spectra-batch-processing-function" class="nav-link" data-scroll-target="#processing-multiple-spectra-batch-processing-function"><span class="header-section-number">5.11.8</span> Processing Multiple Spectra: Batch Processing Function</a></li>
+  <li><a href="#advanced-preprocessing-techniques" id="toc-advanced-preprocessing-techniques" class="nav-link" data-scroll-target="#advanced-preprocessing-techniques"><span class="header-section-number">5.11.9</span> Advanced Preprocessing Techniques</a></li>
+  <li><a href="#preprocessing-pipeline-complete-function" id="toc-preprocessing-pipeline-complete-function" class="nav-link" data-scroll-target="#preprocessing-pipeline-complete-function"><span class="header-section-number">5.11.10</span> Preprocessing Pipeline: Complete Function</a></li>
+  </ul></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">5.12</span> Exercises</a>
+  <ul class="collapse">
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">5.12.1</span> Summary</a></li>
+  </ul></li>
+  <li><a href="#synthesis-and-future-directions" id="toc-synthesis-and-future-directions" class="nav-link" data-scroll-target="#synthesis-and-future-directions"><span class="header-section-number">5.13</span> Synthesis and Future Directions</a>
+  <ul class="collapse">
+  <li><a href="#the-order-of-operations-consensus" id="toc-the-order-of-operations-consensus" class="nav-link" data-scroll-target="#the-order-of-operations-consensus"><span class="header-section-number">5.13.1</span> The “Order of Operations” Consensus</a></li>
+  <li><a href="#future-frontiers-deep-learning" id="toc-future-frontiers-deep-learning" class="nav-link" data-scroll-target="#future-frontiers-deep-learning"><span class="header-section-number">5.13.2</span> Future Frontiers: Deep Learning</a></li>
+  </ul></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references"><span class="header-section-number">5.14</span> References</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/04-spectral-preprocessing-bis.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./02-r-fundamentals.html">Core Techniques</a></li><li class="breadcrumb-item"><a href="./04-spectral-preprocessing-bis.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Spectral Data Preprocessing</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Spectral Data Preprocessing</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introduction-the-stochastic-and-deterministic-nature-of-spectral-interference" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="introduction-the-stochastic-and-deterministic-nature-of-spectral-interference"><span class="header-section-number">5.1</span> Introduction: The Stochastic and Deterministic Nature of Spectral Interference</h2>
+<p>The acquisition of spectral data, whether through vibrational spectroscopy (Near-Infrared, Fourier Transform Infrared, Raman) or mass spectrometry, is fundamentally an exercise in signal estimation amidst a complex background of physical interference. The recorded spectrum <span class="math inline">S(\lambda)</span> is rarely a direct representation of the chemical analyte of interest <span class="math inline">A(\lambda)</span>. Instead, it is a superposition of the chemical signal, deterministic physical artifacts (such as scattering or fluorescence), and stochastic noise components arising from instrumental limitations. Consequently, the raw spectral data is mathematically ill-posed for direct multivariate regression or classification without rigorous preprocessing intervention.</p>
+<p>The imperative for preprocessing arises from the core assumption of linear chemometric models like Principal Component Analysis (PCA) and Partial Least Squares (PLS): that the variance in the data matrix is linearly correlated with the property of interest (e.g., concentration). Physical artifacts introduce non-linearities and variance components that are orthogonal or, worse, collinear with the chemical signal, thereby degrading model robustness. For instance, in Near-Infrared (NIR) spectroscopy, variations in sample particle size can induce multiplicative scattering effects that scale the entire spectrum, effectively masquerading as concentration changes. Similarly, in Raman spectroscopy, fluorescence backgrounds can be orders of magnitude more intense than the inelastic scattering signal, obscuring the vibrational fingerprint.</p>
+<p>This report provides an exhaustive analysis of the state-of-the-art in spectral preprocessing. It moves beyond superficial descriptions to explore the mathematical mechanics of smoothing algorithms, the iterative logic of baseline correction, and the physics-based models for scatter correction. Furthermore, it synthesizes these techniques into domain-specific pipelines, examining their application in high-stakes scenarios such as forensic ink analysis, pharmaceutical quality control, and metabolomic biomarker discovery.</p>
+</section>
+<section id="theoretical-mechanics-of-signal-smoothing-and-denoising" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="theoretical-mechanics-of-signal-smoothing-and-denoising"><span class="header-section-number">5.2</span> Theoretical Mechanics of Signal Smoothing and Denoising</h2>
+<p>The first line of defense in spectral processing is the attenuation of high-frequency noise. This noise, often characterized as white noise or <span class="math inline">1/f</span> flicker noise, originates from detector electronics, thermal fluctuations, and photon statistics (shot noise). The challenge in smoothing is the preservation of spectral fidelity; aggressive noise reduction invariably risks distorting peak shapes, reducing heights, and broadening widths, which directly compromises quantitative accuracy.</p>
+<section id="the-savitzky-golay-filter-polynomial-convolution" class="level3" data-number="5.2.1">
+<h3 data-number="5.2.1" class="anchored" data-anchor-id="the-savitzky-golay-filter-polynomial-convolution"><span class="header-section-number">5.2.1</span> The Savitzky-Golay Filter: Polynomial Convolution</h3>
+<p>The Savitzky-Golay (SG) filter stands as the preeminent algorithm for spectral smoothing, favored for its ability to preserve the higher moments of spectral peaks (such as width and height) better than simple moving average filters. Unlike a boxcar filter that effectively fits a zero-order polynomial (a flat line) to a data window, the SG filter fits a polynomial of order <span class="math inline">o</span> to a window of <span class="math inline">w</span> points via the method of linear least squares.</p>
+<section id="mathematical-derivation-and-gram-polynomials" class="level4">
+<h4 class="anchored" data-anchor-id="mathematical-derivation-and-gram-polynomials">Mathematical Derivation and Gram Polynomials</h4>
+<p>The fundamental operation of the SG filter is convolution. For a spectral point <span class="math inline">x_i</span>, the smoothed value <span class="math inline">x_i^*</span> is calculated as the weighted sum of the raw values within the window defined by <span class="math inline">2m+1</span> points (where <span class="math inline">w = 2m+1</span>):</p>
+<p><span class="math display">x_i^* = \sum_{j=-m}^{m} c_j x_{i+j}</span></p>
+<p>Here, <span class="math inline">c_j</span> are the convolution coefficients. These coefficients are not arbitrary; they are derived from the least-squares fit of a polynomial. Historically, calculating these coefficients required solving the normal equations for every window position. However, utilizing the properties of orthogonal Gram polynomials allows for the recursive calculation of these coefficients, significantly reducing computational overhead and allowing for the derivation of filters of any arbitrary order and length.</p>
+<p>The polynomial fit is constrained by the parameters <span class="math inline">w</span> and <span class="math inline">o</span>. A critical constraint is that the window width must be strictly greater than the polynomial order (<span class="math inline">w \ge o + 1</span>). If <span class="math inline">w = o + 1</span>, the polynomial passes exactly through every point in the window, resulting in an identity transform with zero smoothing. As <span class="math inline">w</span> increases relative to <span class="math inline">o</span>, the smoothing effect intensifies.</p>
+</section>
+<section id="parameter-sensitivity-and-spectral-artifacts" class="level4">
+<h4 class="anchored" data-anchor-id="parameter-sensitivity-and-spectral-artifacts">Parameter Sensitivity and Spectral Artifacts</h4>
+<p>The selection of <span class="math inline">w</span> and <span class="math inline">o</span> is a trade-off between noise suppression and signal distortion.</p>
+<ul>
+<li><strong>Window Size (</strong><span class="math inline">w</span>): A larger window incorporates more data points into the fit, averaging out random noise more effectively. However, if the window exceeds the natural Full Width at Half Maximum (FWHM) of the spectral peaks, the filter will suppress the peak height and artificially broaden the base. In Raman spectroscopy, where peaks are naturally narrow, large windows (e.g., &gt;15 points) can be destructive. In NIR, where bands are broad overtones, larger windows are permissible.</li>
+<li><strong>Polynomial Order (</strong><span class="math inline">o</span>): Higher-order polynomials (e.g., cubic or quartic) can track sharper curvature, preserving narrow peaks better than quadratic fits. However, they are less effective at removing noise.</li>
+<li><strong>Gibbs Phenomenon:</strong> A known artifact of the SG filter is the introduction of “ringing” or side-lobes around sharp spectral features. This manifests as artificial minima flanking a strong peak, a result of the polynomial trying to fit a high-frequency transition. This “phase reversal” where high-frequency noise is inverted rather than removed is a limiting factor of high-order filters.</li>
+</ul>
+<p><strong>Table 1: Comparative Impact of Savitzky-Golay Parameters on Spectral Integrity</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Filter Configuration</th>
+<th style="text-align: left;">Noise Attenuation</th>
+<th style="text-align: left;">Feature Preservation</th>
+<th style="text-align: left;">Risk Profile</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>Small Window / Low Order</strong></td>
+<td style="text-align: left;">Low</td>
+<td style="text-align: left;">High</td>
+<td style="text-align: left;">Insufficient denoising; noise remains dominant.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Large Window / Low Order</strong></td>
+<td style="text-align: left;">High</td>
+<td style="text-align: left;">Low</td>
+<td style="text-align: left;">Peak broadening; loss of resolution; height reduction.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Small Window / High Order</strong></td>
+<td style="text-align: left;">Very Low</td>
+<td style="text-align: left;">Very High</td>
+<td style="text-align: left;">Overfitting of noise; effectively no smoothing.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Large Window / High Order</strong></td>
+<td style="text-align: left;">Moderate</td>
+<td style="text-align: left;">Moderate</td>
+<td style="text-align: left;">Introduction of high-frequency artifacts (ringing).</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="wavelet-transform-denoising" class="level3" data-number="5.2.2">
+<h3 data-number="5.2.2" class="anchored" data-anchor-id="wavelet-transform-denoising"><span class="header-section-number">5.2.2</span> Wavelet Transform Denoising</h3>
+<p>While SG filters operate in the time (wavenumber) domain, Wavelet Transform (WT) denoising operates in the time-frequency domain. This allows for spatially localized denoising, which is superior for non-stationary signals where noise characteristics or peak widths vary across the spectrum.</p>
+<section id="discrete-wavelet-transform-dwt-and-thresholding" class="level4">
+<h4 class="anchored" data-anchor-id="discrete-wavelet-transform-dwt-and-thresholding">Discrete Wavelet Transform (DWT) and Thresholding</h4>
+<p>The DWT decomposes the spectrum into approximation coefficients (low-frequency trend) and detail coefficients (high-frequency noise/features) at various scales. Denoising is achieved by thresholding the detail coefficients.</p>
+<ul>
+<li><strong>Donoho Thresholding:</strong> This method applies a universal threshold derived from the median absolute deviation of the coefficients. Coefficients below this threshold are set to zero (hard thresholding) or shrunk (soft thresholding).</li>
+<li><strong>Wavelet Basis Selection:</strong> The choice of mother wavelet is crucial. The ‘bior4.4’ (biorthogonal) wavelet has been shown to yield optimal predictions in NIR analysis of pine seeds (P. koraiensis), achieving an <span class="math inline">R^2</span> of 0.9485 in PLS models, significantly outperforming raw data models.</li>
+<li><strong>Application:</strong> WT is particularly effective for removing cosmic rays (which appear as high-frequency singularities) and instrument noise while preserving the broad baseline and sharp peaks simultaneously.</li>
+</ul>
+</section>
+</section>
+<section id="cosmic-ray-removal-strategies" class="level3" data-number="5.2.3">
+<h3 data-number="5.2.3" class="anchored" data-anchor-id="cosmic-ray-removal-strategies"><span class="header-section-number">5.2.3</span> Cosmic Ray Removal Strategies</h3>
+<p>Raman and CCD-based spectroscopies are plagued by cosmic rays—high-energy particles that strike the detector, causing single-pixel spikes of immense intensity. These artifacts are non-Gaussian and can skew normalization and integration steps if not removed early in the pipeline.</p>
+</section>
+<section id="z-score-and-nearest-neighbor-algorithms" class="level3" data-number="5.2.4">
+<h3 data-number="5.2.4" class="anchored" data-anchor-id="z-score-and-nearest-neighbor-algorithms"><span class="header-section-number">5.2.4</span> Z-Score and Nearest Neighbor Algorithms</h3>
+<ul>
+<li><strong>Modified Z-Score:</strong> This statistical method calculates the difference between a point and its neighbors. If the intensity difference exceeds a standard deviation threshold (Z-score), it is flagged as a spike. This method is robust but can mistake sharp Raman peaks for spikes if the threshold is too aggressive.</li>
+<li><strong>Nearest Neighbor Comparison (NNC):</strong> This approach compares the intensity of a pixel to the average of its immediate neighbors. If the deviation is significant, the pixel is replaced by the interpolated value. This single-scan method avoids read noise amplification but requires careful tuning of sensitivity thresholds.</li>
+<li><strong>Deep Learning Approaches:</strong> Recent advancements utilize Convolutional Neural Networks (CNNs) trained to recognize the distinct shape of cosmic rays (single pixel width) versus Raman peaks (Gaussian/Lorentzian shape), offering automated cleaning without manual thresholding.</li>
+</ul>
+</section>
+</section>
+<section id="baseline-correction-geometric-and-iterative-approaches" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="baseline-correction-geometric-and-iterative-approaches"><span class="header-section-number">5.3</span> Baseline Correction: Geometric and Iterative Approaches</h2>
+<p>Baseline drift is perhaps the most pervasive artifact in vibrational spectroscopy. In Raman, it arises from sample fluorescence; in FT-IR, from scattering and instrument drift; in NMR, from incomplete water suppression. The goal of baseline correction is to estimate the low-frequency background <span class="math inline">B(\lambda)</span> and subtract it from the measured spectrum <span class="math inline">S(\lambda)</span> to recover the pure analyte signal.</p>
+</section>
+<section id="modified-polynomial-fitting-modpoly" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="modified-polynomial-fitting-modpoly"><span class="header-section-number">5.4</span> Modified Polynomial Fitting (ModPoly)</h2>
+<p>Polynomial fitting is the classical approach. A polynomial of order <span class="math inline">n</span> is fitted to the spectrum. However, a standard least-squares fit would pass through the middle of the peaks, effectively removing half the signal.</p>
+<p><strong>ModPoly Logic:</strong> The Modified Polynomial algorithm uses an iterative approach.</p>
+<ol type="1">
+<li>Fit a polynomial to the raw data.</li>
+<li>Compare the fit to the data. Since spectral peaks are (usually) positive additions to the baseline, data points significantly above the polynomial fit are assumed to be peaks.</li>
+<li>These “peak” points are excluded or replaced by the fitted value.</li>
+<li>Re-fit the polynomial to the modified dataset.</li>
+<li>Repeat until convergence.</li>
+</ol>
+<p><strong>Limitations:</strong> ModPoly struggles with complex baselines. High-order polynomials can introduce “Runge’s phenomenon”—oscillations in the baseline at the edges of the spectrum or in featureless regions, creating artificial bands.</p>
+<section id="asymmetric-least-squares-als-smoothing" class="level3" data-number="5.4.1">
+<h3 data-number="5.4.1" class="anchored" data-anchor-id="asymmetric-least-squares-als-smoothing"><span class="header-section-number">5.4.1</span> Asymmetric Least Squares (ALS) Smoothing</h3>
+<p>Asymmetric Least Squares (ALS) has largely superseded polynomial fitting due to its flexibility and lack of assumption regarding the functional form of the baseline. It treats baseline estimation as a penalized least squares problem.</p>
+<section id="the-als-objective-function" class="level4">
+<h4 class="anchored" data-anchor-id="the-als-objective-function">The ALS Objective Function</h4>
+<p>The ALS algorithm seeks to find a baseline vector <span class="math inline">\mathbf{z}</span> that minimizes the following cost function:</p>
+<p><span class="math display">S = \sum_i w_i (y_i - z_i)^2 + \lambda \sum_i (\Delta^2 z_i)^2</span></p>
+<p>The first term measures the fidelity (how close the baseline is to the data). The second term measures roughness (the second derivative of the baseline). The parameter <span class="math inline">\lambda</span> (lambda) controls the smoothness.</p>
+<ul>
+<li><strong>Asymmetry via Weights (</strong><span class="math inline">w_i</span>): The “asymmetric” magic happens in the weights. If the measured signal <span class="math inline">y_i</span> is greater than the estimated baseline <span class="math inline">z_i</span>, the weight <span class="math inline">w_i</span> is set to a very small value <span class="math inline">p</span> (e.g., 0.001). This allows the baseline to “ignore” the peaks. If <span class="math inline">y_i \le z_i</span>, the weight is set to <span class="math inline">1-p</span> (e.g., 0.999), forcing the baseline to adhere tightly to the non-peak regions.</li>
+</ul>
+</section>
+<section id="parameter-tuning-lambda-and-p" class="level4">
+<h4 class="anchored" data-anchor-id="parameter-tuning-lambda-and-p">Parameter Tuning: Lambda and P</h4>
+<p>The performance of ALS is critically dependent on two parameters:</p>
+<ol type="1">
+<li><strong>Lambda (</strong><span class="math inline">\lambda</span>): A smoothing parameter. Values typically range from <span class="math inline">10^2</span> to <span class="math inline">10^9</span>. A low <span class="math inline">\lambda</span> allows the baseline to snake into the peaks (overfitting), while a high <span class="math inline">\lambda</span> forces a linear fit (underfitting). For Raman spectra with fluorescence, <span class="math inline">\lambda \approx 10^5</span> is a common starting point.</li>
+<li><strong>Asymmetry (</strong><span class="math inline">p</span>): Determines the penalty for positive deviations. A value of <span class="math inline">0.001</span> to <span class="math inline">0.01</span> is standard for positive peaks.</li>
+</ol>
+<p><strong>Issues:</strong> The requirement to manually tune <span class="math inline">\lambda</span> and <span class="math inline">p</span> makes standard ALS difficult to automate for high-throughput screening.</p>
+</section>
+</section>
+<section id="adaptive-iteratively-reweighted-pls-airpls" class="level3" data-number="5.4.2">
+<h3 data-number="5.4.2" class="anchored" data-anchor-id="adaptive-iteratively-reweighted-pls-airpls"><span class="header-section-number">5.4.2</span> Adaptive Iteratively Reweighted PLS (airPLS)</h3>
+<p>To address the parameter tuning bottleneck of ALS, the airPLS (adaptive iteratively reweighted PLS) algorithm was developed. It removes the need for the asymmetry parameter <span class="math inline">p</span> completely.</p>
+<p><strong>Mechanism:</strong> Instead of a fixed binary weight based on whether <span class="math inline">y &gt; z</span>, airPLS assigns weights adaptively based on the magnitude of the residual.</p>
+<p><span class="math display"> w_i = \begin{cases} 0 &amp; y_i \ge z_i \\ \exp\left(\frac{t(y_i - z_i)}{|\mathbf{d}|}\right) &amp; y_i &lt; z_i \end{cases} </span></p>
+<p>Here, the weight decays exponentially as the distance between the signal and baseline increases. This creates a “soft” exclusion of peaks that adapts to the noise level of the spectrum.</p>
+<p><strong>Advantages:</strong> airPLS is computationally fast, requires only the <span class="math inline">\lambda</span> parameter (which is robust across orders of magnitude), and avoids the baseline “drop-off” artifacts seen in ModPoly. It is widely considered the gold standard for automated Raman baseline correction.</p>
+</section>
+<section id="improved-asymmetric-least-squares-iasls" class="level3" data-number="5.4.3">
+<h3 data-number="5.4.3" class="anchored" data-anchor-id="improved-asymmetric-least-squares-iasls"><span class="header-section-number">5.4.3</span> Improved Asymmetric Least Squares (IAsLS)</h3>
+<p>IAsLS is a further refinement that incorporates the first and second derivatives into the weighting scheme to better distinguish between peak regions and baseline regions. By considering the local slope, IAsLS can identify the start and end of peaks more accurately than intensity-based methods alone. This results in baselines that do not cut into the “shoulders” of broad peaks, a common failure mode of standard ALS.</p>
+<p><strong>Table 2: Comparative Analysis of Baseline Correction Algorithms</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Algorithm</th>
+<th style="text-align: left;">Complexity</th>
+<th style="text-align: left;">User Parameters</th>
+<th style="text-align: left;">Strengths</th>
+<th style="text-align: left;">Weaknesses</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>ModPoly</strong></td>
+<td style="text-align: left;">Low</td>
+<td style="text-align: left;">Polynomial Order</td>
+<td style="text-align: left;">Simple, intuitive.</td>
+<td style="text-align: left;">Oscillations (Runge’s), poor fit for complex shapes.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>ALS (AsLS)</strong></td>
+<td style="text-align: left;">Medium</td>
+<td style="text-align: left;"><span class="math inline">\lambda</span>, <span class="math inline">p</span></td>
+<td style="text-align: left;">Flexible, smooth baselines.</td>
+<td style="text-align: left;">Requires manual tuning of <span class="math inline">p</span>; sensitive to noise below baseline.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>airPLS</strong></td>
+<td style="text-align: left;">Medium</td>
+<td style="text-align: left;"><span class="math inline">\lambda</span></td>
+<td style="text-align: left;">Adaptive weights, no <span class="math inline">p</span> needed, fast.</td>
+<td style="text-align: left;">Can struggle with very low SNR if noise &gt; peak height.</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>IAsLS</strong></td>
+<td style="text-align: left;">High</td>
+<td style="text-align: left;"><span class="math inline">\lambda</span>, deriv thresholds</td>
+<td style="text-align: left;">High accuracy, preserves peak shoulders.</td>
+<td style="text-align: left;">Computationally more intensive.</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="scatter-correction-and-normalization-architectures" class="level2" data-number="5.5">
+<h2 data-number="5.5" class="anchored" data-anchor-id="scatter-correction-and-normalization-architectures"><span class="header-section-number">5.5</span> Scatter Correction and Normalization Architectures</h2>
+<p>In Near-Infrared (NIR) spectroscopy, and to a lesser extent in Raman, the interaction of light with physical matter (particles, fibers, granules) creates scattering effects that dominate the spectral variance. According to the Kubelka-Munk theory, reflectance spectra are a function of both absorption (chemical) and scattering (physical). Variations in particle size, packing density, and surface roughness cause multiplicative scaling and additive offsets in the spectra, which must be corrected to linearize the relationship between absorbance and concentration.</p>
+<section id="standard-normal-variate-snv" class="level3" data-number="5.5.1">
+<h3 data-number="5.5.1" class="anchored" data-anchor-id="standard-normal-variate-snv"><span class="header-section-number">5.5.1</span> Standard Normal Variate (SNV)</h3>
+<p>Standard Normal Variate (SNV) is a row-wise normalization technique. It assumes that the scattering effects manifest as a scaling and shifting of the spectrum.</p>
+<p><strong>Mathematical Formulation:</strong></p>
+<p>For a measured spectrum <span class="math inline">x_{ij}</span> (sample <span class="math inline">i</span>, wavelength <span class="math inline">j</span>), the SNV corrected value is:</p>
+<p><span class="math display">x_{ij}^{SNV} = \frac{x_{ij} - \bar{x}_i}{s_i}</span></p>
+<p>where <span class="math inline">\bar{x}_i</span> is the mean intensity of the <span class="math inline">i</span>-th spectrum and <span class="math inline">s_i</span> is the standard deviation of the <span class="math inline">i</span>-th spectrum.</p>
+<p><strong>Operational Characteristics:</strong></p>
+<ul>
+<li><strong>Independence:</strong> SNV operates on each spectrum individually. It does not require a reference spectrum or the statistics of the entire dataset. This makes it ideal for online/real-time monitoring where samples are processed sequentially.</li>
+<li><strong>Effect:</strong> It removes the constant offset (centering) and the multiplicative scaling factor (standardization).</li>
+<li><strong>Caveat:</strong> Because <span class="math inline">s_i</span> includes the variance from the chemical peaks themselves, SNV can inadvertently scale down strong chemical signals if they dominate the spectral variance. However, in NIR, scattering variance usually dwarfs chemical variance, making this a safe assumption.</li>
+</ul>
+</section>
+<section id="multiplicative-scatter-correction-msc" class="level3" data-number="5.5.2">
+<h3 data-number="5.5.2" class="anchored" data-anchor-id="multiplicative-scatter-correction-msc"><span class="header-section-number">5.5.2</span> Multiplicative Scatter Correction (MSC)</h3>
+<p>Multiplicative Scatter Correction (MSC) is a model-based approach that separates the physical scattering from the chemical absorption by regressing each spectrum against a “ideal” reference spectrum (typically the mean spectrum of the calibration set).</p>
+<p><strong>Mathematical Formulation:</strong></p>
+<p>MSC assumes a linear relationship between the sample spectrum <span class="math inline">\mathbf{x}_i</span> and the reference spectrum <span class="math inline">\overline{\mathbf{x}}</span>:</p>
+<p><span class="math display">\mathbf{x}_i = a_i + b_i \overline{\mathbf{x}} + \mathbf{e}_i</span></p>
+<ul>
+<li><span class="math inline">a_i</span>: The additive offset (baseline shift).</li>
+<li><span class="math inline">b_i</span>: The multiplicative scatter coefficient (path length correction).</li>
+</ul>
+<p>The coefficients <span class="math inline">a_i</span> and <span class="math inline">b_i</span> are estimated via ordinary least squares regression. The corrected spectrum is then retrieved by inverting the model:</p>
+<p><span class="math display">\mathbf{x}_{i, MSC} = \frac{\mathbf{x}_i - a_i}{b_i}</span></p>
+<p><strong>Strategic Implementation:</strong></p>
+<p>MSC is theoretically superior to SNV when the “ideal” reference spectrum is well-defined. However, its dependence on the dataset mean introduces a vulnerability: Data Leakage. If the mean spectrum is calculated using the entire dataset (including the test set), information from the test set leaks into the training process. In proper chemometric validation, the reference spectrum must be the mean of the training set only, and this same reference must be applied to the test/validation samples.</p>
+<p><strong>Comparison:</strong> Studies show that SNV and MSC often yield virtually identical results in terms of prediction accuracy (e.g., RMSEP). The choice is often a matter of preference or software availability, with SNV preferred for its sample independence.</p>
+</section>
+<section id="extended-multiplicative-scatter-correction-emsc" class="level3" data-number="5.5.3">
+<h3 data-number="5.5.3" class="anchored" data-anchor-id="extended-multiplicative-scatter-correction-emsc"><span class="header-section-number">5.5.3</span> Extended Multiplicative Scatter Correction (EMSC)</h3>
+<p>Standard MSC assumes that the scattering coefficient <span class="math inline">b</span> is constant across all wavelengths. However, physics dictates that scattering is wavelength-dependent (e.g., Rayleigh scattering is proportional to <span class="math inline">\lambda^{-4}</span>, Mie scattering varies with particle size).</p>
+<p><strong>EMSC Innovation:</strong> EMSC extends the linear model to include polynomial terms that account for wavelength-dependent scattering and explicit interference spectra.</p>
+<p><span class="math display"> \mathbf{x}_i = a_i + b_i \overline{\mathbf{x}} + d_i \lambda + e_i \lambda^2 + \sum_k g_{ik} \mathbf{c}_k + \mathbf{r}_i </span></p>
+<p>Here, <span class="math inline">d_i</span> and <span class="math inline">e_i</span> capture the linear and quadratic scattering effects (slope and curvature). The term <span class="math inline">\mathbf{c}_k</span> represents the spectra of known chemical interferents (e.g., water, CO2). By explicitly modeling and subtracting these, EMSC acts as both a scatter correction and a spectral filter.</p>
+<p><strong>Application:</strong> EMSC is particularly powerful in biological spectroscopy (e.g., FTIR of tissues) where scattering is complex and variable. It has been used to successfully recover absorption spectra from cylindrical domains in heterogeneous samples based on Mie theory approximations.</p>
+</section>
+<section id="probabilistic-quotient-normalization-pqn" class="level3" data-number="5.5.4">
+<h3 data-number="5.5.4" class="anchored" data-anchor-id="probabilistic-quotient-normalization-pqn"><span class="header-section-number">5.5.4</span> Probabilistic Quotient Normalization (PQN)</h3>
+<p>In mass spectrometry-based metabolomics, particularly for biofluids like urine, sample concentration varies wildly due to biological dilution (hydration state). Standard normalization (like Total Area Normalization) fails because a single massive peak (e.g., glucose in a diabetic) can skew the total area, forcing all other metabolite signals down.</p>
+<p><strong>PQN Mechanism:</strong></p>
+<ol type="1">
+<li>Calculate a Reference Spectrum (usually the median of all QC samples).</li>
+<li>For each variable (m/z feature), calculate the quotient of the sample intensity to the reference intensity.</li>
+<li>The normalization factor for the sample is the median of these quotients.</li>
+</ol>
+<p><span class="math display">f_i = \text{median}\left(\frac{x_{ij}}{x_{ref,j}}\right)</span></p>
+<ol start="4" type="1">
+<li>Divide the entire spectrum by <span class="math inline">f_i</span>.</li>
+</ol>
+<p><strong>Rationale:</strong> The median is a robust statistic. While some metabolites change due to biology, the majority should remain constant relative to the reference. The median quotient, therefore, accurately reflects the physical dilution factor, ignoring the biological outliers. PQN is widely cited as the most robust method for urine metabolomics.</p>
+</section>
+</section>
+<section id="feature-enhancement-the-calculus-of-derivatives" class="level2" data-number="5.6">
+<h2 data-number="5.6" class="anchored" data-anchor-id="feature-enhancement-the-calculus-of-derivatives"><span class="header-section-number">5.6</span> Feature Enhancement: The Calculus of Derivatives</h2>
+<p>Spectral derivatives are instrumental in enhancing resolution and eliminating baseline drifts. By transforming the signal into its slope (first derivative) or curvature (second derivative), broad overlapping bands can be separated into distinct peaks.</p>
+<section id="savitzky-golay-vs.-norris-williams-derivatives" class="level3" data-number="5.6.1">
+<h3 data-number="5.6.1" class="anchored" data-anchor-id="savitzky-golay-vs.-norris-williams-derivatives"><span class="header-section-number">5.6.1</span> Savitzky-Golay vs.&nbsp;Norris-Williams Derivatives</h3>
+<p>There are two dominant schools of thought in computing derivatives: the polynomial-based Savitzky-Golay (SG) and the finite-difference-based Norris-Williams (NW).</p>
+<section id="savitzky-golay-sg-derivatives" class="level4">
+<h4 class="anchored" data-anchor-id="savitzky-golay-sg-derivatives">Savitzky-Golay (SG) Derivatives</h4>
+<p>The SG filter can directly output the derivative of the fitted polynomial.</p>
+<p><span class="math display">\frac{dy}{dx} \approx \frac{d}{dx} P(x)</span></p>
+<p>Because the polynomial <span class="math inline">P(x)</span> is a smooth function fitted to the window, its derivative is well-behaved. SG derivatives combine smoothing and differentiation in a single step, minimizing the noise amplification inherent in differentiation.</p>
+<p><strong>Parameters:</strong> The user defines the derivative order (<span class="math inline">d</span>). A first derivative (<span class="math inline">d=1</span>) removes additive baselines. A second derivative (<span class="math inline">d=2</span>) removes linear baselines.</p>
+<p><strong>Consensus:</strong> SG derivatives are the standard in modern chemometrics due to their mathematical rigor and controllable smoothing.</p>
+</section>
+</section>
+<section id="norris-williams-nw-derivatives-gap-segment" class="level3" data-number="5.6.2">
+<h3 data-number="5.6.2" class="anchored" data-anchor-id="norris-williams-nw-derivatives-gap-segment"><span class="header-section-number">5.6.2</span> Norris-Williams (NW) Derivatives (Gap-Segment)</h3>
+<p>The NW method, also known as “gap-segment” derivatives, is prevalent in agricultural NIR (e.g., Foss instruments).</p>
+<p><strong>Algorithm:</strong></p>
+<ol type="1">
+<li><strong>Smoothing:</strong> Apply a boxcar (moving average) filter of length <span class="math inline">S</span> (segment).</li>
+<li><strong>Gap Difference:</strong> Calculate the difference between points separated by a gap <span class="math inline">G</span>.</li>
+</ol>
+<p><span class="math display">\text{Deriv}_i = \frac{\text{Smooth}_{i+G} - \text{Smooth}_{i-G}}{2G}</span></p>
+<p><strong>Comparison:</strong> NW is computationally simpler and faster than SG. Some studies suggest it is superior for detecting trace components in particulate systems (e.g., enzyme granules) because the “gap” acts as a tunable frequency filter, enhancing features of a specific width while suppressing high-frequency noise. However, NW derivatives can be “blocky” and less smooth than SG derivatives.</p>
+</section>
+<section id="interpretability-and-risks" class="level3" data-number="5.6.3">
+<h3 data-number="5.6.3" class="anchored" data-anchor-id="interpretability-and-risks"><span class="header-section-number">5.6.3</span> Interpretability and Risks</h3>
+<ul>
+<li><strong>First Derivative:</strong> Peaks become zero-crossings. Inflection points become maxima/minima. Useful for detecting peak positions.</li>
+<li><strong>Second Derivative:</strong> Peaks become negative minima. Shoulders (inflections) become peaks. This effectively “deconvolves” overlapping bands.</li>
+<li><strong>Noise Amplification:</strong> Differentiation amplifies high-frequency noise. The signal-to-noise ratio (SNR) of a second derivative is significantly lower than the raw spectrum. Therefore, the smoothing window in SG or the segment size in NW must be increased when taking higher-order derivatives.</li>
+</ul>
+</section>
+</section>
+<section id="domain-specific-preprocessing-pipelines" class="level2" data-number="5.7">
+<h2 data-number="5.7" class="anchored" data-anchor-id="domain-specific-preprocessing-pipelines"><span class="header-section-number">5.7</span> Domain-Specific Preprocessing Pipelines</h2>
+<p>The choice of preprocessing algorithms is not arbitrary; it is dictated by the physical nature of the sample and the spectroscopic technique.</p>
+<section id="near-infrared-nir-pipeline-the-scattering-problem" class="level3" data-number="5.7.1">
+<h3 data-number="5.7.1" class="anchored" data-anchor-id="near-infrared-nir-pipeline-the-scattering-problem"><span class="header-section-number">5.7.1</span> Near-Infrared (NIR) Pipeline: The Scattering Problem</h3>
+<p>NIR spectra are dominated by broad overtones and strong scattering from solid samples.</p>
+<p><strong>Standard Protocol:</strong></p>
+<ol type="1">
+<li><strong>Transformation:</strong> Convert Reflectance (<span class="math inline">R</span>) to Absorbance (<span class="math inline">\log(1/R)</span>) to linearize the Beer-Lambert relationship.</li>
+<li><strong>Scatter Correction:</strong> Apply SNV or MSC to correct for particle size variations. This aligns the global intensity of the spectra.</li>
+<li><strong>Derivatives:</strong> Apply SG Second Derivative to remove linear baseline drifts and resolve overlapping O-H and C-H bands.</li>
+<li><strong>Smoothing:</strong> Implicit in the SG derivative step.</li>
+</ol>
+<p><strong>Case Study (P. koraiensis Seeds):</strong> In the prediction of seed viability, a combination of Wavelet Transform (for denoising) followed by Mean Centering and PLS yielded the highest accuracy (<span class="math inline">R^2 = 0.9485</span>). The wavelet filter ‘bior4.4’ was specifically effective at preserving the seed’s chemical features while removing surface scattering noise.</p>
+<p><strong>Case Study (Pharmaceutical Tablets):</strong> For detecting active ingredients in tablets, SNV is critical to normalize for the variable pressure used in tableting, which changes the density and scattering properties of the pill.</p>
+</section>
+<section id="raman-pipeline-the-fluorescence-problem" class="level3" data-number="5.7.2">
+<h3 data-number="5.7.2" class="anchored" data-anchor-id="raman-pipeline-the-fluorescence-problem"><span class="header-section-number">5.7.2</span> Raman Pipeline: The Fluorescence Problem</h3>
+<p>Raman signals are weak and sit atop varying fluorescence backgrounds.</p>
+<p><strong>Standard Protocol:</strong></p>
+<ol type="1">
+<li><strong>Despiking:</strong> Apply Modified Z-Score or Nearest Neighbor filter to remove cosmic rays. <em>Critical:</em> This must be done before any smoothing, or the spike will be smeared into a broad artifact.</li>
+<li><strong>Baseline Correction:</strong> Apply airPLS or IAsLS to remove the broad fluorescence background.</li>
+<li><strong>Denoising:</strong> Apply mild SG smoothing (small window, e.g., 5-9 points) to reduce thermal noise without broadening the sharp Raman peaks.</li>
+<li><strong>Normalization:</strong> Normalize to the area of a standard band (e.g., Phenylalanine ring breathing at 1003 cm⁻¹ in biological samples) or Vector Normalization (Unit Length) to correct for laser power fluctuations.</li>
+</ol>
+<p><strong>Case Study (Coffee Origin):</strong> Raman spectroscopy was used to classify coffee. The “fluorescence effect” was the main hurdle. Preprocessing with Weighted Least Squares (a baseline method) and Normalization eliminated this effect, enabling successful classification.</p>
+</section>
+<section id="mass-spectrometry-metabolomics-pipeline" class="level3" data-number="5.7.3">
+<h3 data-number="5.7.3" class="anchored" data-anchor-id="mass-spectrometry-metabolomics-pipeline"><span class="header-section-number">5.7.3</span> Mass Spectrometry (Metabolomics) Pipeline</h3>
+<p>MS data suffers from axis drift (m/z instability) and concentration variance.</p>
+<p><strong>Standard Protocol:</strong></p>
+<ol type="1">
+<li><strong>Binning/Centroiding:</strong> Reduce raw profile data to peak centroids.</li>
+<li><strong>Alignment (Warping):</strong> Use Dynamic Time Warping (DTW) or Correlation Optimized Warping (COW) to align elution peaks across samples. Algorithms like RANSAC are used to robustly match peaks and define the warping function, improving alignment accuracy by up to 88%.</li>
+<li><strong>Filtering:</strong> Remove peaks that appear in fewer than <span class="math inline">x</span>% of samples (noise reduction).</li>
+<li><strong>Normalization:</strong> Apply PQN to correct for dilution effects in biofluids.</li>
+<li><strong>Transformation:</strong> Log-transform to stabilize variance (heteroscedasticity correction).</li>
+</ol>
+</section>
+</section>
+<section id="software-implementation-and-ecosystems" class="level2" data-number="5.8">
+<h2 data-number="5.8" class="anchored" data-anchor-id="software-implementation-and-ecosystems"><span class="header-section-number">5.8</span> Software Implementation and Ecosystems</h2>
+<p>The implementation of these algorithms is supported by open-source libraries in Python and R, which allow for reproducible and automated workflows.</p>
+</section>
+<section id="python-ecosystem" class="level2" data-number="5.9">
+<h2 data-number="5.9" class="anchored" data-anchor-id="python-ecosystem"><span class="header-section-number">5.9</span> Python Ecosystem</h2>
+<ul>
+<li><strong>scipy.signal.savgol_filter:</strong> The standard implementation of the Savitzky-Golay filter. It is fast and efficient but requires manual parameter setting.</li>
+<li><strong>pybaselines:</strong> A specialized library containing implementations of airPLS, IAsLS, ModPoly, and SNIP. It provides a unified API for testing different baseline algorithms.</li>
+<li><strong>chemotools:</strong> A library designed to integrate chemometric preprocessing (MSC, SNV, SG) into scikit-learn pipelines. This is crucial for machine learning workflows, ensuring that preprocessing parameters (like the MSC reference spectrum) are learned during fit() and applied during transform(), preventing data leakage.</li>
+<li><strong>ramanspy:</strong> A comprehensive toolkit for Raman spectroscopy, offering modules for despiking, baseline subtraction, and spectral unmixing.</li>
+</ul>
+<section id="r-ecosystem" class="level3" data-number="5.9.1">
+<h3 data-number="5.9.1" class="anchored" data-anchor-id="r-ecosystem"><span class="header-section-number">5.9.1</span> R Ecosystem</h3>
+<ul>
+<li><strong>prospectr:</strong> The go-to package for NIR preprocessing. It includes implementations of Norris-Williams derivatives (gapDer), Savitzky-Golay (savitzkyGolay), Standard Normal Variate (standardNormalVariate), and Detrending.</li>
+<li><strong>EMSC:</strong> A dedicated package for Extended Multiplicative Signal Correction, allowing users to build complex interference models easily.</li>
+<li><strong>VPdtw:</strong> Implements Variable Penalty Dynamic Time Warping for aligning chromatographic data, critical for LC-MS analysis.</li>
+<li><strong>mdatools:</strong> A comprehensive package for chemometrics that provides a unified interface for preprocessing (autoscaling, SNV, MSC, SG) and modeling (PCA, PLS, SIMCA), mirroring functionality often found in commercial software.</li>
+</ul>
+<p><strong>Table 3: Feature Matrix of Spectral Preprocessing Libraries</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 12%">
+<col style="width: 19%">
+<col style="width: 34%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Library</th>
+<th style="text-align: left;">Language</th>
+<th style="text-align: left;">Primary Domain</th>
+<th style="text-align: left;">Key Algorithms</th>
+<th style="text-align: left;">Integration</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">scipy</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">General Signal</td>
+<td style="text-align: left;">SG, Convolutions</td>
+<td style="text-align: left;">General</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">pybaselines</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">Vibrational</td>
+<td style="text-align: left;">airPLS, AsLS, ModPoly</td>
+<td style="text-align: left;">numpy</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">chemotools</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">Chemometrics</td>
+<td style="text-align: left;">MSC, SNV, SG</td>
+<td style="text-align: left;">scikit-learn</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ramanspy</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">Raman</td>
+<td style="text-align: left;">Despiking, Unmixing</td>
+<td style="text-align: left;">matplotlib</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">prospectr</td>
+<td style="text-align: left;">R</td>
+<td style="text-align: left;">NIR/Agri</td>
+<td style="text-align: left;">Norris, Gap-Segment, SNV</td>
+<td style="text-align: left;">caret / pls</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">EMSC</td>
+<td style="text-align: left;">R</td>
+<td style="text-align: left;">Biological</td>
+<td style="text-align: left;">EMSC, Interferent Modeling</td>
+<td style="text-align: left;">Base R</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="applied-r-implementations-vibrational-spectroscopy" class="level2" data-number="5.10">
+<h2 data-number="5.10" class="anchored" data-anchor-id="applied-r-implementations-vibrational-spectroscopy"><span class="header-section-number">5.10</span> Applied R Implementations: Vibrational Spectroscopy</h2>
+<p>This section focuses on essential R implementations for NIR and Raman spectroscopy, including smoothing, scatter correction, and baseline correction.</p>
+<section id="smoothing-and-derivatives-savitzky-golay" class="level3" data-number="5.10.1">
+<h3 data-number="5.10.1" class="anchored" data-anchor-id="smoothing-and-derivatives-savitzky-golay"><span class="header-section-number">5.10.1</span> Smoothing and Derivatives: Savitzky-Golay</h3>
+<p>The prospectr package provides a highly efficient C++ implementation of the Savitzky-Golay filter.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(prospectr)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Load example NIR soil data</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(NIRsoil)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>spectra <span class="ot">&lt;-</span> NIRsoil<span class="sc">$</span>spc</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply Savitzky-Golay Filter</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># m = 0 (smoothing only), p = 3 (3rd order polynomial), w = 11 (window size)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>sg_smooth <span class="ot">&lt;-</span> <span class="fu">savitzkyGolay</span>(<span class="at">X =</span> spectra, <span class="at">m =</span> <span class="dv">0</span>, <span class="at">p =</span> <span class="dv">3</span>, <span class="at">w =</span> <span class="dv">11</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply 1st Derivative</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># m = 1 (1st derivative), p = 3, w = 11</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>sg_deriv1 <span class="ot">&lt;-</span> <span class="fu">savitzkyGolay</span>(<span class="at">X =</span> spectra, <span class="at">m =</span> <span class="dv">1</span>, <span class="at">p =</span> <span class="dv">3</span>, <span class="at">w =</span> <span class="dv">11</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Plotting the result</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="fu">matplot</span>(<span class="fu">as.numeric</span>(<span class="fu">colnames</span>(spectra)), <span class="fu">t</span>(sg_deriv1[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>,]), <span class="at">type =</span> <span class="st">'l'</span>,</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        <span class="at">main =</span> <span class="st">"1st Derivative Spectra (Savitzky-Golay)"</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">xlab =</span> <span class="st">"Wavelength (nm)"</span>, <span class="at">ylab =</span> <span class="st">"dA/dlambda"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="scatter-correction-snv-and-msc" class="level3" data-number="5.10.2">
+<h3 data-number="5.10.2" class="anchored" data-anchor-id="scatter-correction-snv-and-msc"><span class="header-section-number">5.10.2</span> Scatter Correction: SNV and MSC</h3>
+<p>Standard Normal Variate (SNV) and Multiplicative Scatter Correction (MSC) are standard for NIR data. prospectr handles SNV, while MSC is available in prospectr or pls.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Standard Normal Variate (SNV)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Operates row-wise: (x - mean) / sd</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>snv_spectra <span class="ot">&lt;-</span> <span class="fu">standardNormalVariate</span>(<span class="at">X =</span> spectra)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Multiplicative Scatter Correction (MSC)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Requires a reference spectrum (default is the column means)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>msc_spectra <span class="ot">&lt;-</span> <span class="fu">msc</span>(<span class="at">X =</span> spectra, <span class="at">ref_spectrum =</span> <span class="fu">colMeans</span>(spectra))</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Note: Ideally, 'ref_spectrum' should be calculated from the TRAINING set only</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># to prevent data leakage during model validation.</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>train_idx <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">500</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>ref_spec <span class="ot">&lt;-</span> <span class="fu">colMeans</span>(spectra[train_idx, ])</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>msc_spectra_val <span class="ot">&lt;-</span> <span class="fu">msc</span>(<span class="at">X =</span> spectra, <span class="at">ref_spectrum =</span> ref_spec)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="baseline-correction-airpls" class="level3" data-number="5.10.3">
+<h3 data-number="5.10.3" class="anchored" data-anchor-id="baseline-correction-airpls"><span class="header-section-number">5.10.3</span> Baseline Correction: airPLS</h3>
+<p>The airPLS algorithm is available via GitHub and utilizes sparse matrices for speed. It is ideal for removing fluorescence backgrounds in Raman spectra.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install airPLS from GitHub if not available on CRAN</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># library(devtools)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># install_github("zmzhang/airPLS_R")</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(airPLS)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulate a spectrum with a baseline drift</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>wavenumbers <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">1000</span>, <span class="at">length.out =</span> <span class="dv">1000</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>pure_signal <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> (wavenumbers <span class="sc">-</span> <span class="dv">500</span>)<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="dv">20</span><span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>baseline_drift <span class="ot">&lt;-</span> <span class="fl">0.001</span> <span class="sc">*</span> wavenumbers <span class="sc">+</span> <span class="fl">0.1</span> <span class="sc">*</span> <span class="fu">sin</span>(wavenumbers<span class="sc">/</span><span class="dv">100</span>)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>raw_signal <span class="ot">&lt;-</span> pure_signal <span class="sc">+</span> baseline_drift <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">1000</span>, <span class="at">sd =</span> <span class="fl">0.01</span>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply airPLS baseline correction</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># lambda: smoothness parameter (adjust based on noise level)</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>baseline_est <span class="ot">&lt;-</span> <span class="fu">airPLS</span>(raw_signal, <span class="at">lambda =</span> <span class="dv">1000</span>, <span class="at">differences =</span> <span class="dv">2</span>, <span class="at">itermax =</span> <span class="dv">20</span>)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>corrected_signal <span class="ot">&lt;-</span> raw_signal <span class="sc">-</span> baseline_est</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Visualization</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(wavenumbers, raw_signal, <span class="at">type =</span> <span class="st">'l'</span>, <span class="at">col =</span> <span class="st">'black'</span>, <span class="at">main =</span> <span class="st">"airPLS Baseline Correction"</span>)</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(wavenumbers, baseline_est, <span class="at">col =</span> <span class="st">'red'</span>, <span class="at">lwd =</span> <span class="dv">2</span>) <span class="co"># The estimated baseline</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(wavenumbers, corrected_signal, <span class="at">col =</span> <span class="st">'blue'</span>, <span class="at">lty =</span> <span class="dv">2</span>) <span class="co"># Corrected signal</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">"topright"</span>, <span class="at">legend=</span><span class="fu">c</span>(<span class="st">"Raw"</span>, <span class="st">"Baseline"</span>, <span class="st">"Corrected"</span>), <span class="at">col=</span><span class="fu">c</span>(<span class="st">"black"</span>, <span class="st">"red"</span>, <span class="st">"blue"</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">2</span>))</span></code></pre></div>
+</details>
+</div>
+</section>
+</section>
+<section id="comprehensive-r-workflow-for-mass-spectrometry" class="level2" data-number="5.11">
+<h2 data-number="5.11" class="anchored" data-anchor-id="comprehensive-r-workflow-for-mass-spectrometry"><span class="header-section-number">5.11</span> Comprehensive R Workflow for Mass Spectrometry</h2>
+<p>Preprocessing is a critical step in MS data analysis that improves data quality and enables accurate downstream analysis. This chapter covers baseline correction, smoothing, normalization, and peak picking using modern R for Mass Spectrometry tools.</p>
+<section id="loading-required-libraries" class="level3" data-number="5.11.1">
+<h3 data-number="5.11.1" class="anchored" data-anchor-id="loading-required-libraries"><span class="header-section-number">5.11.1</span> Loading Required Libraries</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Spectra)           <span class="co"># Core MS data handling</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MsCoreUtils)       <span class="co"># MS processing utilities</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)            <span class="co"># Example datasets</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ProtGenerics)      <span class="co"># Generic functions</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)           <span class="co"># Visualization</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)             <span class="co"># Data manipulation</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)         <span class="co"># Plot composition</span></span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="understanding-raw-spectral-data-loading-and-inspecting-spectra" class="level3" data-number="5.11.2">
+<h3 data-number="5.11.2" class="anchored" data-anchor-id="understanding-raw-spectral-data-loading-and-inspecting-spectra"><span class="header-section-number">5.11.2</span> Understanding Raw Spectral Data: Loading and Inspecting Spectra</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load example proteomics data</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Note: Using setBackend to convert to in-memory storage to avoid mzR issues</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ms_file <span class="ot">&lt;-</span> msdata<span class="sc">::</span><span class="fu">proteomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># First load with MsBackendMzR, then convert to DataFrame backend</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">tryCatch</span>({</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  ms_data <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(ms_file, <span class="at">backend =</span> <span class="fu">MsBackendMzR</span>())</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Convert to in-memory backend for better compatibility</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  ms_data <span class="ot">&lt;-</span> <span class="fu">setBackend</span>(ms_data, <span class="at">backend =</span> <span class="fu">MsBackendDataFrame</span>())</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"Successfully loaded real MS data</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>}, <span class="at">error =</span> <span class="cf">function</span>(e) {</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="co"># If mzR fails, create synthetic data for demonstration</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"Note: Using synthetic data due to mzR compatibility issues</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"Error was:"</span>, <span class="fu">conditionMessage</span>(e), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Create synthetic MS2 spectra using proper format</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  n_spectra <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Create peaks data - separate m/z and intensity lists</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  mz_list <span class="ot">&lt;-</span> <span class="fu">lapply</span>(<span class="dv">1</span><span class="sc">:</span>n_spectra, <span class="cf">function</span>(i) {</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>    n_peaks <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="dv">50</span><span class="sc">:</span><span class="dv">200</span>, <span class="dv">1</span>)</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">sort</span>(<span class="fu">runif</span>(n_peaks, <span class="dv">100</span>, <span class="dv">2000</span>))  <span class="co"># Already sorted</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>  intensity_list <span class="ot">&lt;-</span> <span class="fu">lapply</span>(mz_list, <span class="cf">function</span>(mz_vals) {</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rlnorm</span>(<span class="fu">length</span>(mz_vals), <span class="at">meanlog =</span> <span class="dv">8</span>, <span class="at">sdlog =</span> <span class="dv">2</span>)</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Create spectra data frame with metadata</span></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(S4Vectors)</span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">library</span>(IRanges)</span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>  spd <span class="ot">&lt;-</span> <span class="fu">DataFrame</span>(</span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">msLevel =</span> <span class="fu">rep</span>(<span class="dv">2</span>L, n_spectra),</span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">rtime =</span> <span class="fu">seq</span>(<span class="dv">100</span>, <span class="dv">6000</span>, <span class="at">length.out =</span> n_spectra),</span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">precursorMz =</span> <span class="fu">runif</span>(n_spectra, <span class="dv">400</span>, <span class="dv">1500</span>),</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">precursorCharge =</span> <span class="fu">sample</span>(<span class="dv">2</span><span class="sc">:</span><span class="dv">3</span>, n_spectra, <span class="at">replace =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">polarity =</span> <span class="fu">rep</span>(<span class="dv">1</span>L, n_spectra)</span>
+<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Add list columns using NumericList</span></span>
+<span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a>  spd<span class="sc">$</span>mz <span class="ot">&lt;-</span> <span class="fu">NumericList</span>(mz_list)</span>
+<span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a>  spd<span class="sc">$</span>intensity <span class="ot">&lt;-</span> <span class="fu">NumericList</span>(intensity_list)</span>
+<span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Create Spectra object from DataFrame backend</span></span>
+<span id="cb5-46"><a href="#cb5-46" aria-hidden="true" tabindex="-1"></a>  backend <span class="ot">&lt;-</span> <span class="fu">MsBackendDataFrame</span>()</span>
+<span id="cb5-47"><a href="#cb5-47" aria-hidden="true" tabindex="-1"></a>  backend <span class="ot">&lt;-</span> <span class="fu">backendInitialize</span>(backend, spd)</span>
+<span id="cb5-48"><a href="#cb5-48" aria-hidden="true" tabindex="-1"></a>  ms_data <span class="ot">&lt;&lt;-</span> <span class="fu">Spectra</span>(backend)</span>
+<span id="cb5-49"><a href="#cb5-49" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb5-50"><a href="#cb5-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-51"><a href="#cb5-51" aria-hidden="true" tabindex="-1"></a><span class="co"># Focus on MS2 spectra for preprocessing examples</span></span>
+<span id="cb5-52"><a href="#cb5-52" aria-hidden="true" tabindex="-1"></a>ms2_data <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(ms_data, <span class="dv">2</span>)</span>
+<span id="cb5-53"><a href="#cb5-53" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Total MS2 spectra:"</span>, <span class="fu">length</span>(ms2_data), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb5-54"><a href="#cb5-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-55"><a href="#cb5-55" aria-hidden="true" tabindex="-1"></a><span class="co"># Select a representative spectrum</span></span>
+<span id="cb5-56"><a href="#cb5-56" aria-hidden="true" tabindex="-1"></a>spectrum <span class="ot">&lt;-</span> ms2_data[<span class="dv">10</span>]</span>
+<span id="cb5-57"><a href="#cb5-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-58"><a href="#cb5-58" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract peak data</span></span>
+<span id="cb5-59"><a href="#cb5-59" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">peaksData</span>(spectrum)[[<span class="dv">1</span>]]</span>
+<span id="cb5-60"><a href="#cb5-60" aria-hidden="true" tabindex="-1"></a>mz_vals <span class="ot">&lt;-</span> peaks[, <span class="dv">1</span>]</span>
+<span id="cb5-61"><a href="#cb5-61" aria-hidden="true" tabindex="-1"></a>int_vals <span class="ot">&lt;-</span> peaks[, <span class="dv">2</span>]</span>
+<span id="cb5-62"><a href="#cb5-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-63"><a href="#cb5-63" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Spectrum contains"</span>, <span class="fu">length</span>(mz_vals), <span class="st">"peaks</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb5-64"><a href="#cb5-64" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"m/z range:"</span>, <span class="fu">round</span>(<span class="fu">range</span>(mz_vals), <span class="dv">2</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb5-65"><a href="#cb5-65" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Intensity range:"</span>, <span class="fu">sprintf</span>(<span class="st">"%.2e - %.2e"</span>, <span class="fu">min</span>(int_vals), <span class="fu">max</span>(int_vals)), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="visualizing-raw-data" class="level3" data-number="5.11.3">
+<h3 data-number="5.11.3" class="anchored" data-anchor-id="visualizing-raw-data"><span class="header-section-number">5.11.3</span> Visualizing Raw Data</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a visualization of raw spectrum</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>raw_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">mz =</span> mz_vals, <span class="at">intensity =</span> int_vals)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>p_raw <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(raw_df, <span class="fu">aes</span>(<span class="at">x =</span> mz, <span class="at">y =</span> intensity)) <span class="sc">+</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> mz, <span class="at">yend =</span> <span class="dv">0</span>), <span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Raw MS2 Spectrum"</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="fu">paste</span>(<span class="st">"Precursor:"</span>, <span class="fu">round</span>(<span class="fu">precursorMz</span>(spectrum), <span class="dv">3</span>), <span class="st">"m/z"</span>),</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"Intensity"</span>) <span class="sc">+</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(p_raw)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="baseline-correction" class="level3" data-number="5.11.4">
+<h3 data-number="5.11.4" class="anchored" data-anchor-id="baseline-correction"><span class="header-section-number">5.11.4</span> Baseline Correction</h3>
+<p><strong>Understanding Baseline Issues:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use the already loaded ms_data from above to avoid reloading</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Get a representative spectrum</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>spectrum <span class="ot">&lt;-</span> ms_data[<span class="fu">min</span>(<span class="dv">100</span>, <span class="fu">length</span>(ms_data))]</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">peaksData</span>(spectrum)[[<span class="dv">1</span>]]</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>mz_vals <span class="ot">&lt;-</span> peaks[, <span class="dv">1</span>]</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>int_vals <span class="ot">&lt;-</span> peaks[, <span class="dv">2</span>]</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot raw spectrum</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, int_vals, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Raw Spectrum"</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Intensity"</span>)</span></code></pre></div>
+</details>
+</div>
+<p><strong>Baseline Removal Methods:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simple baseline correction using quantile-based approach</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>baseline_estimate <span class="ot">&lt;-</span> <span class="fu">quantile</span>(int_vals, <span class="fl">0.05</span>)  <span class="co"># 5th percentile</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>corrected_intensity <span class="ot">&lt;-</span> <span class="fu">pmax</span>(int_vals <span class="sc">-</span> baseline_estimate, <span class="dv">0</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot corrected spectrum</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, corrected_intensity, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Baseline Corrected Spectrum"</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Intensity"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="smoothing-techniques" class="level3" data-number="5.11.5">
+<h3 data-number="5.11.5" class="anchored" data-anchor-id="smoothing-techniques"><span class="header-section-number">5.11.5</span> Smoothing Techniques</h3>
+<p>Smoothing reduces noise while preserving spectral features. The Spectra package provides built-in smoothing methods.</p>
+<p><strong>Savitzky-Golay Smoothing:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply Savitzky-Golay smoothing using Spectra</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># halfWindowSize must be an integer</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>smoothed_spectrum <span class="ot">&lt;-</span> <span class="fu">smooth</span>(spectrum, <span class="at">method =</span> <span class="st">"SavitzkyGolay"</span>, <span class="at">halfWindowSize =</span> <span class="dv">2</span>L)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract smoothed data</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>smoothed_peaks <span class="ot">&lt;-</span> <span class="fu">peaksData</span>(smoothed_spectrum)[[<span class="dv">1</span>]]</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare original and smoothed</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> <span class="fu">c</span>(mz_vals, smoothed_peaks[, <span class="dv">1</span>]),</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">intensity =</span> <span class="fu">c</span>(int_vals, smoothed_peaks[, <span class="dv">2</span>]),</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">type =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Original"</span>, <span class="st">"Smoothed"</span>), <span class="fu">c</span>(<span class="fu">length</span>(mz_vals), <span class="fu">nrow</span>(smoothed_peaks)))</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>p_smooth <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(comparison_df, <span class="fu">aes</span>(<span class="at">x =</span> mz, <span class="at">y =</span> intensity, <span class="at">color =</span> type)) <span class="sc">+</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Original"</span> <span class="ot">=</span> <span class="st">"gray60"</span>, <span class="st">"Smoothed"</span> <span class="ot">=</span> <span class="st">"red"</span>)) <span class="sc">+</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Savitzky-Golay Smoothing"</span>,</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"Intensity"</span>, <span class="at">color =</span> <span class="st">"Type"</span>) <span class="sc">+</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(p_smooth)</span></code></pre></div>
+</details>
+</div>
+<p><strong>Moving Average Smoothing:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom moving average implementation</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>moving_average <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">window =</span> <span class="dv">5</span>) {</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  n <span class="ot">&lt;-</span> <span class="fu">length</span>(x)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  smoothed <span class="ot">&lt;-</span> <span class="fu">numeric</span>(n)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  half_window <span class="ot">&lt;-</span> <span class="fu">floor</span>(window <span class="sc">/</span> <span class="dv">2</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>n) {</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    start_idx <span class="ot">&lt;-</span> <span class="fu">max</span>(<span class="dv">1</span>, i <span class="sc">-</span> half_window)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    end_idx <span class="ot">&lt;-</span> <span class="fu">min</span>(n, i <span class="sc">+</span> half_window)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    smoothed[i] <span class="ot">&lt;-</span> <span class="fu">mean</span>(x[start_idx<span class="sc">:</span>end_idx])</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(smoothed)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply moving average</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>ma_intensity <span class="ot">&lt;-</span> <span class="fu">moving_average</span>(int_vals, <span class="at">window =</span> <span class="dv">5</span>)</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Visualize comparison</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>ma_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> mz_vals,</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">original =</span> int_vals,</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">moving_avg =</span> ma_intensity</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(ma_df) <span class="sc">+</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">x =</span> mz, <span class="at">y =</span> original), <span class="at">color =</span> <span class="st">"gray60"</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">x =</span> mz, <span class="at">y =</span> moving_avg), <span class="at">color =</span> <span class="st">"blue"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Moving Average Smoothing (window = 5)"</span>,</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"Intensity"</span>) <span class="sc">+</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+</div>
+<p><strong>Gaussian Smoothing:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Gaussian smoothing implementation</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>gaussian_smooth <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">sigma =</span> <span class="dv">1</span>) {</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  n <span class="ot">&lt;-</span> <span class="fu">length</span>(x)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  kernel_size <span class="ot">&lt;-</span> <span class="fu">ceiling</span>(<span class="dv">3</span> <span class="sc">*</span> sigma)</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  kernel <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="sc">-</span>((<span class="sc">-</span>kernel_size)<span class="sc">:</span>kernel_size)<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> (<span class="dv">2</span> <span class="sc">*</span> sigma<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  kernel <span class="ot">&lt;-</span> kernel <span class="sc">/</span> <span class="fu">sum</span>(kernel)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Apply convolution (simplified)</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  smoothed <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">filter</span>(x, kernel, <span class="at">sides =</span> <span class="dv">2</span>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  smoothed[<span class="fu">is.na</span>(smoothed)] <span class="ot">&lt;-</span> x[<span class="fu">is.na</span>(smoothed)]  <span class="co"># Handle edges</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(<span class="fu">as.numeric</span>(smoothed))</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply Gaussian smoothing to the original intensity values</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>gaussian_smoothed <span class="ot">&lt;-</span> <span class="fu">gaussian_smooth</span>(int_vals, <span class="at">sigma =</span> <span class="dv">2</span>)</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, gaussian_smoothed, <span class="at">type =</span> <span class="st">"l"</span>, <span class="at">col =</span> <span class="st">"blue"</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Gaussian Smoothed Spectrum"</span>, <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Intensity"</span>)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(mz_vals, int_vals, <span class="at">col =</span> <span class="st">"gray"</span>, <span class="at">lty =</span> <span class="dv">2</span>)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">"topright"</span>, <span class="fu">c</span>(<span class="st">"Gaussian Smoothed"</span>, <span class="st">"Original"</span>),</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>       <span class="at">col =</span> <span class="fu">c</span>(<span class="st">"blue"</span>, <span class="st">"gray"</span>), <span class="at">lty =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>))</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="peak-detection" class="level3" data-number="5.11.6">
+<h3 data-number="5.11.6" class="anchored" data-anchor-id="peak-detection"><span class="header-section-number">5.11.6</span> Peak Detection</h3>
+<p><strong>Simple Peak Picking Algorithm:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use the moving average smoothed data for peak detection</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>smoothed_intensity <span class="ot">&lt;-</span> ma_intensity</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Simple peak detection function</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>detect_peaks <span class="ot">&lt;-</span> <span class="cf">function</span>(mz, intensity, <span class="at">min_intensity =</span> <span class="dv">1000</span>, <span class="at">min_distance =</span> <span class="fl">0.1</span>) {</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  n <span class="ot">&lt;-</span> <span class="fu">length</span>(intensity)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  peaks <span class="ot">&lt;-</span> <span class="fu">logical</span>(n)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">2</span><span class="sc">:</span>(n<span class="dv">-1</span>)) {</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (intensity[i] <span class="sc">&gt;</span> intensity[i<span class="dv">-1</span>] <span class="sc">&amp;&amp;</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>        intensity[i] <span class="sc">&gt;</span> intensity[i<span class="sc">+</span><span class="dv">1</span>] <span class="sc">&amp;&amp;</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        intensity[i] <span class="sc">&gt;</span> min_intensity) {</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>      peaks[i] <span class="ot">&lt;-</span> <span class="cn">TRUE</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Filter by minimum distance</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>  peak_indices <span class="ot">&lt;-</span> <span class="fu">which</span>(peaks)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(peak_indices) <span class="sc">&gt;</span> <span class="dv">1</span>) {</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    keep <span class="ot">&lt;-</span> <span class="fu">logical</span>(<span class="fu">length</span>(peak_indices))</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    keep[<span class="dv">1</span>] <span class="ot">&lt;-</span> <span class="cn">TRUE</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">2</span><span class="sc">:</span><span class="fu">length</span>(peak_indices)) {</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>      <span class="cf">if</span> (mz[peak_indices[i]] <span class="sc">-</span> mz[peak_indices[keep][<span class="fu">sum</span>(keep)]] <span class="sc">&gt;</span> min_distance) {</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>        keep[i] <span class="ot">&lt;-</span> <span class="cn">TRUE</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>    peak_indices <span class="ot">&lt;-</span> peak_indices[keep]</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(<span class="fu">list</span>(</span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">mz =</span> mz[peak_indices],</span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity =</span> intensity[peak_indices],</span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">indices =</span> peak_indices</span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a><span class="co"># Detect peaks</span></span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">detect_peaks</span>(mz_vals, smoothed_intensity, <span class="at">min_intensity =</span> <span class="dv">5000</span>)</span>
+<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot spectrum with detected peaks</span></span>
+<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, smoothed_intensity, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Peak Detection Results"</span>, <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Intensity"</span>)</span>
+<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a><span class="fu">points</span>(peaks<span class="sc">$</span>mz, peaks<span class="sc">$</span>intensity, <span class="at">col =</span> <span class="st">"red"</span>, <span class="at">pch =</span> <span class="dv">19</span>)</span></code></pre></div>
+</details>
+</div>
+<p><strong>Peak Statistics:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Analyze detected peaks</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Number of peaks detected:"</span>, <span class="fu">length</span>(peaks<span class="sc">$</span>mz), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Peak m/z range:"</span>, <span class="fu">range</span>(peaks<span class="sc">$</span>mz), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Peak intensity range:"</span>, <span class="fu">range</span>(peaks<span class="sc">$</span>intensity), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Create peak list data frame</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>peak_list <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> peaks<span class="sc">$</span>mz,</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">intensity =</span> peaks<span class="sc">$</span>intensity,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">relative_intensity =</span> peaks<span class="sc">$</span>intensity <span class="sc">/</span> <span class="fu">max</span>(peaks<span class="sc">$</span>intensity) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(peak_list)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="normalization" class="level3" data-number="5.11.7">
+<h3 data-number="5.11.7" class="anchored" data-anchor-id="normalization"><span class="header-section-number">5.11.7</span> Normalization</h3>
+<p><strong>Total Ion Current (TIC) Normalization:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># TIC normalization</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>tic_normalize <span class="ot">&lt;-</span> <span class="cf">function</span>(intensity) {</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  tic <span class="ot">&lt;-</span> <span class="fu">sum</span>(intensity)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(intensity <span class="sc">/</span> tic <span class="sc">*</span> <span class="fl">1e6</span>)  <span class="co"># Scale to parts per million</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>normalized_intensity <span class="ot">&lt;-</span> <span class="fu">tic_normalize</span>(smoothed_intensity)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare before and after normalization</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">1</span>))</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, smoothed_intensity, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Before TIC Normalization"</span>, <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Intensity"</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, normalized_intensity, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"After TIC Normalization"</span>, <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Normalized Intensity"</span>)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span></code></pre></div>
+</details>
+</div>
+<p><strong>Base Peak Normalization:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Base peak normalization</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>base_peak_normalize <span class="ot">&lt;-</span> <span class="cf">function</span>(intensity) {</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  base_peak <span class="ot">&lt;-</span> <span class="fu">max</span>(intensity)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(intensity <span class="sc">/</span> base_peak <span class="sc">*</span> <span class="dv">100</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>bp_normalized <span class="ot">&lt;-</span> <span class="fu">base_peak_normalize</span>(smoothed_intensity)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mz_vals, bp_normalized, <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Base Peak Normalized Spectrum"</span>,</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Relative Intensity (%)"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="processing-multiple-spectra-batch-processing-function" class="level3" data-number="5.11.8">
+<h3 data-number="5.11.8" class="anchored" data-anchor-id="processing-multiple-spectra-batch-processing-function"><span class="header-section-number">5.11.8</span> Processing Multiple Spectra: Batch Processing Function</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>process_spectrum <span class="ot">&lt;-</span> <span class="cf">function</span>(spec, <span class="at">baseline_quantile =</span> <span class="fl">0.05</span>,</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>                            <span class="at">smooth_window =</span> <span class="dv">5</span>, <span class="at">min_peak_intensity =</span> <span class="dv">1000</span>) {</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  mz_vals <span class="ot">&lt;-</span> <span class="fu">mz</span>(spec)[[<span class="dv">1</span>]]</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  int_vals <span class="ot">&lt;-</span> <span class="fu">intensity</span>(spec)[[<span class="dv">1</span>]]</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Baseline correction</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  baseline <span class="ot">&lt;-</span> <span class="fu">quantile</span>(int_vals, baseline_quantile)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  int_vals <span class="ot">&lt;-</span> <span class="fu">pmax</span>(int_vals <span class="sc">-</span> baseline, <span class="dv">0</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Smoothing</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  int_vals <span class="ot">&lt;-</span> <span class="fu">moving_average</span>(int_vals, smooth_window)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Normalization</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  int_vals <span class="ot">&lt;-</span> <span class="fu">base_peak_normalize</span>(int_vals)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Peak detection</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  peaks <span class="ot">&lt;-</span> <span class="fu">detect_peaks</span>(mz_vals, int_vals, min_peak_intensity)</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(<span class="fu">list</span>(</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">mz =</span> mz_vals,</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity =</span> int_vals,</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">peaks =</span> peaks</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Process first 10 spectra</span></span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>processed_results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">min</span>(<span class="dv">10</span>, <span class="fu">length</span>(ms_data))) {</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>  processed_results[[i]] <span class="ot">&lt;-</span> <span class="fu">process_spectrum</span>(ms_data[i])</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+</details>
+</div>
+<p><strong>Quality Assessment:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Assess processing quality</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>peak_counts <span class="ot">&lt;-</span> <span class="fu">sapply</span>(processed_results, <span class="cf">function</span>(x) <span class="fu">length</span>(x<span class="sc">$</span>peaks<span class="sc">$</span>mz))</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Peak counts across processed spectra:</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(peak_counts)</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot peak count distribution</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(peak_counts, <span class="at">breaks =</span> <span class="dv">10</span>,</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"Distribution of Peak Counts"</span>,</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Number of Peaks"</span>, <span class="at">ylab =</span> <span class="st">"Frequency"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="advanced-preprocessing-techniques" class="level3" data-number="5.11.9">
+<h3 data-number="5.11.9" class="anchored" data-anchor-id="advanced-preprocessing-techniques"><span class="header-section-number">5.11.9</span> Advanced Preprocessing Techniques</h3>
+<p><strong>Mass Calibration Concepts:</strong></p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simple mass calibration example (theoretical)</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>calibrate_mass <span class="ot">&lt;-</span> <span class="cf">function</span>(observed_mz, reference_mz, expected_mz) {</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Linear calibration</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  calibration_factor <span class="ot">&lt;-</span> expected_mz <span class="sc">/</span> reference_mz</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  calibrated_mz <span class="ot">&lt;-</span> observed_mz <span class="sc">*</span> calibration_factor</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(calibrated_mz)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Example usage (with hypothetical values)</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>observed <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">100.0</span>, <span class="fl">200.1</span>, <span class="fl">300.2</span>)</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>reference <span class="ot">&lt;-</span> <span class="fl">200.1</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>expected <span class="ot">&lt;-</span> <span class="fl">200.0</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>calibrated <span class="ot">&lt;-</span> <span class="fu">calibrate_mass</span>(observed, reference, expected)</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Original m/z:"</span>, observed, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibrated m/z:"</span>, calibrated, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="preprocessing-pipeline-complete-function" class="level3" data-number="5.11.10">
+<h3 data-number="5.11.10" class="anchored" data-anchor-id="preprocessing-pipeline-complete-function"><span class="header-section-number">5.11.10</span> Preprocessing Pipeline: Complete Function</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>complete_preprocessing <span class="ot">&lt;-</span> <span class="cf">function</span>(spectra_obj,</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">baseline_quantile =</span> <span class="fl">0.05</span>,</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">smooth_sigma =</span> <span class="dv">2</span>,</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">normalization =</span> <span class="st">"base_peak"</span>,</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">min_peak_intensity =</span> <span class="dv">1000</span>) {</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  processed_spectra <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_along</span>(spectra_obj)) {</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    spec <span class="ot">&lt;-</span> spectra_obj[i]</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    mz_vals <span class="ot">&lt;-</span> <span class="fu">mz</span>(spec)[[<span class="dv">1</span>]]</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>    int_vals <span class="ot">&lt;-</span> <span class="fu">intensity</span>(spec)[[<span class="dv">1</span>]]</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Step 1: Baseline correction</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    baseline <span class="ot">&lt;-</span> <span class="fu">quantile</span>(int_vals, baseline_quantile)</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>    int_vals <span class="ot">&lt;-</span> <span class="fu">pmax</span>(int_vals <span class="sc">-</span> baseline, <span class="dv">0</span>)</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Step 2: Smoothing</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    int_vals <span class="ot">&lt;-</span> <span class="fu">gaussian_smooth</span>(int_vals, <span class="at">sigma =</span> smooth_sigma)</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Step 3: Normalization</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (normalization <span class="sc">==</span> <span class="st">"tic"</span>) {</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>      int_vals <span class="ot">&lt;-</span> <span class="fu">tic_normalize</span>(int_vals)</span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">else</span> <span class="cf">if</span> (normalization <span class="sc">==</span> <span class="st">"base_peak"</span>) {</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>      int_vals <span class="ot">&lt;-</span> <span class="fu">base_peak_normalize</span>(int_vals)</span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Step 4: Peak detection</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>    peaks <span class="ot">&lt;-</span> <span class="fu">detect_peaks</span>(mz_vals, int_vals, min_peak_intensity)</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a>    processed_spectra[[i]] <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a>      <span class="at">original_index =</span> i,</span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a>      <span class="at">mz =</span> mz_vals,</span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a>      <span class="at">intensity =</span> int_vals,</span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a>      <span class="at">peaks =</span> peaks,</span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true" tabindex="-1"></a>      <span class="at">metadata =</span> <span class="fu">list</span>(</span>
+<span id="cb19-37"><a href="#cb19-37" aria-hidden="true" tabindex="-1"></a>        <span class="at">processing_date =</span> <span class="fu">Sys.time</span>(),</span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true" tabindex="-1"></a>        <span class="at">parameters =</span> <span class="fu">list</span>(</span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true" tabindex="-1"></a>          <span class="at">baseline_quantile =</span> baseline_quantile,</span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true" tabindex="-1"></a>          <span class="at">smooth_sigma =</span> smooth_sigma,</span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true" tabindex="-1"></a>          <span class="at">normalization =</span> normalization,</span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true" tabindex="-1"></a>          <span class="at">min_peak_intensity =</span> min_peak_intensity</span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(processed_spectra)</span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+</details>
+</div>
+</section>
+</section>
+<section id="exercises" class="level2" data-number="5.12">
+<h2 data-number="5.12" class="anchored" data-anchor-id="exercises"><span class="header-section-number">5.12</span> Exercises</h2>
+<ul>
+<li>Apply different baseline correction methods and compare results.</li>
+<li>Experiment with various smoothing parameters.</li>
+<li>Implement and test different peak detection algorithms.</li>
+<li>Compare TIC and base peak normalization approaches.</li>
+<li>Create a quality control function for preprocessing results.</li>
+</ul>
+<section id="summary" class="level3" data-number="5.12.1">
+<h3 data-number="5.12.1" class="anchored" data-anchor-id="summary"><span class="header-section-number">5.12.1</span> Summary</h3>
+<p>This chapter covered essential preprocessing techniques for MS data, including baseline correction, smoothing, peak detection, and normalization. These steps are fundamental for preparing data for downstream analysis and ensuring reliable results.</p>
+</section>
+</section>
+<section id="synthesis-and-future-directions" class="level2" data-number="5.13">
+<h2 data-number="5.13" class="anchored" data-anchor-id="synthesis-and-future-directions"><span class="header-section-number">5.13</span> Synthesis and Future Directions</h2>
+<p>Spectral preprocessing is not merely a “cleanup” step; it is a transformation of the data space that fundamentally alters the performance of chemometric models. The choice of algorithm—ModPoly vs.&nbsp;airPLS, SNV vs.&nbsp;MSC, SG vs.&nbsp;Norris—must be grounded in the physical reality of the sample and the noise structure of the instrument.</p>
+<section id="the-order-of-operations-consensus" class="level3" data-number="5.13.1">
+<h3 data-number="5.13.1" class="anchored" data-anchor-id="the-order-of-operations-consensus"><span class="header-section-number">5.13.1</span> The “Order of Operations” Consensus</h3>
+<p>A recurring debate in the literature concerns the order of operations. The consensus emerging from recent reviews suggests:</p>
+<ol type="1">
+<li><strong>Artifact Removal:</strong> Cosmic rays and detector spikes must go first.</li>
+<li><strong>Scatter/Pathlength Correction:</strong> SNV or MSC should generally precede derivatives. Derivatives remove the “magnitude” information that SNV needs to calculate the scaling factor.</li>
+<li><strong>Baseline/Spectral Filtering:</strong> Derivatives or Baseline Correction (airPLS) are applied next to remove chemical/fluorescence backgrounds.</li>
+<li><strong>Scaling:</strong> Mean centering is the final step before PCA/PLS.</li>
+</ol>
+</section>
+<section id="future-frontiers-deep-learning" class="level3" data-number="5.13.2">
+<h3 data-number="5.13.2" class="anchored" data-anchor-id="future-frontiers-deep-learning"><span class="header-section-number">5.13.2</span> Future Frontiers: Deep Learning</h3>
+<p>The future of preprocessing lies in automation. Neural networks, specifically 1D Convolutional Neural Networks (CNNs), are beginning to replace manual preprocessing pipelines. A CNN can learn to effectively “despike,” “smooth,” and “correct” data as part of its feature extraction layers, optimizing the preprocessing strategy specifically for the prediction task at hand. However, for regulatory environments (pharma, forensics), the explainability of classical algorithms like SG and SNV ensures their continued dominance.</p>
+<p>In conclusion, the rigorous application of spectral preprocessing is the differentiator between a model that fits noise and a model that captures chemistry. By leveraging adaptive algorithms like airPLS and robust normalization like PQN, researchers can extract precise molecular insights from the chaotic superposition of signals that constitutes a raw spectrum.</p>
+</section>
+</section>
+<section id="references" class="level2" data-number="5.14">
+<h2 data-number="5.14" class="anchored" data-anchor-id="references"><span class="header-section-number">5.14</span> References</h2>
+<ol type="1">
+<li>Preprocessing of Spectral Data - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/publication/397865719_Preprocessing_of_Spectral_Data">https://www.researchgate.net/publication/397865719_Preprocessing_of_Spectral_Data</a><br>
+</li>
+<li>Mini-Tutorial: Cleaning Up the Spectrum Using Preprocessing Strategies for FT-IR ATR Analysis | Spectroscopy Online, accessed November 25, 2025, <a href="https://www.spectroscopyonline.com/view/mini-tutorial-cleaning-up-the-spectrum-using-preprocessing-strategies-for-ft-ir-atr-analysis">https://www.spectroscopyonline.com/view/mini-tutorial-cleaning-up-the-spectrum-using-preprocessing-strategies-for-ft-ir-atr-analysis</a><br>
+</li>
+<li>Baseline and Scatter: Correcting the Spectral Chameleons | Spectroscopy Online, accessed November 25, 2025, <a href="https://www.spectroscopyonline.com/view/baseline-and-scatter-correcting-the-spectral-chameleons">https://www.spectroscopyonline.com/view/baseline-and-scatter-correcting-the-spectral-chameleons</a><br>
+</li>
+<li>A Study on Various Preprocessing Algorithms Used For NIR Spectra. - Research Journal of Pharmaceutical, Biological and Chemical Sciences, accessed November 25, 2025, <a href="https://www.rjpbcs.com/pdf/2016_7(4)/%5B344%5D.pdf">https://www.rjpbcs.com/pdf/2016_7(4)/[344].pdf</a><br>
+</li>
+<li>Artifacts and Anomalies in Raman Spectroscopy: A Review on Origins and Correction Procedures - PubMed Central, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11478279/">https://pmc.ncbi.nlm.nih.gov/articles/PMC11478279/</a><br>
+</li>
+<li>Savitzky–Golay filter - Wikipedia, accessed November 25, 2025, <a href="https://en.wikipedia.org/wiki/Savitzky%E2%80%93Golay_filter">https://en.wikipedia.org/wiki/Savitzky%E2%80%93Golay_filter</a><br>
+</li>
+<li>Savitzky-Golay Smoothing and Differentiation Filter - Eigenvector …, accessed November 25, 2025, <a href="https://eigenvector.com/wp-content/uploads/2020/01/SavitzkyGolay.pdf">https://eigenvector.com/wp-content/uploads/2020/01/SavitzkyGolay.pdf</a><br>
+</li>
+<li>Introduction to the Savitzky-Golay Filter: A Comprehensive Guide (Using Python) - Medium, accessed November 25, 2025, <a href="https://medium.com/pythoneers/introduction-to-the-savitzky-golay-filter-a-comprehensive-guide-using-python-b2dd07a8e2ce">https://medium.com/pythoneers/introduction-to-the-savitzky-golay-filter-a-comprehensive-guide-using-python-b2dd07a8e2ce</a><br>
+</li>
+<li>Savitzky–Golay Smoothing and Differentiation Filter of Even Length: A Gram Polynomial Approach | Spectroscopy Online, accessed November 25, 2025, <a href="https://www.spectroscopyonline.com/view/savitzky-golay-smoothing-and-differentiation-filter-even-length-gram-polynomial-approach">https://www.spectroscopyonline.com/view/savitzky-golay-smoothing-and-differentiation-filter-even-length-gram-polynomial-approach</a><br>
+</li>
+<li>Two methods for baseline correction of spectral data - NIRPY Research, accessed November 25, 2025, <a href="https://nirpyresearch.com/two-methods-baseline-correction-spectral-data/">https://nirpyresearch.com/two-methods-baseline-correction-spectral-data/</a><br>
+</li>
+<li>A review on spectral data preprocessing techniques for machine learning and quantitative analysis - PubMed Central, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12221524/">https://pmc.ncbi.nlm.nih.gov/articles/PMC12221524/</a><br>
+</li>
+<li>Open-sourced Raman spectroscopy data processing package implementing a baseline removal algorithm validated from multiple datasets acquired in human tissue and biofluids - NIH, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9941747/">https://pmc.ncbi.nlm.nih.gov/articles/PMC9941747/</a><br>
+</li>
+<li>Advanced preprocessing and analysis techniques for enhanced Raman spectroscopy data interpretation - SPIE Digital Library, accessed November 25, 2025, <a href="https://www.spiedigitallibrary.org/conference-proceedings-of-spie/13311/3048830/Advanced-preprocessing-and-analysis-techniques-for-enhanced-Raman-spectroscopy-data/10.1117/12.3048830.full">https://www.spiedigitallibrary.org/conference-proceedings-of-spie/13311/3048830/Advanced-preprocessing-and-analysis-techniques-for-enhanced-Raman-spectroscopy-data/10.1117/12.3048830.full</a><br>
+</li>
+<li>NIR spectra pre-processed using the SNV method. - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/figure/NIR-spectra-pre-processed-using-the-SNV-method_fig6_320348058">https://www.researchgate.net/figure/NIR-spectra-pre-processed-using-the-SNV-method_fig6_320348058</a><br>
+</li>
+<li>Porchlight: An Accessible and Interactive Aid in Preprocessing of Spectral Data | Journal of Chemical Education - ACS Publications, accessed November 25, 2025, <a href="https://pubs.acs.org/doi/10.1021/acs.jchemed.2c00812">https://pubs.acs.org/doi/10.1021/acs.jchemed.2c00812</a><br>
+</li>
+<li>Beyond Traditional airPLS: Improved Baseline Removal in SERS with Parameter-Focused Optimization and Prediction | Analytical Chemistry - ACS Publications, accessed November 25, 2025, <a href="https://pubs.acs.org/doi/10.1021/acs.analchem.5c01253">https://pubs.acs.org/doi/10.1021/acs.analchem.5c01253</a><br>
+</li>
+<li>An Automatic Baseline Correction Method Based on the Penalized Least Squares Method, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7181009/">https://pmc.ncbi.nlm.nih.gov/articles/PMC7181009/</a><br>
+</li>
+<li>Baseline: Asymmetric Least Squares | Infrared, Python &amp; Chemometrics, accessed November 25, 2025, <a href="http://spectroscopy.ramer.at/pretreatment/baseline-correction-2-als/">http://spectroscopy.ramer.at/pretreatment/baseline-correction-2-als/</a><br>
+</li>
+<li>Why and How Savitzky–Golay Filters Should Be Replaced - PMC - NIH, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9026279/">https://pmc.ncbi.nlm.nih.gov/articles/PMC9026279/</a><br>
+</li>
+<li>Baseline correction method based on improved asymmetrically reweighted penalized least squares for the Raman spectrum - Optica Publishing Group, accessed November 25, 2025, <a href="https://opg.optica.org/ao/upcoming_pdf.cfm?id=404863">https://opg.optica.org/ao/upcoming_pdf.cfm?id=404863</a><br>
+</li>
+<li>zmzhang/airPLS: baseline correction using adaptive iteratively reweighted Penalized Least Squares - GitHub, accessed November 25, 2025, <a href="https://github.com/zmzhang/airPLS">https://github.com/zmzhang/airPLS</a><br>
+</li>
+<li>pybaselines.Baseline.airpls - Read the Docs, accessed November 25, 2025, <a href="https://pybaselines.readthedocs.io/en/latest/generated/api/pybaselines.Baseline.airpls.html">https://pybaselines.readthedocs.io/en/latest/generated/api/pybaselines.Baseline.airpls.html</a><br>
+</li>
+<li>Two scatter correction techniques for NIR spectroscopy in Python - NIRPY Research, accessed November 25, 2025, <a href="https://nirpyresearch.com/two-scatter-correction-techniques-nir-spectroscopy-python/">https://nirpyresearch.com/two-scatter-correction-techniques-nir-spectroscopy-python/</a><br>
+</li>
+<li>Standard Normal Variate, Multiplicative Signal Correction and Extended Multiplicative Signal Correction Preprocessing in Biospectroscopy | Request PDF - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/publication/288230854_Standard_Normal_Variate_Multiplicative_Signal_Correction_and_Extended_Multiplicative_Signal_Correction_Preprocessing_in_Biospectroscopy">https://www.researchgate.net/publication/288230854_Standard_Normal_Variate_Multiplicative_Signal_Correction_and_Extended_Multiplicative_Signal_Correction_Preprocessing_in_Biospectroscopy</a><br>
+</li>
+<li>Could anybody tell me what are those pre-processing methods for NIR spectroscopy?, accessed November 25, 2025, <a href="https://www.researchgate.net/post/Could-anybody-tell-me-what-are-those-pre-processing-methods-for-NIR-spectroscopy">https://www.researchgate.net/post/Could-anybody-tell-me-what-are-those-pre-processing-methods-for-NIR-spectroscopy</a><br>
+</li>
+<li>Multiplicative Scatter Correction | labCognition Online Help, accessed November 25, 2025, <a href="https://docs.labcognition.com/panorama/en/multiplicative_scatter_correction/">https://docs.labcognition.com/panorama/en/multiplicative_scatter_correction/</a><br>
+</li>
+<li>Include MSC in a custom pipeline using scikit-learn - NIRPY Research, accessed November 25, 2025, <a href="https://nirpyresearch.com/include-msc-custom-pipeline-scikit-learn/">https://nirpyresearch.com/include-msc-custom-pipeline-scikit-learn/</a><br>
+</li>
+<li>Pre-processing in vibrational spectroscopy, a when, why and how - RSC Publishing, accessed November 25, 2025, <a href="https://pubs.rsc.org/en/content/getauthorversionpdf/c3ay42270d">https://pubs.rsc.org/en/content/getauthorversionpdf/c3ay42270d</a><br>
+</li>
+<li>chemometrics.Emsc - Read the Docs, accessed November 25, 2025, <a href="https://chemometrics.readthedocs.io/en/stable/generated/chemometrics.Emsc.html">https://chemometrics.readthedocs.io/en/stable/generated/chemometrics.Emsc.html</a><br>
+</li>
+<li>The Use of Constituent Spectra and Weighting in Extended Multiplicative Signal Correction in Infrared Spectroscopy - PMC, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8948808/">https://pmc.ncbi.nlm.nih.gov/articles/PMC8948808/</a><br>
+</li>
+<li>Extended Multiplicative Signal Correction for Infrared Microspectroscopy of Heterogeneous Samples with Cylindrical Domains - Optica Publishing Group, accessed November 25, 2025, <a href="https://opg.optica.org/abstract.cfm?uri=as-73-8-859">https://opg.optica.org/abstract.cfm?uri=as-73-8-859</a><br>
+</li>
+<li>Extended multiplicative signal correction in vibrational spectroscopy, a tutorial | Request PDF - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/publication/257035315_Extended_multiplicative_signal_correction_in_vibrational_spectroscopy_a_tutorial">https://www.researchgate.net/publication/257035315_Extended_multiplicative_signal_correction_in_vibrational_spectroscopy_a_tutorial</a><br>
+</li>
+<li>Probabilistic Quotient Normalization as Robust Method to Account for Dilution of Complex Biological Mixtures. Application in 1 H NMR Metabonomics - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/publication/6977148_Probabilistic_Quotient_Normalization_as_Robust_Method_to_Account_for_Dilution_of_Complex_Biological_Mixtures_Application_in_1_H_NMR_Metabonomics">https://www.researchgate.net/publication/6977148_Probabilistic_Quotient_Normalization_as_Robust_Method_to_Account_for_Dilution_of_Complex_Biological_Mixtures_Application_in_1_H_NMR_Metabonomics</a><br>
+</li>
+<li>Evaluation of normalization strategies for mass spectrometry-based multi-omics datasets, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12214035/">https://pmc.ncbi.nlm.nih.gov/articles/PMC12214035/</a><br>
+</li>
+<li>What is a Norris Derivative? - ResearchGate, accessed November 25, 2025, <a href="https://www.researchgate.net/publication/274906336_What_is_a_Norris_derivative">https://www.researchgate.net/publication/274906336_What_is_a_Norris_derivative</a><br>
+</li>
+<li>An Evaluation of Different NIR-Spectral Pre-Treatments to Derive the Soil Parameters C and N of a Humus-Clay-Rich Soil - PMC - PubMed Central, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7922103/">https://pmc.ncbi.nlm.nih.gov/articles/PMC7922103/</a><br>
+</li>
+<li>Practical Considerations in Data Pre-treatment for NIR and Raman Spectroscopy, accessed November 25, 2025, <a href="https://www.americanpharmaceuticalreview.com/Featured-Articles/116330-Practical-Considerations-in-Data-Pre-treatment-for-NIR-and-Raman-Spectroscopy/">https://www.americanpharmaceuticalreview.com/Featured-Articles/116330-Practical-Considerations-in-Data-Pre-treatment-for-NIR-and-Raman-Spectroscopy/</a><br>
+</li>
+<li>MSIWarp: A General Approach to Mass Alignment in Mass Spectrometry Imaging | Analytical Chemistry - ACS Publications, accessed November 25, 2025, <a href="https://pubs.acs.org/doi/10.1021/acs.analchem.0c03833">https://pubs.acs.org/doi/10.1021/acs.analchem.0c03833</a><br>
+</li>
+<li>MSIWarp: A General Approach to Mass Alignment in Mass Spectrometry Imaging - NIH, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7745203/">https://pmc.ncbi.nlm.nih.gov/articles/PMC7745203/</a><br>
+</li>
+<li>chemotools - PyPI, accessed November 25, 2025, <a href="https://pypi.org/project/chemotools/0.0.10/">https://pypi.org/project/chemotools/0.0.10/</a><br>
+</li>
+<li>RamanSPy: An Open-Source Python Package for Integrative Raman Spectroscopy Data Analysis - PMC - PubMed Central, accessed November 25, 2025, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11140669/">https://pmc.ncbi.nlm.nih.gov/articles/PMC11140669/</a><br>
+</li>
+<li>Python library for chemometric data analysis - GitHub, accessed November 25, 2025, <a href="https://github.com/maruedt/chemometrics">https://github.com/maruedt/chemometrics</a><br>
+</li>
+<li>EMSC: Extended Multiplicative Signal Correction - CRAN, accessed November 25, 2025, <a href="https://cran.r-project.org/web/packages/EMSC/EMSC.pdf">https://cran.r-project.org/web/packages/EMSC/EMSC.pdf</a><br>
+</li>
+<li>Variable Penalty Dynamic Time Warping Code for Aligning Mass Spectrometry Chromatograms in R - Journal of Statistical Software, accessed November 25, 2025, <a href="https://www.jstatsoft.org/article/view/v047i08/581">https://www.jstatsoft.org/article/view/v047i08/581</a><br>
+</li>
+<li>NIR PAT Basics: Common Spectral Preprocessing for Powder Analysis - Sentronic GmbH, accessed November 25, 2025, <a href="https://www.sentronic.eu/knowledge-base/blog/nir-pat-basics-common-spectral-preprocessing-for-powder-analysis/">https://www.sentronic.eu/knowledge-base/blog/nir-pat-basics-common-spectral-preprocessing-for-powder-analysis/</a><br>
+</li>
+<li>Artificial Intelligence in Analytical Spectroscopy, Part II: Examples in Spectroscopy, accessed November 25, 2025, <a href="https://www.spectroscopyonline.com/view/artificial-intelligence-in-analytical-spectroscopy-part-ii-examples-in-spectroscopy">https://www.spectroscopyonline.com/view/artificial-intelligence-in-analytical-spectroscopy-part-ii-examples-in-spectroscopy</a></li>
+</ol>
+
+
+</section>
+
+</main> <!-- /main -->
+<script>
+
+// Zoom Controls for Quarto Book
+
+// Adds interactive zoom in/out functionality
+
+
+
+(function() {
+
+  'use strict';
+
+  
+
+  // Create zoom controls HTML
+
+  function createZoomControls() {
+
+    const controlsHTML = `
+
+      <div class="zoom-controls" id="zoomControls">
+
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+
+      </div>
+
+    `;
+
+    
+
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+
+  }
+
+  
+
+  // Get current zoom level
+
+  function getCurrentZoom() {
+
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+
+  }
+
+  
+
+  // Set zoom level
+
+  function setZoom(level) {
+
+    // Remove existing zoom classes
+
+    document.body.className = document.body.className
+
+      .replace(/\bzoom-\d+\b/g, '')
+
+      .trim();
+
+    
+
+    // Add new zoom class
+
+    if (level !== 100) {
+
+      document.body.classList.add(`zoom-${level}`);
+
+    }
+
+    
+
+    // Update indicator
+
+    const indicator = document.getElementById('zoomIndicator');
+
+    if (indicator) {
+
+      indicator.textContent = `${level}%`;
+
+    }
+
+    
+
+    // Save to localStorage
+
+    localStorage.setItem('bookZoomLevel', level);
+
+    
+
+    // Update button states
+
+    updateButtonStates(level);
+
+  }
+
+  
+
+  // Update button enabled/disabled states
+
+  function updateButtonStates(level) {
+
+    const zoomInBtn = document.getElementById('zoomInBtn');
+
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+
+    
+
+    if (zoomInBtn) {
+
+      zoomInBtn.disabled = level >= 200;
+
+    }
+
+    if (zoomOutBtn) {
+
+      zoomOutBtn.disabled = level <= 50;
+
+    }
+
+    if (zoomResetBtn) {
+
+      zoomResetBtn.disabled = level === 100;
+
+    }
+
+  }
+
+  
+
+  // Zoom in
+
+  function zoomIn() {
+
+    const current = getCurrentZoom();
+
+    const levels = [50, 75, 100, 125, 150, 200];
+
+    const currentIndex = levels.indexOf(current);
+
+    
+
+    if (currentIndex < levels.length - 1) {
+
+      setZoom(levels[currentIndex + 1]);
+
+    }
+
+  }
+
+  
+
+  // Zoom out
+
+  function zoomOut() {
+
+    const current = getCurrentZoom();
+
+    const levels = [50, 75, 100, 125, 150, 200];
+
+    const currentIndex = levels.indexOf(current);
+
+    
+
+    if (currentIndex > 0) {
+
+      setZoom(levels[currentIndex - 1]);
+
+    }
+
+  }
+
+  
+
+  // Reset zoom
+
+  function resetZoom() {
+
+    setZoom(100);
+
+  }
+
+  
+
+  // Initialize zoom controls
+
+  function initZoomControls() {
+
+    // Create controls
+
+    createZoomControls();
+
+    
+
+    // Attach event listeners
+
+    const zoomInBtn = document.getElementById('zoomInBtn');
+
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+
+    
+
+    if (zoomInBtn) {
+
+      zoomInBtn.addEventListener('click', zoomIn);
+
+    }
+
+    if (zoomOutBtn) {
+
+      zoomOutBtn.addEventListener('click', zoomOut);
+
+    }
+
+    if (zoomResetBtn) {
+
+      zoomResetBtn.addEventListener('click', resetZoom);
+
+    }
+
+    
+
+    // Keyboard shortcuts
+
+    document.addEventListener('keydown', function(e) {
+
+      // Ctrl + Plus or Ctrl + Equals
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+
+        e.preventDefault();
+
+        zoomIn();
+
+      }
+
+      // Ctrl + Minus
+
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+
+        e.preventDefault();
+
+        zoomOut();
+
+      }
+
+      // Ctrl + 0
+
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+
+        e.preventDefault();
+
+        resetZoom();
+
+      }
+
+    });
+
+    
+
+    // Restore saved zoom level
+
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+
+    if (savedZoom) {
+
+      setZoom(parseInt(savedZoom));
+
+    } else {
+
+      setZoom(100);
+
+    }
+
+  }
+
+  
+
+  // Initialize when DOM is ready
+
+  if (document.readyState === 'loading') {
+
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+
+  } else {
+
+    initZoomControls();
+
+  }
+
+  
+
+  // Image click to zoom functionality
+
+  document.addEventListener('click', function(e) {
+
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+
+      const img = e.target;
+
+      const container = document.createElement('div');
+
+      container.className = 'zoom-container';
+
+      container.id = 'imageZoomContainer';
+
+      
+
+      const clonedImg = img.cloneNode(true);
+
+      clonedImg.style.maxWidth = '85%';
+
+      clonedImg.style.maxHeight = '95%';
+
+      clonedImg.style.width = 'auto';
+
+      clonedImg.style.height = 'auto';
+
+      clonedImg.style.objectFit = 'contain';
+
+      container.appendChild(clonedImg);
+
+      document.body.appendChild(container);
+
+      
+
+      // Zoom in
+
+      setTimeout(() => {
+
+        container.classList.add('zoomed');
+
+      }, 10);
+
+      
+
+      // Zoom out on click
+
+      container.addEventListener('click', function() {
+
+        container.classList.remove('zoomed');
+
+        setTimeout(() => {
+
+          container.remove();
+
+        }, 300);
+
+      });
+
+    }
+
+  });
+
+  
+
+})();
+
+</script>
+
+
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./03-data-formats-import-bis.html" class="pagination-link" aria-label="Mass Spectrometry Data Formats, Standards, and Import Workflows: A Comprehensive Technical Guide">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Mass Spectrometry Data Formats, Standards, and Import Workflows: A Comprehensive Technical Guide</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./05-peak-detection-quantification.html" class="pagination-link" aria-label="Peak Detection and Quantification">
+        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/04-spectral-preprocessing-bis.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

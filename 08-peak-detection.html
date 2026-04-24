@@ -6,10 +6,8 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="author" content="Lucas VHH TRAN">
-<meta name="dcterms.date" content="2026-04-24">
 
-<title>Mass Spectrometry Data Analysis with R</title>
+<title>8&nbsp; Peak Detection and Quantification – Mass Spectrometry Data Analysis with R</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -32,7 +30,8 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./01-ms-introduction.html" rel="next">
+<link href="./09-retention-time-alignment.html" rel="next">
+<link href="./07-spectral-processing.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -84,7 +83,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./index.html">Preface</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./07-spectral-processing.html">Part III — Spectral Processing and Feature Quantification</a></li><li class="breadcrumb-item"><a href="./08-peak-detection.html"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -114,7 +113,7 @@ ul.task-list li input[type="checkbox"] {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./index.html" class="sidebar-item-text sidebar-link active">
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Preface</span></a>
   </div>
 </li>
@@ -193,7 +192,7 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./08-peak-detection.html" class="sidebar-item-text sidebar-link">
+  <a href="./08-peak-detection.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></span></a>
   </div>
 </li>
@@ -384,47 +383,57 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#preface" id="toc-preface" class="nav-link active" data-scroll-target="#preface">Preface</a>
+  <li><a href="#setting-up-the-environment" id="toc-setting-up-the-environment" class="nav-link active" data-scroll-target="#setting-up-the-environment"><span class="header-section-number">8.1</span> Setting Up the Environment</a></li>
+  <li><a href="#modern-peak-detection-with-spectra" id="toc-modern-peak-detection-with-spectra" class="nav-link" data-scroll-target="#modern-peak-detection-with-spectra"><span class="header-section-number">8.2</span> Modern Peak Detection with Spectra</a>
   <ul class="collapse">
-  <li><a href="#about-this-book" id="toc-about-this-book" class="nav-link" data-scroll-target="#about-this-book">About This Book</a></li>
-  <li><a href="#who-this-book-is-for" id="toc-who-this-book-is-for" class="nav-link" data-scroll-target="#who-this-book-is-for">Who This Book Is For</a></li>
-  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
-  <li><a href="#what-youll-learn" id="toc-what-youll-learn" class="nav-link" data-scroll-target="#what-youll-learn">What You’ll Learn</a></li>
-  <li><a href="#book-structure" id="toc-book-structure" class="nav-link" data-scroll-target="#book-structure">Book Structure</a></li>
-  <li><a href="#getting-started" id="toc-getting-started" class="nav-link" data-scroll-target="#getting-started">Getting Started</a></li>
-  <li><a href="#acknowledgments" id="toc-acknowledgments" class="nav-link" data-scroll-target="#acknowledgments">Acknowledgments</a></li>
-  <li><a href="#disclaimer" id="toc-disclaimer" class="nav-link" data-scroll-target="#disclaimer">Disclaimer</a></li>
-  <li><a href="#feedback-and-updates" id="toc-feedback-and-updates" class="nav-link" data-scroll-target="#feedback-and-updates">Feedback and Updates</a></li>
+  <li><a href="#built-in-peak-picking" id="toc-built-in-peak-picking" class="nav-link" data-scroll-target="#built-in-peak-picking"><span class="header-section-number">8.2.1</span> Built-in Peak Picking</a></li>
+  <li><a href="#noise-estimation" id="toc-noise-estimation" class="nav-link" data-scroll-target="#noise-estimation"><span class="header-section-number">8.2.2</span> Noise Estimation</a></li>
   </ul></li>
+  <li><a href="#peak-quantification-methods" id="toc-peak-quantification-methods" class="nav-link" data-scroll-target="#peak-quantification-methods"><span class="header-section-number">8.3</span> Peak Quantification Methods</a>
+  <ul class="collapse">
+  <li><a href="#peak-integration" id="toc-peak-integration" class="nav-link" data-scroll-target="#peak-integration"><span class="header-section-number">8.3.1</span> Peak Integration</a></li>
+  <li><a href="#gaussian-fitting-for-peak-quantification" id="toc-gaussian-fitting-for-peak-quantification" class="nav-link" data-scroll-target="#gaussian-fitting-for-peak-quantification"><span class="header-section-number">8.3.2</span> Gaussian Fitting for Peak Quantification</a></li>
+  </ul></li>
+  <li><a href="#peak-quality-assessment" id="toc-peak-quality-assessment" class="nav-link" data-scroll-target="#peak-quality-assessment"><span class="header-section-number">8.4</span> Peak Quality Assessment</a>
+  <ul class="collapse">
+  <li><a href="#signal-to-noise-ratio-calculation" id="toc-signal-to-noise-ratio-calculation" class="nav-link" data-scroll-target="#signal-to-noise-ratio-calculation"><span class="header-section-number">8.4.1</span> Signal-to-Noise Ratio Calculation</a></li>
+  <li><a href="#peak-symmetry-assessment" id="toc-peak-symmetry-assessment" class="nav-link" data-scroll-target="#peak-symmetry-assessment"><span class="header-section-number">8.4.2</span> Peak Symmetry Assessment</a></li>
+  </ul></li>
+  <li><a href="#peak-list-management" id="toc-peak-list-management" class="nav-link" data-scroll-target="#peak-list-management"><span class="header-section-number">8.5</span> Peak List Management</a>
+  <ul class="collapse">
+  <li><a href="#creating-comprehensive-peak-lists" id="toc-creating-comprehensive-peak-lists" class="nav-link" data-scroll-target="#creating-comprehensive-peak-lists"><span class="header-section-number">8.5.1</span> Creating Comprehensive Peak Lists</a></li>
+  </ul></li>
+  <li><a href="#batch-peak-processing" id="toc-batch-peak-processing" class="nav-link" data-scroll-target="#batch-peak-processing"><span class="header-section-number">8.6</span> Batch Peak Processing</a>
+  <ul class="collapse">
+  <li><a href="#processing-multiple-spectra" id="toc-processing-multiple-spectra" class="nav-link" data-scroll-target="#processing-multiple-spectra"><span class="header-section-number">8.6.1</span> Processing Multiple Spectra</a></li>
+  </ul></li>
+  <li><a href="#advanced-peak-detection-system" id="toc-advanced-peak-detection-system" class="nav-link" data-scroll-target="#advanced-peak-detection-system"><span class="header-section-number">8.7</span> Advanced Peak Detection System</a>
+  <ul class="collapse">
+  <li><a href="#core-peak-detection-functions" id="toc-core-peak-detection-functions" class="nav-link" data-scroll-target="#core-peak-detection-functions"><span class="header-section-number">8.7.1</span> Core Peak Detection Functions</a></li>
+  <li><a href="#applying-advanced-peak-detection" id="toc-applying-advanced-peak-detection" class="nav-link" data-scroll-target="#applying-advanced-peak-detection"><span class="header-section-number">8.7.2</span> Applying Advanced Peak Detection</a></li>
+  <li><a href="#peak-slope-analysis" id="toc-peak-slope-analysis" class="nav-link" data-scroll-target="#peak-slope-analysis"><span class="header-section-number">8.7.3</span> Peak Slope Analysis</a></li>
+  <li><a href="#trough-detection" id="toc-trough-detection" class="nav-link" data-scroll-target="#trough-detection"><span class="header-section-number">8.7.4</span> Trough Detection</a></li>
+  <li><a href="#peak-area-calculation-system" id="toc-peak-area-calculation-system" class="nav-link" data-scroll-target="#peak-area-calculation-system"><span class="header-section-number">8.7.5</span> Peak Area Calculation System</a></li>
+  <li><a href="#demonstrating-peak-area-calculation" id="toc-demonstrating-peak-area-calculation" class="nav-link" data-scroll-target="#demonstrating-peak-area-calculation"><span class="header-section-number">8.7.6</span> Demonstrating Peak Area Calculation</a></li>
+  </ul></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">8.8</span> Exercises</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">8.9</span> Summary</a></li>
   </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/index.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/08-peak-detection.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./07-spectral-processing.html">Part III — Spectral Processing and Feature Quantification</a></li><li class="breadcrumb-item"><a href="./08-peak-detection.html"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title">Mass Spectrometry Data Analysis with R</h1>
-<p class="subtitle lead">A Comprehensive Guide to MS Data Analysis</p>
+<h1 class="title"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Peak Detection and Quantification</span></h1>
 </div>
 
 
 
 <div class="quarto-title-meta">
 
-    <div>
-    <div class="quarto-title-meta-heading">Author</div>
-    <div class="quarto-title-meta-contents">
-             <p>Lucas VHH TRAN </p>
-          </div>
-  </div>
     
-    <div>
-    <div class="quarto-title-meta-heading">Published</div>
-    <div class="quarto-title-meta-contents">
-      <p class="date">April 24, 2026</p>
-    </div>
-  </div>
   
     
   </div>
@@ -434,84 +443,276 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-
-<section id="preface" class="level1 unnumbered">
-<h1 class="unnumbered">Preface</h1><p><img src="cover.png" title="Mass Spectrometry Data Analysis with R" class="quarto-cover-image nolightbox img-fluid"></p>
-<p>Welcome to “R for Mass Spectrometry” - a comprehensive guide to analyzing mass spectrometry data using the R programming language and its rich ecosystem of specialized packages.</p>
-<section id="about-this-book" class="level2">
-<h2 class="anchored" data-anchor-id="about-this-book">About This Book</h2>
-<p>Mass spectrometry (MS) has become an indispensable tool in analytical chemistry, proteomics, metabolomics, and many other scientific disciplines. As the complexity and volume of MS data continue to grow, computational tools for data processing and analysis have become essential. R, with its extensive statistical capabilities and specialized packages for mass spectrometry, provides an excellent platform for comprehensive MS data analysis.</p>
-<p>This book aims to bridge the gap between mass spectrometry theory and practical computational implementation, providing readers with both conceptual understanding and hands-on experience in MS data analysis using R.</p>
+<p>Peak detection and quantification form the foundation of MS data analysis workflows. This chapter covers modern algorithms implemented in the R for Mass Spectrometry ecosystem and practical implementations using <code>Spectra</code> and <code>MsCoreUtils</code>.</p>
+<section id="setting-up-the-environment" class="level2" data-number="8.1">
+<h2 data-number="8.1" class="anchored" data-anchor-id="setting-up-the-environment"><span class="header-section-number">8.1</span> Setting Up the Environment</h2>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Note: Using synthetic data due to mzR compatibility issues</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Selected spectrum:</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Precursor m/z: 754.184 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Number of peaks: 133 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Intensity range: 1.19e+01 - 2.37e+06 </code></pre>
+</div>
+</div>
 </section>
-<section id="who-this-book-is-for" class="level2">
-<h2 class="anchored" data-anchor-id="who-this-book-is-for">Who This Book Is For</h2>
-<p>This book is designed for:</p>
-<ul>
-<li><strong>Graduate students</strong> in analytical chemistry, biochemistry, or related fields</li>
-<li><strong>Researchers</strong> working with mass spectrometry data</li>
-<li><strong>Data scientists</strong> entering the field of analytical chemistry</li>
-<li><strong>Bioinformaticians</strong> specializing in proteomics or metabolomics</li>
-<li><strong>Anyone</strong> interested in learning computational approaches to MS data analysis</li>
-</ul>
+<section id="modern-peak-detection-with-spectra" class="level2" data-number="8.2">
+<h2 data-number="8.2" class="anchored" data-anchor-id="modern-peak-detection-with-spectra"><span class="header-section-number">8.2</span> Modern Peak Detection with Spectra</h2>
+<section id="built-in-peak-picking" class="level3" data-number="8.2.1">
+<h3 data-number="8.2.1" class="anchored" data-anchor-id="built-in-peak-picking"><span class="header-section-number">8.2.1</span> Built-in Peak Picking</h3>
+<p>The <code>Spectra</code> package provides optimized peak picking methods:</p>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Peak reduction:</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Original peaks: 133 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  After picking: 24 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Reduction: 82 %</code></pre>
+</div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="08-peak-detection_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+</div>
 </section>
-<section id="prerequisites" class="level2">
-<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
-<p>Readers should have:</p>
-<ul>
-<li>Basic knowledge of R programming</li>
-<li>Familiarity with fundamental mass spectrometry concepts</li>
-<li>Understanding of basic statistics</li>
-<li>Experience with data analysis workflows (helpful but not required)</li>
-</ul>
+<section id="noise-estimation" class="level3" data-number="8.2.2">
+<h3 data-number="8.2.2" class="anchored" data-anchor-id="noise-estimation"><span class="header-section-number">8.2.2</span> Noise Estimation</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Estimated noise level: 3277.76 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>SNR statistics:</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Median SNR: 0.75 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Mean SNR: 9.31 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Max SNR: 723.41 </code></pre>
+</div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="08-peak-detection_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="08-peak-detection_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid figure-img" width="2100"></p>
+</figure>
+</div>
+</div>
+</div>
 </section>
-<section id="what-youll-learn" class="level2">
-<h2 class="anchored" data-anchor-id="what-youll-learn">What You’ll Learn</h2>
-<p>By the end of this book, you will be able to:</p>
-<ul>
-<li>Set up and configure R environments for MS data analysis</li>
-<li>Import, process, and visualize various MS data formats</li>
-<li>Implement spectral preprocessing and peak detection algorithms</li>
-<li>Perform statistical analysis of MS datasets</li>
-<li>Conduct metabolomics and proteomics data analysis workflows</li>
-<li>Apply machine learning techniques to MS data</li>
-<li>Develop and validate analytical methods</li>
-<li>Create reproducible analysis pipelines</li>
-</ul>
 </section>
-<section id="book-structure" class="level2">
-<h2 class="anchored" data-anchor-id="book-structure">Book Structure</h2>
-<p>The book is organized into progressively advanced topics:</p>
+<section id="peak-quantification-methods" class="level2" data-number="8.3">
+<h2 data-number="8.3" class="anchored" data-anchor-id="peak-quantification-methods"><span class="header-section-number">8.3</span> Peak Quantification Methods</h2>
+<section id="peak-integration" class="level3" data-number="8.3.1">
+<h3 data-number="8.3.1" class="anchored" data-anchor-id="peak-integration"><span class="header-section-number">8.3.1</span> Peak Integration</h3>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="08-peak-detection_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Peak Area: 0 
+Peak Height: 2371160 
+Peak m/z: 719.2207 </code></pre>
+</div>
+</div>
+</section>
+<section id="gaussian-fitting-for-peak-quantification" class="level3" data-number="8.3.2">
+<h3 data-number="8.3.2" class="anchored" data-anchor-id="gaussian-fitting-for-peak-quantification"><span class="header-section-number">8.3.2</span> Gaussian Fitting for Peak Quantification</h3>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="08-peak-detection_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid figure-img" width="2400"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Gaussian Fit Results:
+  Center: 719.1114 
+  Area: -6674634 
+  R-squared: 0.994 </code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="peak-quality-assessment" class="level2" data-number="8.4">
+<h2 data-number="8.4" class="anchored" data-anchor-id="peak-quality-assessment"><span class="header-section-number">8.4</span> Peak Quality Assessment</h2>
+<section id="signal-to-noise-ratio-calculation" class="level3" data-number="8.4.1">
+<h3 data-number="8.4.1" class="anchored" data-anchor-id="signal-to-noise-ratio-calculation"><span class="header-section-number">8.4.1</span> Signal-to-Noise Ratio Calculation</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>SNR values for detected peaks:</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 69.69</code></pre>
+</div>
+</div>
+</section>
+<section id="peak-symmetry-assessment" class="level3" data-number="8.4.2">
+<h3 data-number="8.4.2" class="anchored" data-anchor-id="peak-symmetry-assessment"><span class="header-section-number">8.4.2</span> Peak Symmetry Assessment</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Peak Symmetry Assessment:
+  Asymmetry Factor: 5.621 
+  FWHM: 22.7887 </code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="peak-list-management" class="level2" data-number="8.5">
+<h2 data-number="8.5" class="anchored" data-anchor-id="peak-list-management"><span class="header-section-number">8.5</span> Peak List Management</h2>
+<section id="creating-comprehensive-peak-lists" class="level3" data-number="8.5.1">
+<h3 data-number="8.5.1" class="anchored" data-anchor-id="creating-comprehensive-peak-lists"><span class="header-section-number">8.5.1</span> Creating Comprehensive Peak Lists</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>  peak_id       mz intensity relative_intensity      snr asymmetry area
+1       1 719.2207   2371160                100 69.68987  5.620902    0</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="batch-peak-processing" class="level2" data-number="8.6">
+<h2 data-number="8.6" class="anchored" data-anchor-id="batch-peak-processing"><span class="header-section-number">8.6</span> Batch Peak Processing</h2>
+<section id="processing-multiple-spectra" class="level3" data-number="8.6.1">
+<h3 data-number="8.6.1" class="anchored" data-anchor-id="processing-multiple-spectra"><span class="header-section-number">8.6.1</span> Processing Multiple Spectra</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Total peaks detected across spectra: 60 
+  peak_id       mz intensity relative_intensity       snr  asymmetry    area
+1       1 244.7057  42771.88           12.34308 0.9532201  2.5576214       0
+2       2 327.8421  92756.94           26.76772 2.0967084  0.5159425 1722408
+3       3 499.9734  48168.09           13.90031 1.0818725  0.4781007       0
+4       4 583.4235 226616.75           65.39688 5.3889942 73.3594800       0
+5       5 625.0181 148558.39           42.87086 3.4045120 15.9325747       0
+6       6 653.3221 136722.88           39.45538 3.1273898  0.3150271       0
+  spectrum_id retention_time
+1           1            100
+2           1            100
+3           1            100
+4           1            100
+5           1            100
+6           1            100</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="advanced-peak-detection-system" class="level2" data-number="8.7">
+<h2 data-number="8.7" class="anchored" data-anchor-id="advanced-peak-detection-system"><span class="header-section-number">8.7</span> Advanced Peak Detection System</h2>
+<p>This section introduces a comprehensive peak detection and area calculation system that provides robust methods for spectral analysis, including distance-based filtering, slope analysis, and sophisticated area calculations.</p>
+<section id="core-peak-detection-functions" class="level3" data-number="8.7.1">
+<h3 data-number="8.7.1" class="anchored" data-anchor-id="core-peak-detection-functions"><span class="header-section-number">8.7.1</span> Core Peak Detection Functions</h3>
+</section>
+<section id="applying-advanced-peak-detection" class="level3" data-number="8.7.2">
+<h3 data-number="8.7.2" class="anchored" data-anchor-id="applying-advanced-peak-detection"><span class="header-section-number">8.7.2</span> Applying Advanced Peak Detection</h3>
+<p><strong>Note</strong>: To use the advanced peak detection functions, you need to first define them by running the code blocks above (or source them from a separate R script). For demonstration purposes, we’ll show a simplified example here.</p>
+<p>For a working example that doesn’t require the full function definitions, we can use a simplified peak detection approach:</p>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Simplified peak detection results:</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Total peaks detected: 17 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Peak m/z range: 300.44 1944.56 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Peak height range: 6882.45 2371160 </code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  index     peak   height type
+1     8 300.4421 31556.99 peak
+2    17 393.2184 33672.98 peak
+3    22 454.3711 10082.55 peak
+4    27 510.6402 18913.01 peak
+5    32 573.8701 19330.30 peak</code></pre>
+</div>
+</div>
+</section>
+<section id="peak-slope-analysis" class="level3" data-number="8.7.3">
+<h3 data-number="8.7.3" class="anchored" data-anchor-id="peak-slope-analysis"><span class="header-section-number">8.7.3</span> Peak Slope Analysis</h3>
+<p>For demonstration, here’s a simplified slope calculation:</p>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Peak slope analysis:
+  Peaks analyzed: 16 
+  Mean slope angle range: 89.96 90 degrees
+  Mean asymmetry (diff_percent): 0.01 %
+  index     peak   height angle_left angle_right angle_mean diff_percent
+1     8 300.4421 31556.99   89.98430    89.99443   89.98936  0.011258257
+2    17 393.2184 33672.98   89.99279    89.99487   89.99383  0.002310248
+3    22 454.3711 10082.55   89.93208    89.98208   89.95708  0.055584005</code></pre>
+</div>
+</div>
+</section>
+<section id="trough-detection" class="level3" data-number="8.7.4">
+<h3 data-number="8.7.4" class="anchored" data-anchor-id="trough-detection"><span class="header-section-number">8.7.4</span> Trough Detection</h3>
+</section>
+<section id="peak-area-calculation-system" class="level3" data-number="8.7.5">
+<h3 data-number="8.7.5" class="anchored" data-anchor-id="peak-area-calculation-system"><span class="header-section-number">8.7.5</span> Peak Area Calculation System</h3>
+</section>
+<section id="demonstrating-peak-area-calculation" class="level3" data-number="8.7.6">
+<h3 data-number="8.7.6" class="anchored" data-anchor-id="demonstrating-peak-area-calculation"><span class="header-section-number">8.7.6</span> Demonstrating Peak Area Calculation</h3>
+</section>
+</section>
+<section id="exercises" class="level2" data-number="8.8">
+<h2 data-number="8.8" class="anchored" data-anchor-id="exercises"><span class="header-section-number">8.8</span> Exercises</h2>
 <ol type="1">
-<li><strong>Fundamentals</strong> - R basics and MS data structures</li>
-<li><strong>Data Handling</strong> - File formats and data import/export</li>
-<li><strong>Preprocessing</strong> - Spectral cleaning and preparation</li>
-<li><strong>Peak Analysis</strong> - Detection and quantification methods</li>
-<li><strong>Visualization</strong> - Creating informative plots and graphics</li>
-<li><strong>Statistics</strong> - Hypothesis testing and multivariate analysis</li>
-<li><strong>Metabolomics</strong> - Specialized workflows for metabolite analysis</li>
-<li><strong>Proteomics</strong> - Protein identification and quantification</li>
-<li><strong>Advanced Topics</strong> - Machine learning and method development</li>
+<li>Implement and compare different peak detection algorithms</li>
+<li>Evaluate the effect of different integration methods on quantification</li>
+<li>Create quality filters based on SNR and peak symmetry</li>
+<li>Develop a peak alignment algorithm for multiple spectra</li>
+<li>Build a complete peak processing pipeline with quality control</li>
+<li>Apply the advanced peak detection system to your own spectral data</li>
+<li>Compare peak areas calculated using different methods (trapezoidal, shoelace, Gaussian fitting)</li>
+<li>Implement peak area ratio analysis for comparative studies</li>
 </ol>
 </section>
-<section id="getting-started" class="level2">
-<h2 class="anchored" data-anchor-id="getting-started">Getting Started</h2>
-<p>To follow along with the examples in this book, you’ll need to install R and several specialized packages. Installation instructions and package setup are covered in the first chapter.</p>
-</section>
-<section id="acknowledgments" class="level2">
-<h2 class="anchored" data-anchor-id="acknowledgments">Acknowledgments</h2>
-<p>This book builds upon the excellent work of the R for Mass Spectrometry community and the developers of key packages including Spectra, xcms, MSnbase, and many others.</p>
-</section>
-<section id="disclaimer" class="level2">
-<h2 class="anchored" data-anchor-id="disclaimer">Disclaimer</h2>
-<p>The materials, examples, and code samples in this ebook are provided for educational purposes only and are offered “as is,” without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or noninfringement. While the author has made reasonable efforts to ensure the accuracy of the content, no guarantee is made as to its completeness or suitability. Readers who adopt, run, or modify any code or follow any procedure do so entirely at their own risk. Under no circumstances shall the author be liable for any loss, damage, or other liability, whether in an action of contract, tort, negligence, or otherwise, arising from or in connection with the use of this ebook.</p>
-</section>
-<section id="feedback-and-updates" class="level2">
-<h2 class="anchored" data-anchor-id="feedback-and-updates">Feedback and Updates</h2>
-<p>This book is a living document. Please report errors, suggest improvements, or request additional topics through the book’s repository.</p>
-<p>Let’s begin our journey into the world of mass spectrometry data analysis with R!</p>
+<section id="summary" class="level2" data-number="8.9">
+<h2 data-number="8.9" class="anchored" data-anchor-id="summary"><span class="header-section-number">8.9</span> Summary</h2>
+<p>This chapter covered advanced peak detection and quantification methods, including:</p>
+<ul>
+<li><strong>Modern peak detection</strong>: CWT-based detection, matched filtering, and built-in Spectra methods</li>
+<li><strong>Advanced peak detection system</strong>: Comprehensive functions (<code>detect_spectral_peaks</code>, <code>filter_peaks_by_distance</code>) for robust peak detection with neighbor validation, minimum height filtering, and distance-based filtering</li>
+<li><strong>Peak characterization</strong>: Slope analysis (<code>calculate_peak_slope_metrics</code>) and trough detection (<code>detect_spectral_troughs</code>) for comprehensive peak geometry assessment</li>
+<li><strong>Peak area calculation</strong>: Multiple integration approaches including trapezoidal rule, polygon area calculation (<code>calculate_polygon_area</code>), and Gaussian fitting</li>
+<li><strong>Area refinement</strong>: Linear regression-based boundary refinement (<code>refine_peak_boundaries</code>) for accurate peak area determination</li>
+<li><strong>Statistical analysis</strong>: Comprehensive area statistics (<code>calculate_area_statistics</code>) and ratio calculations (<code>calculate_area_ratios</code>) with outlier handling</li>
+</ul>
+<p>These techniques form the foundation for reliable quantitative analysis in mass spectrometry, providing robust tools for both automated and manual peak analysis workflows.</p>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->
@@ -862,10 +1063,13 @@ ul.task-list li input[type="checkbox"] {
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
+      <a href="./07-spectral-processing.html" class="pagination-link" aria-label="Spectral Data Preprocessing">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Spectral Data Preprocessing</span></span>
+      </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./01-ms-introduction.html" class="pagination-link" aria-label="Introduction to Mass Spectrometry">
-        <span class="nav-page-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Introduction to Mass Spectrometry</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./09-retention-time-alignment.html" class="pagination-link" aria-label="Retention Time Alignment and Feature Tables">
+        <span class="nav-page-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Retention Time Alignment and Feature Tables</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
@@ -874,5 +1078,5 @@ ul.task-list li input[type="checkbox"] {
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/index.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/08-peak-detection.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
 </body></html>

@@ -26,7 +26,7 @@ Part V: Advanced Topics (1 chapter + summary)
 ### 2. Visual Enhancements
 
 **Added 5 Comprehensive Workflow Diagrams:**
-1. ✅ **Overall MS Workflow** (intro.qmd) - Complete pipeline from sample to results
+1. ✅ **Overall MS Workflow** (01-ms-principles.qmd) - Complete pipeline from sample to results
 2. ✅ **Metabolomics xcms Pipeline** (08-metabolomics) - 5-step processing workflow
 3. ✅ **Proteomics Bottom-up Workflow** (09-proteomics) - Sample prep to differential analysis
 4. ✅ **QFeatures Architecture** (10-qfeatures) - Hierarchical data structure
@@ -131,8 +131,8 @@ Part V: Advanced Topics (1 chapter + summary)
 ✅ **All 13 Chapters are Complete and Well-Written:**
 
 1. **Preface** (index.qmd) - Excellent welcome and overview
-2. **MS Principles** (intro.qmd) - 345 lines of detailed theory + new workflow diagram
-3. **Introduction** (01-Introduction.qmd) - 212 lines of hands-on examples
+2. **MS Principles** (01-ms-principles.qmd) - 345 lines of detailed theory + new workflow diagram
+3. **Introduction** (legacy/01-Introduction.qmd) - 212 lines of hands-on examples
 4. **R Fundamentals** (02) - 276 lines covering ecosystem
 5. **Data Formats** (03) - 222 lines on Spectra objects
 6. **Preprocessing** (04) - 480 lines with comprehensive examples
@@ -261,11 +261,11 @@ git push origin master
 
 ### Files Modified
 1. ✅ `_quarto.yml` - Enhanced configuration (37 → 87 lines)
-2. ✅ `intro.qmd` - Added MS workflow diagram
-3. ✅ `07-statistical-analysis.qmd` - Added statistical workflow diagram
-4. ✅ `08-metabolomics-analysis.qmd` - Added xcms pipeline diagram
-5. ✅ `09-proteomics-analysis.qmd` - Added proteomics workflow diagram
-6. ✅ `10-qfeatures-quantitative.qmd` - Added QFeatures architecture diagram
+2. ✅ `01-ms-principles.qmd` - Added MS workflow diagram
+3. ✅ `10-statistical-analysis.qmd` - Added statistical workflow diagram
+4. ✅ `11-metabolomics-analysis.qmd` - Added xcms pipeline diagram
+5. ✅ `13-proteomics-analysis.qmd` - Added proteomics workflow diagram
+6. ✅ `14-qfeatures-quantitative.qmd` - Added QFeatures architecture diagram
 7. ✅ `summary.qmd` - Added book learning path diagram
 
 ### Visual Assets Added

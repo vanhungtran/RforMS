@@ -14,26 +14,26 @@ This document summarizes the comprehensive improvements made to "R for Mass Spec
 ```yaml
 Part I: Foundations
   - Preface (index.qmd)
-  - Chapter 0: MS Principles (intro.qmd)
-  - Chapter 1: Getting Started (01-Introduction.qmd)
+- Chapter 0: MS Principles (01-ms-principles.qmd)
+- Chapter 1: Getting Started (legacy/01-Introduction.qmd)
 
 Part II: Core Techniques
   - Chapter 2: R Fundamentals (02-r-fundamentals.qmd)
-  - Chapter 3: Data Formats & Import (03-data-formats-import.qmd)
-  - Chapter 4: Spectral Preprocessing (04-spectral-preprocessing.qmd)
-  - Chapter 5: Peak Detection & Quantification (05-peak-detection-quantification.qmd)
+- Chapter 3: Data Formats & Import (legacy/03-data-formats-import.qmd)
+- Chapter 4: Spectral Preprocessing (legacy/04-spectral-preprocessing-legacy.qmd)
+- Chapter 5: Peak Detection & Quantification (07-peak-detection-quantification.qmd)
 
 Part III: Analysis & Visualization
-  - Chapter 6: Data Visualization (06-data-visualization.qmd)
-  - Chapter 7: Statistical Analysis (07-statistical-analysis.qmd)
+- Chapter 6: Data Visualization (09-data-visualization.qmd)
+- Chapter 7: Statistical Analysis (10-statistical-analysis.qmd)
 
 Part IV: Applications
-  - Chapter 8: Metabolomics Analysis (08-metabolomics-analysis.qmd)
-  - Chapter 9: Proteomics Analysis (09-proteomics-analysis.qmd)
-  - Chapter 10: QFeatures Quantitative (10-qfeatures-quantitative.qmd)
+- Chapter 8: Metabolomics Analysis (11-metabolomics-analysis.qmd)
+- Chapter 9: Proteomics Analysis (13-proteomics-analysis.qmd)
+- Chapter 10: QFeatures Quantitative (14-qfeatures-quantitative.qmd)
 
 Part V: Advanced Topics
-  - Chapter 11: Advanced Topics & Applications (11-advanced-topics.qmd)
+- Chapter 11: Advanced Topics & Applications (05-advanced-topics.qmd)
   - Summary (summary.qmd)
   - References (references.qmd)
 ```
@@ -78,31 +78,31 @@ execute:
 
 **Added 5 Comprehensive Mermaid Diagrams:**
 
-#### 3.1 Overall MS Workflow (intro.qmd)
+#### 3.1 Overall MS Workflow (01-ms-principles.qmd)
 - Sample preparation through data analysis pipeline
 - Shows integration of all R packages
 - Color-coded workflow stages
 - Includes decision points for different analysis types
 
-#### 3.2 Metabolomics XCMS Pipeline (08-metabolomics-analysis.qmd)
+#### 3.2 Metabolomics XCMS Pipeline (11-metabolomics-analysis.qmd)
 - Detailed 5-step xcms workflow
 - Peak detection → RT correction → correspondence → gap filling → annotation
 - Parameter guidance in callout boxes
 - Statistical analysis downstream connections
 
-#### 3.3 Proteomics Bottom-up Workflow (09-proteomics-analysis.qmd)
+#### 3.3 Proteomics Bottom-up Workflow (13-proteomics-analysis.qmd)
 - Complete sample prep to results pipeline
 - Database searching with multiple engines
 - Protein inference and FDR control
 - Quantification methods (label-free, TMT, SILAC)
 
-#### 3.4 QFeatures Architecture (10-qfeatures-quantitative.qmd)
+#### 3.4 QFeatures Architecture (14-qfeatures-quantitative.qmd)
 - Hierarchical data structure (PSMs → Peptides → Proteins)
 - Aggregation strategies visualization
 - Metadata propagation illustration
 - Processing pipeline from raw to differential analysis
 
-#### 3.5 Statistical Analysis Flowchart (07-statistical-analysis.qmd)
+#### 3.5 Statistical Analysis Flowchart (10-statistical-analysis.qmd)
 - QC → Normalization → Analysis → Visualization pipeline
 - Parallel univariate and multivariate paths
 - Best practices in callout boxes
@@ -167,18 +167,18 @@ Contents:
 | Chapter | Content | Code Quality | Length | Status |
 |---------|---------|--------------|--------|--------|
 | Preface (index.qmd) | Excellent welcome, prerequisites, learning objectives | N/A | Comprehensive | ✅ Complete |
-| 0. MS Principles (intro.qmd) | Detailed theory: m/z, instrumentation, ionization | Citations | 345 lines | ✅ Enhanced with workflow |
-| 1. Introduction (01-Introduction.qmd) | Hands-on R examples with real datasets | Working code | 212 lines | ✅ Complete |
+| 0. MS Principles (01-ms-principles.qmd) | Detailed theory: m/z, instrumentation, ionization | Citations | 345 lines | ✅ Enhanced with workflow |
+| 1. Introduction (legacy/01-Introduction.qmd) | Hands-on R examples with real datasets | Working code | 212 lines | ✅ Complete |
 | 2. R Fundamentals (02-r-fundamentals.qmd) | Package installation, ecosystem overview | Setup code | 276 lines | ✅ Complete |
-| 3. Data Formats (03-data-formats-import.qmd) | mzML, Spectra objects, filtering | Working examples | 222 lines | ✅ Complete |
-| 4. Preprocessing (04-spectral-preprocessing.qmd) | Baseline, smoothing, normalization | Synthetic data fallback | 480 lines | ✅ Complete |
-| 5. Peak Detection (05-peak-detection-quantification.qmd) | MAD picking, noise estimation | Error handling | 546 lines | ✅ Complete |
-| 6. Visualization (06-data-visualization.qmd) | Spectral plots, TIC/BPC, mirror plots | ggplot2 code | 616 lines | ✅ Complete |
-| 7. Statistical Analysis (07-statistical-analysis.qmd) | PCA, clustering, limma, volcano plots | Synthetic dataset | 528 lines | ✅ Enhanced with diagram |
-| 8. Metabolomics (08-metabolomics-analysis.qmd) | xcms workflow, CentWave, CAMERA | Conditional loading | 788 lines | ✅ Enhanced with diagram |
-| 9. Proteomics (09-proteomics-analysis.qmd) | PSM matching, protein inference, TMT | Comprehensive | 811 lines | ✅ Enhanced with diagram |
-| 10. QFeatures (10-qfeatures-quantitative.qmd) | Aggregation, missing values, normalization | feat1 dataset | 479 lines | ✅ Enhanced with diagram |
-| 11. Advanced Topics (11-advanced-topics.qmd) | Backends, parallel processing, databases | Backend demos | 1188 lines | ✅ Complete |
+| 3. Data Formats (legacy/03-data-formats-import.qmd) | mzML, Spectra objects, filtering | Working examples | 222 lines | ✅ Complete |
+| 4. Preprocessing (legacy/04-spectral-preprocessing-legacy.qmd) | Baseline, smoothing, normalization | Synthetic data fallback | 480 lines | ✅ Complete |
+| 5. Peak Detection (07-peak-detection-quantification.qmd) | MAD picking, noise estimation | Error handling | 546 lines | ✅ Complete |
+| 6. Visualization (09-data-visualization.qmd) | Spectral plots, TIC/BPC, mirror plots | ggplot2 code | 616 lines | ✅ Complete |
+| 7. Statistical Analysis (10-statistical-analysis.qmd) | PCA, clustering, limma, volcano plots | Synthetic dataset | 528 lines | ✅ Enhanced with diagram |
+| 8. Metabolomics (11-metabolomics-analysis.qmd) | xcms workflow, CentWave, CAMERA | Conditional loading | 788 lines | ✅ Enhanced with diagram |
+| 9. Proteomics (13-proteomics-analysis.qmd) | PSM matching, protein inference, TMT | Comprehensive | 811 lines | ✅ Enhanced with diagram |
+| 10. QFeatures (14-qfeatures-quantitative.qmd) | Aggregation, missing values, normalization | feat1 dataset | 479 lines | ✅ Enhanced with diagram |
+| 11. Advanced Topics (05-advanced-topics.qmd) | Backends, parallel processing, databases | Backend demos | 1188 lines | ✅ Complete |
 | Summary (summary.qmd) | Best practices, package summary, future directions | Reference table | 196 lines | ✅ Complete |
 
 **Key Findings:**

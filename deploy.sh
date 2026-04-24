@@ -63,10 +63,8 @@ done
 
 # Copy site_libs directory if it exists
 if [ -d "docs/site_libs" ]; then
-    if [ -d "site_libs" ]; then
-        rm -rf site_libs
-    fi
-    cp -r docs/site_libs .
+    mkdir -p site_libs
+    cp -r docs/site_libs/. ./site_libs/
     echo "  Copied: site_libs/"
 fi
 echo "✓ Additional files copied"
@@ -98,6 +96,9 @@ git add *.css *.scss 2>/dev/null || true
 # Add _quarto.yml if modified
 git add _quarto.yml
 
+# Add cover image if modified
+git add cover.png docs/cover.png 2>/dev/null || true
+
 echo "✓ Files staged"
 echo ""
 
@@ -111,7 +112,7 @@ else
     echo "Changes to commit:"
     echo "$status"
     echo ""
-    
+
     # Step 6: Commit changes
     echo "Step 6: Committing changes..."
     commit_message="Deploy book: Update HTML files from docs/ to root $(date '+%Y-%m-%d %H:%M:%S')"
@@ -122,7 +123,7 @@ else
     fi
     echo "✓ Changes committed"
     echo ""
-    
+
     # Step 7: Push to GitHub
     echo "Step 7: Pushing to GitHub..."
     git push origin master

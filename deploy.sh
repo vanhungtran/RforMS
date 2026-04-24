@@ -61,10 +61,9 @@ for file in robots.txt sitemap.xml search.json .nojekyll; do
     fi
 done
 
-# Copy site_libs directory if it exists
+# Copy site_libs directory if it exists (use PowerShell on Windows for reliability)
 if [ -d "docs/site_libs" ]; then
-    mkdir -p site_libs
-    cp -r docs/site_libs/. ./site_libs/
+    powershell.exe -Command "New-Item -ItemType Directory -Path 'site_libs' -Force | Out-Null; Copy-Item -Path 'docs/site_libs/*' -Destination 'site_libs' -Recurse -Force"
     echo "  Copied: site_libs/"
 fi
 echo "✓ Additional files copied"

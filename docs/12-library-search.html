@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.29">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>11&nbsp; Match MS/MS Spectra to Libraries – Mass Spectrometry Data Analysis with R</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./13-quant-proteomics.html" rel="next">
+<link href="./11-annotate-metabolites.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-0815c480559380816a4d1ea211a47e91.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-23d003e80a5415bcd382f8d57091344b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./08-detect-features.html">Part II — Feature Detection and Identification</a></li><li class="breadcrumb-item"><a href="./12-library-search.html"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-library-search.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Matrix Normalization and Batch Correction</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">11.1</span> Learning Objectives</a></li>
+  <li><a href="#introduction-to-spectral-library-search" id="toc-introduction-to-spectral-library-search" class="nav-link" data-scroll-target="#introduction-to-spectral-library-search"><span class="header-section-number">11.2</span> Introduction to Spectral Library Search</a>
+  <ul class="collapse">
+  <li><a href="#why-spectral-library-matching" id="toc-why-spectral-library-matching" class="nav-link" data-scroll-target="#why-spectral-library-matching"><span class="header-section-number">11.2.1</span> Why Spectral Library Matching?</a></li>
+  <li><a href="#the-metabolomics-standards-initiative-msi-confidence-levels" id="toc-the-metabolomics-standards-initiative-msi-confidence-levels" class="nav-link" data-scroll-target="#the-metabolomics-standards-initiative-msi-confidence-levels"><span class="header-section-number">11.2.2</span> The Metabolomics Standards Initiative (MSI) Confidence Levels</a></li>
+  <li><a href="#key-matching-parameters" id="toc-key-matching-parameters" class="nav-link" data-scroll-target="#key-matching-parameters"><span class="header-section-number">11.2.3</span> Key Matching Parameters</a></li>
+  </ul></li>
+  <li><a href="#setting-up-the-environment" id="toc-setting-up-the-environment" class="nav-link" data-scroll-target="#setting-up-the-environment"><span class="header-section-number">11.3</span> Setting Up the Environment</a>
+  <ul class="collapse">
+  <li><a href="#required-packages" id="toc-required-packages" class="nav-link" data-scroll-target="#required-packages"><span class="header-section-number">11.3.1</span> Required Packages</a></li>
+  <li><a href="#loading-libraries" id="toc-loading-libraries" class="nav-link" data-scroll-target="#loading-libraries"><span class="header-section-number">11.3.2</span> Loading Libraries</a></li>
+  </ul></li>
+  <li><a href="#accessing-reference-spectral-libraries" id="toc-accessing-reference-spectral-libraries" class="nav-link" data-scroll-target="#accessing-reference-spectral-libraries"><span class="header-section-number">11.4</span> Accessing Reference Spectral Libraries</a>
+  <ul class="collapse">
+  <li><a href="#public-databases-accessible-from-r" id="toc-public-databases-accessible-from-r" class="nav-link" data-scroll-target="#public-databases-accessible-from-r"><span class="header-section-number">11.4.1</span> Public Databases Accessible from R</a></li>
+  <li><a href="#building-a-local-compounddb-database" id="toc-building-a-local-compounddb-database" class="nav-link" data-scroll-target="#building-a-local-compounddb-database"><span class="header-section-number">11.4.2</span> Building a Local CompoundDb Database</a></li>
+  <li><a href="#querying-a-compounddb-database" id="toc-querying-a-compounddb-database" class="nav-link" data-scroll-target="#querying-a-compounddb-database"><span class="header-section-number">11.4.3</span> Querying a CompoundDb Database</a></li>
+  </ul></li>
+  <li><a href="#preparing-experimental-data" id="toc-preparing-experimental-data" class="nav-link" data-scroll-target="#preparing-experimental-data"><span class="header-section-number">11.5</span> Preparing Experimental Data</a>
+  <ul class="collapse">
+  <li><a href="#loading-query-spectra" id="toc-loading-query-spectra" class="nav-link" data-scroll-target="#loading-query-spectra"><span class="header-section-number">11.5.1</span> Loading Query Spectra</a></li>
+  <li><a href="#quality-control-of-query-spectra" id="toc-quality-control-of-query-spectra" class="nav-link" data-scroll-target="#quality-control-of-query-spectra"><span class="header-section-number">11.5.2</span> Quality Control of Query Spectra</a></li>
+  </ul></li>
+  <li><a href="#spectral-matching-with-metaboannotation" id="toc-spectral-matching-with-metaboannotation" class="nav-link" data-scroll-target="#spectral-matching-with-metaboannotation"><span class="header-section-number">11.6</span> Spectral Matching with MetaboAnnotation</a>
+  <ul class="collapse">
+  <li><a href="#basic-cosine-similarity-search" id="toc-basic-cosine-similarity-search" class="nav-link" data-scroll-target="#basic-cosine-similarity-search"><span class="header-section-number">11.6.1</span> Basic Cosine Similarity Search</a></li>
+  <li><a href="#understanding-the-match-results" id="toc-understanding-the-match-results" class="nav-link" data-scroll-target="#understanding-the-match-results"><span class="header-section-number">11.6.2</span> Understanding the Match Results</a></li>
+  <li><a href="#best-hit-per-spectrum" id="toc-best-hit-per-spectrum" class="nav-link" data-scroll-target="#best-hit-per-spectrum"><span class="header-section-number">11.6.3</span> Best Hit Per Spectrum</a></li>
+  </ul></li>
+  <li><a href="#assigning-msi-confidence-levels" id="toc-assigning-msi-confidence-levels" class="nav-link" data-scroll-target="#assigning-msi-confidence-levels"><span class="header-section-number">11.7</span> Assigning MSI Confidence Levels</a>
+  <ul class="collapse">
+  <li><a href="#score-based-classification" id="toc-score-based-classification" class="nav-link" data-scroll-target="#score-based-classification"><span class="header-section-number">11.7.1</span> Score-Based Classification</a></li>
+  <li><a href="#adding-retention-time-for-level-1" id="toc-adding-retention-time-for-level-1" class="nav-link" data-scroll-target="#adding-retention-time-for-level-1"><span class="header-section-number">11.7.2</span> Adding Retention Time for Level 1</a></li>
+  </ul></li>
+  <li><a href="#visualizing-spectral-matches" id="toc-visualizing-spectral-matches" class="nav-link" data-scroll-target="#visualizing-spectral-matches"><span class="header-section-number">11.8</span> Visualizing Spectral Matches</a>
+  <ul class="collapse">
+  <li><a href="#mirror-plots" id="toc-mirror-plots" class="nav-link" data-scroll-target="#mirror-plots"><span class="header-section-number">11.8.1</span> Mirror Plots</a></li>
+  <li><a href="#annotated-mirror-plot-with-peak-labels" id="toc-annotated-mirror-plot-with-peak-labels" class="nav-link" data-scroll-target="#annotated-mirror-plot-with-peak-labels"><span class="header-section-number">11.8.2</span> Annotated Mirror Plot with Peak Labels</a></li>
+  </ul></li>
+  <li><a href="#advanced-matching-strategies" id="toc-advanced-matching-strategies" class="nav-link" data-scroll-target="#advanced-matching-strategies"><span class="header-section-number">11.9</span> Advanced Matching Strategies</a>
+  <ul class="collapse">
+  <li><a href="#adduct-aware-matching" id="toc-adduct-aware-matching" class="nav-link" data-scroll-target="#adduct-aware-matching"><span class="header-section-number">11.9.1</span> Adduct-Aware Matching</a></li>
+  <li><a href="#using-different-similarity-metrics" id="toc-using-different-similarity-metrics" class="nav-link" data-scroll-target="#using-different-similarity-metrics"><span class="header-section-number">11.9.2</span> Using Different Similarity Metrics</a></li>
+  <li><a href="#reverse-search-library-vs-query" id="toc-reverse-search-library-vs-query" class="nav-link" data-scroll-target="#reverse-search-library-vs-query"><span class="header-section-number">11.9.3</span> Reverse Search (Library vs Query)</a></li>
+  </ul></li>
+  <li><a href="#exporting-and-reporting-annotations" id="toc-exporting-and-reporting-annotations" class="nav-link" data-scroll-target="#exporting-and-reporting-annotations"><span class="header-section-number">11.10</span> Exporting and Reporting Annotations</a>
+  <ul class="collapse">
+  <li><a href="#creating-an-annotation-table" id="toc-creating-an-annotation-table" class="nav-link" data-scroll-target="#creating-an-annotation-table"><span class="header-section-number">11.10.1</span> Creating an Annotation Table</a></li>
+  <li><a href="#export-to-csv" id="toc-export-to-csv" class="nav-link" data-scroll-target="#export-to-csv"><span class="header-section-number">11.10.2</span> Export to CSV</a></li>
+  </ul></li>
+  <li><a href="#common-pitfalls-and-solutions" id="toc-common-pitfalls-and-solutions" class="nav-link" data-scroll-target="#common-pitfalls-and-solutions"><span class="header-section-number">11.11</span> Common Pitfalls and Solutions</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">11.12</span> Exercises</a>
+  <ul class="collapse">
+  <li><a href="#exercise-1-build-a-local-spectral-library" id="toc-exercise-1-build-a-local-spectral-library" class="nav-link" data-scroll-target="#exercise-1-build-a-local-spectral-library"><span class="header-section-number">11.12.1</span> Exercise 1: Build a Local Spectral Library</a></li>
+  <li><a href="#exercise-2-perform-library-search" id="toc-exercise-2-perform-library-search" class="nav-link" data-scroll-target="#exercise-2-perform-library-search"><span class="header-section-number">11.12.2</span> Exercise 2: Perform Library Search</a></li>
+  <li><a href="#exercise-3-adduct-handling" id="toc-exercise-3-adduct-handling" class="nav-link" data-scroll-target="#exercise-3-adduct-handling"><span class="header-section-number">11.12.3</span> Exercise 3: Adduct Handling</a></li>
+  <li><a href="#exercise-4-visualize-top-match" id="toc-exercise-4-visualize-top-match" class="nav-link" data-scroll-target="#exercise-4-visualize-top-match"><span class="header-section-number">11.12.4</span> Exercise 4: Visualize Top Match</a></li>
+  <li><a href="#exercise-5-annotation-report" id="toc-exercise-5-annotation-report" class="nav-link" data-scroll-target="#exercise-5-annotation-report"><span class="header-section-number">11.12.5</span> Exercise 5: Annotation Report</a></li>
+  </ul></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">11.13</span> Summary</a>
+  <ul class="collapse">
+  <li><a href="#key-takeaways" id="toc-key-takeaways" class="nav-link" data-scroll-target="#key-takeaways"><span class="header-section-number">11.13.1</span> Key Takeaways</a></li>
+  <li><a href="#additional-resources" id="toc-additional-resources" class="nav-link" data-scroll-target="#additional-resources"><span class="header-section-number">11.13.2</span> Additional Resources</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/12-library-search.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./08-detect-features.html">Part II — Feature Detection and Identification</a></li><li class="breadcrumb-item"><a href="./12-library-search.html"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="learning-objectives" class="level2" data-number="11.1">
+<h2 data-number="11.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">11.1</span> Learning Objectives</h2>
+<p>By the end of this chapter, you will be able to:</p>
+<ul>
+<li>Understand the principles of spectral library matching and annotation confidence levels</li>
+<li>Access and query public spectral databases from R (MassBank, MoNA, HMDB)</li>
+<li>Build and manage local spectral libraries using <code>CompoundDb</code></li>
+<li>Perform cosine similarity-based library searches with <code>MetaboAnnotation</code></li>
+<li>Interpret and filter annotation results with appropriate confidence levels</li>
+<li>Handle adducts and multiple ionization forms in matching workflows</li>
+</ul>
+<hr>
+</section>
+<section id="introduction-to-spectral-library-search" class="level2" data-number="11.2">
+<h2 data-number="11.2" class="anchored" data-anchor-id="introduction-to-spectral-library-search"><span class="header-section-number">11.2</span> Introduction to Spectral Library Search</h2>
+<section id="why-spectral-library-matching" class="level3" data-number="11.2.1">
+<h3 data-number="11.2.1" class="anchored" data-anchor-id="why-spectral-library-matching"><span class="header-section-number">11.2.1</span> Why Spectral Library Matching?</h3>
+<p>Raw MS/MS spectra contain rich structural information, but their identity remains unknown until matched against a reference. <strong>Spectral library search</strong> compares observed fragmentation patterns to curated databases, assigning putative identities based on spectral similarity.</p>
+<pre><code>Experimental Spectrum          Reference Spectrum (Library)
+        │                              │
+        ▼                              ▼
+   [M+H]+ at m/z 205.097         [M+H]+ at m/z 205.097
+        │                              │
+        ▼                              ▼
+   Fragments:                       Fragments:
+   m/z 158.06 (100%)               m/z 158.06 (100%)
+   m/z 144.08 (45%)                m/z 144.08 (48%)
+   m/z 130.07 (30%)                m/z 130.07 (28%)
+        │                              │
+        └──────────┬───────────────────┘
+                   ▼
+          Cosine Similarity = 0.95
+                   │
+                   ▼
+          Annotation: Tryptophan</code></pre>
+</section>
+<section id="the-metabolomics-standards-initiative-msi-confidence-levels" class="level3" data-number="11.2.2">
+<h3 data-number="11.2.2" class="anchored" data-anchor-id="the-metabolomics-standards-initiative-msi-confidence-levels"><span class="header-section-number">11.2.2</span> The Metabolomics Standards Initiative (MSI) Confidence Levels</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 13%">
+<col style="width: 42%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Level</th>
+<th>Name</th>
+<th>Evidence Required</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>1</strong></td>
+<td>Confirmed metabolite</td>
+<td>Retention time + MS/MS + isotopic pattern match to authentic standard</td>
+<td>Highest</td>
+</tr>
+<tr class="even">
+<td><strong>2</strong></td>
+<td>Putatively annotated</td>
+<td>MS/MS match to library spectrum (no RT or standard)</td>
+<td>High</td>
+</tr>
+<tr class="odd">
+<td><strong>3</strong></td>
+<td>Putatively characterized class</td>
+<td>Spectral similarity to class-specific fragments</td>
+<td>Moderate</td>
+</tr>
+<tr class="even">
+<td><strong>4</strong></td>
+<td>Unknown feature</td>
+<td>No match; only m/z and RT known</td>
+<td>Low</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p><strong>Important:</strong> Most untargeted studies achieve Level 2 for a subset of features. Level 1 requires purchasing and running authentic standards.</p>
+</blockquote>
+</section>
+<section id="key-matching-parameters" class="level3" data-number="11.2.3">
+<h3 data-number="11.2.3" class="anchored" data-anchor-id="key-matching-parameters"><span class="header-section-number">11.2.3</span> Key Matching Parameters</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 28%">
+<col style="width: 38%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Typical Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Precursor m/z tolerance</strong></td>
+<td>5-20 ppm</td>
+<td>How close precursor m/z must match between query and library</td>
+</tr>
+<tr class="even">
+<td><strong>Fragment tolerance</strong></td>
+<td>0.01-0.05 Da (or 10-20 ppm)</td>
+<td>Allowed m/z deviation for fragment ions</td>
+</tr>
+<tr class="odd">
+<td><strong>Cosine threshold</strong></td>
+<td>0.6-0.9</td>
+<td>Similarity score cutoff (1.0 = identical)</td>
+</tr>
+<tr class="even">
+<td><strong>Min matched peaks</strong></td>
+<td>4-6</td>
+<td>Minimum number of common fragments</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p><strong>Resource note:</strong> Matching thousands of spectra against libraries with &gt;100,000 entries can be memory-intensive. For large experiments, consider subsetting libraries by precursor m/z range first, using <code>matchSpectra</code> with <code>chunksize = 1000</code>, or running on a machine with ≥16GB RAM.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="setting-up-the-environment" class="level2" data-number="11.3">
+<h2 data-number="11.3" class="anchored" data-anchor-id="setting-up-the-environment"><span class="header-section-number">11.3</span> Setting Up the Environment</h2>
+<section id="required-packages" class="level3" data-number="11.3.1">
+<h3 data-number="11.3.1" class="anchored" data-anchor-id="required-packages"><span class="header-section-number">11.3.1</span> Required Packages</h3>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Install core annotation packages from Bioconductor</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MetaboAnnotation"</span>,  <span class="co"># High-level annotation workflows</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"CompoundDb"</span>,        <span class="co"># Local compound/spectral databases</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Spectra"</span>,           <span class="co"># Core MS data structures</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MsBackendMassbank"</span>, <span class="co"># MassBank spectral backend</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MsBackendMsp"</span>,      <span class="co"># MSP file support</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MsCoreUtils"</span>        <span class="co"># Similarity calculations</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># For data manipulation and visualization</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="fu">c</span>(<span class="st">"tidyverse"</span>, <span class="st">"RSQLite"</span>, <span class="st">"dbplyr"</span>))</span></code></pre></div>
+</section>
+<section id="loading-libraries" class="level3" data-number="11.3.2">
+<h3 data-number="11.3.2" class="anchored" data-anchor-id="loading-libraries"><span class="header-section-number">11.3.2</span> Loading Libraries</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Spectra)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MetaboAnnotation)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(CompoundDb)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MsCoreUtils)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Check versions</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"MetaboAnnotation version:"</span>, <span class="fu">packageVersion</span>(<span class="st">"MetaboAnnotation"</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"CompoundDb version:"</span>, <span class="fu">packageVersion</span>(<span class="st">"CompoundDb"</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="accessing-reference-spectral-libraries" class="level2" data-number="11.4">
+<h2 data-number="11.4" class="anchored" data-anchor-id="accessing-reference-spectral-libraries"><span class="header-section-number">11.4</span> Accessing Reference Spectral Libraries</h2>
+<section id="public-databases-accessible-from-r" class="level3" data-number="11.4.1">
+<h3 data-number="11.4.1" class="anchored" data-anchor-id="public-databases-accessible-from-r"><span class="header-section-number">11.4.1</span> Public Databases Accessible from R</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 23%">
+<col style="width: 23%">
+<col style="width: 13%">
+<col style="width: 39%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Database</th>
+<th>Coverage</th>
+<th>Size</th>
+<th>R Access Method</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>MassBank</strong></td>
+<td>Multi-class, multi-instrument</td>
+<td>&gt;200,000 spectra</td>
+<td>MSP download or <code>CompDb</code></td>
+</tr>
+<tr class="even">
+<td><strong>MoNA</strong> (Massbank of North America)</td>
+<td>Community-contributed</td>
+<td>&gt;800,000 spectra</td>
+<td>Download MSP/SDF</td>
+</tr>
+<tr class="odd">
+<td><strong>HMDB</strong></td>
+<td>Human metabolites</td>
+<td>&gt;50,000 spectra</td>
+<td><code>CompoundDb</code> / download</td>
+</tr>
+<tr class="even">
+<td><strong>GNPS</strong></td>
+<td>Natural products</td>
+<td>&gt;500,000 spectra</td>
+<td>Web API</td>
+</tr>
+<tr class="odd">
+<td><strong>LipidBlast</strong></td>
+<td>In-silico lipids</td>
+<td>&gt;200,000 spectra</td>
+<td>Download MSP</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="building-a-local-compounddb-database" class="level3" data-number="11.4.2">
+<h3 data-number="11.4.2" class="anchored" data-anchor-id="building-a-local-compounddb-database"><span class="header-section-number">11.4.2</span> Building a Local CompoundDb Database</h3>
+<p>For reproducible workflows, create a local SQLite database from downloaded spectral libraries:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(CompoundDb)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Option 1: From MSP file (e.g., MoNA export)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Download MoNA MSP file from https://mona.fiehnlab.ucdavis.edu/downloads</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>msp_file <span class="ot">&lt;-</span> <span class="st">"MoNA-export-GC-MS.msp"</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert MSP to SQLite</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>cdb <span class="ot">&lt;-</span> <span class="fu">createCompDb</span>(</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  msp_file,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">metadata =</span> <span class="fu">list</span>(</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">source =</span> <span class="st">"MoNA"</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">url =</span> <span class="st">"https://mona.fiehnlab.ucdavis.edu/"</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">version =</span> <span class="st">"2024-01"</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">download_date =</span> <span class="fu">as.character</span>(<span class="fu">Sys.Date</span>())</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">path =</span> <span class="st">"."</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Option 2: From MassBank MSP download (more reliable than direct API)</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>massbank_url <span class="ot">&lt;-</span> <span class="st">"https://massbank.eu/MassBank/Downloads/MassBank_record.msp"</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="fu">download.file</span>(massbank_url, <span class="at">destfile =</span> <span class="st">"massbank.msp"</span>)</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>cdb_massbank <span class="ot">&lt;-</span> <span class="fu">createCompDb</span>(</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="st">"massbank.msp"</span>,</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">metadata =</span> <span class="fu">list</span>(</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">source =</span> <span class="st">"MassBank"</span>,</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">url =</span> <span class="st">"https://massbank.eu/"</span>,</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">version =</span> <span class="st">"2024-01"</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  <span class="at">path =</span> <span class="st">"."</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="co"># Option 3: From SDF file (HMDB, PubChem)</span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>sdf_file <span class="ot">&lt;-</span> <span class="st">"hmdb_metabolites.sdf"</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>cdb_hmdb <span class="ot">&lt;-</span> <span class="fu">compound_tbl_sdf</span>(sdf_file) <span class="sc">|&gt;</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">createCompDb</span>(</span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">metadata =</span> <span class="fu">list</span>(<span class="at">source =</span> <span class="st">"HMDB"</span>, <span class="at">version =</span> <span class="st">"5.0"</span>),</span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">path =</span> <span class="st">"."</span></span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a><span class="co"># Explore the database</span></span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>cdb</span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a><span class="fu">listTables</span>(cdb)  <span class="co"># Show all tables in the database</span></span></code></pre></div>
+</section>
+<section id="querying-a-compounddb-database" class="level3" data-number="11.4.3">
+<h3 data-number="11.4.3" class="anchored" data-anchor-id="querying-a-compounddb-database"><span class="header-section-number">11.4.3</span> Querying a CompoundDb Database</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load existing database</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>cdb <span class="ot">&lt;-</span> <span class="fu">CompDb</span>(<span class="st">"MoNA.sqlite"</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Explore contents</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>cdb</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Count compounds and spectra</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>n_compounds <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">unique</span>(<span class="fu">compounds</span>(cdb)<span class="sc">$</span>compound_id))</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>n_spectra <span class="ot">&lt;-</span> <span class="fu">length</span>(<span class="fu">spectra</span>(cdb))</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Database contains %d compounds with %d spectra</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>            n_compounds, n_spectra))</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Search by compound name</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>tryptophan <span class="ot">&lt;-</span> <span class="fu">compounds</span>(cdb) <span class="sc">|&gt;</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"tryptophan"</span>, name, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(tryptophan)</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Retrieve spectra for a specific compound</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>cmpd_id <span class="ot">&lt;-</span> tryptophan<span class="sc">$</span>compound_id[<span class="dv">1</span>]</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>cmpd_spectra <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(cdb, <span class="at">filter =</span> <span class="sc">~</span> compound_id <span class="sc">==</span> cmpd_id)</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Spectra for %s: %d</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>            tryptophan<span class="sc">$</span>name[<span class="dv">1</span>], <span class="fu">length</span>(cmpd_spectra)))</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="preparing-experimental-data" class="level2" data-number="11.5">
+<h2 data-number="11.5" class="anchored" data-anchor-id="preparing-experimental-data"><span class="header-section-number">11.5</span> Preparing Experimental Data</h2>
+<section id="loading-query-spectra" class="level3" data-number="11.5.1">
+<h3 data-number="11.5.1" class="anchored" data-anchor-id="loading-query-spectra"><span class="header-section-number">11.5.1</span> Loading Query Spectra</h3>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load example metabolomics data</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># metabolomics() returns paths to example files from a real LC-MS/MS experiment</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># First file contains MS1 and MS2 spectra from tomato samples</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>query_file <span class="ot">&lt;-</span> msdata<span class="sc">::</span><span class="fu">metabolomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span>]</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"File:"</span>, <span class="fu">basename</span>(query_file), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Size:"</span>, <span class="fu">round</span>(<span class="fu">file.info</span>(query_file)<span class="sc">$</span>size <span class="sc">/</span> <span class="fl">1e6</span>, <span class="dv">2</span>), <span class="st">"MB</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Load all spectra</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>all_spectra <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(query_file)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter to MS2 spectra only</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>query_sps <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(all_spectra, <span class="dv">2</span>L)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic statistics</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Query data summary:</span><span class="sc">\n</span><span class="st">"</span>))</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Total MS2 spectra: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">length</span>(query_sps)))</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  RT range: %.1f - %.1f sec (%.1f - %.1f min)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>            <span class="fu">min</span>(<span class="fu">rtime</span>(query_sps)), <span class="fu">max</span>(<span class="fu">rtime</span>(query_sps)),</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>            <span class="fu">min</span>(<span class="fu">rtime</span>(query_sps))<span class="sc">/</span><span class="dv">60</span>, <span class="fu">max</span>(<span class="fu">rtime</span>(query_sps))<span class="sc">/</span><span class="dv">60</span>))</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Preview precursor information</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>precursor_info <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">spectrum_id =</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">min</span>(<span class="dv">10</span>, <span class="fu">length</span>(query_sps)),</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">precursor_mz =</span> <span class="fu">precursorMz</span>(query_sps[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>]),</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">precursor_charge =</span> <span class="fu">precursorCharge</span>(query_sps[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>])</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(precursor_info)</span></code></pre></div>
+</section>
+<section id="quality-control-of-query-spectra" class="level3" data-number="11.5.2">
+<h3 data-number="11.5.2" class="anchored" data-anchor-id="quality-control-of-query-spectra"><span class="header-section-number">11.5.2</span> Quality Control of Query Spectra</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter low-quality spectra before matching</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>has_enough_peaks <span class="ot">&lt;-</span> <span class="cf">function</span>(spectra, <span class="at">min_peaks =</span> <span class="dv">5</span>) {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  npeaks <span class="ot">&lt;-</span> <span class="fu">lengths</span>(<span class="fu">peaksData</span>(spectra))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  npeaks <span class="sc">&gt;=</span> min_peaks</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>has_precursor <span class="ot">&lt;-</span> <span class="cf">function</span>(spectra) {</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="sc">!</span><span class="fu">is.na</span>(<span class="fu">precursorMz</span>(spectra))</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply filters</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>query_clean <span class="ot">&lt;-</span> query_sps[<span class="fu">has_enough_peaks</span>(query_sps, <span class="at">min_peaks =</span> <span class="dv">5</span>)]</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>query_clean <span class="ot">&lt;-</span> query_clean[<span class="fu">has_precursor</span>(query_clean)]</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Quality filtering:</span><span class="sc">\n</span><span class="st">"</span>))</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Original MS2: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">length</span>(query_sps)))</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  After ≥5 peaks: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">sum</span>(<span class="fu">has_enough_peaks</span>(query_sps))))</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  After precursor present: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">length</span>(query_clean)))</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="spectral-matching-with-metaboannotation" class="level2" data-number="11.6">
+<h2 data-number="11.6" class="anchored" data-anchor-id="spectral-matching-with-metaboannotation"><span class="header-section-number">11.6</span> Spectral Matching with MetaboAnnotation</h2>
+<section id="basic-cosine-similarity-search" class="level3" data-number="11.6.1">
+<h3 data-number="11.6.1" class="anchored" data-anchor-id="basic-cosine-similarity-search"><span class="header-section-number">11.6.1</span> Basic Cosine Similarity Search</h3>
+<p><code>MetaboAnnotation</code> provides a unified interface for matching query spectra against reference spectra.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare reference spectra from CompoundDb</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>ref_sps <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(cdb)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Define matching parameters</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>match_param <span class="ot">&lt;-</span> <span class="fu">CompareSpectraParam</span>(</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm =</span> <span class="dv">10</span>,                    <span class="co"># Precursor tolerance (parts per million)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">tolerance =</span> <span class="fl">0.05</span>,            <span class="co"># Fragment m/z tolerance (Dalton)</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">score =</span> <span class="st">"cosine"</span>,            <span class="co"># Similarity metric (0 = dissimilar, 1 = identical)</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">THRESHFUN =</span> <span class="cf">function</span>(x) <span class="fu">which</span>(x <span class="sc">&gt;=</span> <span class="fl">0.6</span>),  <span class="co"># Keep only matches with score ≥ 0.6</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">requirePrecursor =</span> <span class="cn">TRUE</span>      <span class="co"># Must match precursor m/z within ppm tolerance</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Run matching (this may take several minutes for large libraries)</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>matches <span class="ot">&lt;-</span> <span class="fu">matchSpectra</span>(</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">query =</span> query_clean,</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">target =</span> ref_sps,</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">param =</span> match_param</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Examine results</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>matches</span></code></pre></div>
+</section>
+<section id="understanding-the-match-results" class="level3" data-number="11.6.2">
+<h3 data-number="11.6.2" class="anchored" data-anchor-id="understanding-the-match-results"><span class="header-section-number">11.6.2</span> Understanding the Match Results</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract match data as data frame</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>match_df <span class="ot">&lt;-</span> <span class="fu">matchedData</span>(matches)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Structure of results</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(match_df)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Key columns:</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># - query_idx: index in query_clean</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># - target_idx: index in ref_sps</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co"># - score: cosine similarity (0-1)</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co"># - precursorMz_query, precursorMz_target</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="co"># - compound_name, compound_id</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary statistics</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Match statistics:</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Queries with matches: %d / %d (%.1f%%)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>            <span class="fu">length</span>(<span class="fu">unique</span>(match_df<span class="sc">$</span>query_idx)),</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>            <span class="fu">length</span>(query_clean),</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>            <span class="fu">length</span>(<span class="fu">unique</span>(match_df<span class="sc">$</span>query_idx)) <span class="sc">/</span> <span class="fu">length</span>(query_clean) <span class="sc">*</span> <span class="dv">100</span>))</span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Total matches (hits): %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">nrow</span>(match_df)))</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Average hits per query: %.1f</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>            <span class="fu">nrow</span>(match_df) <span class="sc">/</span> <span class="fu">length</span>(<span class="fu">unique</span>(match_df<span class="sc">$</span>query_idx))))</span></code></pre></div>
+</section>
+<section id="best-hit-per-spectrum" class="level3" data-number="11.6.3">
+<h3 data-number="11.6.3" class="anchored" data-anchor-id="best-hit-per-spectrum"><span class="header-section-number">11.6.3</span> Best Hit Per Spectrum</h3>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Keep only the top-scoring match for each query spectrum</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>best_hits <span class="ot">&lt;-</span> match_df <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(query_idx) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(score)) <span class="sc">|&gt;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution of top scores</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(best_hits<span class="sc">$</span>score)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Score distribution histogram</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(best_hits, <span class="fu">aes</span>(<span class="at">x =</span> score)) <span class="sc">+</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">color =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Distribution of Best Match Cosine Similarities"</span>,</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Cosine Similarity Score"</span>,</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Number of Spectra"</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="assigning-msi-confidence-levels" class="level2" data-number="11.7">
+<h2 data-number="11.7" class="anchored" data-anchor-id="assigning-msi-confidence-levels"><span class="header-section-number">11.7</span> Assigning MSI Confidence Levels</h2>
+<section id="score-based-classification" class="level3" data-number="11.7.1">
+<h3 data-number="11.7.1" class="anchored" data-anchor-id="score-based-classification"><span class="header-section-number">11.7.1</span> Score-Based Classification</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Assign MSI confidence levels based on score thresholds</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>best_hits <span class="ot">&lt;-</span> best_hits <span class="sc">|&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">msi_level =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.9</span> <span class="sc">~</span> <span class="st">"Level 2 (Putative annotation)"</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.7</span> <span class="sc">~</span> <span class="st">"Level 3 (Probable compound class)"</span>,</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.5</span> <span class="sc">~</span> <span class="st">"Level 3 (Possible class match)"</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span>         <span class="sc">~</span> <span class="st">"Level 4 (Unknown)"</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">confidence_score =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.9</span> <span class="sc">~</span> <span class="st">"High"</span>,</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.7</span> <span class="sc">~</span> <span class="st">"Medium"</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.5</span> <span class="sc">~</span> <span class="st">"Low"</span>,</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"None"</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary by confidence level</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>best_hits <span class="sc">|&gt;</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(msi_level, confidence_score) <span class="sc">|&gt;</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(confidence_score))</span></code></pre></div>
+</section>
+<section id="adding-retention-time-for-level-1" class="level3" data-number="11.7.2">
+<h3 data-number="11.7.2" class="anchored" data-anchor-id="adding-retention-time-for-level-1"><span class="header-section-number">11.7.2</span> Adding Retention Time for Level 1</h3>
+<p>For Level 1 confidence, you need retention time matching against authentic standards:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: If you have retention time data</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>best_hits_with_rt <span class="ot">&lt;-</span> best_hits <span class="sc">|&gt;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Assuming query RT is available and reference has predicted/measured RT</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">rt_difference_sec =</span> <span class="fu">abs</span>(query_rt_sec <span class="sc">-</span> target_rt_sec),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">rt_match =</span> rt_difference_sec <span class="sc">&lt;</span> <span class="dv">30</span>,  <span class="co"># Within 30 seconds</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">msi_level =</span> <span class="fu">case_when</span>(</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.9</span> <span class="sc">&amp;</span> rt_match <span class="sc">~</span> <span class="st">"Level 1 (Confirmed)"</span>,</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.9</span> <span class="sc">~</span> <span class="st">"Level 2 (Putative)"</span>,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>      score <span class="sc">&gt;=</span> <span class="fl">0.7</span> <span class="sc">~</span> <span class="st">"Level 3 (Probable class)"</span>,</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Level 4 (Unknown)"</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="visualizing-spectral-matches" class="level2" data-number="11.8">
+<h2 data-number="11.8" class="anchored" data-anchor-id="visualizing-spectral-matches"><span class="header-section-number">11.8</span> Visualizing Spectral Matches</h2>
+<section id="mirror-plots" class="level3" data-number="11.8.1">
+<h3 data-number="11.8.1" class="anchored" data-anchor-id="mirror-plots"><span class="header-section-number">11.8.1</span> Mirror Plots</h3>
+<p>Mirror plots compare query spectrum (top) against library spectrum (bottom):</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot best match for first annotated spectrum</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>first_match <span class="ot">&lt;-</span> best_hits<span class="sc">$</span>query_idx[<span class="dv">1</span>]</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>first_target <span class="ot">&lt;-</span> best_hits<span class="sc">$</span>target_idx[<span class="dv">1</span>]</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Create mirror plot</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectraMirror</span>(</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> query_clean[first_match],</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> ref_sps[first_target],</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm =</span> <span class="dv">10</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">main =</span> <span class="fu">sprintf</span>(<span class="st">"Match: %s (cosine = %.3f)"</span>,</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>                 best_hits<span class="sc">$</span>compound_name[<span class="dv">1</span>],</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>                 best_hits<span class="sc">$</span>score[<span class="dv">1</span>])</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</section>
+<section id="annotated-mirror-plot-with-peak-labels" class="level3" data-number="11.8.2">
+<h3 data-number="11.8.2" class="anchored" data-anchor-id="annotated-mirror-plot-with-peak-labels"><span class="header-section-number">11.8.2</span> Annotated Mirror Plot with Peak Labels</h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Enhanced mirror plot with peak annotations</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectraMirror</span>(</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> query_clean[first_match],</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> ref_sps[first_target],</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm =</span> <span class="dv">10</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">labelPeaks =</span> <span class="cn">TRUE</span>,           <span class="co"># Label common peaks</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">labelTol =</span> <span class="fl">0.05</span>,             <span class="co"># Tolerance for labeling</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">main =</span> <span class="st">"MS/MS Mirror Plot: Query vs Library"</span>,</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">"m/z"</span>,</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylab =</span> <span class="st">"Relative Intensity (%)"</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="advanced-matching-strategies" class="level2" data-number="11.9">
+<h2 data-number="11.9" class="anchored" data-anchor-id="advanced-matching-strategies"><span class="header-section-number">11.9</span> Advanced Matching Strategies</h2>
+<section id="adduct-aware-matching" class="level3" data-number="11.9.1">
+<h3 data-number="11.9.1" class="anchored" data-anchor-id="adduct-aware-matching"><span class="header-section-number">11.9.1</span> Adduct-Aware Matching</h3>
+<p>Metabolites appear as multiple adduct forms ([M+H]+, [M+Na]+, [M-H]-). Unaware matching inflates false negatives.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Adduct-aware matching</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>matches_adducts <span class="ot">&lt;-</span> <span class="fu">matchSpectra</span>(</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">query =</span> query_clean,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">target =</span> ref_sps,</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">param =</span> <span class="fu">CompareSpectraParam</span>(</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">ppm =</span> <span class="dv">10</span>,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">tolerance =</span> <span class="fl">0.05</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">adducts =</span> <span class="fu">c</span>(<span class="st">"[M+H]+"</span>, <span class="st">"[M+Na]+"</span>, <span class="st">"[M+K]+"</span>, <span class="st">"[M+NH4]+"</span>),</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">score =</span> <span class="st">"cosine"</span>,</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">THRESHFUN =</span> <span class="cf">function</span>(x) <span class="fu">which</span>(x <span class="sc">&gt;=</span> <span class="fl">0.6</span>)</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare with adduct-unaware matching</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>n_matches_no_adduct <span class="ot">&lt;-</span> <span class="fu">nrow</span>(<span class="fu">matchedData</span>(matches))</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>n_matches_with_adduct <span class="ot">&lt;-</span> <span class="fu">nrow</span>(<span class="fu">matchedData</span>(matches_adducts))</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Matches without adduct handling: %d</span><span class="sc">\n</span><span class="st">"</span>, n_matches_no_adduct))</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Matches with adduct handling: %d</span><span class="sc">\n</span><span class="st">"</span>, n_matches_with_adduct))</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Increase: %.1f%%</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>            (n_matches_with_adduct <span class="sc">-</span> n_matches_no_adduct) <span class="sc">/</span> n_matches_no_adduct <span class="sc">*</span> <span class="dv">100</span>))</span></code></pre></div>
+</section>
+<section id="using-different-similarity-metrics" class="level3" data-number="11.9.2">
+<h3 data-number="11.9.2" class="anchored" data-anchor-id="using-different-similarity-metrics"><span class="header-section-number">11.9.2</span> Using Different Similarity Metrics</h3>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare different scoring methods</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>metrics <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"cosine"</span>, <span class="st">"pearson"</span>, <span class="st">"spearman"</span>, <span class="st">"jaccard"</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>scores_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (metric <span class="cf">in</span> metrics) {</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  param <span class="ot">&lt;-</span> <span class="fu">CompareSpectraParam</span>(</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">ppm =</span> <span class="dv">10</span>,</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">tolerance =</span> <span class="fl">0.05</span>,</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">score =</span> metric,</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">THRESHFUN =</span> <span class="cf">function</span>(x) <span class="fu">which</span>(x <span class="sc">&gt;=</span> <span class="fl">0.5</span>)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  matches_temp <span class="ot">&lt;-</span> <span class="fu">matchSpectra</span>(query_clean[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>], ref_sps, param)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>  scores_list[[metric]] <span class="ot">&lt;-</span> <span class="fu">matchedData</span>(matches_temp)<span class="sc">$</span>score</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare score distributions</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>score_comparison <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">lapply</span>(<span class="fu">names</span>(scores_list), <span class="cf">function</span>(m) {</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">data.frame</span>(<span class="at">metric =</span> m, <span class="at">score =</span> scores_list[[m]])</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(score_comparison, <span class="fu">aes</span>(<span class="at">x =</span> metric, <span class="at">y =</span> score, <span class="at">fill =</span> metric)) <span class="sc">+</span></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>() <span class="sc">+</span></span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Comparison of Similarity Metrics"</span>,</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Metric"</span>,</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Similarity Score"</span></span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</section>
+<section id="reverse-search-library-vs-query" class="level3" data-number="11.9.3">
+<h3 data-number="11.9.3" class="anchored" data-anchor-id="reverse-search-library-vs-query"><span class="header-section-number">11.9.3</span> Reverse Search (Library vs Query)</h3>
+<p>For quality control, you can also search library spectra against your queries:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Reverse search: find which library spectra match your queries</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>reverse_matches <span class="ot">&lt;-</span> <span class="fu">matchSpectra</span>(</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">query =</span> ref_sps[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>],    <span class="co"># Library spectra as "queries"</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">target =</span> query_clean,       <span class="co"># Your data as "target"</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">param =</span> <span class="fu">CompareSpectraParam</span>(</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">ppm =</span> <span class="dv">10</span>,</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">tolerance =</span> <span class="fl">0.05</span>,</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">THRESHFUN =</span> <span class="cf">function</span>(x) <span class="fu">which</span>(x <span class="sc">&gt;=</span> <span class="fl">0.7</span>)</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a><span class="co"># High reverse scores indicate good library representation</span></span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="exporting-and-reporting-annotations" class="level2" data-number="11.10">
+<h2 data-number="11.10" class="anchored" data-anchor-id="exporting-and-reporting-annotations"><span class="header-section-number">11.10</span> Exporting and Reporting Annotations</h2>
+<section id="creating-an-annotation-table" class="level3" data-number="11.10.1">
+<h3 data-number="11.10.1" class="anchored" data-anchor-id="creating-an-annotation-table"><span class="header-section-number">11.10.1</span> Creating an Annotation Table</h3>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create comprehensive annotation report</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>annotation_report <span class="ot">&lt;-</span> best_hits <span class="sc">|&gt;</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">spectrum_id =</span> query_idx,</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    compound_name,</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    compound_id,</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">cosine_score =</span> score,</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    msi_level,</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">precursor_mz =</span> precursorMz_query,</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    precursor_charge,</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">library_precursor_mz =</span> precursorMz_target</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">mass_error_ppm =</span> <span class="fu">abs</span>(precursor_mz <span class="sc">-</span> library_precursor_mz) <span class="sc">/</span> precursor_mz <span class="sc">*</span> <span class="fl">1e6</span>,</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">match_quality =</span> <span class="fu">case_when</span>(</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>      cosine_score <span class="sc">&gt;=</span> <span class="fl">0.9</span> <span class="sc">~</span> <span class="st">"excellent"</span>,</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>      cosine_score <span class="sc">&gt;=</span> <span class="fl">0.8</span> <span class="sc">~</span> <span class="st">"good"</span>,</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>      cosine_score <span class="sc">&gt;=</span> <span class="fl">0.7</span> <span class="sc">~</span> <span class="st">"fair"</span>,</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"poor"</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="co"># View top annotations</span></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>annotation_report <span class="sc">|&gt;</span></span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(cosine_score)) <span class="sc">|&gt;</span></span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>) <span class="sc">|&gt;</span></span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>()</span></code></pre></div>
+</section>
+<section id="export-to-csv" class="level3" data-number="11.10.2">
+<h3 data-number="11.10.2" class="anchored" data-anchor-id="export-to-csv"><span class="header-section-number">11.10.2</span> Export to CSV</h3>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Save full annotation results</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(annotation_report, <span class="st">"ms_annotations.csv"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Export high-confidence only (Level 2 and above)</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>high_conf <span class="ot">&lt;-</span> annotation_report <span class="sc">|&gt;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">str_detect</span>(msi_level, <span class="st">"Level [12]"</span>))</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(high_conf, <span class="st">"high_confidence_annotations.csv"</span>)</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Exported %d high-confidence annotations</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">nrow</span>(high_conf)))</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="common-pitfalls-and-solutions" class="level2" data-number="11.11">
+<h2 data-number="11.11" class="anchored" data-anchor-id="common-pitfalls-and-solutions"><span class="header-section-number">11.11</span> Common Pitfalls and Solutions</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 32%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pitfall</th>
+<th>Problem</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Low match rates</strong></td>
+<td>&lt;10% of spectra annotated</td>
+<td>Check precursor tolerance; increase fragment tolerance; use adducts</td>
+</tr>
+<tr class="even">
+<td><strong>False positives</strong></td>
+<td>Wrong compounds with high scores</td>
+<td>Increase cosine threshold to ≥0.8; require minimum matched peaks</td>
+</tr>
+<tr class="odd">
+<td><strong>Adduct confusion</strong></td>
+<td>[M+Na]+ matched to [M+H]+ library</td>
+<td>Use adduct-aware matching; check mass differences</td>
+</tr>
+<tr class="even">
+<td><strong>Library bias</strong></td>
+<td>Over-representation of certain classes</td>
+<td>Use multiple libraries; consider spectral pooling</td>
+</tr>
+<tr class="odd">
+<td><strong>Noisy spectra</strong></td>
+<td>Many matches due to random noise</td>
+<td>Filter query spectra (minimum peaks, intensity threshold)</td>
+</tr>
+<tr class="even">
+<td><strong>Memory issues</strong></td>
+<td>Crash during matching</td>
+<td>Use <code>chunksize = 1000</code>; subset library by m/z range first</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="exercises" class="level2" data-number="11.12">
+<h2 data-number="11.12" class="anchored" data-anchor-id="exercises"><span class="header-section-number">11.12</span> Exercises</h2>
+<section id="exercise-1-build-a-local-spectral-library" class="level3" data-number="11.12.1">
+<h3 data-number="11.12.1" class="anchored" data-anchor-id="exercise-1-build-a-local-spectral-library"><span class="header-section-number">11.12.1</span> Exercise 1: Build a Local Spectral Library</h3>
+<p>Download a small MSP file from MoNA (e.g., “MoNA-export-LipidBlast.msp”) and import it into a <code>CompoundDb</code> database. Report: - Number of compounds and spectra - The top 5 compound names in the database</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-2-perform-library-search" class="level3" data-number="11.12.2">
+<h3 data-number="11.12.2" class="anchored" data-anchor-id="exercise-2-perform-library-search"><span class="header-section-number">11.12.2</span> Exercise 2: Perform Library Search</h3>
+<p>Load the example metabolomics file from <code>msdata::metabolomics()</code> and extract all MS2 spectra. Perform a library search against your database from Exercise 1 with cosine thresholds of 0.7 and 0.9. Compare the number of annotations.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-3-adduct-handling" class="level3" data-number="11.12.3">
+<h3 data-number="11.12.3" class="anchored" data-anchor-id="exercise-3-adduct-handling"><span class="header-section-number">11.12.3</span> Exercise 3: Adduct Handling</h3>
+<p>Run the same search with and without adduct handling (<code>[M+H]+</code>, <code>[M+Na]+</code>, <code>[M+K]+</code>). How many additional matches are found with adducts enabled?</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-4-visualize-top-match" class="level3" data-number="11.12.4">
+<h3 data-number="11.12.4" class="anchored" data-anchor-id="exercise-4-visualize-top-match"><span class="header-section-number">11.12.4</span> Exercise 4: Visualize Top Match</h3>
+<p>Generate a mirror plot for the highest-scoring match from Exercise 2. Annotate at least 3 common fragment peaks.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-5-annotation-report" class="level3" data-number="11.12.5">
+<h3 data-number="11.12.5" class="anchored" data-anchor-id="exercise-5-annotation-report"><span class="header-section-number">11.12.5</span> Exercise 5: Annotation Report</h3>
+<p>Create a summary table showing annotation statistics by MSI confidence level. Include counts and percentage of total annotated spectra.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="summary" class="level2" data-number="11.13">
+<h2 data-number="11.13" class="anchored" data-anchor-id="summary"><span class="header-section-number">11.13</span> Summary</h2>
+<section id="key-takeaways" class="level3" data-number="11.13.1">
+<h3 data-number="11.13.1" class="anchored" data-anchor-id="key-takeaways"><span class="header-section-number">11.13.1</span> Key Takeaways</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 40%">
+<col style="width: 59%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Key Points</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>MSI Levels</strong></td>
+<td>Level 1 (standard) &gt; Level 2 (library) &gt; Level 3 (class) &gt; Level 4 (unknown)</td>
+</tr>
+<tr class="even">
+<td><strong>Matching Parameters</strong></td>
+<td>Precursor tolerance (ppm), fragment tolerance (Da), cosine threshold (0.6-0.9)</td>
+</tr>
+<tr class="odd">
+<td><strong>Spectral Libraries</strong></td>
+<td>MassBank, MoNA, HMDB → download MSP → import with <code>CompoundDb</code></td>
+</tr>
+<tr class="even">
+<td><strong>MetaboAnnotation</strong></td>
+<td><code>matchSpectra()</code> with <code>CompareSpectraParam</code> for cosine search</td>
+</tr>
+<tr class="odd">
+<td><strong>Adducts</strong></td>
+<td>Always include common adducts ([M+H]+, [M+Na]+, [M+K]+)</td>
+</tr>
+<tr class="even">
+<td><strong>Quality Control</strong></td>
+<td>Filter query spectra (≥5 peaks, precursor present); require minimum score</td>
+</tr>
+<tr class="odd">
+<td><strong>Memory Management</strong></td>
+<td>Use <code>chunksize</code> or subset libraries for large experiments</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="additional-resources" class="level3" data-number="11.13.2">
+<h3 data-number="11.13.2" class="anchored" data-anchor-id="additional-resources"><span class="header-section-number">11.13.2</span> Additional Resources</h3>
+<ul>
+<li><a href="https://rformassspectrometry.github.io/MetaboAnnotation/">MetaboAnnotation Reference</a></li>
+<li><a href="https://rformassspectrometry.github.io/CompoundDb/">CompoundDb Tutorial</a></li>
+<li><a href="https://massbank.eu/">MassBank Europe</a></li>
+<li><a href="https://mona.fiehnlab.ucdavis.edu/">MoNA Database</a></li>
+<li><a href="https://metabolomicssociety.org/msi">MSI Guidelines for Metabolomics</a></li>
+</ul>
+<hr>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./11-annotate-metabolites.html" class="pagination-link" aria-label="Annotate Metabolites from Feature Tables">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./13-quant-proteomics.html" class="pagination-link" aria-label="Build and Audit a Quantitative Proteomics Data Object">
+        <span class="nav-page-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/12-library-search.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

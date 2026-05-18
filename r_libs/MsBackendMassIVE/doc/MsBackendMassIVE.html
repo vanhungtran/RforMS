@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+   <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+      <meta name="generator" content="r-universe/pandoc">
+      
+      
+      <title>Retrieve and Use Mass Spectrometry Data from MassIVE</title>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css" data-external="1">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" data-external="1">
+      <link rel="stylesheet" href="https://r-universe.dev/static/article-styles.css?nocache=1" data-external="1">
+   </head>
+   <body>
+      <div class="container" id="topcontainer">
+         <script>if (window.self != window.top) try {document.getElementById('topcontainer').className = "container-fluid article-in-iframe"; } catch(e) {}</script>
+
+         <div class="frontmatter">
+         <h1 class="title">Retrieve and Use Mass Spectrometry Data from
+MassIVE</h1>
+         </div>
+
+                  <div class="row">
+            <div class="col-xl-10"><script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelector("h1").className = "title";
+});
+</script>
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  var links = document.links;  
+  for (var i = 0, linksLength = links.length; i < linksLength; i++)
+    if (links[i].hostname != window.location.hostname)
+      links[i].target = '_blank';
+});
+</script>
+<p><strong>Package</strong>: <em><a href="https://bioconductor.org/packages/3.22/MsBackendMassIVE">MsBackendMassIVE</a></em><br />
+<strong>Authors</strong>: Gabriele Tomè [aut, cre] (ORCID: <a href="https://orcid.org/0000-0002-3976-6068" class="uri">https://orcid.org/0000-0002-3976-6068</a>, fnd:
+MetaRbolomics4Galaxy project (CUP: D53C25001030003) co-funded by the
+Autonomous Province of Bolzano under the Joint Projects South
+Tyrol–Germany 2025 program.), Philippine Louail [aut] (ORCID: <a href="https://orcid.org/0009-0007-5429-6846" class="uri">https://orcid.org/0009-0007-5429-6846</a>), Johannes Rainer
+[aut] (ORCID: <a href="https://orcid.org/0000-0002-6977-7147" class="uri">https://orcid.org/0000-0002-6977-7147</a>)<br />
+<strong>Last modified:</strong> 2026-04-24 13:11:55.813004<br />
+<strong>Compiled</strong>: Fri Apr 24 13:13:22 2026</p>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>Metabolomics experiments and results including mass spectrometry (MS)
+data can be deposited in several public repositories, such as <a href="https://massive.ucsd.edu/ProteoSAFe/static/massive.jsp">MassIVE</a>
+(Mass Spectrometry Interactive Virtual Environment). MassIVE is a
+community resource developed by the NIH-funded Center for Computational
+Mass Spectrometry at UC San Diego to promote the global, free exchange
+of mass spectrometry data. MassIVE supports deposition of both
+proteomics and metabolomics experiments and is a full member of the <a href="http://www.proteomexchange.org/">ProteomeXchange</a> consortium.
+While data is available, manual lookup and download is cumbersome
+hampering the re-analysis of public data and replication of results. The
+<em>MsBackendMassIVE</em> package closes this gap by providing
+functionality to query, retrieve and cache MS data from MassIVE directly
+from R hence enabling a direct and seamless integration of MS data from
+MassIVE into R-based analysis workflows. <em>MsBackendMassIVE</em>
+leverages on Bioconductor’s <code>r Biocpkg(&quot;BiocFileCache&quot;)</code> for
+caching remote data locally and provides a <em>MS data backend</em> for
+the <em><a href="https://bioconductor.org/packages/3.22/Spectra">Spectra</a></em>
+package to enable loading and integrating cached MS data directly into
+R.</p>
+</div>
+<div id="installation" class="section level1">
+<h1>Installation</h1>
+<p>The package can be installed from within R with the commands
+below:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;BiocManager&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>    <span class="fu">install.packages</span>(<span class="st">&quot;BiocManager&quot;</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="st">&quot;RforMassSpectrometry/MsBackendMassIVE&quot;</span>)</span></code></pre></div>
+</div>
+<div id="importing-ms-data-from-massive" class="section level1">
+<h1>Importing MS Data from MassIVE</h1>
+<p>Each experiment in MassIVE is identified by a unique accession
+starting with <em>MSV</em> followed by a number. While the <a href="https://massive.ucsd.edu/ProteoSAFe/">MassIVE web page</a> allows
+only a manual, non programmatic, lookup of data and experiments, a
+separate, central registry of data files and experiments is hosted on
+GNPS2. This <a href="https://datasetcache.gnps2.org/datasette/database/filename">datasetcache</a>
+registry allows programmatic access and is used by
+<em>MsBackendMassIVE</em> to query information on MassIVE
+experiments.</p>
+<p>Below we list all files from the MassIVE data set with the ID
+<em>MSV000080547</em>.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(MsBackendMassIVE)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&#39; List files of a MassIVE data set</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>all_files <span class="ot">&lt;-</span> <span class="fu">massive_list_files</span>(<span class="st">&quot;MSV000080547&quot;</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="fu">head</span>(all_files)</span></code></pre></div>
+<pre><code>## [1] &quot;ccms_parameters/params.xml&quot;                      
+## [2] &quot;peak/Quant_assesment_QE/AG_spiked_sample1.mzXML&quot; 
+## [3] &quot;peak/Quant_assesment_QE/AG_spiked_sample10.mzXML&quot;
+## [4] &quot;peak/Quant_assesment_QE/AG_spiked_sample11.mzXML&quot;
+## [5] &quot;peak/Quant_assesment_QE/AG_spiked_sample12.mzXML&quot;
+## [6] &quot;peak/Quant_assesment_QE/AG_spiked_sample13.mzXML&quot;</code></pre>
+<p>These files are accessible through the FTP path associated with the
+MassIVE data set. Below we use the <code>massive_ftp_path()</code>
+function to return the FTP path for our test data set.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">massive_ftp_path</span>(<span class="st">&quot;MSV000080547&quot;</span>, <span class="at">mustWork =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>## [1] &quot;ftp://massive-ftp.ucsd.edu/v01/MSV000080547&quot;</code></pre>
+<p>MS data files in supported formats (mzML, CDF, mzXML) can be directly
+loaded using the <code>MsBackendMassIVE</code> backend into R as a
+<code>Spectra</code> object (<code>MsBackendMassIVE</code> directly
+extends <em>Spectra</em>’s <code>MsBackendMzR</code> backend and
+therefore supports import of MS data files in these formats). By
+default, all MS data files of the data set would be retrieved, but in
+our example below we restrict to a few data files to reduce the amount
+of data that needs to be downloaded. To this end we define a pattern
+matching the file name of only some data files using the
+<code>filePattern</code> parameter.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">library</span>(Spectra)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co">#&#39; Load MS data files of one data set</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>s <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(<span class="st">&quot;MSV000080547&quot;</span>, <span class="at">filePattern =</span> <span class="st">&quot;1.mzML$&quot;</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>             <span class="at">source =</span> <span class="fu">MsBackendMassIVE</span>())</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>s</span></code></pre></div>
+<pre><code>## MSn data (Spectra) with 4322 spectra in a MsBackendMassIVE backend:
+##        msLevel     rtime scanIndex
+##      &lt;integer&gt; &lt;numeric&gt; &lt;integer&gt;
+## 1            1     0.497         1
+## 2            1     0.829         2
+## 3            1     1.159         3
+## 4            1     1.488         4
+## 5            1     1.818         5
+## ...        ...       ...       ...
+## 4318         1   718.439      2157
+## 4319         1   718.769      2158
+## 4320         1   719.099      2159
+## 4321         1   719.429      2160
+## 4322         1   719.759      2161
+##  ... 36 more variables/columns.
+## 
+## file(s):
+## AG_spiked_sample1.mzML
+## AG_spiked_sample11.mzML</code></pre>
+<p>This call downloaded 2 files from the experiment into the local cache
+and loaded them as a <code>Spectra</code> object. The downloading and
+caching of the data is handled by Bioconductor’s <em><a href="https://bioconductor.org/packages/3.22/BiocFileCache">BiocFileCache</a></em>.
+The local cache can thus also be managed directly using functionality
+from that package. Any subsequent loading of the same data files will
+load the locally cached versions avoiding thus repetitive download of
+the same data.</p>
+<p>The <code>Spectra</code> object with the MS data files of the MassIVE
+data set enables now any subsequent analysis of the data in R. On top of
+the spectra variables and mass peak data values that are provided by the
+MS data files also additional information related to the MassIVE data
+set are available as specific <em>spectra variables</em>. We list all
+available spectra variables of the data set below.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">spectraVariables</span>(s)</span></code></pre></div>
+<pre><code>##  [1] &quot;msLevel&quot;                  &quot;rtime&quot;                   
+##  [3] &quot;acquisitionNum&quot;           &quot;scanIndex&quot;               
+##  [5] &quot;dataStorage&quot;              &quot;dataOrigin&quot;              
+##  [7] &quot;centroided&quot;               &quot;smoothed&quot;                
+##  [9] &quot;polarity&quot;                 &quot;precScanNum&quot;             
+## [11] &quot;precursorMz&quot;              &quot;precursorIntensity&quot;      
+## [13] &quot;precursorCharge&quot;          &quot;collisionEnergy&quot;         
+## [15] &quot;isolationWindowLowerMz&quot;   &quot;isolationWindowTargetMz&quot; 
+## [17] &quot;isolationWindowUpperMz&quot;   &quot;peaksCount&quot;              
+## [19] &quot;totIonCurrent&quot;            &quot;basePeakMZ&quot;              
+## [21] &quot;basePeakIntensity&quot;        &quot;electronBeamEnergy&quot;      
+## [23] &quot;ionisationEnergy&quot;         &quot;lowMZ&quot;                   
+## [25] &quot;highMZ&quot;                   &quot;mergedScan&quot;              
+## [27] &quot;mergedResultScanNum&quot;      &quot;mergedResultStartScanNum&quot;
+## [29] &quot;mergedResultEndScanNum&quot;   &quot;injectionTime&quot;           
+## [31] &quot;filterString&quot;             &quot;spectrumId&quot;              
+## [33] &quot;ionMobilityDriftTime&quot;     &quot;scanWindowLowerLimit&quot;    
+## [35] &quot;scanWindowUpperLimit&quot;     &quot;massive_id&quot;              
+## [37] &quot;data_file&quot;</code></pre>
+<p>The MassIVE-specific variables are <code>&quot;massive_id&quot;</code> and
+<code>&quot;data_file&quot;</code> providing the MassIVE ID of the data set and
+the original data file name in the MassIVE FTP server for each
+individual spectrum.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">spectraData</span>(s, <span class="fu">c</span>(<span class="st">&quot;massive_id&quot;</span>, <span class="st">&quot;data_file&quot;</span>))</span></code></pre></div>
+<pre><code>## DataFrame with 4322 rows and 2 columns
+##        massive_id              data_file
+##       &lt;character&gt;            &lt;character&gt;
+## 1    MSV000080547 peak/Quant_assesment..
+## 2    MSV000080547 peak/Quant_assesment..
+## 3    MSV000080547 peak/Quant_assesment..
+## 4    MSV000080547 peak/Quant_assesment..
+## 5    MSV000080547 peak/Quant_assesment..
+## ...           ...                    ...
+## 4318 MSV000080547 peak/Quant_assesment..
+## 4319 MSV000080547 peak/Quant_assesment..
+## 4320 MSV000080547 peak/Quant_assesment..
+## 4321 MSV000080547 peak/Quant_assesment..
+## 4322 MSV000080547 peak/Quant_assesment..</code></pre>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">basename</span>(s<span class="sc">$</span>data_file) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span></code></pre></div>
+<pre><code>## [1] &quot;AG_spiked_sample1.mzML&quot; &quot;AG_spiked_sample1.mzML&quot; &quot;AG_spiked_sample1.mzML&quot;
+## [4] &quot;AG_spiked_sample1.mzML&quot; &quot;AG_spiked_sample1.mzML&quot; &quot;AG_spiked_sample1.mzML&quot;</code></pre>
+<p>The <code>massive_sync()</code> function can be used to
+<em>synchronize</em> the local content of a
+<code>MsBackendMassIVE</code> and is useful if, for example, locally
+cached files were deleted. The function checks if all data files of the
+backend are available locally and eventually downloads and caches
+missing files.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">massive_sync</span>(s<span class="sc">@</span>backend)</span></code></pre></div>
+<pre><code>## MsBackendMassIVE with 4322 spectra
+##        msLevel     rtime scanIndex
+##      &lt;integer&gt; &lt;numeric&gt; &lt;integer&gt;
+## 1            1     0.497         1
+## 2            1     0.829         2
+## 3            1     1.159         3
+## 4            1     1.488         4
+## 5            1     1.818         5
+## ...        ...       ...       ...
+## 4318         1   718.439      2157
+## 4319         1   718.769      2158
+## 4320         1   719.099      2159
+## 4321         1   719.429      2160
+## 4322         1   719.759      2161
+##  ... 36 more variables/columns.
+## 
+## file(s):
+## AG_spiked_sample1.mzML
+## AG_spiked_sample11.mzML</code></pre>
+<p>In addition, it is also possible to <em>manually</em> cache and
+download selected files from MassIVE using the
+<code>massive_sync_data_files()</code> function. Before downloading,
+this function first evaluates if the respective data files are already
+cached and only downloads them if needed. As a result, the function
+returns a <code>data.frame</code> with the storage location and other
+information of the cached file(s). Below we use this function to
+retrieve the local storage information on one of the data files of the
+MassIVE data set <em>MSV000080547</em>:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">massive_sync_data_files</span>(<span class="st">&quot;MSV000080547&quot;</span>,</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>                               <span class="at">fileName =</span> <span class="st">&quot;AG_spiked_sample11.mzML&quot;</span>)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>res</span></code></pre></div>
+<pre><code>##    rid   massive_id                                        data_file
+## 1 BFC2 MSV000080547 peak/Quant_assesment_QQQ/AG_spiked_sample11.mzML
+##                                                         rpath
+## 1 /github/home/.cache/R/BiocFileCache/AG_spiked_sample11.mzML</code></pre>
+<p>The <code>massive_cached_data_files()</code> function can be used to
+inspect and list all locally cached MassIVE data files. This function
+does not require an active internet connection since only local content
+is queried. With the default settings, a <code>data.frame</code> with
+all available data files is returned.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">massive_cached_data_files</span>()</span></code></pre></div>
+<pre><code>##    rid   massive_id                                        data_file
+## 2 BFC2 MSV000080547 peak/Quant_assesment_QQQ/AG_spiked_sample11.mzML
+##                                                         rpath
+## 2 /github/home/.cache/R/BiocFileCache/AG_spiked_sample11.mzML</code></pre>
+<p>Locally cached files for a MassIVE data set can be removed using the
+<code>massive_delete_cache()</code> function providing the ID of the
+MassIVE data set for which local data files should be removed.</p>
+</div>
+<div id="general-use-and-information-retrieval-from-massive" class="section level1">
+<h1>General use and information retrieval from MassIVE</h1>
+<p>Next to the <code>MsBackendMassIVE</code> backend for
+<code>Spectra</code> objects, the <em>MsBackendMassIVE</em> package
+provides also various utility functions to query and retrieve
+information from MassIVE or GNPS2’s <em>datasetcache</em>.</p>
+<p>The <code>massive_param_file()</code> function reads the parameter
+file from a MassIVE data set that provides general, experiment-specific
+information. These are retrieved as a two-column <code>data.frame</code>
+with the first column containing the names of the data set properties,
+and the second their values.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a>prm <span class="ot">&lt;-</span> <span class="fu">massive_param_file</span>(<span class="st">&quot;MSV000080547&quot;</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a><span class="fu">head</span>(prm)</span></code></pre></div>
+<pre><code>##          ParameterName
+## 1     dataset.comments
+## 2   dataset.instrument
+## 3     dataset.keywords
+## 4 dataset.modification
+## 5     dataset.password
+## 6           dataset.pi
+##                                                                     Value
+## 1 Quantity assessment experiment for one sample two metabolomics workflow
+## 2                                                   MS:1001911;MS:1000644
+## 3                                            Standards;quantity assesment
+## 4                                                           PRIDE:0000398
+## 5                                                                       a
+## 6                                                         P Dorrestein|||</code></pre>
+<p>The <code>massive_number_files()</code> function returns the number
+of files in a MassIVE data set. By default, only MS data files (mzML,
+CDF, mzXML) are counted, but this can be changed by providing a
+different pattern to the <code>pattern</code> parameter.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">massive_number_files</span>(<span class="st">&quot;MSV000080547&quot;</span>)</span></code></pre></div>
+<pre><code>## [1] 40</code></pre>
+<p>The <code>massive_download_file()</code> function allows to download
+any file of an experiment (directly, i.e., without caching). As an
+example we download below a docx file to a temporary folder.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">massive_list_files</span>(<span class="st">&quot;MSV000083058&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span></code></pre></div>
+<pre><code>## [1] &quot;ccms_parameters/params.xml&quot;            
+## [2] &quot;ccms_statistics/statistics.tsv&quot;        
+## [3] &quot;methods/README_Histones_P108_VS3.docx&quot; 
+## [4] &quot;other/Table 1 SAINT3788_TripleTOF.xlsx&quot;
+## [5] &quot;other/Table 2 SAINT3788_TripleTOF.xlsx&quot;
+## [6] &quot;other/Table 3 SAINT3788_TripleTOF.xlsx&quot;</code></pre>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">massive_download_file</span>(<span class="st">&quot;MSV000083058&quot;</span>,</span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>                      <span class="at">fileName =</span> <span class="st">&quot;README_Histones_P108_VS3.docx&quot;</span>,</span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>                      <span class="at">path =</span> <span class="fu">tempdir</span>())</span></code></pre></div>
+<p><em>MsBackendMassIVE</em> provides also two utility functions to
+query the GNPS2 <em>datasetcache</em>, <code>gnps2_query()</code> and
+<code>gnps2_usi_download_link()</code>.</p>
+<p>Below we use <code>gnps2_query()</code> to retrieve all information
+for a MassIVE data set from the datasetcache.</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">gnps2_query</span>(<span class="st">&quot;MSV000083058&quot;</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a><span class="fu">head</span>(res)</span></code></pre></div>
+<pre><code>##                                                          usi
+## 1             mzspec:MSV000083058:ccms_parameters/params.xml
+## 2         mzspec:MSV000083058:ccms_statistics/statistics.tsv
+## 3  mzspec:MSV000083058:methods/README_Histones_P108_VS3.docx
+## 4 mzspec:MSV000083058:other/Table 1 SAINT3788_TripleTOF.xlsx
+## 5 mzspec:MSV000083058:other/Table 2 SAINT3788_TripleTOF.xlsx
+## 6 mzspec:MSV000083058:other/Table 3 SAINT3788_TripleTOF.xlsx
+##                                 filepath      dataset collection is_update
+## 1             ccms_parameters/params.xml MSV000083058                    0
+## 2         ccms_statistics/statistics.tsv MSV000083058                    0
+## 3  methods/README_Histones_P108_VS3.docx MSV000083058                    0
+## 4 other/Table 1 SAINT3788_TripleTOF.xlsx MSV000083058                    0
+## 5 other/Table 2 SAINT3788_TripleTOF.xlsx MSV000083058                    0
+## 6 other/Table 3 SAINT3788_TripleTOF.xlsx MSV000083058                    0
+##   update_name                create_time   size size_mb sample_type spectra_ms1
+## 1          NA 2024-04-11 02:34:07.431000   8619       0     MASSIVE           0
+## 2          NA 2024-01-23 14:53:43.404000      0       0     MASSIVE           0
+## 3          NA 2024-03-28 13:07:48.624000  31495       0     MASSIVE           0
+## 4          NA 2024-04-23 08:04:41.282000  10783       0     MASSIVE           0
+## 5          NA 2024-04-02 13:03:41.877000 931530       0     MASSIVE           0
+## 6          NA 2024-03-28 13:07:48.754000 152547       0     MASSIVE           0
+##   spectra_ms2 instrument_vendor instrument_model file_processed
+## 1           0                NA               NA             No
+## 2           0                NA               NA             No
+## 3           0                NA               NA             No
+## 4           0                NA               NA             No
+## 5           0                NA               NA             No
+## 6           0                NA               NA             No
+##                           filename
+## 1                       params.xml
+## 2                   statistics.tsv
+## 3    README_Histones_P108_VS3.docx
+## 4 Table 1 SAINT3788_TripleTOF.xlsx
+## 5 Table 2 SAINT3788_TripleTOF.xlsx
+## 6 Table 3 SAINT3788_TripleTOF.xlsx</code></pre>
+<p>Via the <code>gnps2_query()</code> function, it is also possible to
+compute the total size of data files in a MassIVE data set. To this end,
+the <code>filepath_pattern</code> parameter can be used to restrict the
+query to specific files.</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a>files_info <span class="ot">&lt;-</span> <span class="fu">gnps2_query</span>(<span class="st">&quot;MSV000083058&quot;</span>, <span class="at">filepath_pattern =</span> <span class="st">&quot;mzML$&quot;</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a>size_gb <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">sum</span>(files_info<span class="sc">$</span>size)<span class="sc">/</span>(<span class="dv">2</span><span class="sc">^</span><span class="dv">30</span>), <span class="dv">2</span>)</span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a><span class="fu">message</span>(<span class="st">&quot;Total size of mzML files in data set MSV000083058: &quot;</span>, size_gb, <span class="st">&quot; GB&quot;</span>)</span></code></pre></div>
+<pre><code>## Total size of mzML files in data set MSV000083058: 3.48 GB</code></pre>
+<p>The <code>gnps2_usi_download_link()</code> returns a fully qualified
+link to a data file (listed in the GNPS2 datasetcache), based on it’s
+USI.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a><span class="fu">gnps2_usi_download_link</span>(res<span class="sc">$</span>usi[<span class="dv">4</span>])</span></code></pre></div>
+<pre><code>## [1] &quot;https://massiveproxy.gnps2.org/massiveproxy/MSV000083058/other/Table%201%20SAINT3788_TripleTOF.xlsx&quot;</code></pre>
+</div>
+<div id="session-information" class="section level1">
+<h1>Session information</h1>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+<pre><code>## R version 4.5.3 (2026-03-11)
+## Platform: x86_64-pc-linux-gnu
+## Running under: Ubuntu 24.04.4 LTS
+## 
+## Matrix products: default
+## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+## 
+## locale:
+##  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+##  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+##  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+##  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+## [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+## 
+## time zone: Etc/UTC
+## tzcode source: system (glibc)
+## 
+## attached base packages:
+## [1] stats4    stats     graphics  grDevices utils     datasets  methods  
+## [8] base     
+## 
+## other attached packages:
+## [1] MsBackendMassIVE_0.99.0 Spectra_1.21.7          BiocParallel_1.45.0    
+## [4] S4Vectors_0.49.2        BiocGenerics_0.57.1     generics_0.1.4         
+## [7] BiocStyle_2.39.0       
+## 
+## loaded via a namespace (and not attached):
+##  [1] xfun_0.57              bslib_0.10.0           httr2_1.2.2           
+##  [4] Biobase_2.71.0         vctrs_0.7.3            tools_4.5.3           
+##  [7] curl_7.1.0             parallel_4.5.3         tibble_3.3.1          
+## [10] RSQLite_2.4.6          cluster_2.1.8.2        blob_1.3.0            
+## [13] pkgconfig_2.0.3        data.table_1.18.2.1    dbplyr_2.5.2          
+## [16] lifecycle_1.0.5        compiler_4.5.3         stringr_1.6.0         
+## [19] progress_1.2.3         codetools_0.2-20       ncdf4_1.24            
+## [22] clue_0.3-68            htmltools_0.5.9        sys_3.4.3             
+## [25] buildtools_1.0.0       sass_0.4.10            yaml_2.3.12           
+## [28] pillar_1.11.1          crayon_1.5.3           jquerylib_0.1.4       
+## [31] MASS_7.3-65            cachem_1.1.0           MetaboCoreUtils_1.19.3
+## [34] tidyselect_1.2.1       digest_0.6.39          stringi_1.8.7         
+## [37] dplyr_1.2.1            purrr_1.2.2            maketools_1.3.2       
+## [40] fastmap_1.2.0          cli_3.6.6              magrittr_2.0.5        
+## [43] withr_3.0.2            prettyunits_1.2.0      filelock_1.0.3        
+## [46] rappdirs_0.3.4         bit64_4.8.0            rmarkdown_2.31        
+## [49] httr_1.4.8             bit_4.6.0              hms_1.1.4             
+## [52] memoise_2.0.1          evaluate_1.0.5         knitr_1.51            
+## [55] IRanges_2.45.0         BiocFileCache_3.1.0    rlang_1.2.0           
+## [58] Rcpp_1.1.1-1           glue_1.8.1             DBI_1.3.0             
+## [61] BiocManager_1.30.27    mzR_2.45.1             xml2_1.5.2            
+## [64] jsonlite_2.0.0         R6_2.6.1               fs_2.1.0              
+## [67] ProtGenerics_1.39.2    MsCoreUtils_1.23.10</code></pre>
+</div></div>
+            <div class="d-none d-xl-block col-xl-2 bd-toc">
+               <ul class="section-nav">
+                  <li class="toc-entry"><ul>
+<li><a href="#introduction" id="toc-introduction">Introduction</a></li>
+<li><a href="#installation" id="toc-installation">Installation</a></li>
+<li><a href="#importing-ms-data-from-massive" id="toc-importing-ms-data-from-massive">Importing MS Data from
+MassIVE</a></li>
+<li><a href="#general-use-and-information-retrieval-from-massive" id="toc-general-use-and-information-retrieval-from-massive">General use
+and information retrieval from MassIVE</a></li>
+<li><a href="#session-information" id="toc-session-information">Session
+information</a></li>
+</ul></li>
+               </ul>
+            </div>
+         </div>
+               </div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.slim.js" data-external="1"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.min.js" data-external="1"></script>
+      <script src="https://r-universe.dev/static/article.js" data-external="1"></script>
+
+      <!-- Mathjax -->
+      <!-- <script src="https://polyfill.io/v3/polyfill.min.js?features=es6" data-external="1"></script> -->
+      <script id="MathJax-script" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.0.0/tex-mml-chtml.min.js" data-external="1"></script>
+   </body>
+</html>

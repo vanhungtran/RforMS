@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.29">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>18&nbsp; Handle Missing Data, Imputation, and Robustness – Mass Spectrometry Data Analysis with R</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./20-differential-abundance.html" rel="next">
+<link href="./18-normalize-batches.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-0815c480559380816a4d1ea211a47e91.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-23d003e80a5415bcd382f8d57091344b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./18-normalize-batches.html">Part IV — Matrix Normalization and Batch Correction</a></li><li class="breadcrumb-item"><a href="./19-missing-data.html"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Matrix Normalization and Batch Correction</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">18.1</span> Learning Objectives</a></li>
+  <li><a href="#why-missing-data-matter-in-ms-based-omics" id="toc-why-missing-data-matter-in-ms-based-omics" class="nav-link" data-scroll-target="#why-missing-data-matter-in-ms-based-omics"><span class="header-section-number">18.2</span> Why Missing Data Matter in MS-Based Omics</a></li>
+  <li><a href="#datasets-for-this-chapter" id="toc-datasets-for-this-chapter" class="nav-link" data-scroll-target="#datasets-for-this-chapter"><span class="header-section-number">18.3</span> Datasets for This Chapter</a></li>
+  <li><a href="#setup-and-package-installation" id="toc-setup-and-package-installation" class="nav-link" data-scroll-target="#setup-and-package-installation"><span class="header-section-number">18.4</span> Setup and Package Installation</a></li>
+  <li><a href="#step-1-load-data-and-inspect-missingness" id="toc-step-1-load-data-and-inspect-missingness" class="nav-link" data-scroll-target="#step-1-load-data-and-inspect-missingness"><span class="header-section-number">18.5</span> Step 1: Load Data and Inspect Missingness</a>
+  <ul class="collapse">
+  <li><a href="#load-the-ubilength-dataset" id="toc-load-the-ubilength-dataset" class="nav-link" data-scroll-target="#load-the-ubilength-dataset"><span class="header-section-number">18.5.1</span> Load the UbiLength Dataset</a></li>
+  <li><a href="#visualise-missingness-pattern" id="toc-visualise-missingness-pattern" class="nav-link" data-scroll-target="#visualise-missingness-pattern"><span class="header-section-number">18.5.2</span> Visualise Missingness Pattern</a></li>
+  <li><a href="#per-sample-missingness" id="toc-per-sample-missingness" class="nav-link" data-scroll-target="#per-sample-missingness"><span class="header-section-number">18.5.3</span> Per-Sample Missingness</a></li>
+  </ul></li>
+  <li><a href="#step-2-diagnose-mar-vs-mnar" id="toc-step-2-diagnose-mar-vs-mnar" class="nav-link" data-scroll-target="#step-2-diagnose-mar-vs-mnar"><span class="header-section-number">18.6</span> Step 2: Diagnose MAR vs MNAR</a>
+  <ul class="collapse">
+  <li><a href="#the-key-diagnostic-plot" id="toc-the-key-diagnostic-plot" class="nav-link" data-scroll-target="#the-key-diagnostic-plot"><span class="header-section-number">18.6.1</span> The Key Diagnostic Plot</a></li>
+  </ul></li>
+  <li><a href="#step-3-apply-four-imputation-strategies" id="toc-step-3-apply-four-imputation-strategies" class="nav-link" data-scroll-target="#step-3-apply-four-imputation-strategies"><span class="header-section-number">18.7</span> Step 3: Apply Four Imputation Strategies</a>
+  <ul class="collapse">
+  <li><a href="#strategy-1-minimum-value-mnar-simple" id="toc-strategy-1-minimum-value-mnar-simple" class="nav-link" data-scroll-target="#strategy-1-minimum-value-mnar-simple"><span class="header-section-number">18.7.1</span> Strategy 1: Minimum Value (MNAR, Simple)</a></li>
+  <li><a href="#strategy-2-k-nearest-neighbors-mar" id="toc-strategy-2-k-nearest-neighbors-mar" class="nav-link" data-scroll-target="#strategy-2-k-nearest-neighbors-mar"><span class="header-section-number">18.7.2</span> Strategy 2: k-Nearest Neighbors (MAR)</a></li>
+  <li><a href="#strategy-3-left-censored-gaussian-draws-mnar-perseus-style" id="toc-strategy-3-left-censored-gaussian-draws-mnar-perseus-style" class="nav-link" data-scroll-target="#strategy-3-left-censored-gaussian-draws-mnar-perseus-style"><span class="header-section-number">18.7.3</span> Strategy 3: Left-Censored Gaussian Draws (MNAR, Perseus-style)</a></li>
+  <li><a href="#strategy-4-mixed-mar-for-low-missing-mnar-for-high-missing" id="toc-strategy-4-mixed-mar-for-low-missing-mnar-for-high-missing" class="nav-link" data-scroll-target="#strategy-4-mixed-mar-for-low-missing-mnar-for-high-missing"><span class="header-section-number">18.7.4</span> Strategy 4: Mixed (MAR for low-missing, MNAR for high-missing)</a></li>
+  </ul></li>
+  <li><a href="#step-4-compare-imputation-distributions" id="toc-step-4-compare-imputation-distributions" class="nav-link" data-scroll-target="#step-4-compare-imputation-distributions"><span class="header-section-number">18.8</span> Step 4: Compare Imputation Distributions</a></li>
+  <li><a href="#step-5-sensitivity-analysis-are-conclusions-stable" id="toc-step-5-sensitivity-analysis-are-conclusions-stable" class="nav-link" data-scroll-target="#step-5-sensitivity-analysis-are-conclusions-stable"><span class="header-section-number">18.9</span> Step 5: Sensitivity Analysis – Are Conclusions Stable?</a>
+  <ul class="collapse">
+  <li><a href="#prepare-sample-groups" id="toc-prepare-sample-groups" class="nav-link" data-scroll-target="#prepare-sample-groups"><span class="header-section-number">18.9.1</span> Prepare Sample Groups</a></li>
+  <li><a href="#differential-analysis-function" id="toc-differential-analysis-function" class="nav-link" data-scroll-target="#differential-analysis-function"><span class="header-section-number">18.9.2</span> Differential Analysis Function</a></li>
+  <li><a href="#run-for-all-strategies" id="toc-run-for-all-strategies" class="nav-link" data-scroll-target="#run-for-all-strategies"><span class="header-section-number">18.9.3</span> Run for All Strategies</a></li>
+  <li><a href="#find-stable-features-significant-across-all-strategies" id="toc-find-stable-features-significant-across-all-strategies" class="nav-link" data-scroll-target="#find-stable-features-significant-across-all-strategies"><span class="header-section-number">18.9.4</span> Find Stable Features (Significant Across ALL Strategies)</a></li>
+  </ul></li>
+  <li><a href="#step-6-visualise-overlap-with-upset-plot" id="toc-step-6-visualise-overlap-with-upset-plot" class="nav-link" data-scroll-target="#step-6-visualise-overlap-with-upset-plot"><span class="header-section-number">18.10</span> Step 6: Visualise Overlap with UpSet Plot</a></li>
+  <li><a href="#step-7-robustness-summary-report" id="toc-step-7-robustness-summary-report" class="nav-link" data-scroll-target="#step-7-robustness-summary-report"><span class="header-section-number">18.11</span> Step 7: Robustness Summary Report</a></li>
+  <li><a href="#complete-workflow-in-one-block" id="toc-complete-workflow-in-one-block" class="nav-link" data-scroll-target="#complete-workflow-in-one-block"><span class="header-section-number">18.12</span> Complete Workflow in One Block</a></li>
+  <li><a href="#common-pitfalls-and-solutions" id="toc-common-pitfalls-and-solutions" class="nav-link" data-scroll-target="#common-pitfalls-and-solutions"><span class="header-section-number">18.13</span> Common Pitfalls and Solutions</a></li>
+  <li><a href="#decision-flowchart-for-imputation-strategy" id="toc-decision-flowchart-for-imputation-strategy" class="nav-link" data-scroll-target="#decision-flowchart-for-imputation-strategy"><span class="header-section-number">18.14</span> Decision Flowchart for Imputation Strategy</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">18.15</span> Exercises</a>
+  <ul class="collapse">
+  <li><a href="#exercise-1-diagnose-missingness-in-metabolomics-data" id="toc-exercise-1-diagnose-missingness-in-metabolomics-data" class="nav-link" data-scroll-target="#exercise-1-diagnose-missingness-in-metabolomics-data"><span class="header-section-number">18.15.1</span> Exercise 1: Diagnose Missingness in Metabolomics Data</a></li>
+  <li><a href="#exercise-2-compare-imputation-methods-on-cptac-data" id="toc-exercise-2-compare-imputation-methods-on-cptac-data" class="nav-link" data-scroll-target="#exercise-2-compare-imputation-methods-on-cptac-data"><span class="header-section-number">18.15.2</span> Exercise 2: Compare Imputation Methods on CPTAC Data</a></li>
+  <li><a href="#exercise-3-sensitivity-on-your-own-data" id="toc-exercise-3-sensitivity-on-your-own-data" class="nav-link" data-scroll-target="#exercise-3-sensitivity-on-your-own-data"><span class="header-section-number">18.15.3</span> Exercise 3: Sensitivity on Your Own Data</a></li>
+  <li><a href="#exercise-4-missingness-heatmap" id="toc-exercise-4-missingness-heatmap" class="nav-link" data-scroll-target="#exercise-4-missingness-heatmap"><span class="header-section-number">18.15.4</span> Exercise 4: Missingness Heatmap</a></li>
+  </ul></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">18.16</span> Summary</a>
+  <ul class="collapse">
+  <li><a href="#key-outputs-from-this-chapter" id="toc-key-outputs-from-this-chapter" class="nav-link" data-scroll-target="#key-outputs-from-this-chapter"><span class="header-section-number">18.16.1</span> Key Outputs from This Chapter</a></li>
+  <li><a href="#decision-rules" id="toc-decision-rules" class="nav-link" data-scroll-target="#decision-rules"><span class="header-section-number">18.16.2</span> Decision Rules</a></li>
+  <li><a href="#resources" id="toc-resources" class="nav-link" data-scroll-target="#resources"><span class="header-section-number">18.16.3</span> Resources</a></li>
+  </ul></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">18.17</span> Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/19-missing-data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./18-normalize-batches.html">Part IV — Matrix Normalization and Batch Correction</a></li><li class="breadcrumb-item"><a href="./19-missing-data.html"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“Missing data are not all equal – how you handle them can change your biological conclusions.”</em></p>
+</blockquote>
+<section id="learning-objectives" class="level2" data-number="18.1">
+<h2 data-number="18.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">18.1</span> Learning Objectives</h2>
+<p>By the end of this chapter, you will be able to:</p>
+<ul>
+<li>Distinguish <strong>MAR</strong> (missing at random) from <strong>MNAR</strong> (missing not at random) using diagnostic plots</li>
+<li>Visualise missingness structure with heatmaps and UpSet plots</li>
+<li>Apply four imputation strategies: minimum value, k-NN, left-censored draws, and mixed</li>
+<li>Test whether differential analysis conclusions are <strong>robust to imputation choice</strong></li>
+<li>Export stable features and an imputation sensitivity summary</li>
+</ul>
+</section>
+<section id="why-missing-data-matter-in-ms-based-omics" class="level2" data-number="18.2">
+<h2 data-number="18.2" class="anchored" data-anchor-id="why-missing-data-matter-in-ms-based-omics"><span class="header-section-number">18.2</span> Why Missing Data Matter in MS-Based Omics</h2>
+<p>Missing values are ubiquitous in mass spectrometry data. A peptide or metabolite may be missing because:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 32%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Mechanism</th>
+<th>Abbreviation</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Missing at Random</strong></td>
+<td>MAR</td>
+<td>Missingness depends on observed data, not the missing value itself</td>
+<td>Low-quality injection affects all features equally</td>
+</tr>
+<tr class="even">
+<td><strong>Missing Not at Random</strong></td>
+<td>MNAR</td>
+<td>Missingness depends on the unobserved value (usually low abundance)</td>
+<td>Peptide below detection limit in treated samples</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The critical point:</strong> Using a MAR method (e.g., k-NN) on MNAR data inflates false positives. Using an MNAR method (e.g., left-censored imputation) on MAR data adds unnecessary noise.</p>
+<hr>
+</section>
+<section id="datasets-for-this-chapter" class="level2" data-number="18.3">
+<h2 data-number="18.3" class="anchored" data-anchor-id="datasets-for-this-chapter"><span class="header-section-number">18.3</span> Datasets for This Chapter</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Dataset</th>
+<th>Package</th>
+<th>Type</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>UbiLength</code></td>
+<td><code>DEP</code></td>
+<td>LFQ proteomics</td>
+<td>Typical missingness patterns</td>
+</tr>
+<tr class="even">
+<td><code>sacurine</code></td>
+<td><code>ropls</code></td>
+<td>Metabolomics</td>
+<td>High missing rate example</td>
+</tr>
+<tr class="odd">
+<td><code>faahKO</code></td>
+<td><code>faahKO</code></td>
+<td>LC-MS feature table</td>
+<td>Preprocessed data</td>
+</tr>
+</tbody>
+</table>
+<p>For this demonstration, we reuse <code>UbiLength</code> from the <code>DEP</code> package. Chapter 13 uses the same dataset for LFQ quantification; here the focus is narrower: diagnosing missingness mechanisms and testing whether conclusions depend on the imputation strategy.</p>
+<hr>
+</section>
+<section id="setup-and-package-installation" class="level2" data-number="18.4">
+<h2 data-number="18.4" class="anchored" data-anchor-id="setup-and-package-installation"><span class="header-section-number">18.4</span> Setup and Package Installation</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Install required packages</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"DEP"</span>,           <span class="co"># Proteomics data and imputation</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"naniar"</span>,        <span class="co"># Missing data visualisation</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"impute"</span>,        <span class="co"># kNN imputation</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"ComplexUpset"</span>,  <span class="co"># Set overlap visualisation</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"limma"</span>,         <span class="co"># Differential analysis</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"ggplot2"</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"dplyr"</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>))</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load libraries</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DEP)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(naniar)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(impute)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ComplexUpset)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Set random seed for reproducibility</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span></code></pre></div>
+<hr>
+</section>
+<section id="step-1-load-data-and-inspect-missingness" class="level2" data-number="18.5">
+<h2 data-number="18.5" class="anchored" data-anchor-id="step-1-load-data-and-inspect-missingness"><span class="header-section-number">18.5</span> Step 1: Load Data and Inspect Missingness</h2>
+<section id="load-the-ubilength-dataset" class="level3" data-number="18.5.1">
+<h3 data-number="18.5.1" class="anchored" data-anchor-id="load-the-ubilength-dataset"><span class="header-section-number">18.5.1</span> Load the UbiLength Dataset</h3>
+<p><code>UbiLength</code> is a label-free proteomics dataset with 12 samples across 4 conditions and 3 replicates per condition.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(<span class="st">"UbiLength"</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Locate LFQ intensity columns</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>int_cols <span class="ot">&lt;-</span> <span class="fu">grep</span>(<span class="st">"^LFQ"</span>, <span class="fu">colnames</span>(UbiLength), <span class="at">value =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Found"</span>, <span class="fu">length</span>(int_cols), <span class="st">"intensity columns</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract intensity matrix and log2 transform</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>mat_raw <span class="ot">&lt;-</span> <span class="fu">log2</span>(<span class="fu">as.matrix</span>(UbiLength[, int_cols]))</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace infinite values (from log2(0)) with NA</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>mat_raw[<span class="fu">is.infinite</span>(mat_raw)] <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Dimensions</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Proteins:"</span>, <span class="fu">nrow</span>(mat_raw), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Samples:"</span>, <span class="fu">ncol</span>(mat_raw), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</section>
+<section id="visualise-missingness-pattern" class="level3" data-number="18.5.2">
+<h3 data-number="18.5.2" class="anchored" data-anchor-id="visualise-missingness-pattern"><span class="header-section-number">18.5.2</span> Visualise Missingness Pattern</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to data frame for naniar</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>df_raw <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(mat_raw)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Overall missingness heatmap</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">gg_miss_upset</span>(df_raw, <span class="at">nsets =</span> <span class="dv">8</span>, <span class="at">nintersects =</span> <span class="dv">20</span>) <span class="sc">+</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Missingness pattern across samples"</span>)</span></code></pre></div>
+<p><strong>Interpretation:</strong> This plot shows which samples share missing proteins. High overlap in missingness across replicate samples suggests technical bias.</p>
+</section>
+<section id="per-sample-missingness" class="level3" data-number="18.5.3">
+<h3 data-number="18.5.3" class="anchored" data-anchor-id="per-sample-missingness"><span class="header-section-number">18.5.3</span> Per-Sample Missingness</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Proportion missing per sample</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>missing_by_sample <span class="ot">&lt;-</span> <span class="fu">colMeans</span>(<span class="fu">is.na</span>(mat_raw))</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>missing_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample =</span> <span class="fu">names</span>(missing_by_sample),</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">missing_pct =</span> missing_by_sample <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(missing_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(sample, missing_pct), <span class="at">y =</span> missing_pct)) <span class="sc">+</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>, <span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Missing values per sample"</span>,</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Sample"</span>, <span class="at">y =</span> <span class="st">"Missing values (%)"</span>) <span class="sc">+</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="step-2-diagnose-mar-vs-mnar" class="level2" data-number="18.6">
+<h2 data-number="18.6" class="anchored" data-anchor-id="step-2-diagnose-mar-vs-mnar"><span class="header-section-number">18.6</span> Step 2: Diagnose MAR vs MNAR</h2>
+<section id="the-key-diagnostic-plot" class="level3" data-number="18.6.1">
+<h3 data-number="18.6.1" class="anchored" data-anchor-id="the-key-diagnostic-plot"><span class="header-section-number">18.6.1</span> The Key Diagnostic Plot</h3>
+<p>If missingness correlates with <strong>low intensity</strong>, the mechanism is likely <strong>MNAR</strong> (values missing because they were too low to detect). If missingness is random across the intensity range, <strong>MAR</strong> is more plausible.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate per-protein mean intensity and missing fraction</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>mean_intensity <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">1</span>, mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>miss_fraction <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">1</span>, <span class="cf">function</span>(x) <span class="fu">mean</span>(<span class="fu">is.na</span>(x)))</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Create diagnostic plot</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>diagnostic_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">mean_intensity =</span> mean_intensity,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">miss_fraction =</span> miss_fraction</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(diagnostic_df, <span class="fu">aes</span>(<span class="at">x =</span> mean_intensity, <span class="at">y =</span> miss_fraction)) <span class="sc">+</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"loess"</span>, <span class="at">se =</span> <span class="cn">TRUE</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">fill =</span> <span class="st">"pink"</span>) <span class="sc">+</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Missingness mechanism diagnostic"</span>,</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Downward slope = MNAR (low intensity values missing)"</span>,</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Mean log2 intensity (observed values only)"</span>,</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Fraction missing per protein"</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p><strong>How to interpret:</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 25%">
+<col style="width: 54%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pattern</th>
+<th>Mechanism</th>
+<th>Recommended Imputation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Strong downward slope</td>
+<td>MNAR</td>
+<td>Left-censored (Perseus-style)</td>
+</tr>
+<tr class="even">
+<td>Flat or upward slope</td>
+<td>MAR</td>
+<td>k-NN, minimum value</td>
+</tr>
+<tr class="odd">
+<td>Mixed (some proteins high, some low)</td>
+<td>Mixed</td>
+<td>Strategy 4: mixed approach</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+</section>
+<section id="step-3-apply-four-imputation-strategies" class="level2" data-number="18.7">
+<h2 data-number="18.7" class="anchored" data-anchor-id="step-3-apply-four-imputation-strategies"><span class="header-section-number">18.7</span> Step 3: Apply Four Imputation Strategies</h2>
+<section id="strategy-1-minimum-value-mnar-simple" class="level3" data-number="18.7.1">
+<h3 data-number="18.7.1" class="anchored" data-anchor-id="strategy-1-minimum-value-mnar-simple"><span class="header-section-number">18.7.1</span> Strategy 1: Minimum Value (MNAR, Simple)</h3>
+<p>Replace each missing value with the minimum observed value in that sample. Fast, conservative, assumes missing = very low abundance.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>imp_min <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">2</span>, <span class="cf">function</span>(x) {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  x[<span class="fu">is.na</span>(x)] <span class="ot">&lt;-</span> <span class="fu">min</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  x</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Min value imputation completed</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</section>
+<section id="strategy-2-k-nearest-neighbors-mar" class="level3" data-number="18.7.2">
+<h3 data-number="18.7.2" class="anchored" data-anchor-id="strategy-2-k-nearest-neighbors-mar"><span class="header-section-number">18.7.2</span> Strategy 2: k-Nearest Neighbors (MAR)</h3>
+<p>Uses similar proteins (by expression profile) to predict missing values. Assumes missingness is random.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># k-NN imputation (k = 10 by default)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>imp_knn <span class="ot">&lt;-</span> impute<span class="sc">::</span><span class="fu">impute.knn</span>(mat_raw)<span class="sc">$</span>data</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"k-NN imputation completed</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</section>
+<section id="strategy-3-left-censored-gaussian-draws-mnar-perseus-style" class="level3" data-number="18.7.3">
+<h3 data-number="18.7.3" class="anchored" data-anchor-id="strategy-3-left-censored-gaussian-draws-mnar-perseus-style"><span class="header-section-number">18.7.3</span> Strategy 3: Left-Censored Gaussian Draws (MNAR, Perseus-style)</h3>
+<p>This emulates the popular Perseus imputation: draw random values from a left-shifted normal distribution. Standard for MNAR proteomics data.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>imp_leftcensored <span class="ot">&lt;-</span> mat_raw</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>na_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="fu">is.na</span>(imp_leftcensored), <span class="at">arr.ind =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Process each column independently</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">unique</span>(na_idx[, <span class="dv">2</span>])) {</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  col_vals <span class="ot">&lt;-</span> imp_leftcensored[, j]</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  col_mean <span class="ot">&lt;-</span> <span class="fu">mean</span>(col_vals, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  col_sd <span class="ot">&lt;-</span> <span class="fu">sd</span>(col_vals, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Draw from left tail: mean - 1.8 SD, width 0.3 SD</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  n_missing <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(col_vals))</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  fill_vals <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n_missing, <span class="at">mean =</span> col_mean <span class="sc">-</span> <span class="fl">1.8</span> <span class="sc">*</span> col_sd, <span class="at">sd =</span> <span class="fl">0.3</span> <span class="sc">*</span> col_sd)</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  imp_leftcensored[<span class="fu">is.na</span>(col_vals), j] <span class="ot">&lt;-</span> fill_vals</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Left-censored imputation completed</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</section>
+<section id="strategy-4-mixed-mar-for-low-missing-mnar-for-high-missing" class="level3" data-number="18.7.4">
+<h3 data-number="18.7.4" class="anchored" data-anchor-id="strategy-4-mixed-mar-for-low-missing-mnar-for-high-missing"><span class="header-section-number">18.7.4</span> Strategy 4: Mixed (MAR for low-missing, MNAR for high-missing)</h3>
+<p>Proteins with &lt;50% missing use k-NN (MAR). Proteins with ≥50% missing use minimum value (MNAR). This handles heterogeneous missingness.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>miss_frac_row <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">1</span>, <span class="cf">function</span>(x) <span class="fu">mean</span>(<span class="fu">is.na</span>(x)))</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>imp_mixed <span class="ot">&lt;-</span> mat_raw</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>imp_mixed[miss_frac_row <span class="sc">&lt;</span> <span class="fl">0.5</span>, ] <span class="ot">&lt;-</span> imp_knn[miss_frac_row <span class="sc">&lt;</span> <span class="fl">0.5</span>, ]</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>imp_mixed[miss_frac_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>, ] <span class="ot">&lt;-</span> imp_min[miss_frac_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>, ]</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Mixed imputation: %d proteins (%.1f%%) used k-NN, %d proteins (%.1f%%) used min</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sum</span>(miss_frac_row <span class="sc">&lt;</span> <span class="fl">0.5</span>), <span class="dv">100</span> <span class="sc">*</span> <span class="fu">mean</span>(miss_frac_row <span class="sc">&lt;</span> <span class="fl">0.5</span>),</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sum</span>(miss_frac_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>), <span class="dv">100</span> <span class="sc">*</span> <span class="fu">mean</span>(miss_frac_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>)))</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="step-4-compare-imputation-distributions" class="level2" data-number="18.8">
+<h2 data-number="18.8" class="anchored" data-anchor-id="step-4-compare-imputation-distributions"><span class="header-section-number">18.8</span> Step 4: Compare Imputation Distributions</h2>
+<p>Plot the intensity distribution for one sample under each strategy. This reveals how each method shifts the data.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract first sample after each imputation</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>sample_name <span class="ot">&lt;-</span> <span class="fu">colnames</span>(mat_raw)[<span class="dv">1</span>]</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">intensity =</span> <span class="fu">c</span>(mat_raw[, <span class="dv">1</span>], imp_min[, <span class="dv">1</span>], imp_knn[, <span class="dv">1</span>], </span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>                imp_leftcensored[, <span class="dv">1</span>], imp_mixed[, <span class="dv">1</span>]),</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">strategy =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Raw (with NA)"</span>, <span class="st">"Min value"</span>, <span class="st">"k-NN"</span>, </span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>                   <span class="st">"Left-censored"</span>, <span class="st">"Mixed"</span>), </span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>                 <span class="at">each =</span> <span class="fu">nrow</span>(mat_raw))</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Remove NA for plotting (raw has NAs)</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="ot">&lt;-</span> comparison_df[<span class="sc">!</span><span class="fu">is.na</span>(comparison_df<span class="sc">$</span>intensity) <span class="sc">|</span> </span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>                                comparison_df<span class="sc">$</span>strategy <span class="sc">!=</span> <span class="st">"Raw (with NA)"</span>, ]</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(comparison_df, <span class="fu">aes</span>(<span class="at">x =</span> intensity, <span class="at">fill =</span> strategy)) <span class="sc">+</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">bw =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>strategy, <span class="at">scales =</span> <span class="st">"fixed"</span>, <span class="at">ncol =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="fu">paste</span>(<span class="st">"Imputation strategy comparison -"</span>, sample_name),</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"log2 intensity"</span>,</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Density"</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span></code></pre></div>
+<p><strong>What to look for:</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Strategy</th>
+<th>Distribution Shape</th>
+<th>Appropriate For</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Min value</td>
+<td>Spike at low end</td>
+<td>Conservative MNAR</td>
+</tr>
+<tr class="even">
+<td>k-NN</td>
+<td>Preserves original shape</td>
+<td>MAR</td>
+</tr>
+<tr class="odd">
+<td>Left-censored</td>
+<td>Smooth left tail</td>
+<td>Standard MNAR</td>
+</tr>
+<tr class="even">
+<td>Mixed</td>
+<td>Bimodal (two methods combined)</td>
+<td>Heterogeneous data</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="step-5-sensitivity-analysis-are-conclusions-stable" class="level2" data-number="18.9">
+<h2 data-number="18.9" class="anchored" data-anchor-id="step-5-sensitivity-analysis-are-conclusions-stable"><span class="header-section-number">18.9</span> Step 5: Sensitivity Analysis – Are Conclusions Stable?</h2>
+<p>The core question: <em>Do different imputation methods lead to the same biological conclusions?</em></p>
+<p>We’ll run differential analysis (limma) on each imputed matrix and compare which proteins are significantly different between conditions.</p>
+<section id="prepare-sample-groups" class="level3" data-number="18.9.1">
+<h3 data-number="18.9.1" class="anchored" data-anchor-id="prepare-sample-groups"><span class="header-section-number">18.9.1</span> Prepare Sample Groups</h3>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Define groups (assuming first 4 = control, last 4 = treatment)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>group <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="fu">rep</span>(<span class="st">"Control"</span>, <span class="dv">4</span>), <span class="fu">rep</span>(<span class="st">"Treatment"</span>, <span class="dv">4</span>)))</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> group)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Design matrix:</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(design)</span></code></pre></div>
+</section>
+<section id="differential-analysis-function" class="level3" data-number="18.9.2">
+<h3 data-number="18.9.2" class="anchored" data-anchor-id="differential-analysis-function"><span class="header-section-number">18.9.2</span> Differential Analysis Function</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>run_limma <span class="ot">&lt;-</span> <span class="cf">function</span>(mat, design, <span class="at">coef =</span> <span class="dv">2</span>) {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># mat: samples × features (transpose from our format)</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  mat_t <span class="ot">&lt;-</span> <span class="fu">t</span>(mat)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(mat_t, design)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">eBayes</span>(fit)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  results <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit, <span class="at">coef =</span> coef, <span class="at">number =</span> <span class="cn">Inf</span>) <span class="sc">|&gt;</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">"protein"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(protein, logFC, adj.P.Val)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(results)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+</section>
+<section id="run-for-all-strategies" class="level3" data-number="18.9.3">
+<h3 data-number="18.9.3" class="anchored" data-anchor-id="run-for-all-strategies"><span class="header-section-number">18.9.3</span> Run for All Strategies</h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply differential analysis to each imputation</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>results_raw <span class="ot">&lt;-</span> <span class="fu">run_limma</span>(mat_raw, design)      <span class="co"># Will have NAs</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>results_min <span class="ot">&lt;-</span> <span class="fu">run_limma</span>(imp_min, design)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>results_knn <span class="ot">&lt;-</span> <span class="fu">run_limma</span>(imp_knn, design)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>results_left <span class="ot">&lt;-</span> <span class="fu">run_limma</span>(imp_leftcensored, design)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>results_mixed <span class="ot">&lt;-</span> <span class="fu">run_limma</span>(imp_mixed, design)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Collect significant proteins (adj.P.Val &lt; 0.05)</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>sig_lists <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">min_val =</span> results_min<span class="sc">$</span>protein[results_min<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>],</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">knn =</span> results_knn<span class="sc">$</span>protein[results_knn<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>],</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">left_censored =</span> results_left<span class="sc">$</span>protein[results_left<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>],</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">mixed =</span> results_mixed<span class="sc">$</span>protein[results_mixed<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>]</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary of significant counts</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>sig_summary <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">strategy =</span> <span class="fu">names</span>(sig_lists),</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_significant =</span> <span class="fu">sapply</span>(sig_lists, length)</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(sig_summary)</span></code></pre></div>
+</section>
+<section id="find-stable-features-significant-across-all-strategies" class="level3" data-number="18.9.4">
+<h3 data-number="18.9.4" class="anchored" data-anchor-id="find-stable-features-significant-across-all-strategies"><span class="header-section-number">18.9.4</span> Find Stable Features (Significant Across ALL Strategies)</h3>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Features significant in every imputation</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>stable_features <span class="ot">&lt;-</span> <span class="fu">Reduce</span>(intersect, sig_lists)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Proteins significant under ALL imputation strategies:"</span>, <span class="fu">length</span>(stable_features), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="co"># View first 10 stable features</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(stable_features) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Example stable features:</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">head</span>(stable_features, <span class="dv">10</span>))</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="step-6-visualise-overlap-with-upset-plot" class="level2" data-number="18.10">
+<h2 data-number="18.10" class="anchored" data-anchor-id="step-6-visualise-overlap-with-upset-plot"><span class="header-section-number">18.10</span> Step 6: Visualise Overlap with UpSet Plot</h2>
+<p>UpSet plots are superior to Venn diagrams for &gt;3 sets.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare matrix for UpSet</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>all_significant <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unlist</span>(sig_lists))</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>upset_mat <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sapply</span>(sig_lists, <span class="cf">function</span>(s) <span class="fu">as.integer</span>(all_significant <span class="sc">%in%</span> s))</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(upset_mat) <span class="ot">&lt;-</span> all_significant</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Create UpSet plot</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="fu">upset</span>(</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  upset_mat,</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">intersect =</span> <span class="fu">names</span>(sig_lists),</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">name =</span> <span class="st">"Imputation strategy"</span>,</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">width_ratio =</span> <span class="fl">0.6</span>,</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">height_ratio =</span> <span class="fl">0.5</span>,</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">min_size =</span> <span class="dv">5</span>,</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">sort_sets =</span> <span class="cn">FALSE</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>) <span class="sc">+</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggtitle</span>(<span class="st">"Overlap of significant proteins across imputation strategies"</span>)</span></code></pre></div>
+<p><strong>Interpretation:</strong></p>
+<ul>
+<li><strong>Large intersection</strong> = robust findings (insensitive to imputation)</li>
+<li><strong>Small intersection</strong> = conclusions are imputation-dependent (proceed with caution)</li>
+<li><strong>Unique to one strategy</strong> = likely false positives or biologically interesting edge cases</li>
+</ul>
+<hr>
+</section>
+<section id="step-7-robustness-summary-report" class="level2" data-number="18.11">
+<h2 data-number="18.11" class="anchored" data-anchor-id="step-7-robustness-summary-report"><span class="header-section-number">18.11</span> Step 7: Robustness Summary Report</h2>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate stability metrics</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>robustness_summary <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">strategy =</span> <span class="fu">names</span>(sig_lists),</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_significant =</span> <span class="fu">sapply</span>(sig_lists, length),</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">n_stable =</span> <span class="fu">sapply</span>(sig_lists, <span class="cf">function</span>(s) <span class="fu">sum</span>(s <span class="sc">%in%</span> stable_features)),</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">stability_pct =</span> <span class="fu">sapply</span>(sig_lists, <span class="cf">function</span>(s) </span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="dv">100</span> <span class="sc">*</span> <span class="fu">sum</span>(s <span class="sc">%in%</span> stable_features) <span class="sc">/</span> <span class="fu">length</span>(s))</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>robustness_summary <span class="ot">&lt;-</span> robustness_summary <span class="sc">|&gt;</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(stability_pct))</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(robustness_summary)</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Export</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(robustness_summary, <span class="st">"imputation_robustness_summary.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Export stable feature list</span></span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(stable_features) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>  stable_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">protein =</span> stable_features,</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">imputation_robust =</span> <span class="cn">TRUE</span></span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write.csv</span>(stable_df, <span class="st">"stable_features_across_imputations.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Files exported:</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"  - imputation_robustness_summary.csv</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(stable_features) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"  - stable_features_across_imputations.csv</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<hr>
+</section>
+<section id="complete-workflow-in-one-block" class="level2" data-number="18.12">
+<h2 data-number="18.12" class="anchored" data-anchor-id="complete-workflow-in-one-block"><span class="header-section-number">18.12</span> Complete Workflow in One Block</h2>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Complete missing data handling pipeline</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DEP); <span class="fu">library</span>(impute); <span class="fu">library</span>(limma); <span class="fu">library</span>(ggplot2); <span class="fu">library</span>(dplyr)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Load</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(<span class="st">"UbiLength"</span>)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>int_cols <span class="ot">&lt;-</span> <span class="fu">grep</span>(<span class="st">"^LFQ"</span>, <span class="fu">colnames</span>(UbiLength), <span class="at">value =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>mat_raw <span class="ot">&lt;-</span> <span class="fu">log2</span>(<span class="fu">as.matrix</span>(UbiLength[, int_cols]))</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>mat_raw[<span class="fu">is.infinite</span>(mat_raw)] <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Diagnose MNAR pattern</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>miss_frac <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">1</span>, <span class="cf">function</span>(x) <span class="fu">mean</span>(<span class="fu">is.na</span>(x)))</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>mean_int <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">1</span>, mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mean_int, miss_frac)</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Impute four ways</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>imp_min <span class="ot">&lt;-</span> <span class="fu">apply</span>(mat_raw, <span class="dv">2</span>, <span class="cf">function</span>(x) { x[<span class="fu">is.na</span>(x)] <span class="ot">&lt;-</span> <span class="fu">min</span>(x, <span class="at">na.rm=</span><span class="cn">TRUE</span>); x })</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>imp_knn <span class="ot">&lt;-</span> impute<span class="sc">::</span><span class="fu">impute.knn</span>(mat_raw)<span class="sc">$</span>data</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>imp_left <span class="ot">&lt;-</span> mat_raw</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(j <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">ncol</span>(mat_raw)) {</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>  na_idx <span class="ot">&lt;-</span> <span class="fu">is.na</span>(imp_left[,j])</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">mean</span>(imp_left[,j], <span class="at">na.rm=</span><span class="cn">TRUE</span>)</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>  s <span class="ot">&lt;-</span> <span class="fu">sd</span>(imp_left[,j], <span class="at">na.rm=</span><span class="cn">TRUE</span>)</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>  imp_left[na_idx,j] <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(<span class="fu">sum</span>(na_idx), m <span class="sc">-</span> <span class="fl">1.8</span><span class="sc">*</span>s, <span class="fl">0.3</span><span class="sc">*</span>s)</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>imp_mixed <span class="ot">&lt;-</span> mat_raw</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Mixed logic: use k-NN for low-missing proteins, min for high-missing</span></span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>miss_row <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="fu">is.na</span>(mat_raw))</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>imp_mixed[miss_row <span class="sc">&lt;</span> <span class="fl">0.5</span>, ] <span class="ot">&lt;-</span> imp_knn[miss_row <span class="sc">&lt;</span> <span class="fl">0.5</span>, ]</span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>imp_mixed[miss_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>, ] <span class="ot">&lt;-</span> imp_min[miss_row <span class="sc">&gt;=</span> <span class="fl">0.5</span>, ]</span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Differential analysis on each</span></span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>group <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="fu">rep</span>(<span class="st">"Ctrl"</span>,<span class="dv">4</span>), <span class="fu">rep</span>(<span class="st">"Treat"</span>,<span class="dv">4</span>)))</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span>group)</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>run_DE <span class="ot">&lt;-</span> <span class="cf">function</span>(mat) {</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(<span class="fu">t</span>(mat), design); fit <span class="ot">&lt;-</span> <span class="fu">eBayes</span>(fit)</span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">topTable</span>(fit, <span class="at">coef=</span><span class="dv">2</span>, <span class="at">number=</span><span class="cn">Inf</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rownames_to_column</span>(<span class="st">"prot"</span>) <span class="sc">|&gt;</span> <span class="fu">filter</span>(adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>) <span class="sc">|&gt;</span> <span class="fu">pull</span>(prot)</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>sig <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">min=</span><span class="fu">run_DE</span>(imp_min), <span class="at">knn=</span><span class="fu">run_DE</span>(imp_knn), </span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>            <span class="at">left=</span><span class="fu">run_DE</span>(imp_left), <span class="at">mixed=</span><span class="fu">run_DE</span>(imp_mixed))</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Stable features</span></span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>stable <span class="ot">&lt;-</span> <span class="fu">Reduce</span>(intersect, sig)</span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Stable features:"</span>, <span class="fu">length</span>(stable), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+<hr>
+</section>
+<section id="common-pitfalls-and-solutions" class="level2" data-number="18.13">
+<h2 data-number="18.13" class="anchored" data-anchor-id="common-pitfalls-and-solutions"><span class="header-section-number">18.13</span> Common Pitfalls and Solutions</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 23%">
+<col style="width: 50%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pitfall</th>
+<th>Why It’s a Problem</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Assuming all missing data are the same</strong></td>
+<td>MAR methods on MNAR data create false positives</td>
+<td>Always run the MNAR diagnostic first</td>
+</tr>
+<tr class="even">
+<td><strong>Imputing before filtering low-quality features</strong></td>
+<td>Noisy features add more noise to imputation</td>
+<td>Filter features (e.g., &gt;50% missing) BEFORE imputation</td>
+</tr>
+<tr class="odd">
+<td><strong>Using only one imputation method</strong></td>
+<td>No way to know if conclusions are robust</td>
+<td>Run sensitivity analysis across ≥3 methods</td>
+</tr>
+<tr class="even">
+<td><strong>Imputing after normalisation</strong></td>
+<td>Normalisation changes distribution shapes</td>
+<td>Impute on raw intensities, then normalise</td>
+</tr>
+<tr class="odd">
+<td><strong>Reporting imputed values as real</strong></td>
+<td>Misleads readers about data quality</td>
+<td>Clearly state imputation method in methods section</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="decision-flowchart-for-imputation-strategy" class="level2" data-number="18.14">
+<h2 data-number="18.14" class="anchored" data-anchor-id="decision-flowchart-for-imputation-strategy"><span class="header-section-number">18.14</span> Decision Flowchart for Imputation Strategy</h2>
+<pre class="mermaid"><code>flowchart TD
+    A[Start: Raw data with missing values] --&gt; B{Diagnostic plot:&lt;br&gt;Does missingness&lt;br&gt;correlate with low intensity?}
+    
+    B --&gt;|Yes - Strong downward slope| C[MNAR - values missing because too low]
+    B --&gt;|No - Flat or upward slope| D[MAR - missingness is random]
+    B --&gt;|Mixed pattern| E[Heterogeneous missingness]
+    
+    C --&gt; F{Proportion missing?}
+    F --&gt;|&lt;20%| G[Min value imputation]
+    F --&gt;|20-50%| H[Left-censored Gaussian draws]
+    F --&gt;|&gt;50%| I[Consider removing feature]
+    
+    D --&gt; J[k-NN imputation]
+    
+    E --&gt; K[Mixed imputation:&lt;br&gt;k-NN for low-missing&lt;br&gt;Min for high-missing]
+    
+    G --&gt; L[Sensitivity analysis:&lt;br&gt;Compare conclusions across methods]
+    H --&gt; L
+    I --&gt; M[Feature filtered - not imputed]
+    J --&gt; L
+    K --&gt; L
+    
+    L --&gt; N{Stable across methods?}
+    N --&gt;|Yes| O[Report all stable features]
+    N --&gt;|No| P[Report imputation-dependent&lt;br&gt;Findings with caution]</code></pre>
+<hr>
+</section>
+<section id="exercises" class="level2" data-number="18.15">
+<h2 data-number="18.15" class="anchored" data-anchor-id="exercises"><span class="header-section-number">18.15</span> Exercises</h2>
+<section id="exercise-1-diagnose-missingness-in-metabolomics-data" class="level3" data-number="18.15.1">
+<h3 data-number="18.15.1" class="anchored" data-anchor-id="exercise-1-diagnose-missingness-in-metabolomics-data"><span class="header-section-number">18.15.1</span> Exercise 1: Diagnose Missingness in Metabolomics Data</h3>
+<p>Load the <code>sacurine</code> dataset from <code>ropls</code>. Calculate missingness per feature and per sample. Is the pattern more consistent with MAR or MNAR?</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-2-compare-imputation-methods-on-cptac-data" class="level3" data-number="18.15.2">
+<h3 data-number="18.15.2" class="anchored" data-anchor-id="exercise-2-compare-imputation-methods-on-cptac-data"><span class="header-section-number">18.15.2</span> Exercise 2: Compare Imputation Methods on CPTAC Data</h3>
+<p>Use <code>MsDataHub</code> to load a CPTAC peptide dataset. Apply min, k-NN, and left-censored imputation. Which produces the smallest change to the overall distribution?</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-3-sensitivity-on-your-own-data" class="level3" data-number="18.15.3">
+<h3 data-number="18.15.3" class="anchored" data-anchor-id="exercise-3-sensitivity-on-your-own-data"><span class="header-section-number">18.15.3</span> Exercise 3: Sensitivity on Your Own Data</h3>
+<p>Run the full sensitivity workflow on your LFQ dataset. What percentage of significant features are stable across all imputation methods? Report as “Robustness score”.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-4-missingness-heatmap" class="level3" data-number="18.15.4">
+<h3 data-number="18.15.4" class="anchored" data-anchor-id="exercise-4-missingness-heatmap"><span class="header-section-number">18.15.4</span> Exercise 4: Missingness Heatmap</h3>
+<p>Create a heatmap showing missingness per sample. Identify if any sample has &gt;50% missing values – would you exclude it?</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="summary" class="level2" data-number="18.16">
+<h2 data-number="18.16" class="anchored" data-anchor-id="summary"><span class="header-section-number">18.16</span> Summary</h2>
+<section id="key-outputs-from-this-chapter" class="level3" data-number="18.16.1">
+<h3 data-number="18.16.1" class="anchored" data-anchor-id="key-outputs-from-this-chapter"><span class="header-section-number">18.16.1</span> Key Outputs from This Chapter</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Missingness heatmap</td>
+<td>Visualise pattern across samples</td>
+</tr>
+<tr class="even">
+<td>MAR vs MNAR diagnostic</td>
+<td>Determine imputation strategy</td>
+</tr>
+<tr class="odd">
+<td>Four imputed matrices</td>
+<td>Apply different assumptions</td>
+</tr>
+<tr class="even">
+<td>Distribution comparison plot</td>
+<td>Visualise how methods differ</td>
+</tr>
+<tr class="odd">
+<td>Significant features per strategy</td>
+<td>Quantity agreement across methods</td>
+</tr>
+<tr class="even">
+<td>Stable features list</td>
+<td>High-confidence findings</td>
+</tr>
+<tr class="odd">
+<td>UpSet overlap plot</td>
+<td>Visualise set intersections</td>
+</tr>
+<tr class="even">
+<td>Robustness summary</td>
+<td>Report stability metrics</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="decision-rules" class="level3" data-number="18.16.2">
+<h3 data-number="18.16.2" class="anchored" data-anchor-id="decision-rules"><span class="header-section-number">18.16.2</span> Decision Rules</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Scenario</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>MNAR (downward slope)</td>
+<td>Use left-censored (Perseus-style)</td>
+</tr>
+<tr class="even">
+<td>MAR (flat slope)</td>
+<td>Use k-NN</td>
+</tr>
+<tr class="odd">
+<td>Mixed missingness</td>
+<td>Use mixed strategy</td>
+</tr>
+<tr class="even">
+<td>&lt;20% missing overall</td>
+<td>Any method, but test sensitivity</td>
+</tr>
+<tr class="odd">
+<td>&gt;50% missing per feature</td>
+<td>Remove feature (don’t impute)</td>
+</tr>
+<tr class="even">
+<td>Conclusions differ by method</td>
+<td>Report all, highlight stable subset</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="resources" class="level3" data-number="18.16.3">
+<h3 data-number="18.16.3" class="anchored" data-anchor-id="resources"><span class="header-section-number">18.16.3</span> Resources</h3>
+<ul>
+<li><a href="https://bioconductor.org/packages/release/bioc/vignettes/DEP/inst/doc/DEP.html">DEP package vignette</a> – proteomics imputation</li>
+<li><a href="https://naniar.njtierney.com/">naniar gallery</a> – missing data visualisation</li>
+<li><a href="https://www.nature.com/articles/nmeth.3901">Perseus imputation documentation</a> – left-censored method</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="session-information" class="level2" data-number="18.17">
+<h2 data-number="18.17" class="anchored" data-anchor-id="session-information"><span class="header-section-number">18.17</span> Session Information</h2>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./18-normalize-batches.html" class="pagination-link" aria-label="Normalize Across Samples and Batches">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./20-differential-abundance.html" class="pagination-link" aria-label="Differential Abundance Analysis with Design Matrices">
+        <span class="nav-page-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/19-missing-data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html>
+   <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+      <meta name="generator" content="r-universe/pandoc">
+      <meta name="author" content>
+      
+      <title>Core Utils for Mass Spectrometry Data</title>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css" data-external="1">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" data-external="1">
+      <link rel="stylesheet" href="https://r-universe.dev/static/article-styles.css?nocache=1" data-external="1">
+   </head>
+   <body>
+      <div class="container" id="topcontainer">
+         <script>if (window.self != window.top) try {document.getElementById('topcontainer').className = "container-fluid article-in-iframe"; } catch(e) {}</script>
+
+         <div class="frontmatter">
+         <h1 class="title">Core Utils for Mass Spectrometry Data</h1>
+         </div>
+
+                  <div class="row">
+            <div class="col-xl-10"><script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelector("h1").className = "title";
+});
+</script>
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  var links = document.links;  
+  for (var i = 0, linksLength = links.length; i < linksLength; i++)
+    if (links[i].hostname != window.location.hostname)
+      links[i].target = '_blank';
+});
+</script>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>The <em>MsCoreUtils</em> package provides low-level functions for
+mass spectrometry data and is independent of any high-level data
+structures <span class="citation">[@rainer_modular_2022]</span>. These
+functions include mass spectra processing functions (noise estimation,
+smoothing, binning), quantitative aggregation functions (median polish,
+robust summarisation, …), missing data imputation, data normalisation
+(quantiles, vsn, …) as well as misc helper functions, that are used
+across high level data structure within the R for Mass Spectrometry
+packages.</p>
+<p>For a full list of function, see</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;MsCoreUtils&quot;</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">ls</span>(<span class="at">pos =</span> <span class="st">&quot;package:MsCoreUtils&quot;</span>)</span></code></pre></div>
+<pre><code>##  [1] &quot;%between%&quot;                  &quot;aggregate_by_matrix&quot;       
+##  [3] &quot;aggregate_by_vector&quot;        &quot;asInteger&quot;                 
+##  [5] &quot;between&quot;                    &quot;bin&quot;                       
+##  [7] &quot;breaks_ppm&quot;                 &quot;closest&quot;                   
+##  [9] &quot;coefMA&quot;                     &quot;coefSG&quot;                    
+## [11] &quot;coefWMA&quot;                    &quot;colCounts&quot;                 
+## [13] &quot;colMeansMat&quot;                &quot;colSumsMat&quot;                
+## [15] &quot;common&quot;                     &quot;common_path&quot;               
+## [17] &quot;entropy&quot;                    &quot;estimateBaseline&quot;          
+## [19] &quot;estimateBaselineConvexHull&quot; &quot;estimateBaselineMedian&quot;    
+## [21] &quot;estimateBaselineSnip&quot;       &quot;estimateBaselineTopHat&quot;    
+## [23] &quot;force_sorted&quot;               &quot;formatRt&quot;                  
+## [25] &quot;getImputeMargin&quot;            &quot;gnps&quot;                      
+## [27] &quot;gnps_chain_dp&quot;              &quot;gnps_r&quot;                    
+## [29] &quot;group&quot;                      &quot;i2index&quot;                   
+## [31] &quot;impute_bpca&quot;                &quot;impute_fun&quot;                
+## [33] &quot;impute_knn&quot;                 &quot;impute_matrix&quot;             
+## [35] &quot;impute_min&quot;                 &quot;impute_MinDet&quot;             
+## [37] &quot;impute_MinProb&quot;             &quot;impute_mixed&quot;              
+## [39] &quot;impute_mle&quot;                 &quot;impute_neighbour_average&quot;  
+## [41] &quot;impute_QRILC&quot;               &quot;impute_RF&quot;                 
+## [43] &quot;impute_with&quot;                &quot;impute_zero&quot;               
+## [45] &quot;imputeMethods&quot;              &quot;isPeaksMatrix&quot;             
+## [47] &quot;join&quot;                       &quot;join_gnps&quot;                 
+## [49] &quot;join_gnps_r&quot;                &quot;localMaxima&quot;               
+## [51] &quot;maxi&quot;                       &quot;medianPolish&quot;              
+## [53] &quot;navdist&quot;                    &quot;ndotproduct&quot;               
+## [55] &quot;nentropy&quot;                   &quot;neuclidean&quot;                
+## [57] &quot;noise&quot;                      &quot;normalize_matrix&quot;          
+## [59] &quot;normalizeMethods&quot;           &quot;nspectraangle&quot;             
+## [61] &quot;ppm&quot;                        &quot;rbindFill&quot;                 
+## [63] &quot;reduce&quot;                     &quot;refineCentroids&quot;           
+## [65] &quot;retry&quot;                      &quot;rla&quot;                       
+## [67] &quot;robustSummary&quot;              &quot;rowRla&quot;                    
+## [69] &quot;rt2character&quot;               &quot;rt2numeric&quot;                
+## [71] &quot;smooth&quot;                     &quot;sumi&quot;                      
+## [73] &quot;validPeaksMatrix&quot;           &quot;valleys&quot;                   
+## [75] &quot;vapply1c&quot;                   &quot;vapply1d&quot;                  
+## [77] &quot;vapply1l&quot;                   &quot;which.first&quot;               
+## [79] &quot;which.last&quot;</code></pre>
+<p>or the <a href="https://rformassspectrometry.github.io/MsCoreUtils/reference/index.html">reference
+page</a> on the package webpage.</p>
+</div>
+<div id="examples" class="section level1">
+<h1>Examples</h1>
+<p>The functions defined in this package utilise basic classes with the
+aim of being reused in packages that provide a more formal, high-level
+interface.</p>
+<p>As an examples, let’s take the <code>robustSummary()</code> function,
+that calculates the robust summary of the columns of a matrix:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">rnorm</span>(<span class="dv">30</span>), <span class="at">nrow =</span> <span class="dv">3</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">colnames</span>(x) <span class="ot">&lt;-</span> letters[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>]</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">rownames</span>(x) <span class="ot">&lt;-</span> LETTERS[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>]</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>x</span></code></pre></div>
+<pre><code>##           a           b         c          d           e         f          g
+## A 0.2655622 -0.03845528 0.3648440 -1.0746081 -0.23850272 1.1752388  0.8065980
+## B 0.3547026 -0.34914812 1.5986656  0.2900006 -0.42321242 2.0844174  0.6957382
+## C 1.9784064 -0.01379366 0.9907757 -0.8038357 -0.08164951 0.6389793 -0.5410635
+##             h           i          j
+## A -0.09921966 -0.04541419 -1.2524378
+## B  0.63402713 -0.42713408 -0.5068673
+## C -0.44014309  1.36585830  0.1942046</code></pre>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">robustSummary</span>(x)</span></code></pre></div>
+<pre><code>##           a           b           c           d           e           f 
+##  0.72660663 -0.13379902  0.98476179 -0.52948106 -0.24778822  1.29954515 
+##           g           h           i           j 
+##  0.38901525  0.03155479  0.18701890 -0.52170015</code></pre>
+<p>This function is typicall to be used to summarise peptide
+quantitation values into protein intensities<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>. This functionality is
+available in</p>
+<ul>
+<li><p>the <a href="http://lgatto.github.io/MSnbase/reference/combineFeatures.html">MSnbase::combineFeatures()</a>
+function for <code>MSnSet</code> objects and</p></li>
+<li><p>the <a href="https://rformassspectrometry.github.io/QFeatures/reference/Features-aggregate.html">QFeatures::aggregateFeatures()</a>
+function for <code>QFeatures</code> objects.</p></li>
+</ul>
+</div>
+<div id="contributions" class="section level1">
+<h1>Contributions</h1>
+<p>If you would like to contribute any low-level functionality, please
+<a href="https://github.com/RforMassSpectrometry/MsCoreUtils/issues">open a
+GitHub issue</a> to discuss it. Please note that any <a href="https://rformassspectrometry.github.io/RforMassSpectrometry/articles/RforMassSpectrometry.html#contributions">contributions</a>
+should follow the <a href="https://rformassspectrometry.github.io/RforMassSpectrometry/articles/RforMassSpectrometry.html#coding-style">style
+guide</a> and will require an appropriate unit test.</p>
+<p>If you wish to reuse any functions in this package, please just go
+ahead. If you would like any advice or seek help, please either <a href="https://github.com/RforMassSpectrometry/MsCoreUtils/issues">open a
+GitHub issue</a>.</p>
+</div>
+<div id="session-information" class="section level1 unnumbered">
+<h1 class="unnumbered">Session information</h1>
+<pre><code>## R version 4.6.0 (2026-04-24)
+## Platform: x86_64-pc-linux-gnu
+## Running under: Ubuntu 24.04.4 LTS
+## 
+## Matrix products: default
+## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+## 
+## locale:
+##  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+##  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+##  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+##  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+## [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+## 
+## time zone: Etc/UTC
+## tzcode source: system (glibc)
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+## [1] MsCoreUtils_1.23.10 BiocStyle_2.39.0   
+## 
+## loaded via a namespace (and not attached):
+##  [1] cli_3.6.6           knitr_1.51          rlang_1.2.0        
+##  [4] xfun_0.57           generics_0.1.4      jsonlite_2.0.0     
+##  [7] clue_0.3-68         S4Vectors_0.49.3    buildtools_1.0.0   
+## [10] htmltools_0.5.9     maketools_1.3.2     sys_3.4.3          
+## [13] sass_0.4.10         stats4_4.6.0        rmarkdown_2.31     
+## [16] evaluate_1.0.5      jquerylib_0.1.4     MASS_7.3-65        
+## [19] fastmap_1.2.0       yaml_2.3.12         lifecycle_1.0.5    
+## [22] BiocManager_1.30.27 cluster_2.1.8.2     compiler_4.6.0     
+## [25] digest_0.6.39       R6_2.6.1            bslib_0.10.0       
+## [28] tools_4.6.0         BiocGenerics_0.57.1 cachem_1.1.0</code></pre>
+</div>
+<div id="references" class="section level1 unnumbered">
+<h1 class="unnumbered">References</h1>
+</div>
+<div class="footnotes footnotes-end-of-document">
+<hr />
+<ol>
+<li id="fn1"><p>See Sticker <em>et al.</em> Robust summarization and
+inference in proteome-wide label-free quantification. <a href="https://doi.org/10.1101/668863" class="uri">https://doi.org/10.1101/668863</a>.<a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div></div>
+            <div class="d-none d-xl-block col-xl-2 bd-toc">
+               <ul class="section-nav">
+                  <li class="toc-entry"><ul>
+<li><a href="#introduction" id="toc-introduction">Introduction</a></li>
+<li><a href="#examples" id="toc-examples">Examples</a></li>
+<li><a href="#contributions" id="toc-contributions">Contributions</a></li>
+<li><a href="#session-information" id="toc-session-information">Session
+information</a></li>
+<li><a href="#references" id="toc-references">References</a></li>
+</ul></li>
+               </ul>
+            </div>
+         </div>
+               </div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.slim.js" data-external="1"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.min.js" data-external="1"></script>
+      <script src="https://r-universe.dev/static/article.js" data-external="1"></script>
+
+      <!-- Mathjax -->
+      <!-- <script src="https://polyfill.io/v3/polyfill.min.js?features=es6" data-external="1"></script> -->
+      <script id="MathJax-script" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.0.0/tex-mml-chtml.min.js" data-external="1"></script>
+   </body>
+</html>

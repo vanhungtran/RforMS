@@ -73,7 +73,7 @@ echo ""
 echo "Step 4: Staging files for commit..."
 
 # Add HTML files
-git add *.html
+git add ./*.html
 
 # Add necessary deployment files (but not CSS/SCSS)
 git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null
@@ -90,7 +90,7 @@ fi
 if [ -f "custom.scss" ]; then
     git add custom.scss
 fi
-git add *.css *.scss 2>/dev/null || true
+git add ./*.css ./*.scss 2>/dev/null || true
 
 # Add _quarto.yml if modified
 git add _quarto.yml

@@ -1,0 +1,94 @@
+# MS File Format Reference {#sec-appendix-formats .unnumbered}
+
+Mass spectrometry data passes through several file formats on its way from the instrument to a statistical result: closed vendor formats written by the acquisition software, open standards for raw spectra, and open standards for identification and quantification results. This appendix is a quick reference to the formats you will encounter, which R package reads each, and how to convert vendor data to open standards. Chapter 4 covers import in depth.
+
+## Vendor (proprietary) formats
+
+Instrument software writes closed, undocumented binary formats. Read them by converting to an open standard first (see *Conversion*), except where a dedicated reader exists.
+
+| Vendor | Extension(s) | Notes |
+|---|---|---|
+| Thermo Fisher | `.raw` | Single file per run. Readable directly via **ThermoRawFileParser** (→ mzML) or on Windows/Linux via the vendor DLLs. |
+| SCIEX | `.wiff` + `.wiff.scan` (and `.wiff2`) | Two-file pair — keep both together. |
+| Agilent | `.d` (directory) | A *folder*, not a single file; contains `MSScan.bin`, `MSPeak.bin`, method files. |
+| Bruker | `.d`, `.baf`, `.tdf`/`.tsf` (timsTOF) | `.tdf` holds ion-mobility (TIMS) data. |
+| Waters | `.raw` (directory) | A folder despite the extension; distinct from Thermo `.raw`. |
+| Shimadzu | `.lcd` | LC-MS solution format. |
+
+::: {.callout-warning}
+Vendor formats are best treated as **read-only archival originals**. Never edit them in place; convert a copy. For multi-file vendor formats (SCIEX `.wiff`/`.wiff.scan`, Agilent/Waters/Bruker `.d` directories), move the whole set together or conversion will fail.
+:::
+
+## Open standards for raw spectra
+
+| Format | Body | Purpose | Reads in R with |
+|---|---|---|---|
+| **mzML** | HUPO-PSI | Current community standard for raw spectra + chromatograms; XML with controlled vocabulary and optional numeric compression | `Spectra` + `MsBackendMzR`, `mzR`, `MSnbase` |
+| **mzXML** | ISB/SPC | Older raw-spectra standard; superseded by mzML but still common | `Spectra` + `MsBackendMzR`, `mzR` |
+| **imzML** + **.ibd** | HUPO-PSI | Imaging MS (adds spatial coordinates); `.imzML` is the XML metadata (valid mzML), `.ibd` is the binary spectral data blob. Never separate the pair. | `Cardinal` + `CardinalIO` (see Appendix F) |
+| **mz5 / netCDF (ANDI-MS, `.cdf`)** | — | HDF5-based mz5; ANDI/netCDF is a legacy GC-MS interchange format | `mzR` (netCDF), `xcms` |
+
+### mzML — structure worth knowing
+
+- **Controlled vocabulary (PSI-MS CV):** every field is tagged with an accession (e.g. `MS:1000511` = "ms level"), which makes the format self-describing and vendor-neutral.
+- **Spectrum vs. chromatogram lists:** mzML stores both profile/centroided spectra and chromatograms (TIC, BPC, SRM transitions).
+- **Binary encoding:** m/z and intensity arrays are Base64-encoded, optionally zlib-compressed and/or numpress-compressed — choose compression at conversion time to trade file size against read speed.
+- **indexedmzML:** a wrapper adding a byte-offset index so readers can seek to any spectrum without parsing the whole file — essential for on-disk backends. Always convert with indexing enabled.
+- **Centroiding:** convert with vendor peak-picking on where possible; centroided data is smaller and required by most downstream identification tools.
+
+## Open standards for identification and quantification
+
+| Format | Body | Carries | Reads in R with |
+|---|---|---|---|
+| **mzIdentML** (`.mzid`) | HUPO-PSI | Peptide/protein identifications, scores, decoy flags, search parameters | `mzR`, `MSnbase::readMzIdData()`, `PSMatch::PSM()` |
+| **mzTab** (`.mzTab`) | HUPO-PSI | Final identification **and** quantification results in a single tab-delimited report (proteomics + metabolomics) | `MSnbase`, `MsBackendMsp`/readers, custom `readr` |
+| **MGF** (Mascot Generic Format) | Matrix Science | Peak lists of MS/MS spectra for database search; plain text | `Spectra` + `MsBackendMgf`, `MSnbase` |
+| **MSP** (NIST) | NIST | Reference/library MS/MS spectra with metadata; plain text | `Spectra` + `MsBackendMsp`, `CompoundDb` |
+| **pepXML / protXML** | TPP | Trans-Proteomic Pipeline search/inference results | via conversion to mzIdentML |
+| **ISA-Tab** | MetaboLights | Study/assay metadata bundle for metabolomics deposition | `Risa`, manual |
+
+## Conversion recommendations
+
+### ProteoWizard `msconvert`
+
+The reference tool for vendor → open conversion. Typical mzML conversion with vendor peak-picking and indexing:
+
+```bash
+# Centroided, indexed, zlib-compressed mzML
+msconvert sample.raw \
+  --mzML \
+  --filter "peakPicking vendor msLevel=1-" \
+  --zlib
+```
+
+- Run on Windows (or a Docker image with the vendor libraries) for full vendor-format support.
+- `--filter "peakPicking vendor"` uses the instrument vendor's own centroiding — preferred over generic algorithms.
+- Add `--filter "titleMaker ..."` for MGF exports feeding a search engine.
+
+### ThermoRawFileParser
+
+Cross-platform (Linux/macOS/Windows, no vendor DLLs) converter for Thermo `.raw`:
+
+```bash
+ThermoRawFileParser.sh -i=sample.raw -f=2 -o=./mzml/    # -f=2 → indexed mzML
+```
+
+### Practical guidance
+
+| Goal | Recommended target format |
+|---|---|
+| Untargeted metabolomics / xcms | Centroided **mzML** (indexed) |
+| DDA proteomics database search | Centroided **mzML** or **MGF** |
+| DIA proteomics | **mzML** (profile or centroided per tool) |
+| Sharing identifications | **mzIdentML** |
+| Depositing final results | **mzTab** (+ raw mzML) |
+| Public deposition | mzML raw + repository-specific metadata (PRIDE / MetaboLights — Chapter 25) |
+
+::: {.callout-note}
+Keep the original vendor file **and** the converted mzML. Record the exact `msconvert` command (and version) in your analysis provenance — conversion settings such as centroiding and compression affect downstream feature detection and are part of a reproducible workflow (Chapter 3).
+:::
+
+## Reference
+
+- HUPO Proteomics Standards Initiative (PSI): <https://www.psidev.info/> — mzML, mzIdentML, mzTab specifications and the PSI-MS controlled vocabulary.
+- ProteoWizard / `msconvert`: <https://proteowizard.sourceforge.io/>.

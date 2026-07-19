@@ -1,0 +1,210 @@
+# Experimental Design, Replication, and Power
+
+> *No amount of sophisticated modelling rescues a confounded design. The most important statistics in a mass spectrometry study are decided before a single sample enters the instrument.*
+
+Every analysis chapter so far assumed the data already existed. This chapter steps back to the decision that determines whether an experiment can answer its question at all: **how it is designed**. Get the design right — enough replication, no confounding, randomised run order — and the modelling in the chapters that follow is straightforward. Get it wrong, and no normalization, imputation, or empirical-Bayes moderation can recover a signal that was never separable from the noise.
+
+This chapter is deliberately placed at the start of the statistical-modelling part: it is the bridge between *how MS data is generated* (Parts I–IV) and *how it is analysed* (Chapters 20–23).
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Confounding your condition with batch or run order. If every case runs on Monday and every control on Tuesday, no statistical method can separate biology from day. Randomize and block *before* you acquire a single sample.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Distinguish biological, technical, and batch sources of variation in MS data
+- Choose the right kind and number of replicates for your question
+- Randomise and block sample acquisition to protect against run-order and batch effects
+- Recognise and avoid confounding between the factor of interest and technical factors
+- Estimate statistical power and required sample size for MS experiments, both analytically and by simulation
+- Account for MS-specific realities — missingness, dynamic range, and dropout — when planning
+
+## Sources of Variation
+
+Every measured intensity is a sum of signal and several kinds of noise. Good design maximises the first relative to the rest.
+
+| Source | Example in MS | Design lever |
+|---|---|---|
+| **Biological** | Genuine between-subject differences | This *is* your signal — sample enough subjects |
+| **Technical** | Sample prep, digestion, injection variability | Technical replicates, internal standards |
+| **Batch** | Reagent lots, columns, instrument recalibration, acquisition day | Randomisation, blocking, QC pools |
+| **Run-order / drift** | Sensitivity decline across a long sequence | Randomise injection order; interleave QCs |
+
+The central design question is not "how do I remove noise?" but "how do I keep noise from **aligning with** my factor of interest?" Noise that is random can be modelled; noise that is confounded with the biology is fatal.
+
+## Replication
+
+### Biological vs. technical replicates
+
+- **Biological replicates** are independent experimental units (different subjects, animals, cultures). They capture the variability you want to generalise over, and they are what determines statistical power.
+- **Technical replicates** are repeated measurements of the *same* biological sample (re-injections, duplicate digestions). They quantify measurement precision but **do not** increase power for biological inference — averaging them gives one value per biological unit.
+
+::: {.callout-warning}
+Treating technical replicates as if they were biological replicates is **pseudoreplication** — it inflates the apparent sample size and produces anti-conservative p-values. In `limma`, model technical replicates with `duplicateCorrelation()` and block on the biological unit (Chapter 21); never let them count as independent samples.
+:::
+
+### How many biological replicates?
+
+The honest answer is *it depends on the effect size and variance* — which is exactly what the power analysis below quantifies. As rough field guidance for discovery MS:
+
+| Study type | Typical minimum per group | Notes |
+|---|---|---|
+| Cell-line proteomics (low variance) | 3–4 | Controlled system; small biological variability |
+| Tissue / animal proteomics | 5–8 | Higher biological variance |
+| Human clinical cohorts | 20+ per group | Large inter-individual variability; often imbalanced |
+| Untargeted metabolomics (human) | 30+ per group | High variance + many features to correct over |
+
+These are starting points, not substitutes for a power calculation with your own pilot variance.
+
+## Randomisation and Blocking
+
+Two samples measured back-to-back are more alike than two measured a day apart. If all your cases run on Monday and all controls on Tuesday, **day and condition are confounded** and no analysis can separate them.
+
+- **Randomise** injection order across the whole sequence so condition is not correlated with run position or acquisition day.
+- **Block** deliberately when a nuisance factor is unavoidable: if a study spans two plates, put a balanced mix of conditions on *each* plate rather than one condition per plate, then include plate as a covariate in the model (Chapter 21).
+- **Interleave QC samples** (a pooled aliquot of all samples) at regular intervals to monitor drift and enable signal correction (Chapter 6, Chapter 17).
+- For **isobaric labelling** (TMT/iTRAQ), balance conditions across channels and include a common **reference channel** in every plex for cross-batch normalisation (Chapter 14).
+
+```r
+#| eval: false
+# Randomise injection order while keeping QC pools at fixed positions
+set.seed(2024)
+samples   <- paste0("S", 1:40)
+run_order <- sample(samples)                 # randomised biological samples
+# Insert a QC pool every 10 injections
+schedule  <- append(run_order,
+                    values = rep("QC_pool", 4),
+                    after  = c(0, 10, 20, 30))
+```
+
+### The confounding check
+
+Before acquisition, tabulate your factor of interest against every technical factor. Any strong association is a red flag.
+
+```r
+#| eval: false
+# Is condition balanced across batch? (want roughly uniform counts)
+table(metadata$condition, metadata$batch)
+# Is condition correlated with run order? (want ~0)
+cor(as.integer(factor(metadata$condition)), metadata$run_order)
+```
+
+## Power and Sample Size
+
+**Statistical power** is the probability of detecting a true effect of a given size. Planning for adequate power is what separates a study that can succeed from one that is underpowered before it begins. Power depends on four quantities; fix any three and the fourth follows:
+
+1. **Effect size** — the difference you care to detect, in MS usually a log₂ fold-change
+2. **Variability** — the residual standard deviation (estimate from pilot data or literature)
+3. **Sample size** — biological replicates per group
+4. **Significance threshold** — after multiple-testing correction (Chapter 20)
+
+### Analytical power for a two-group comparison
+
+For a single feature, a two-sample *t*-test power calculation gives a first estimate. The effect size (Cohen's *d*) is the log₂ fold-change divided by the standard deviation.
+
+```r
+#| eval: false
+library(pwr)
+
+log2fc <- 1.0            # detect a two-fold change
+sd_est <- 0.8            # residual SD on the log2 scale (from pilot data)
+d      <- log2fc / sd_est
+
+pwr::pwr.t.test(d = d, sig.level = 0.05, power = 0.80,
+                type = "two.sample")   # -> required n per group
+```
+
+### Multiple testing changes everything
+
+A single-feature calculation is optimistic: an MS experiment tests thousands of features and controls the **false discovery rate**, so the effective per-feature threshold is far stricter than 0.05. A practical adjustment is to target the Bonferroni-style level for the number of features you expect to test.
+
+```r
+#| eval: false
+n_features   <- 5000
+target_fdr   <- 0.05
+approx_alpha <- target_fdr / n_features        # conservative planning threshold
+
+pwr::pwr.t.test(d = 1.0 / 0.8, sig.level = approx_alpha,
+                power = 0.80, type = "two.sample")
+```
+
+### Simulation-based power (recommended for MS)
+
+Analytical formulas ignore MS realities — non-normal intensities, missing values, and the `limma` moderation you will actually use. A **simulation** that mimics your planned analysis gives a far more honest estimate: generate data under a realistic model, run the real pipeline, and count how often true effects are recovered.
+
+```r
+#| eval: false
+library(limma)
+
+simulate_power <- function(n_per_group, n_features = 5000, n_de = 200,
+                           log2fc = 1, sigma = 0.8, n_sim = 100) {
+  hits <- numeric(n_sim)
+  for (s in seq_len(n_sim)) {
+    group  <- factor(rep(c("A", "B"), each = n_per_group))
+    design <- model.matrix(~ group)
+    # Null features + a block of truly differential features
+    mat <- matrix(rnorm(n_features * 2 * n_per_group, sd = sigma),
+                  nrow = n_features)
+    mat[1:n_de, group == "B"] <- mat[1:n_de, group == "B"] + log2fc
+    fit <- eBayes(lmFit(mat, design))
+    padj <- p.adjust(fit$p.value[, 2], method = "BH")
+    # Power = fraction of true DE features recovered at FDR 5%
+    hits[s] <- mean(padj[1:n_de] < 0.05)
+  }
+  mean(hits)
+}
+
+# Power curve across candidate sample sizes
+sizes <- c(3, 5, 8, 10, 15, 20)
+power_curve <- vapply(sizes, simulate_power, numeric(1))
+data.frame(n_per_group = sizes, power = round(power_curve, 2))
+```
+
+Plot power against sample size and choose the smallest *n* that clears your target (commonly 0.80). Because the simulation uses the same `limma` pipeline as your real analysis, its estimate already accounts for empirical-Bayes moderation.
+
+### MS-specific caveats
+
+- **Missingness reduces effective sample size.** A feature present in only half your samples has far less power than the nominal *n* suggests. Inflate planned *n* to cover expected dropout (Chapter 18).
+- **Dynamic range and dropout interact.** Low-abundance features are both more variable and more often missing, so they are systematically underpowered — power is not uniform across the feature table.
+- **Imbalanced clinical cohorts** lose power fast; the smaller group governs. Plan the case group, not the total.
+- **Pilot data beats guesses.** A small pilot to estimate the residual SD is the single most valuable input to a credible power calculation.
+
+## Design Checklist
+
+Before acquisition:
+
+- [ ] Factor of interest defined, with the smallest biologically meaningful effect size stated
+- [ ] Biological replication justified by a power calculation using pilot or literature variance
+- [ ] Technical replicates (if any) planned to be modelled, not pseudoreplicated
+- [ ] Injection order randomised; condition not correlated with run order or day
+- [ ] Batches balanced across conditions; batch recorded for every sample
+- [ ] QC pool aliquots scheduled at regular intervals
+- [ ] For isobaric labelling: conditions balanced across channels, reference channel in every plex
+- [ ] Confounding table (condition × each technical factor) checked and clean
+- [ ] Expected missingness budgeted into the sample size
+
+## Summary
+
+- The design decisions made before acquisition set the ceiling on what any analysis can achieve; confounding is unrecoverable downstream.
+- **Biological** replicates drive power; **technical** replicates quantify precision and must not be pseudoreplicated.
+- **Randomise** run order and **block** unavoidable nuisance factors so technical variation stays uncorrelated with biology.
+- Estimate power from effect size, variance, sample size, and a multiple-testing-aware threshold — and prefer **simulation** through your real `limma` pipeline over analytical shortcuts.
+- Budget for MS realities: missingness, dynamic range, and imbalance all erode power.
+
+The next chapter takes a well-designed dataset and builds the statistical model that extracts its differentially abundant features.
+
+## Exercises
+
+1. **Confounding audit.** You are given a 24-sample study where samples 1–12 (all controls) ran on day 1 and 13–24 (all cases) on day 2. Explain why no normalization can fix this, and propose a re-acquisition schedule.
+2. **Replicate accounting.** A study has 4 subjects per group, each injected in triplicate. How many independent units does the differential test actually have, and how would you model the triplicates in `limma` (Chapter 21)?
+3. **Analytical power.** Using `pwr`, find the per-group sample size needed to detect a log₂FC of 1.5 with residual SD 0.9 at 80% power, first at α = 0.05 and then at a Bonferroni threshold for 4,000 features. Compare.
+4. **Simulation power curve.** Adapt the `simulate_power()` function to include 30% random missingness (set values to `NA` before fitting) and re-draw the power curve. How much does missingness raise the required *n*?
+5. **Design a TMT experiment.** You have 3 conditions × 6 replicates and TMT-10 plexes. Sketch a channel/plex layout that balances conditions across plexes and includes a reference channel.
+
+## Session Information
+
+```r
+sessionInfo()
+```

@@ -1,0 +1,373 @@
+# Protein Evidence and Inference {#sec-protein-evidence}
+
+> *"You identified 5,000 peptides. Those peptides map to 2,500 proteins. But some proteins have only one peptide. Some peptides map to multiple proteins. One protein has 47 peptides. How do you move from 'peptides identified' to 'proteins quantified' without lying to yourself or your readers?"*
+
+This chapter solves the **protein inference problem** — arguably the most statistically subtle step in bottom-up proteomics.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Counting a shared peptide toward every protein it could belong to. That double-counts evidence and bleeds abundance between homologs. Resolve protein groups and handle razor/shared peptides explicitly before quantifying.
+:::
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. **Map peptides to proteins** using `dplyr` to track uniqueness and shared sequences.
+2. **Distinguish between razor peptides, unique peptides, and shared peptides.**
+3. **Apply network analysis** using `igraph` to resolve indistinguishable protein groups.
+4. **Aggregate peptide-level quantitation to protein-level** using `QFeatures` and robust statistical summarization.
+5. **Filter protein matrices** safely to avoid "One-Hit Wonders" and false discoveries.
+
+## Prerequisites
+
+Before diving into protein inference, you should be familiar with the following concepts covered in earlier chapters:
+
+| Concept Needed | Where to Find It |
+|----------------|------------------|
+| Project structure, `renv` | Chapter 3 |
+| PSM tables, identification filtering | Chapter 10 |
+| Basic `dplyr` and `tidyr` manipulation | Chapter 2 |
+
+*Note: Basic probability and an understanding of graph/network nodes will be highly beneficial in this chapter.*
+
+---
+
+## The Protein Inference Problem
+
+### Why This Problem Exists
+
+In "bottom-up" (or shotgun) proteomics, the mass spectrometer does not measure intact proteins. Proteins are first chemically digested into shorter, more manageable peptides using an enzyme like trypsin. While this makes chromatography and ionization highly efficient, it destroys the physical link between the peptide and its parent protein. 
+
+Once a search engine confidently identifies a peptide sequence from an MS/MS spectrum, we must logically infer which proteins were originally present in the sample. This presents two major challenges:
+1. **One peptide $\rightarrow$ Many possible proteins**: A single peptide sequence might exist in multiple homologous proteins, or across several splice variants (isoforms) of the same gene.
+2. **Many peptides $\rightarrow$ One protein**: A highly abundant or massive protein will generate dozens of detectable peptides, offering varying degrees of quantitative confidence.
+
+### The Terminology You Must Know
+
+To navigate protein inference, you must be comfortable with the following vocabulary:
+
+- **Unique peptide**: A peptide sequence that maps to exactly *one* protein in the target database. This provides direct, unambiguous evidence of that protein's presence.
+- **Shared peptide** (or degenerate/common peptide): A peptide sequence that maps to *two or more* proteins.
+- **Razor peptide**: A heuristic concept (popularized by MaxQuant) where a shared peptide is artificially assigned to the protein group that has the most independent evidence (i.e., the most unique peptides).
+- **Indistinguishable group**: A set of proteins that share the exact same set of identified peptides. Based on the MS evidence alone, they cannot be differentiated.
+- **Occam's razor protein set**: The minimal, most parsimonious set of proteins necessary to explain all the observed peptides.
+
+```{mermaid}
+graph LR
+    subgraph Peptides
+        P1([Peptide 1])
+        P2([Peptide 2])
+        P3([Peptide 3])
+        P4([Peptide 4])
+    end
+    
+    subgraph Proteins
+        PR1[Protein A]
+        PR2[Protein B]
+        PR3[Protein C]
+    end
+    
+    P1 ===|Unique| PR1
+    P2 -.-|Shared| PR1
+    P2 -.-|Shared| PR2
+    P3 ===|Unique| PR2
+    P4 -.-|Shared| PR2
+    P4 -.-|Shared| PR3
+    
+    style P1 fill:#D7E6FB,stroke:#27408B
+    style P2 fill:#FBE0FA,stroke:#B000B0
+    style P3 fill:#D7E6FB,stroke:#27408B
+    style P4 fill:#FBE0FA,stroke:#B000B0
+    style PR1 fill:#ffffff,stroke:#27408B,stroke-width:2px
+    style PR2 fill:#ffffff,stroke:#27408B,stroke-width:2px
+    style PR3 fill:#ffffff,stroke:#27408B,stroke-width:2px
+```
+*Figure 9.1: Bipartite graph showing peptide-to-protein mapping complexity. Peptide 1 and 3 are unique. Peptides 2 and 4 are shared. Because Protein C has no unique evidence, it is typically dropped in favor of the more parsimonious explanation (Proteins A and B).*
+
+### The Consequences of Getting This Wrong
+
+| Error | Consequence |
+|-------|-------------|
+| **Over-assembly** | False protein identifications, inflated discovery counts, and biological hallucinations. |
+| **Under-assembly** | Missed true positives, lost statistical power, and reduced biological signal. |
+| **Mis-quantification** | Shared peptide intensity is incorrectly allocated, artificially inflating the abundance of homologous proteins. |
+
+### Occam's Razor and the Parsimony Principle
+
+The protein inference problem has no unique solution — multiple sets of proteins can explain the same set of observed peptides. The gold standard for resolving this ambiguity is **Occam's razor**: choose the minimal set of proteins that explains all observed peptides. This is not an arbitrary preference — it is a statistical necessity. A model with more proteins than needed to explain the data is overfitting.
+
+**The parsimony algorithm in practice:**
+
+1.  Start with all proteins that have at least one unique peptide — these must be present.
+2.  For each shared peptide, check whether it can be explained by proteins already in the set.
+3.  Only add new proteins when a shared peptide cannot be explained by any protein already included.
+4.  Proteins with no unique peptides that are subsets of a larger group are collapsed into a **protein group** — reported as a single entry (e.g., "ProteinA;ProteinB").
+
+**The razor peptide heuristic.** MaxQuant popularised the "razor peptide" concept: when a shared peptide maps to multiple proteins, assign it to the protein with the most unique peptides. This is a heuristic — not a formal solution — but it performs well in practice because it allocates shared signal to the protein with the strongest independent evidence.
+
+**The protein group reporting standard.** When proteins cannot be distinguished (identical peptide evidence), they must be reported as a group. Never report individual proteins from an indistinguishable group as separate identifications — this inflates discovery counts. The first-listed protein in the group (by convention, the one with the most peptides) serves as the group representative for quantification and downstream analysis.
+
+---
+
+## Building the Peptide-to-Protein Map
+
+To demonstrate how this is handled in R, let's create a simulated dataset of Peptide-Spectrum Matches (PSMs). This dataset represents the clean, FDR-controlled output you would normally extract from a tool like Mascot, MSFragger, or MaxQuant.
+
+### Simulating the Data
+
+We will simulate 6 peptides mapped across 4 proteins, along with quantitative intensities from two different biological samples (`intensity_s1` and `intensity_s2`).
+
+```r
+# Load required data manipulation libraries
+library(dplyr)
+library(stringr)
+
+# Simulate a small PSM dataset
+psm_data <- tibble::tribble(
+  ~peptide_sequence, ~protein_accession, ~intensity_s1, ~intensity_s2,
+  "SYGFNAAR",        "P00403",           1500,          1600,
+  "ELGNDAYK",        "P00403",           3000,          3100,
+  "ELGNDAYK",        "P12345",           3000,          3100,  # Shared!
+  "IAEESNFPFIK",     "P98765",           800,           850,
+  "LLQTAEGAE",       "P98765",           1200,          1100,
+  "LLQTAEGAE",       "P88888",           1200,          1100   # Shared!
+)
+
+print(psm_data)
+```
+
+Looking closely at this data, the sequence `ELGNDAYK` is listed twice because the search engine recognized that this exact amino acid string exists in both protein `P00403` and protein `P12345`.
+
+### Categorizing Unique vs. Shared Peptides
+
+The very first computational step is to explicitly flag which peptides are unique and which are shared. We use `dplyr::group_by` to analyze each peptide sequence independently, and `n_distinct()` to count how many unique proteins it maps to.
+
+```r
+# Categorize peptides
+peptide_mapping <- psm_data |>
+  group_by(peptide_sequence) |>
+  mutate(
+    n_proteins = n_distinct(protein_accession),
+    peptide_type = if_else(n_proteins == 1, "unique", "shared")
+  ) |>
+  ungroup()
+
+# Let's look at the mapping specifically
+peptide_mapping |> 
+  select(peptide_sequence, protein_accession, n_proteins, peptide_type)
+```
+
+**Explanation of the code:**
+1. `group_by(peptide_sequence)`: This isolates our data so the subsequent calculations operate *per peptide*.
+2. `n_distinct(protein_accession)`: Counts the unique protein IDs associated with that specific peptide.
+3. `if_else(...)`: A safe, vectorized conditional that labels the row "unique" if `n_proteins == 1`, and "shared" otherwise.
+4. `ungroup()`: A critical best practice to remove the grouping metadata so future dataframe operations aren't accidentally applied per-peptide.
+
+---
+
+## Network Analysis and Parsimony Grouping
+
+When dealing with thousands of proteins, you cannot resolve shared peptides manually. We need to implement the **Principle of Parsimony**, which states: *"The simplest set of proteins that explains all observed peptides is the preferred explanation."*
+
+To do this computationally, we treat the peptides and proteins as nodes in a graph. A peptide and a protein are connected by an "edge" if the peptide belongs to that protein. 
+
+### Building the Bipartite Graph
+
+We will use the excellent `igraph` package to build this network and identify "connected components"—isolated sub-networks of proteins that share evidence.
+
+```r
+library(igraph)
+
+# 1. Filter our data to look ONLY at shared peptides
+shared_peptides <- peptide_mapping |>
+  filter(peptide_type == "shared")
+
+# 2. Create an "Edge List" (Column 1 = From, Column 2 = To)
+edge_list <- shared_peptides |>
+  select(peptide_sequence, protein_accession)
+
+# 3. Build an undirected graph from the edge list
+bg <- graph_from_data_frame(edge_list, directed = FALSE)
+
+# 4. Visually distinguish peptides from proteins
+V(bg)$type <- V(bg)$name %in% edge_list$peptide_sequence
+V(bg)$color <- if_else(V(bg)$type, "lightblue", "lightgreen")
+V(bg)$shape <- if_else(V(bg)$type, "circle", "square")
+
+# Plot the network
+plot(bg, 
+     vertex.size = 25, 
+     vertex.label.cex = 0.8,
+     main = "Shared Peptide Connectivity Graph")
+```
+
+**Explanation of the code:**
+* `graph_from_data_frame()` builds a mathematical network object. We set `directed = FALSE` because the relationship is mutual (the peptide belongs to the protein, and the protein contains the peptide).
+* `V(bg)` allows us to access the **Vertices** (nodes) of the graph. We assign colors and shapes based on whether the node's name exists in our peptide list.
+
+### Finding Indistinguishable Groups
+
+By extracting the "connected components" of this graph, we can see exactly which proteins are inextricably linked by shared evidence.
+
+```r
+# Find the isolated sub-networks
+network_components <- components(bg)
+
+# Display the grouping assignment for each node
+print(network_components$membership)
+```
+
+If `P00403` and `P12345` share the same membership ID in the `igraph` output, they form a single indistinguishable protein group based on the shared `ELGNDAYK` peptide. In a real pipeline, if neither protein possessed a *unique* peptide to differentiate them, they would be collapsed into a single reporting identifier (e.g., `P00403;P12345`).
+
+::: {.callout-tip}
+#### Using MaxQuant's Pre-Calculated Groups
+If you process your raw data using MaxQuant, you do not need to build these graphs manually. MaxQuant automatically performs a highly rigorous parsimony algorithm and exports the results in `proteinGroups.txt`. When analyzing MaxQuant data in R, simply rely on the `Protein IDs` column in that file, which separates grouped accessions with semicolons.
+:::
+
+---
+
+## Peptide-to-Protein Quantification Aggregation
+
+We have resolved the qualitative problem (which proteins are present). We must now tackle the quantitative problem: **How do we compute a single abundance value for a protein from multiple peptide signals?**
+
+Peptides ionize at vastly different efficiencies. A highly basic peptide might fly beautifully in the mass spectrometer, yielding an intensity of `1,000,000`, while a hydrophobic, poorly ionizing peptide from the exact same protein yields an intensity of `10,000`. Therefore, simple summation is highly susceptible to missing values and outlier peptides.
+
+We will use the `QFeatures` package, which provides a formalized, reproducible infrastructure for aggregating data through the hierarchy of MS measurements.
+
+### Step 1: Handling Shared Peptides
+
+Before quantifying, we face a dilemma regarding our shared peptides. If Peptide X is shared between Protein A and Protein B, and both proteins are present, whose abundance is it measuring?
+
+The safest and most conservative approach is to **filter out shared peptides entirely before aggregation**. You lose some data depth, but you guarantee that Protein A's quantity isn't artificially inflated by Protein B.
+
+```r
+library(QFeatures)
+
+# Filter to retain ONLY unique peptides
+unique_peptides <- peptide_mapping |>
+  filter(peptide_type == "unique")
+
+cat("Remaining peptides for quantification:", nrow(unique_peptides), "\n")
+```
+
+### Step 2: Building the QFeatures Object
+
+To use `QFeatures`, we must convert our tidy dataframe into a mathematical matrix, separating the quantitative data from the descriptive metadata.
+
+```r
+# Extract just the intensity columns as a numeric matrix
+quant_matrix <- unique_peptides |>
+  select(intensity_s1, intensity_s2) |>
+  as.matrix()
+
+# Set the rownames of the matrix to the peptide sequences
+rownames(quant_matrix) <- unique_peptides$peptide_sequence
+
+# Create a metadata dataframe (rowData) describing the rows
+row_metadata <- DataFrame(
+  Protein_Group = unique_peptides$protein_accession,
+  Sequence = unique_peptides$peptide_sequence
+)
+
+# Combine into a SummarizedExperiment
+peptide_se <- SummarizedExperiment(
+  assays = list(intensities = quant_matrix),
+  rowData = row_metadata
+)
+
+# Initialize the master QFeatures object
+qf <- QFeatures(list(peptides = peptide_se))
+
+print(qf)
+```
+
+**Explanation of the code:**
+1. `as.matrix()`: R's matrix algebra requires homogenous numeric structures. We must strip away the text columns.
+2. `DataFrame()`: This is Bioconductor's specialized version of a dataframe. It holds our metadata (like which protein a peptide maps to).
+3. `SummarizedExperiment()`: This class mathematically fuses our `quant_matrix` (the assay) to our `row_metadata`, ensuring that if we filter a row in the matrix, the corresponding metadata is filtered automatically.
+4. `QFeatures()`: We place our peptide-level `SummarizedExperiment` inside the top-level container, naming this assay "peptides".
+
+### Step 3: Robust Aggregation
+
+Now we execute the aggregation. We tell `QFeatures` to group rows by the `Protein_Group` column, and apply an aggregation function.
+
+We will use `MsCoreUtils::robustSummary`. This algorithm implements Tukey's **Median Polish**. It iteratively fits a robust linear model that accounts for both the "sample effect" (true biological abundance) and the "feature effect" (how well that specific peptide ionizes), making it highly resistant to outliers and missing values.
+
+```r
+library(MsCoreUtils)
+
+# Aggregate peptides to proteins
+qf <- aggregateFeatures(
+  object = qf,
+  i = "peptides",                    # The assay to start from
+  fcol = "Protein_Group",            # The metadata column defining the mapping
+  name = "proteins",                 # The name of the new assay to create
+  fun = MsCoreUtils::robustSummary,  # The mathematical function to apply
+  na.rm = TRUE                       # Ignore missing values during math
+)
+
+print(qf)
+```
+
+Notice that the `QFeatures` object now contains two assays: `"peptides"` and `"proteins"`. The hierarchical relationship between them is permanently recorded.
+
+To extract the final, protein-level quantitative matrix for statistical testing:
+
+```r
+protein_matrix <- assay(qf[["proteins"]])
+print(protein_matrix)
+```
+
+---
+
+## Quality Control: The One-Hit Wonder Problem
+
+A major risk in proteomics is trusting proteins that were identified and quantified by only a single peptide. These "One-Hit Wonders" lack independent verification. A single noisy MS/MS spectrum could result in a false biological conclusion.
+
+Many pipelines mandate a strict **Two-Peptide Rule**. Because we used `QFeatures` for aggregation, the software automatically counted how many peptides were used to build each protein and stored it in a hidden metadata column called `.n`.
+
+We can easily filter our protein matrix using this metadata:
+
+```r
+# Extract the metadata for the newly created 'proteins' assay
+protein_metadata <- rowData(qf[["proteins"]])
+
+# View the peptide count per protein
+print(protein_metadata[, c("Protein_Group", ".n")])
+
+# Filter the assay to keep only robust proteins (>= 2 peptides)
+qf_filtered <- qf["proteins"][protein_metadata$.n >= 2, ]
+
+cat("Proteins passing the Two-Peptide Rule:", nrow(assay(qf_filtered[["proteins"]])), "\n")
+```
+
+::: {.callout-warning}
+#### The Danger of the Two-Peptide Rule
+While removing single-peptide proteins eliminates noise, it also eliminates real biology. Small proteins (e.g., histones), heavily modified regions, or specific biological cleavage products naturally produce only one detectable peptide. Always document your threshold explicitly in your methods section, and consider running a sensitivity analysis to see what biology you are sacrificing.
+:::
+
+---
+
+## Summary
+
+This chapter addressed the protein inference problem — the fact that a single peptide can match multiple proteins in a bottom-up proteomics experiment. Key points:
+
+1. **Protein inference is a logical network problem, not a simple 1:1 mapping.**
+2. **Always explicitly report your numbers**: Total identified peptides, the proportion of unique vs. shared peptides, and the final number of indistinguishable protein groups.
+3. **Shared peptides present a quantitative danger.** Excluding them prior to aggregation is the safest way to prevent abundance signals from bleeding between homologous proteins.
+4. **Use Robust Aggregation.** Simple summation or means are highly susceptible to missing values and ionization bias. `MsCoreUtils::robustSummary` provides a statistically sound median polish.
+5. **Track your evidence depth.** Use `QFeatures` to track exactly how many peptides contributed to a protein's quantification (`.n`), allowing you to set defensible thresholds like the Two-Peptide rule.
+
+---
+
+## Exercises
+
+1. **Wrangling Practice:** Using `dplyr`, write a pipeline that takes the `psm_data` simulated at the beginning of the chapter, removes any row where `intensity_s1` is below `1000`, and then recalculates the `n_proteins` count. Do any previously "shared" peptides become "unique" because of this intensity filter?
+2. **Aggregation Comparison:** `QFeatures::aggregateFeatures` accepts different mathematical functions. Rerun the aggregation step on the `unique_peptides` dataset, but change `fun = MsCoreUtils::robustSummary` to `fun = matrixStats::colMedians`. Compare the output matrices. 
+3. **Network Manipulation:** Modify the `igraph` visualization code to color the nodes by their `components()` membership ID rather than whether they are a peptide or protein.
+
+## Session Information
+
+``` r
+sessionInfo()
+```

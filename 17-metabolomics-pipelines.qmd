@@ -1,0 +1,777 @@
+# Metabolomics Quantification Pipelines
+
+This is where the pieces come together. Feature detection, alignment, annotation, normalization — each has had its own chapter; here they become a single, reproducible pipeline that takes raw mzML files in one end and a clean, analysis-ready feature matrix out the other. It is the untargeted-metabolomics counterpart to the proteomics quantification chapters, assembled entirely from tools you have already met.
+
+The companion project provides three MetaboLights datasets for this chapter's workflows: **MTBLS38** (51-compound chemical standard library, ideal for parameter tuning and method validation), **MTBLS234** (metabolite annotation reference), and **MTBLS1455** (untargeted metabolomics cohort). The pipeline `r4ms_book/analysis/mtbls38_standards_analysis.R` runs feature detection, alignment, and QC on MTBLS38 with known ground truth — the chemical identity and expected retention time of every feature.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Running the pipeline once and trusting the defaults. Untargeted metabolomics is parameter-sensitive at every step; check feature counts and QC-pool CV before you believe the matrix it produces.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+-   Explain the canonical LC-MS metabolomics preprocessing pipeline and its sequential dependencies.
+-   Load vendor-converted mzML/CDF files into an `MsExperiment` object.
+-   Configure and run `CentWaveParam` peak detection, tuning `ppm`, `peakwidth`, `snthresh`, and `prefilter`.
+-   Correct retention time drift across samples with `ObiwarpParam`.
+-   Group chromatographic peaks across samples into a consensus feature matrix with `PeakDensityParam`.
+-   Fill chromatographic gaps and extract the final feature matrix with `featureValues()`.
+-   Apply a quick CV-based QC filter before exporting the matrix for statistical analysis.
+
+------------------------------------------------------------------------
+
+## Introduction to xcms and the RforMassSpectrometry Ecosystem
+
+### Overview of the LC-MS Preprocessing Pipeline
+
+Mass Spectrometry (MS)-based metabolomics aims to identify and quantify the complete set of small molecules (the metabolome) within a biological system.\[1, 2\] The data analysis workflow transforms raw instrument data into a feature matrix — rows are samples, columns are detected ions defined by $m/z$ and retention time — through a conserved sequence of steps:\[3\]
+
+1.  **Peak detection** — Identify chromatographic peaks per sample.
+2.  **Retention time alignment** — Correct drift between analytical runs.
+3.  **Correspondence (grouping)** — Match peaks across samples into consensus features.
+4.  **Gap filling** — Integrate signal for peaks missed in individual samples.
+5.  **Annotation** — Assign putative identities to features.
+6.  **Statistical analysis** — Find significantly changing features as part of the full metabolomics quantification workflow.
+
+Each step is a dependency chain: an error in step 1 is amplified through every subsequent step.\[15, 19\] This chapter covers steps 1–4 and basic post-processing QC.
+
+### The R-Based Ecosystem vs. "Black Box" Solutions
+
+Researchers can use GUI platforms (e.g., XCMS Online, MetaboAnalyst web server)\[10, 11\] or a programmable R workflow.\[12\] Web tools are accessible but obscure parameters and hinder reproducibility.\[10\] An R-based pipeline:
+
+-   Is fully open, auditable, and reproducible.
+-   Gives granular control over every parameter — critical because metabolomics results are highly sensitive to parameterisation.\[15\]
+-   Produces a runnable script that can be published as supplementary material.
+
+The core Bioconductor packages used here are:
+
+| Package Name | Primary Function | Repository |
+|:---|:---|:---|
+| **`xcms`** | Peak detection, RT alignment, feature grouping | Bioconductor |
+| **`MsExperiment`** | Container for raw MS data + sample metadata | Bioconductor |
+| **`Spectra`** | Low-level spectrum access and manipulation | Bioconductor |
+| **`CAMERA`** | Adduct and isotope annotation after grouping | Bioconductor |
+
+### The Propagation of Error
+
+-   If **peak detection** parameters are mis-specified, noise is reported as features or true signals are missed.\[15\]
+-   If **RT alignment** fails, the same metabolite in two samples is treated as two different compounds.
+-   If **adduct/isotope annotation** (via `CAMERA`) is skipped, one metabolite can appear as dozens of redundant features, inflating false positives.\[19\]
+-   If this flawed feature list feeds **pathway analysis**, biological conclusions are based on noise.
+
+------------------------------------------------------------------------
+
+## Setting Up the Environment
+
+```{r setup-xcms}
+#| warning: false
+#| message: false
+
+if (requireNamespace("xcms", quietly = TRUE)) {
+  library(xcms)
+} else {
+  message("Install xcms: BiocManager::install('xcms')")
+}
+
+if (requireNamespace("MsExperiment", quietly = TRUE)) {
+  library(MsExperiment)
+} else {
+  message("Install MsExperiment: BiocManager::install('MsExperiment')")
+}
+
+if (requireNamespace("Spectra", quietly = TRUE)) {
+  library(Spectra)
+} else {
+  message("Install Spectra: BiocManager::install('Spectra')")
+}
+
+library(ggplot2)
+library(dplyr)
+
+if (requireNamespace("CAMERA", quietly = TRUE)) library(CAMERA)
+```
+
+------------------------------------------------------------------------
+
+## Pipeline Overview
+
+```{mermaid}
+%%| fig-width: 10
+%%| fig-height: 6
+flowchart LR
+    A[Raw mzML/CDF] --> B[readMsExperiment]
+    B --> C[findChromPeaks\nCentWaveParam]
+    C --> D[adjustRtime\nObiwarpParam]
+    D --> E[groupFeatures\nPeakDensityParam]
+    E --> F[fillChromPeaks]
+    F --> G[featureValues\nFeature Matrix]
+    G --> H[Quick CV QC]
+    H --> I[Export for\nChapter 17]
+
+    style A fill:#D7E6FB,stroke:#27408B
+    style G fill:#FBE0FA,stroke:#B000B0
+    style I fill:#D7FFD7,stroke:#006400
+```
+
+```{r pipeline-table}
+workflow_steps <- data.frame(
+  Step    = 1:6,
+  Process = c("Peak Detection", "RT Correction",
+               "Correspondence", "Gap Filling",
+               "Annotation", "Feature Matrix"),
+  Function = c("findChromPeaks()", "adjustRtime()",
+                "groupFeatures()", "fillChromPeaks()",
+                "CAMERA::xsAnnotate()", "featureValues()"),
+  Output  = c("Per-sample peaks", "Aligned peaks",
+               "Consensus features", "Complete matrix",
+               "Adduct/isotope groups", "Sample × feature table")
+)
+knitr::kable(workflow_steps, caption = "xcms preprocessing pipeline steps")
+```
+
+------------------------------------------------------------------------
+
+## Data Import with MsExperiment
+
+Modern mass spectrometers export data as `mzML`, `mzXML`, or `netCDF` after vendor conversion (see Chapter 4).\[17, 20\] `readMsExperiment()` creates a unified container holding both spectra and sample metadata.
+
+```{r xcms-import, eval=FALSE}
+library(xcms)
+library(MsExperiment)
+library(Spectra)
+library(faahKO)  # example dataset (CDF files, KO vs WT mouse liver)
+
+# Locate CDF files bundled with faahKO
+cdf_files <- dir(system.file("cdf", package = "faahKO"),
+                 full.names = TRUE, recursive = TRUE)
+
+# Sample metadata — one row per file
+pd <- data.frame(
+    sample_name  = sub(".CDF", "", basename(cdf_files), fixed = TRUE),
+    sample_group = c(rep("KO", 6), rep("WT", 6))
+)
+
+# Load spectra + metadata into one object
+ms_exp <- readMsExperiment(spectraFiles = cdf_files, sampleData = pd)
+ms_exp
+```
+
+**Key checks after import:**
+
+```{r import-checks, eval=FALSE}
+# Number of files loaded
+length(unique(spectra(ms_exp)$dataOrigin))
+
+# Inspect scan count per sample
+table(spectra(ms_exp)$dataOrigin)
+
+# Check MS levels present
+table(spectra(ms_exp)$msLevel)
+```
+
+------------------------------------------------------------------------
+
+## Peak Detection (CentWaveParam)
+
+CentWave identifies chromatographic peaks by detecting continuous wavelet transform (CWT) ridges in the $m/z$–RT space.\[18, 27\] All parameters are set via `CentWaveParam`.
+
+```{r peak-detection, eval=FALSE}
+cwp <- CentWaveParam(
+    peakwidth   = c(20, 50),  # expected peak width range in seconds
+    ppm         = 30,          # m/z tolerance (instrument-dependent)
+    snthresh    = 10,          # signal-to-noise ratio threshold
+    prefilter   = c(3, 100)   # (min scans, min intensity) to consider a peak
+)
+
+ms_exp <- findChromPeaks(ms_exp, param = cwp)
+
+# Inspect detected peaks
+head(chromPeaks(ms_exp))
+nrow(chromPeaks(ms_exp))  # total peaks across all samples
+```
+
+**Parameter guidance:**
+
+| Parameter | Typical Range | Effect if Too Small | Effect if Too Large |
+|:---|:---|:---|:---|
+| `peakwidth` | (5–20 s, 20–80 s) | Splits broad peaks | Merges narrow peaks |
+| `ppm` | 5–25 | Misses real peaks | Merges distinct ions |
+| `snthresh` | 3–10 | Retains noise | Drops low-abundance signals |
+| `prefilter` | (3, 100)–(5, 1000) | Retains transient noise | Drops low-level metabolites |
+
+> **Tip:** Run `findChromPeaks` on a subset of samples first to evaluate peak counts before applying to the full dataset.
+
+```{r peak-summary, eval=FALSE}
+# Summarise per-sample peak counts
+peak_count_summary <- data.frame(
+    sample     = seq_len(nrow(sampleData(ms_exp))),
+    n_peaks    = vapply(seq_len(nrow(sampleData(ms_exp))),
+                        function(i) sum(chromPeaks(ms_exp)[, "sample"] == i),
+                        integer(1))
+)
+print(peak_count_summary)
+```
+
+------------------------------------------------------------------------
+
+## Retention Time Alignment (ObiwarpParam)
+
+Retention time drift between analytical runs arises from column aging, temperature changes, or solvent degassing.\[7, 8, 28\] `adjustRtime()` with `ObiwarpParam` uses an ordered bijective interpolated warping (OBI-Warp) algorithm to align all samples to a common reference.
+
+```{r rt-alignment, eval=FALSE}
+owp <- ObiwarpParam(binSize = 1)  # m/z bin size for warping
+
+ms_exp <- adjustRtime(ms_exp, param = owp)
+
+# Visualise RT adjustment magnitude
+plotAdjustedRtime(ms_exp)
+```
+
+**Key diagnostics:**
+
+```{r rt-diagnostics, eval=FALSE}
+# Maximum RT shift per sample
+rtime_adj <- rtime(ms_exp, adjusted = TRUE)
+rtime_raw <- rtime(ms_exp, adjusted = FALSE)
+
+rt_shifts <- vapply(seq_len(nrow(sampleData(ms_exp))), function(i) {
+    idx <- spectra(ms_exp)$dataOrigin == fileNames(ms_exp)[i]
+    max(abs(rtime_adj[idx] - rtime_raw[idx]), na.rm = TRUE)
+}, numeric(1))
+
+cat("Max RT shift per sample (seconds):\n")
+print(round(rt_shifts, 2))
+```
+
+> If RT shifts exceed \~30–60 seconds, inspect for failed samples or consider using a reference sample-based alignment strategy (`PeakGroupsParam`).
+
+------------------------------------------------------------------------
+
+## Feature Grouping Across Samples
+
+After alignment, `groupFeatures()` matches chromatographic peaks across samples into consensus features using a density-based approach.\[8, 20, 29\]
+
+```{r feature-grouping, eval=FALSE}
+pdp <- PeakDensityParam(
+    sampleGroups = ms_exp$sample_group,  # experimental groups
+    minFraction  = 0.5,                  # feature must be present in ≥50% of samples per group
+    bw           = 30,                   # RT bandwidth for density kernel (seconds)
+    binSize      = 0.025                 # m/z bin width
+)
+
+ms_exp <- groupFeatures(ms_exp, param = pdp)
+
+# Number of grouped features
+nrow(featureDefinitions(ms_exp))
+```
+
+**Parameter guidance:**
+
+| Parameter | Typical Range | Effect |
+|:---|:---|:---|
+| `minFraction` | 0.3–0.8 | Higher → fewer but more reproducible features |
+| `bw` | 5–30 s | Higher → tolerates more RT drift; risk of merging nearby features |
+| `binSize` | 0.01–0.05 Da | Smaller → finer $m/z$ resolution |
+
+```{r feature-qc, eval=FALSE}
+# Check feature definitions
+head(featureDefinitions(ms_exp))
+
+# Distribution of features detected across samples
+feat_presence <- featureValues(ms_exp, value = "into")
+detection_rate <- apply(feat_presence, 1, function(x) mean(!is.na(x)))
+hist(detection_rate, main = "Feature detection rate across samples",
+     xlab = "Fraction of samples with peak", col = "steelblue")
+```
+
+------------------------------------------------------------------------
+
+## Gap Filling
+
+Some peaks fall below the detection threshold in individual samples but are genuinely present at low levels. `fillChromPeaks()` integrates the raw signal in the expected $m/z$–RT window for those missing entries.\[8, 29\]
+
+```{r gap-fill, eval=FALSE}
+fcp <- ChromPeakAreaParam()  # default integration windows
+ms_exp <- fillChromPeaks(ms_exp, param = fcp)
+
+# Compare missing values before vs after
+feat_raw    <- featureValues(ms_exp, filled = FALSE)
+feat_filled <- featureValues(ms_exp, filled = TRUE)
+
+cat("Missing before gap fill:", sum(is.na(feat_raw)), "\n")
+cat("Missing after gap fill: ", sum(is.na(feat_filled)), "\n")
+```
+
+> Gap filling can introduce noise. Keep track of which values were gap-filled vs. originally detected (use `featureValues(..., missing = NA)` and compare).
+
+------------------------------------------------------------------------
+
+## Extracting the Feature Matrix
+
+```{r extract-matrix, eval=FALSE}
+# Extract integrated peak areas (use "maxo" for peak height instead)
+feature_matrix <- featureValues(ms_exp, value = "into", method = "medret")
+
+# Attach feature metadata (m/z, RT) as a data frame
+feature_meta <- as.data.frame(featureDefinitions(ms_exp))[, c("mzmed", "rtmed", "npeaks")]
+
+cat("Feature matrix dimensions:", nrow(feature_matrix), "features ×",
+    ncol(feature_matrix), "samples\n")
+head(feature_matrix[, 1:6])
+```
+
+The resulting `feature_matrix` has: - **Rows** = consensus features (identified by median $m/z$ and RT) - **Columns** = samples - **Values** = integrated peak areas (or heights)
+
+------------------------------------------------------------------------
+
+## Quick QC Before Export
+
+Before handing the matrix to statistical analysis, apply a simple reproducibility filter: remove features with high CV in quality control (QC) samples, or — if no QC samples are present — across all samples.
+
+```{r quick-qc, eval=FALSE}
+# Coefficient of variation per feature
+feature_cv <- apply(feature_matrix, 1,
+                    function(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE) * 100)
+
+# Detection rate per feature
+feature_detect <- apply(feature_matrix, 1, function(x) mean(!is.na(x)))
+
+# Retain features with CV < 30% and detected in ≥50% of samples
+keep <- feature_cv < 30 & feature_detect >= 0.5
+cat("Features retained after QC filter:", sum(keep, na.rm = TRUE),
+    "of", length(keep), "\n")
+
+feature_matrix_qc <- feature_matrix[keep, ]
+feature_meta_qc   <- feature_meta[keep, ]
+
+# Export for Chapter 17
+saveRDS(list(matrix = feature_matrix_qc,
+             meta   = feature_meta_qc,
+             sample_info = as.data.frame(sampleData(ms_exp))),
+        file = "data/xcms_feature_matrix.rds")
+```
+
+------------------------------------------------------------------------
+
+## Example 2: Untargeted Metabolomics from mzML to Feature Matrix
+
+### Project Question
+
+Which metabolomics features differ between experimental groups, and which can be annotated?
+
+This is the raw-data counterpart to the label-free proteomics example in Chapter 13. It starts from vendor-converted LC-MS files, performs xcms preprocessing, exports an analysis-ready feature matrix, and prepares candidate annotations for biological interpretation.
+
+### Dataset and Scope
+
+Use `MTBLS234` as the main public dataset. It is a MetaboLights plasma LC-MS dataset with mzML files, suitable for a Metabonaut-inspired workflow without reusing the Metabonaut example datasets. For offline teaching or fast rendering, use `faahKO` as a fallback dataset.
+
+This example emphasizes raw/run-level QC because the input is chromatographic MS data rather than a processed table. The most important checks are TIC/BPC profiles, retention-time stability, peak counts per run, missingness before and after gap filling, and feature-level reproducibility.
+
+`MTBLS234` is best used to teach raw-data import, xcms preprocessing, feature-matrix construction, and QC. If its imported metadata do not define a clean two-group contrast for your teaching subset, define `sample_info$group` manually from the relevant sample or assay fields, or switch `use_metabolights <- FALSE` to run the offline `faahKO` contrast.
+
+### Workflow Map
+
+| Step | Implementation |
+|----|----|
+| Metadata and contrasts | Create MetaboLights sample metadata; define a study-group contrast when groups are available |
+| Raw data import | Load MTBLS234 mzML files with `MsIO::readMsObject()` or fallback netCDF files with `readMsExperiment()` |
+| Raw/run-level QC | TIC/BPC plots, peak counts, retention-time drift |
+| Feature detection audit | Run peak detection, RT correction, correspondence, and gap filling |
+| Abundance matrix | Export feature-by-sample matrix with `featureValues()` |
+| Low-quality feature filtering | Remove blank-driven, high-CV, and high-missingness features |
+| Normalization | Log2 transform and apply median, TIC, or LOESS normalization as appropriate |
+| Missingness diagnostics | Compare missingness before and after gap filling |
+| Statistical modeling | Use `limma` on the normalized feature matrix |
+| Multiple testing | Apply Benjamini-Hochberg FDR |
+| Visualization | PCA, volcano plot, feature heatmap, feature trajectory plot |
+| Annotation | Use m/z, retention time, adducts, isotope patterns, and MS/MS matches where available |
+| Reproducible export | Save parameters, feature tables, figures, candidate annotations, and session information |
+
+### Setup and Metadata
+
+The code below is marked `eval: false` so the chapter can render without downloading or processing raw files during book builds.
+
+```{r}
+#| eval: false
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+bioc_pkgs <- c(
+  "xcms",
+  "Spectra",
+  "mzR",
+  "MsExperiment",
+  "MsIO",
+  "MsBackendMetaboLights",
+  "CAMERA",
+  "MetaboAnnotation",
+  "MetaboCoreUtils",
+  "limma",
+  "faahKO",       # fallback/offline dataset
+  "ComplexHeatmap"
+)
+
+cran_pkgs <- c(
+  "tidyverse",
+  "ggrepel",
+  "patchwork",
+  "sessioninfo"
+)
+
+for (pkg in bioc_pkgs) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    BiocManager::install(pkg, ask = FALSE, update = FALSE)
+  }
+}
+
+for (pkg in cran_pkgs) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg, repos = "https://cloud.r-project.org")
+  }
+}
+
+library(xcms)
+library(Spectra)
+library(MsExperiment)
+library(MsIO)
+library(MsBackendMetaboLights)
+library(limma)
+library(tidyverse)
+library(ggrepel)
+```
+
+```{r}
+#| eval: false
+dir.create("results", showWarnings = FALSE)
+dir.create("figures", showWarnings = FALSE)
+dir.create("objects", showWarnings = FALSE)
+
+use_metabolights <- TRUE
+
+if (use_metabolights) {
+  mtbls_id <- "MTBLS234"
+
+  mtbls_param <- MetaboLightsParam(
+    mtblsId = mtbls_id,
+    filePattern = "mzML$"
+  )
+
+  ms_exp <- readMsObject(
+    MsExperiment(),
+    mtbls_param,
+    keepOntology = FALSE,
+    keepProtocol = FALSE,
+    simplify = TRUE
+  )
+
+  sample_info <- as_tibble(as.data.frame(sampleData(ms_exp))) |>
+    mutate(
+      sample_name = make.unique(as.character(`Sample Name` %||% seq_len(n()))),
+      group = "plasma_sample",
+      injection_order = seq_len(n())
+    )
+
+  sample_info$group <- factor(sample_info$group)
+  sampleData(ms_exp)$sample_name <- sample_info$sample_name
+  sampleData(ms_exp)$group <- sample_info$group
+  sampleData(ms_exp)$injection_order <- sample_info$injection_order
+} else {
+  cdf_files <- dir(
+    system.file("cdf", package = "faahKO"),
+    full.names = TRUE,
+    recursive = TRUE
+  )
+
+  sample_info <- tibble(
+    file = cdf_files,
+    sample_name = tools::file_path_sans_ext(basename(cdf_files)),
+    group = if_else(grepl("KO", basename(cdf_files), ignore.case = TRUE), "KO", "WT"),
+    injection_order = seq_along(cdf_files)
+  )
+
+  sample_info$group <- factor(sample_info$group, levels = c("WT", "KO"))
+
+  ms_exp <- readMsExperiment(
+    spectraFiles = sample_info$file,
+    sampleData = as.data.frame(sample_info)
+  )
+}
+
+write_csv(sample_info, "results/metab_00_sample_metadata.csv")
+saveRDS(ms_exp, "objects/01_metabolomics_ms_experiment_raw.rds")
+```
+
+### Import Raw Files and Perform Run-Level QC
+
+```{r}
+#| eval: false
+tic <- chromatogram(spectra(ms_exp), aggregationFun = "sum")
+bpc <- chromatogram(spectra(ms_exp), aggregationFun = "max")
+
+png("figures/metab_01_tic.png", width = 1400, height = 900, res = 160)
+plot(tic, col = as.integer(sample_info$group))
+legend("topright", legend = levels(sample_info$group), col = seq_along(levels(sample_info$group)), lty = 1)
+dev.off()
+
+png("figures/metab_02_bpc.png", width = 1400, height = 900, res = 160)
+plot(bpc, col = as.integer(sample_info$group))
+legend("topright", legend = levels(sample_info$group), col = seq_along(levels(sample_info$group)), lty = 1)
+dev.off()
+```
+
+### Peak Detection, RT Correction, Grouping, and Gap Filling
+
+```{r}
+#| eval: false
+xcms_params <- list(
+  peak_detection = CentWaveParam(
+    peakwidth = c(20, 50),
+    ppm = 30,
+    snthresh = 10,
+    prefilter = c(3, 100)
+  ),
+  rt_correction = ObiwarpParam(binSize = 1),
+  grouping = PeakDensityParam(
+    sampleGroups = sampleData(ms_exp)$group,
+    minFraction = 0.5,
+    bw = 30,
+    binSize = 0.025
+  ),
+  gap_filling = ChromPeakAreaParam()
+)
+
+saveRDS(xcms_params, "objects/02_xcms_parameters.rds")
+
+ms_exp <- findChromPeaks(ms_exp, param = xcms_params$peak_detection)
+
+peak_counts <- tibble(
+  sample = sample_info$sample_name,
+  n_peaks = vapply(seq_len(nrow(sample_info)), function(i) {
+    sum(chromPeaks(ms_exp)[, "sample"] == i)
+  }, integer(1))
+)
+write_csv(peak_counts, "results/metab_01_peak_counts.csv")
+
+ms_exp <- adjustRtime(ms_exp, param = xcms_params$rt_correction)
+
+png("figures/metab_03_retention_time_alignment.png", width = 1400, height = 900, res = 160)
+plotAdjustedRtime(ms_exp)
+dev.off()
+
+ms_exp <- groupFeatures(ms_exp, param = xcms_params$grouping)
+
+feature_matrix_raw <- featureValues(ms_exp, value = "into", filled = FALSE)
+missing_before <- sum(is.na(feature_matrix_raw))
+
+ms_exp <- fillChromPeaks(ms_exp, param = xcms_params$gap_filling)
+
+feature_matrix_filled <- featureValues(ms_exp, value = "into", filled = TRUE)
+missing_after <- sum(is.na(feature_matrix_filled))
+
+gap_fill_log <- tibble(
+  missing_before_gap_fill = missing_before,
+  missing_after_gap_fill = missing_after
+)
+write_csv(gap_fill_log, "results/metab_02_gap_filling_log.csv")
+saveRDS(ms_exp, "objects/03_metabolomics_xcms_processed.rds")
+```
+
+### Build and Filter the Feature Matrix
+
+```{r}
+#| eval: false
+feature_meta <- as.data.frame(featureDefinitions(ms_exp)) |>
+  rownames_to_column("feature_id")
+
+feature_matrix <- feature_matrix_filled
+rownames(feature_matrix) <- feature_meta$feature_id
+
+feature_detect <- rowMeans(!is.na(feature_matrix))
+feature_cv <- apply(feature_matrix, 1, function(x) {
+  sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE) * 100
+})
+
+keep <- feature_detect >= 0.5 & feature_cv < 30
+
+filter_log <- tibble(
+  n_features_raw = nrow(feature_matrix),
+  n_features_kept = sum(keep, na.rm = TRUE),
+  n_features_removed = sum(!keep, na.rm = TRUE)
+)
+write_csv(filter_log, "results/metab_03_feature_filter_log.csv")
+
+feature_matrix_qc <- feature_matrix[keep, ]
+feature_meta_qc <- feature_meta[keep, ]
+
+write_csv(
+  as_tibble(feature_matrix_qc, rownames = "feature_id"),
+  "results/metab_04_feature_matrix_gap_filled_qc.csv"
+)
+```
+
+If blanks or pooled QC samples are available, replace the simple global CV filter with explicit blank subtraction and QC-based CV filtering. For example, remove features where the blank median is close to or greater than the biological sample median.
+
+### Normalize, Transform, and Diagnose Missingness
+
+```{r}
+#| eval: false
+mat_log2 <- log2(feature_matrix_qc + 1)
+
+sample_medians <- apply(mat_log2, 2, median, na.rm = TRUE)
+mat_norm <- sweep(mat_log2, 2, sample_medians, "-")
+
+missing_summary <- tibble(
+  sample = colnames(mat_norm),
+  pct_missing = colMeans(is.na(mat_norm)) * 100
+)
+write_csv(missing_summary, "results/metab_05_missingness_by_sample.csv")
+
+p_pca <- prcomp(t(mat_norm), center = TRUE, scale. = TRUE)
+pca_df <- as_tibble(p_pca$x[, 1:2], rownames = "sample_name") |>
+  left_join(sample_info, by = "sample_name")
+
+p_pca_plot <- ggplot(pca_df, aes(PC1, PC2, color = group)) +
+  geom_point(size = 3) +
+  labs(title = "PCA of normalized metabolomics feature matrix") +
+  theme_bw()
+
+ggsave("figures/metab_04_pca_normalized.png", p_pca_plot, width = 7, height = 5, dpi = 300)
+
+write_csv(
+  as_tibble(mat_norm, rownames = "feature_id"),
+  "results/metab_06_feature_matrix_normalized.csv"
+)
+```
+
+### Differential Feature Testing with limma
+
+```{r}
+#| eval: false
+group_levels <- levels(sample_info$group)
+stopifnot(length(group_levels) >= 2)
+
+design <- model.matrix(~ 0 + group, data = sample_info)
+colnames(design) <- make.names(group_levels)
+
+contrast_name <- paste0(make.names(group_levels)[2], "_vs_", make.names(group_levels)[1])
+contrast_formula <- paste(make.names(group_levels)[2], "-", make.names(group_levels)[1])
+contrast_matrix <- makeContrasts(contrasts = contrast_formula, levels = design)
+colnames(contrast_matrix) <- contrast_name
+
+fit <- lmFit(mat_norm, design)
+fit <- contrasts.fit(fit, contrast_matrix)
+fit <- eBayes(fit)
+
+diff_features <- topTable(fit, coef = contrast_name, number = Inf, sort.by = "P") |>
+  rownames_to_column("feature_id") |>
+  left_join(feature_meta_qc, by = "feature_id")
+
+write_csv(diff_features, "results/metab_07_differential_feature_table.csv")
+```
+
+```{r}
+#| eval: false
+volcano_df <- diff_features |>
+  mutate(
+    significant = adj.P.Val < 0.05 & abs(logFC) > 1,
+    neg_log10_fdr = -log10(adj.P.Val)
+  )
+
+p_volcano <- ggplot(volcano_df, aes(logFC, neg_log10_fdr)) +
+  geom_point(aes(color = significant), alpha = 0.75) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(
+    title = "Differential metabolomics features",
+    x = "log2 fold change",
+    y = "-log10 FDR",
+    color = "Significant"
+  ) +
+  theme_bw()
+
+ggsave("figures/metab_05_volcano_ko_vs_wt.png", p_volcano, width = 7, height = 6, dpi = 300)
+```
+
+### Candidate Annotation
+
+Feature annotation is evidence-based rather than absolute. A defensible candidate table records the measured m/z, retention time, adduct hypothesis, mass error, isotope/adduct grouping, and any MS/MS library evidence. Without authentic standards, report annotations as putative.
+
+```{r}
+#| eval: false
+candidate_annotations <- diff_features |>
+  filter(adj.P.Val < 0.05) |>
+  transmute(
+    feature_id,
+    mz = mzmed,
+    rt_seconds = rtmed,
+    logFC,
+    adj_p_value = adj.P.Val,
+    annotation_level = "unknown_feature",
+    adduct_candidate = NA_character_,
+    compound_candidate = NA_character_,
+    mass_error_ppm = NA_real_,
+    evidence = "m/z and RT feature only; add MS/MS library or standards for higher confidence"
+  )
+
+write_csv(candidate_annotations, "results/metab_08_candidate_annotation_table.csv")
+```
+
+If MS/MS spectra or a local compound database are available, add annotation evidence with `MetaboAnnotation`, `MetaboCoreUtils`, and library search tools. CAMERA-style isotope and adduct grouping can also be added after feature grouping to reduce redundant features before pathway interpretation.
+
+### Main Outputs
+
+| Output | File |
+|----|----|
+| TIC/BPC plots | `figures/metab_01_tic.png`, `figures/metab_02_bpc.png` |
+| xcms parameter record | `objects/02_xcms_parameters.rds` |
+| Aligned xcms object | `objects/03_metabolomics_xcms_processed.rds` |
+| Gap-filling log | `results/metab_02_gap_filling_log.csv` |
+| Blank/QC filtering log | `results/metab_03_feature_filter_log.csv` |
+| Gap-filled QC feature matrix | `results/metab_04_feature_matrix_gap_filled_qc.csv` |
+| Normalized feature matrix | `results/metab_06_feature_matrix_normalized.csv` |
+| Differential feature table | `results/metab_07_differential_feature_table.csv` |
+| Candidate annotation table | `results/metab_08_candidate_annotation_table.csv` |
+| Reproducibility record | `results/metab_09_session_info.txt` |
+
+```{r}
+#| eval: false
+sessioninfo::session_info() |>
+  capture.output() |>
+  writeLines("results/metab_09_session_info.txt")
+```
+
+------------------------------------------------------------------------
+
+## Summary
+
+This chapter walked through the complete xcms preprocessing pipeline:
+
+-   **Data import** via `readMsExperiment()` — linking raw files to sample metadata.
+-   **Peak detection** with `CentWaveParam` — tuning `ppm`, `peakwidth`, and `snthresh` to instrument performance.
+-   **RT alignment** with `ObiwarpParam` — correcting run-to-run drift.
+-   **Feature grouping** with `PeakDensityParam` — creating a consensus sample × feature matrix.
+-   **Gap filling** with `fillChromPeaks()` — recovering low-abundance signals.
+-   **Quick QC filter** - removing irreproducible features before downstream statistics.
+-   **Example 2** - an end-to-end untargeted metabolomics project template from raw files to a differential feature table and candidate annotation table.
+
+The exported feature matrix is the input for downstream normalization, multivariate analysis, differential testing, and pathway interpretation in later chapters.
+
+## Exercises
+
+1.  Load the `faahKO` dataset and run `findChromPeaks()` with two different `ppm` settings (10 and 30). Compare total peak counts and the overlap between detected feature sets.
+2.  Visualise the BPC (base peak chromatogram) before and after `adjustRtime()` using `plotChromatogramsOverlay()`.
+3.  Vary `minFraction` (0.3, 0.5, 0.8) in `PeakDensityParam` and report how feature count changes.
+4.  Implement a QC-sample CV filter: simulate 3 QC injections by taking the mean of all samples ± 10% noise, and retain only features with QC CV < 20%.
+5.  **Parameter Tuning**: You are analyzing data from an Orbitrap instrument with very high mass accuracy. Which `CentWaveParam` would you adjust first, and would you increase or decrease its value compared to a TOF instrument?
+6.  **Alignment vs. Correspondence**: Explain the difference between `adjustRtime` (alignment) and `groupChromPeaks` (correspondence). Can you run grouping without alignment?
+7.  **Gap Filling**: Run an `xcms` pipeline on the `faahKO` dataset. Compare the number of missing values in the feature matrix before and after running `fillChromPeaks()`.
+8.  Export the filtered feature matrix to CSV and verify it opens correctly in Excel or `read.csv()`.
+
+## Session Information
+
+``` r
+sessionInfo()
+```

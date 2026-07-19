@@ -1,0 +1,347 @@
+# Mass Spectrometry Imaging with Cardinal {#sec-appendix-ms-imaging .unnumbered}
+
+> *"An image is worth a thousand spectra — if you know how to read the coordinates."*
+
+Mass spectrometry imaging (MSI) adds a spatial dimension to the mass spectrometric measurement: instead of a single averaged spectrum per sample, MSI records a full mass spectrum at every pixel across a tissue section or sample surface. This appendix introduces the data model, file formats, and computational workflow for MSI using the **Cardinal** ecosystem [@bemis2015cardinal; @bemis2023cardinal], Bioconductor's primary toolkit for statistical analysis of MSI experiments.
+
+::: {.callout-note}
+**Dataset and package choices.** This appendix uses `CardinalWorkflows::exampleMSIData("pig206")`, a 206-pixel DESI--MS imaging dataset of a sagittal pig fetus section at approximately 200 µm spatial resolution [@bemis2015cardinal]. Among the documented examples in `CardinalWorkflows`, `pig206` is the smallest that preserves meaningful biological structure (two distinguishable tissue regions: brain and torso). A smaller synthetic dataset would demonstrate import alone without offering a realistic spatial analysis, while the larger datasets (several thousand pixels) would slow routine rendering. `pig206` balances pedagogical value with rendering practicality at under a few seconds for the full workflow.
+:::
+
+## Learning Objectives
+
+By the end of this appendix you will be able to:
+
+- Describe the three-dimensional structure of an imaging mass spectrometry dataset (x, y, m/z)
+- Distinguish the roles of the `.imzML` and `.ibd` file pair
+- Import MSI data with `CardinalIO` and inspect the resulting `MSImagingExperiment` object
+- Visualise the spatial distribution of selected ions with `image()`
+- Apply a compact preprocessing workflow (normalization, baseline reduction, peak picking)
+- Perform spatial exploratory analysis (PCA, segmentation)
+- Recognise why ordinary pixel-wise statistical tests are invalid for imaging data
+- Understand export and provenance considerations for MSI data
+
+## The Imaging-MS Data Model: Spectra Plus Spatial Coordinates
+
+A conventional LC--MS experiment produces a *list* of spectra ordered by retention time. An MSI experiment produces a *grid* of spectra ordered by spatial position. Each pixel in the grid contains a complete mass spectrum; the dataset is therefore a **three-dimensional data cube** with dimensions:
+
+- **x** (columns across the sample)
+- **y** (rows across the sample)
+- **m/z** (the mass-to-charge axis)
+
+If the instrument acquires MS/MS or ion-mobility data, additional dimensions (precursor m/z, drift time) are added, but the core abstraction remains: a spectrum at every spatial coordinate.
+
+This structure differs fundamentally from LC--MS data in two ways that affect every subsequent analysis decision:
+
+1. **Spatial correlation**: Neighbouring pixels share similar spectra because they sample the same tissue region. This positive spatial autocorrelation violates the independence assumption of most classical statistical tests.
+
+2. **Massive pixel count**: A single tissue section imaged at 50 µm can produce 50,000--500,000 spectra. The data is wide (many pixels), not tall (many time points as in LC--MS), which shifts the computational bottleneck from file I/O to memory-efficient matrix operations.
+
+The Cardinal package represents this structure as an `MSImagingExperiment` object, which stores spectral data, spatial coordinates, and pixel-level metadata in a single coordinated container.
+
+## Relationship Between .imzML and .ibd
+
+The standard format for MSI data interoperability is **imzML**, developed by the HUPO Proteomics Standards Initiative (PSI) specifically for imaging mass spectrometry (see Appendix B for the full format reference). Like many MS formats, imzML splits metadata from binary data into two linked files:
+
+| File | Content | Role |
+|------|---------|------|
+| `.imzML` | XML metadata: instrument settings, pixel coordinates, processing history, and *byte offsets* into the binary file | The readable index that describes the experiment |
+| `.ibd` | Raw binary arrays of m/z and intensity data, concatenated pixel by pixel | The bulk spectral data, never edited directly |
+
+The `.imzML` file is valid mzML XML extended with spatial coordinate tags (`MS:1001983` for x, `MS:1001984` for y). Critically, the `<binaryDataArray>` elements inside each `<spectrum>` tag are *empty* in the XML --- they contain only a `cvParam` specifying where that pixel's data begins and ends in the `.ibd` file. This design lets software load the small XML index into memory and seek directly to any pixel's data in the large binary file without loading the whole dataset.
+
+::: {.callout-warning}
+Always keep the `.imzML` and `.ibd` files together as a pair. Renaming or moving one without the other breaks the byte-offset links, and the data becomes unreadable. The same caution applies as for multi-file vendor formats (SCIEX `.wiff`/`.wiff.scan`, Agilent `.d` directories) discussed in Chapter 4.
+:::
+
+## Import with CardinalIO and Inspection as an MSImagingExperiment
+
+### Installation
+
+Install the Cardinal ecosystem from Bioconductor:
+
+```r
+#| eval: false
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(c("Cardinal", "CardinalIO", "CardinalWorkflows"))
+```
+
+### Import from .imzML files
+
+For real data acquired from an instrument, use `readImzML()` from the `CardinalIO` package (re-exported by `Cardinal`):
+
+```r
+#| eval: false
+library(Cardinal)
+data <- readImzML("path/to/your_data.imzML")
+```
+
+### Load the example dataset
+
+For this appendix we use the bundled example:
+
+```r
+library(Cardinal)
+library(CardinalWorkflows)
+
+data <- CardinalWorkflows::exampleMSIData("pig206")
+```
+
+### Inspect the MSImagingExperiment
+
+```r
+# Basic object summary
+data
+summary(data)
+```
+
+The output reports the number of spectra (pixels), the number of mass channels, the m/z range, and the spatial grid dimensions.
+
+```r
+# Dimensions: spectra (pixels) × mass channels
+dim(data)
+
+# Number of pixels
+length(data)
+
+# m/z range
+range(mz(data))
+
+# Number of m/z channels
+ncol(data)
+
+# Spatial coordinates
+coord <- coord(data)
+head(coord)
+summary(coord)
+```
+
+The `coord()` function returns a data frame with x and y columns, one row per pixel, giving the spatial position of each spectrum on the sample.
+
+## Ion-Image Visualization
+
+The `image()` method for `MSImagingExperiment` renders the spatial distribution of ion intensity for a specified m/z value. Each pixel is coloured by the measured intensity at that m/z, producing an ion image.
+
+```r
+# Ion images for selected m/z values
+# Choose values that show distinct spatial patterns
+par(mfrow = c(1, 3))
+image(data, mz = 103.4, main = "m/z 103.4", col.regions = viridis::viridis(100))
+image(data, mz = 156.3, main = "m/z 156.3", col.regions = viridis::viridis(100))
+image(data, mz = 203.8, main = "m/z 203.8", col.regions = viridis::viridis(100))
+```
+
+::: {.callout-tip}
+Experiment with different m/z values. Ions localised to specific anatomical regions (e.g., brain, torso margin) are immediately visible as distinct spatial patterns, while ubiquitous ions (e.g., background or matrix peaks) appear uniformly across the tissue.
+:::
+
+For quantitative comparison across images, use a consistent intensity scale:
+
+```r
+# Consistent intensity range across panels
+image(data, mz = c(103.4, 156.3, 203.8),
+      contrast.enhance = "histogram",
+      layout = c(1, 3))
+```
+
+Ion images are the primary visual tool in MSI analysis --- they reveal which molecular species are spatially co-localised and drive the biological interpretation of the experiment.
+
+## Compact Preprocessing Workflow
+
+MSI data requires the same preprocessing steps as LC--MS data, but applied with spatial awareness. The following compact workflow covers the essential steps.
+
+### Step 1: TIC Normalization
+
+Variation in total ion current across pixels mostly reflects differences in tissue thickness, ionisation efficiency, and desorption efficacy rather than biology. TIC normalisation scales each pixel's spectrum so that the sum of intensities is the same across all pixels.
+
+```r
+data_norm <- normalize(data, method = "tic")
+summary(data_norm)
+```
+
+### Step 2: Baseline Reduction
+
+Ambient signal (electronic noise, chemical background) creates a baseline offset that varies across the m/z range. Reducing this baseline improves the accuracy of downstream peak picking and quantification.
+
+```r
+data_bc <- reduceBaseline(data_norm, method = "locmin")
+```
+
+The `"locmin"` method estimates the baseline as a local minimum within a sliding window and subtracts it. This is generally effective for DESI and MALDI data where the background is slowly varying.
+
+### Step 3: Peak Picking
+
+Peak picking identifies the m/z values where genuine ion signals exist, discarding the vast majority of mass channels that contain only noise. This step dramatically reduces the data dimensionality.
+
+```r
+# Simple threshold-based peak picking
+data_peaks <- peakPick(data_bc, method = "simple", SNR = 3)
+
+# Number of peaks detected per pixel
+summary(rowSums(spectraData(data_peaks) > 0))
+```
+
+An alternative to peak picking is mass binning, which aggregates intensities into fixed-width m/z bins:
+
+```r
+# Bin to 0.5 Da resolution (useful for lower-resolution mass analysers)
+data_binned <- bin(data_bc, resolution = 0.5)
+```
+
+### Complete Pipeline
+
+Chained together:
+
+```r
+#| eval: false
+pipeline <- data |>
+    normalize(method = "tic") |>
+    reduceBaseline(method = "locmin") |>
+    peakPick(method = "simple", SNR = 3)
+```
+
+::: {.callout-note}
+The parameters above (SNR threshold, bin width, baseline window) are starting points. Optimise them against your specific instrument and tissue type by examining whether known biological features are preserved. Chapter 3 covers parameter provenance with `targets`, which applies equally to MSI pipelines.
+:::
+
+## Spatial Exploratory Analysis
+
+Once the data is preprocessed, the goal shifts to discovering interpretable spatial structure: which regions have similar molecular profiles, and which ions drive the differences?
+
+### Principal Component Analysis
+
+PCA on the pixel-by-m/z matrix identifies the dominant axes of spectral variation. The first few principal components often correspond to anatomical tissue regions.
+
+```r
+# PCA on the normalised, baseline-corrected data
+pca_result <- PCA(data_bc, ncomp = 5)
+
+# Spatial maps of the first three components
+par(mfrow = c(1, 3))
+image(pca_result, component = 1, main = "PC1")
+image(pca_result, component = 2, main = "PC2")
+image(pca_result, component = 3, main = "PC3")
+
+# Variance explained
+plot(pca_result)
+```
+
+The spatial PCA maps highlight regions of similar molecular composition. If PC1 separates brain from torso, for instance, the loadings tell you which m/z values drive that separation.
+
+### Spatial Segmentation (Clustering)
+
+Spatially-aware clustering incorporates both spectral similarity *and* spatial adjacency, producing contiguous regions that correspond to histological features. Cardinal implements **spatial shrunken centroids** (@bemis2015cardinal), a regularised classifier that pools information across neighbouring pixels.
+
+```r
+# Spatial shrunken centroids segmentation
+# r = spatial radius (pixels), k = number of clusters
+seg <- spatialShrunkenCentroids(data_bc, r = 2, k = 3:6)
+
+# View the segmentation result
+summary(seg)
+
+# Spatial map of the best segmentation (selected by cross-validation)
+image(seg)
+
+# Centroids (average spectra) for each segment
+seg_centroids <- centroids(seg)
+matplot(mz(data_bc), t(seg_centroids), type = "l",
+        xlab = "m/z", ylab = "Mean intensity",
+        col = 1:4, lty = 1)
+legend("topright", legend = paste("Segment", 1:4),
+       col = 1:4, lty = 1)
+```
+
+**Figure F1** (the `image(seg)` output) shows the spatial segmentation --- an interpretable spatial result that identifies coherent molecular regions without pixel-level multiple testing. This is the kind of outcome that adds spatial insight beyond what LC--MS can provide.
+
+::: {.callout-tip}
+The `r` parameter controls spatial regularisation: larger values produce smoother, more contiguous segments. Use cross-validation scores in the `summary()` output to select `r` and `k` objectively rather than manually tuning to match expectations.
+:::
+
+## Statistical Testing and Classification: A Warning About Spatial Dependence
+
+A natural instinct when analysing MSI data is to compare two regions (e.g., tumour vs. healthy) by running a t-test per m/z value across all pixels in each region. **This is almost always invalid** for three reasons:
+
+1.  **Spatial autocorrelation violates independence.** Two pixels taken from the same tissue region are more similar than two pixels from opposite ends of the section. Standard t-tests and fold-change estimates assume independent observations; with spatially correlated pixels, the effective sample size is far smaller than the pixel count, producing p-values that are dramatically over-optimistic (anti-conservative).
+
+2.  **Massive multiple testing.** A typical MSI dataset tests tens of thousands of m/z values. At a nominal $\alpha = 0.05$, thousands of false positives are expected. Standard FDR correction (Benjamini--Hochberg) helps but does not address the spatial dependence issue.
+
+3.  **Positional confounding.** If the tumour region is on one side of the section and healthy tissue on the other, any ion with a spatial gradient --- including instrumental drift or batch effects --- will appear "significant."
+
+::: {.callout-warning}
+**Do not perform independent pixel-wise tests and report the p-values as if each pixel were an independent biological replicate.** The spatial autocorrelation in MSI data means that the effective sample size is the number of *biological units* (e.g., tissue sections, animals), not the number of pixels. Pixel-level t-tests will systematically overstate significance. The segmentation and spatial PCA shown above are safer exploratory tools that avoid this pitfall.
+:::
+
+### Valid alternatives for MSI inference
+
+| Approach | Why it is valid | Cardinal implementation |
+|----------|----------------|------------------------|
+| **Spatial segmentation** | Tests whether regions have distinct molecular profiles at the *region* level, not the pixel level | `spatialShrunkenCentroids()` |
+| **ROI-based summarisation with subject-level replication** | Average spectra across a region of interest per subject, then test at the subject level (n = subjects, not pixels) | Manual aggregation + `limma` |
+| **Spatial FDR** | Adjusts for spatial correlation in the multiple-testing correction | External packages |
+| **Linear mixed model with spatial random effects** | Explicitly models the spatial correlation structure | External packages (`mgcv`, `INLA`) |
+
+The key message: when pixels are your unit of observation but tissue sections (or animals) are your unit of replication, the analysis must operate at the **replicate level**, not the pixel level.
+
+## Export and Provenance Considerations
+
+MSI data analysis generates several classes of output that should be tracked:
+
+| Output | Format | Recommendation |
+|--------|--------|----------------|
+| Preprocessed spectral data | imzML + ibd | Write with `CardinalIO::writeImzML()` |
+| Segmentation maps | TIFF or GeoTIFF | Preserve spatial resolution |
+| Ion images | TIFF or PNG | One file per m/z or multi-panel |
+| Feature table | CSV or HDF5 | m/z values × (mean intensity per segment) |
+| Provenance log | YAML or plain text | Record software versions, parameters |
+
+```r
+#| eval: false
+# Write processed data back to imzML/ibd
+CardinalIO::writeImzML(data_bc, "processed_data.imzML")
+```
+
+Provenance information to record in every MSI project:
+
+- Cardinal, CardinalIO, and CardinalWorkflows versions
+- Preprocessing parameters (normalisation method, baseline algorithm, SNR threshold)
+- Segmentation parameters (r, k, cross-validation scores)
+- Software versions of any downstream statistical software
+
+The exact set of parameters and their values should be tracked in a version-controlled pipeline (Chapter 3 covers `targets` for parameter provenance). This is especially important for MSI because the spatial resolution, pixel size, and preprocessing choices directly affect which biological structures are resolvable.
+
+## Summary
+
+Mass spectrometry imaging adds the spatial dimension to MS analysis, creating rich three-dimensional datasets where each pixel carries a full mass spectrum. The Cardinal ecosystem provides a coherent framework for importing, visualising, preprocessing, and exploring these data.
+
+| Concept | Key point |
+|---------|-----------|
+| Data model | (x, y, m/z) cube — each pixel is a spectrum |
+| File format | `.imzML` (XML metadata) + `.ibd` (binary data) |
+| Import | `readImzML()` from `CardinalIO` → `MSImagingExperiment` |
+| Visualisation | `image()` renders ion-intensity spatial maps |
+| Preprocessing | Normalise → baseline-correct → pick peaks or bin |
+| Exploration | PCA for variance structure; segmentation for molecular regions |
+| Statistical testing | Pixel-wise tests are invalid due to spatial autocorrelation |
+| Export | `writeImzML()` for portability; track every parameter |
+
+The spatial dimension is both the power and the pitfall of MSI: it reveals molecular anatomy that LC--MS cannot see, but it demands spatially aware statistical reasoning.
+
+## Exercises
+
+1.  **Data cube dimensions**: Explain in your own words why an MSI dataset is described as a "three-dimensional data cube." What are the three dimensions, and how does this differ from an LC--MS dataset?
+
+2.  **File format roles**: A collaborator emails you a `.imzML` file but the `.ibd` file is missing. Can you still read the data? What information is available from the `.imzML` alone?
+
+3.  **Ion image interpretation**: Using the `pig206` dataset, find three m/z values that show clearly different spatial patterns (one enriched in brain, one in torso, one relatively uniform). Write the R code to produce a three-panel ion image. What biological or technical explanations could account for a uniformly distributed ion?
+
+4.  **Segmentation parameter sensitivity**: Rerun `spatialShrunkenCentroids()` with `r = 0` (no spatial regularisation) and `r = 3`. How do the resulting segments differ? What does this imply about the trade-off between spatial smoothness and the ability to detect fine anatomical features?
+
+5.  **The pixel-trap**: You have analysed three tissue sections from three mice per group (control, treated). A reviewer asks for a pixel-level t-test comparing the two groups. Write a short paragraph explaining why this is invalid and what you would do instead.
+
+## Session Information
+
+```r
+sessionInfo()
+```

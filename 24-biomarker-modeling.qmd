@@ -1,0 +1,447 @@
+# Biomarker Modeling Without Data Leakage for MS‑Based Omics
+
+> *“A classifier with 95% accuracy that was trained on its own test set is not a result. It is a mistake.”*
+
+Chapter 22 introduced the modelling toolkit — `tidymodels`, regularised regression, tree ensembles, resampling, class imbalance, and calibration. This chapter focuses on the discipline that separates a genuine biomarker from an artefact: validating a model **without data leakage** and reporting it to clinical standards. The two chapters are complementary — the models come from Chapter 22; the leakage-free validation and clinical endpoints come from here.
+
+The companion project `r4ms_book/analysis/clinical_spectronaut_analysis.R` applies this chapter's nested-CV framework to PXD000547 (paired clinical DIA samples), demonstrating the gap between in-sample AUC and held-out performance on real patient data.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Selecting features on all samples, then cross-validating. It is the single most common cause of an AUC that looks brilliant in-house and collapses in an independent cohort. Select features inside each fold.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Identify and prevent data leakage in high‑dimensional MS feature tables  
+- Implement a proper train/test split **before** any preprocessing  
+- Perform **nested cross‑validation** for unbiased model selection  
+- Select features **inside** each cross‑validation fold, never globally  
+- Evaluate classifiers with ROC curves and confidence intervals  
+- Assess clinical utility using survival analysis  
+- Report biomarker models to publication standards (without optimistic bias)
+
+## Why Leakage Is Epidemic in MS Biomarker Studies
+
+Mass spectrometry produces thousands of features (peptides, metabolites) from relatively few samples. This high‑dimensional, low‑sample setting is extremely vulnerable to data leakage:
+
+| Form of Leakage | Common MS Mistake | Consequence |
+|----------------|-------------------|-------------|
+| **Preprocessing leakage** | Normalizing all samples together before splitting | Test set influences scaling, missing value imputation |
+| **Feature selection leakage** | Running t‑tests on all samples to select top features | Test set determines which features are kept |
+| **Hyperparameter tuning leakage** | Using CV on full data to choose e.g. `ntree` | Optimistic AUC that fails in new cohorts |
+
+**The one rule:** The test set is a black box until the very end. Nothing from the test set may touch model training – not even indirectly.
+
+### The Bias-Variance Tradeoff in MS Biomarker Modeling
+
+High-dimensional MS data ($p \gg n$: thousands of features, tens of samples) creates an extreme bias-variance tension:
+
+| Choice | Bias | Variance | When Preferred |
+|--------|------|----------|----------------|
+| **Simple model** (logistic regression, LDA) | Higher (may miss complex patterns) | Lower (stable estimates) | Small $n$, interpretability required |
+| **Regularised model** (LASSO, ridge, elastic net) | Moderate (shrunk coefficients) | Moderate (regularisation controls variance) | $p \gg n$ with sparse true signals |
+| **Complex model** (random forest, XGBoost) | Lower (captures interactions) | Higher (overfits unless constrained) | Larger $n$, prediction-focused |
+| **Deep learning** | Lowest (universal approximator) | Highest (requires large $n$) | Very large datasets, image/spectral input |
+
+For most MS biomarker studies ($n = 50$–$200$, $p = 1{,}000$–$10{,}000$), the sweet spot is **regularised logistic regression** for interpretability or **random forest** for predictive performance — both with rigorous nested cross-validation.
+
+**The $p \gg n$ trap:** When features outnumber samples, it is always possible to find a combination of features that perfectly separates groups in the training data. This is not a discovery — it is a mathematical inevitability. Only held-out test performance counts.
+
+### Nested Cross-Validation: The Non-Negotiable Standard
+
+A single train/test split is insufficient for small-sample MS data — the split itself can dramatically affect results. Nested cross-validation is the minimum acceptable standard:
+
+```
+Outer loop (5-fold): Estimate generalization performance
+  ├── Fold 1: Train on 80%, Test on 20%
+  ├── Fold 2: Train on 80%, Test on 20%
+  └── ...
+      Within EACH outer training set:
+      Inner loop (5-fold): Tune hyperparameters
+        ├── Train on 64%, Validate on 16%
+        └── Select best hyperparameters → refit on full 80%
+```
+
+**Critical rule:** Feature selection must occur **inside** each outer fold. If you select the top 50 features using all samples and then run CV, you have leaked test-set information into the feature selection step. The result: an AUC of 0.95 that drops to 0.60 in an independent cohort.
+
+```r
+# Correct: feature selection inside CV
+# Incorrect: select_features(all_data) then cross-validate
+```
+
+---
+
+## Setup: Simulate an MS Feature Table
+
+We will work with a feature table typical of untargeted metabolomics or proteomics (rows = samples, columns = features). The `msdata` package provides real examples, but for controlled learning we simulate with known biology.
+
+```r
+#| eval: false
+# Load required packages
+library(tidyverse)
+library(randomForest)
+library(survival)
+library(survminer)
+library(pROC)
+library(msdata)  # for real MS file paths (optional)
+
+set.seed(42)
+
+# Simulate MS feature table: 120 samples × 200 features
+n_samples   <- 120
+n_features  <- 200
+
+# Raw intensities (log‑normal, typical for MS)
+raw_intensity <- matrix(
+  rlnorm(n_samples * n_features, meanlog = 5, sdlog = 2),
+  nrow = n_samples,
+  ncol = n_features,
+  dimnames = list(
+    paste0("sample_", 1:n_samples),
+    paste0("Metab_", 1:n_features)
+  )
+)
+
+# Clinical metadata
+metadata <- data.frame(
+  sample_id   = paste0("sample_", 1:n_samples),
+  class       = factor(rep(c("Control", "Disease"), each = n_samples / 2)),
+  age         = round(rnorm(n_samples, 58, 10)),
+  batch       = factor(rep(1:4, length.out = n_samples)),
+  os_months   = rexp(n_samples, rate = 0.03),
+  os_event    = rbinom(n_samples, 1, 0.6)
+)
+
+cat("MS feature table:", nrow(raw_intensity), "samples ×",
+    ncol(raw_intensity), "features\n")
+head(metadata[, 1:4])
+```
+
+> **Real‑world note:** In a real MS experiment, this matrix would come from `featureValues()` (xcms) or a normalized proteomics table (DEP). The same principles apply.
+
+---
+
+## Step 1: Split First – Never Touch Test Data
+
+Split before any log transform, scaling, or imputation.
+
+```r
+#| eval: false
+set.seed(42)
+train_idx <- sample(seq_len(n_samples), size = round(0.75 * n_samples))
+test_idx  <- setdiff(seq_len(n_samples), train_idx)
+
+train_x <- raw_intensity[train_idx, ]
+test_x  <- raw_intensity[test_idx,  ]
+train_y <- metadata[train_idx, ]
+test_y  <- metadata[test_idx,  ]
+
+cat("Training set :", nrow(train_x), "samples\n")
+cat("Test set     :", nrow(test_x),  "samples\n")
+```
+
+---
+
+## Step 2: Preprocess Using Training Statistics Only
+
+Fit all preprocessing – log2 transform, scaling, missing value imputation – on the **training set** and apply the learned parameters to the test set.
+
+```r
+#| eval: false
+# Log2 transform (add 1 to avoid log(0))
+train_log <- log2(train_x + 1)
+test_log  <- log2(test_x  + 1)
+
+# Scale: learn mean and SD from training set only
+train_means <- colMeans(train_log, na.rm = TRUE)
+train_sds   <- apply(train_log, 2, sd, na.rm = TRUE)
+train_sds[train_sds == 0] <- 1   # avoid division by zero
+
+train_scaled <- scale(train_log, center = train_means, scale = train_sds)
+test_scaled  <- scale(test_log,  center = train_means, scale = train_sds)
+
+# Missing value imputation (if any) – use training medians
+# For completeness, we assume no missing in this simulation
+cat("Preprocessing complete – all parameters from training set only.\n")
+```
+
+> **MS‑specific warning:** Never use `scale()` on the full matrix before splitting. That would centre each feature using test‑set means, leaking information.
+
+---
+
+## Step 3: Feature Selection Inside Cross‑Validation (Nested CV)
+
+The correct approach: outer loop (train/validation split) and inner loop (feature selection + model training). The test set is never used for feature selection.
+
+```r
+#| eval: false
+set.seed(42)
+k_folds   <- 5
+n_train   <- nrow(train_scaled)
+fold_ids  <- sample(rep(seq_len(k_folds), length.out = n_train))
+
+cv_aucs <- numeric(k_folds)
+
+for (fold in seq_len(k_folds)) {
+  
+  # Split this fold
+  cv_train_x <- train_scaled[fold_ids != fold, ]
+  cv_val_x   <- train_scaled[fold_ids == fold, ]
+  cv_train_y <- train_y$class[fold_ids != fold]
+  cv_val_y   <- train_y$class[fold_ids == fold]
+  
+  # Feature selection on CV training set only (t‑test)
+  p_vals <- apply(cv_train_x, 2, function(col) {
+    tryCatch(
+      t.test(col ~ cv_train_y)$p.value,
+      error = function(e) 1
+    )
+  })
+  # Keep top 50 features based on p‑value (or use a threshold)
+  selected <- names(sort(p_vals))[1:min(50, sum(p_vals < 0.1))]
+  if (length(selected) == 0) selected <- names(sort(p_vals))[1:20]
+  
+  cv_train_sel <- cv_train_x[, selected, drop = FALSE]
+  cv_val_sel   <- cv_val_x[,   selected, drop = FALSE]
+  
+  # Train classifier (random forest)
+  rf <- randomForest(
+    x = cv_train_sel,
+    y = cv_train_y,
+    ntree = 300,
+    importance = FALSE
+  )
+  
+  # Predict on validation fold
+  probs <- predict(rf, cv_val_sel, type = "prob")[, "Disease"]
+  roc_obj <- roc(cv_val_y, probs, quiet = TRUE)
+  cv_aucs[fold] <- auc(roc_obj)
+}
+
+cat(sprintf("Cross‑validated AUC (nested): %.3f ± %.3f\n",
+            mean(cv_aucs), sd(cv_aucs)))
+```
+
+**Why does this work?**  
+Each validation fold is never seen during feature selection or model training for that iteration. The average AUC estimates generalisation performance without leakage.
+
+---
+
+## Step 4: Train Final Model on Full Training Set
+
+After determining the number of features (e.g., 50) from the CV process, train one final model on the complete training set.
+
+```r
+#| eval: false
+# Feature selection on full training set
+p_vals_full <- apply(train_scaled, 2, function(col) {
+  tryCatch(
+    t.test(col ~ train_y$class)$p.value,
+    error = function(e) 1
+  )
+})
+top_features <- names(sort(p_vals_full))[1:50]
+
+train_final <- train_scaled[, top_features, drop = FALSE]
+test_final  <- test_scaled[,  top_features, drop = FALSE]
+
+final_model <- randomForest(
+  x = train_final,
+  y = train_y$class,
+  ntree = 500,
+  importance = TRUE
+)
+
+cat("Final model trained on", nrow(train_final),
+    "samples with", ncol(train_final), "features.\n")
+```
+
+---
+
+## Step 5: Evaluate Once on the Held‑Out Test Set
+
+The test set is used **exactly once** – at the very end.
+
+```r
+#| eval: false
+test_probs <- predict(final_model, test_final, type = "prob")[, "Disease"]
+test_preds <- predict(final_model, test_final)
+
+# Confusion matrix
+conf_mat <- table(Predicted = test_preds, Actual = test_y$class)
+accuracy <- sum(diag(conf_mat)) / sum(conf_mat)
+tp <- conf_mat["Disease", "Disease"]
+tn <- conf_mat["Control", "Control"]
+fp <- conf_mat["Disease", "Control"]
+fn <- conf_mat["Control", "Disease"]
+
+cat("Test set performance (unbiased estimate):\n")
+cat("  Accuracy   :", round(accuracy, 3), "\n")
+cat("  Sensitivity:", round(tp / (tp + fn), 3), "\n")
+cat("  Specificity:", round(tn / (tn + fp), 3), "\n")
+
+# ROC curve
+roc_test <- roc(test_y$class, test_probs, quiet = TRUE)
+cat("  AUC        :", round(auc(roc_test), 3),
+    "95% CI:", round(ci.auc(roc_test), 3), "\n")
+
+plot(roc_test, main = "ROC Curve – Unbiased Test Set",
+     col = "steelblue", lwd = 2)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+```
+
+**Crucial point:** This AUC is the genuine estimate of future performance. If it is much lower than the cross‑validated AUC, leakage was present.
+
+---
+
+## Step 6: Feature Importance and Stability
+
+Identify which MS features drive the classification.
+
+```r
+#| eval: false
+imp_df <- importance(final_model) %>%
+  as.data.frame() %>%
+  rownames_to_column("feature") %>%
+  arrange(desc(MeanDecreaseGini)) %>%
+  head(20)
+
+ggplot(imp_df, aes(x = reorder(feature, MeanDecreaseGini),
+                   y = MeanDecreaseGini)) +
+  geom_col(fill = "steelblue", alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = "Top 20 MS Features by Importance",
+    subtitle = "Mean Decrease in Gini (Random Forest)",
+    x = NULL, y = "Importance"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Step 7: Clinical Utility – Survival Analysis
+
+For clinical biomarker studies, a high AUC is not enough. Show that the model score stratifies patient prognosis.
+
+```r
+#| eval: false
+test_y$model_score <- test_probs
+test_y$score_group <- factor(
+  ifelse(test_probs >= median(test_probs), "High", "Low"),
+  levels = c("Low", "High")
+)
+
+surv_obj <- Surv(time = test_y$os_months, event = test_y$os_event)
+km_fit   <- survfit(surv_obj ~ score_group, data = test_y)
+
+ggsurvplot(
+  km_fit, data = test_y,
+  pval = TRUE, conf.int = TRUE,
+  xlab = "Time (months)", ylab = "Overall Survival Probability",
+  title = "Survival by Model Score (Test Set)",
+  legend.title = "Score group",
+  palette = c("steelblue", "firebrick")
+)
+
+# Multivariate Cox model (adjust for age and batch)
+cox_fit <- coxph(surv_obj ~ model_score + age + batch, data = test_y)
+cat("\nCox model (adjusted for age and batch):\n")
+print(summary(cox_fit)$coefficients)
+```
+
+**Interpretation:** A hazard ratio significantly >1 for the continuous model score indicates that higher predicted risk corresponds to worse survival, independent of clinical covariates.
+
+---
+
+## Common MS‑Specific Leakage Pitfalls
+
+| Pitfall | How It Happens in MS Workflows | Solution |
+|---------|--------------------------------|----------|
+| **Using all samples for QC filtering** | Removing low‑intensity features based on global missing rate | Split first, then filter inside training only |
+| **Batch correction before splitting** | Applying ComBat to full feature matrix | Learn batch effects from training, correct test with same parameters |
+| **Normalising with PQN globally** | Probabilistic quotient normalisation on all samples | Estimate reference spectrum from training set only |
+| **Imputing missing values with k‑NN** | k‑NN uses global distance matrix (includes test samples) | Impute using training set, then apply to test |
+| **Selecting features with VIP > 1 from PLS‑DA** | PLS‑DA performed on all samples | Use CV loops or split first |
+
+---
+
+## Reporting Checklist for MS Biomarker Studies
+
+Before submitting a manuscript:
+
+- [ ] Train/test split performed before **any** preprocessing (including missing value imputation)
+- [ ] Preprocessing parameters estimated on training data only
+- [ ] Feature selection performed **inside** each cross‑validation fold
+- [ ] Final model trained on full training set, evaluated on test set exactly once
+- [ ] Performance reported with 95% confidence intervals (bootstrap or CI of AUC)
+- [ ] Survival or clinical endpoint validation provided (if applicable)
+- [ ] Code and data deposited in public repository (e.g., GitHub, Zenodo)
+- [ ] Statement in methods: “No data from the test set were used for model training or feature selection.”
+
+---
+
+## Exercises
+
+### Exercise 1: Quantify Leakage Bias
+
+Modify the code to perform feature selection using t‑tests on the **full training+test** set before splitting. Compare the test AUC from this leaky workflow to the correct one. How much optimistic bias do you observe?
+
+```r
+# Your code here
+```
+
+### Exercise 2: Different Feature Selection Method
+
+Replace the t‑test based feature selection with `limma` (for proteomics) or `randomForest` importance inside the CV loop. Does the CV AUC change?
+
+```r
+# Your code here (use limma::eBayes or varSelRF)
+```
+
+### Exercise 3: Batch Effect as a Confounder
+
+Simulate a batch effect that is correlated with the outcome. Run the nested CV workflow both including and ignoring batch as a covariate. How does the generalised AUC differ?
+
+```r
+# Your code here
+```
+
+### Exercise 4: Apply to Real MS Data
+
+Use a real MS feature table from `msdata::metabolomics()` preprocessed with `xcms`. Apply the complete workflow. Report the test set AUC and list the top 5 discriminatory metabolites (if identification is available).
+
+```r
+# Your code here (requires xcms to build feature table first)
+```
+
+---
+
+## Summary
+
+- **Data leakage** is the single most common reason why MS biomarker models fail validation.
+- The **only** way to obtain an unbiased performance estimate is to split data **before** any processing, and to perform feature selection **inside** cross‑validation.
+- Preprocessing parameters (scaling, imputation) must be learned from the training set alone.
+- Report test set performance with confidence intervals, not just point estimates.
+- For clinical translation, assess survival stratification and adjust for covariates.
+
+### Key R Functions for Leakage‑Free MS Modeling
+
+| Task | Function | Package |
+|------|----------|---------|
+| Train/test split | `sample()`, `createDataPartition()` | base, caret |
+| Nested CV | manual loop | – |
+| Feature selection inside CV | `t.test()`, `limma::eBayes()` | stats, limma |
+| Random forest | `randomForest()` | randomForest |
+| ROC + AUC | `roc()`, `ci.auc()` | pROC |
+| Survival analysis | `survfit()`, `coxph()` | survival |
+
+---
+
+## Session Information
+
+```r
+sessionInfo()
+```

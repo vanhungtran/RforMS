@@ -1,0 +1,168 @@
+# R Package Reference for Mass Spectrometry {#sec-appendix-packages .unnumbered}
+
+This appendix summarises the R and Bioconductor packages used throughout the book. For each package it lists the **source** (CRAN, Bioconductor, or GitHub), its **role** in an MS workflow, the **key functions** demonstrated in the text, and the **chapters** where it appears. Install Bioconductor packages with `BiocManager::install()` and CRAN packages with `install.packages()`; pin exact versions with `renv` (Chapter 3).
+
+```r
+#| eval: false
+install.packages("BiocManager")
+BiocManager::install(c(
+  "Spectra", "xcms", "QFeatures", "MsExperiment", "MsCoreUtils",
+  "MetaboAnnotation", "PSMatch", "limma", "DEP"
+))
+```
+
+::: {.callout-note}
+Package versions evolve. Run `sessionInfo()` (printed at the end of each chapter) to see what was loaded at render time. Install Bioconductor packages with `BiocManager::install()` and pin exact versions in your own project with `renv::snapshot()` (Chapter 3).
+:::
+
+## Data infrastructure and raw-spectra handling
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **mzR** | Bioc | Low-level parser for mzML/mzXML/mzIdentML via C++ backends | `openMSfile()`, `header()`, `peaks()` | 4, 5 |
+| **Spectra** | Bioc | Modern, backend-agnostic container for raw MS spectra | `Spectra()`, `filterMsLevel()`, `filterRt()`, `plotSpectra()`, `combineSpectra()` | 2, 4, 5, 6, 11 |
+| **MsBackendMzR** | Bioc | On-disk mzML/mzXML backend for `Spectra` (low memory) | `MsBackendMzR()` | 4, 5 |
+| **MsBackendSql / MsBackendHdf5Peaks** | Bioc | SQL/HDF5 backends for very large datasets | `MsBackendSql()`, `MsBackendHdf5Peaks()` | 4 |
+| **MsCoreUtils** | Bioc | Vectorised numerical helpers shared across the ecosystem | `closest()`, `bin()`, `normalizeMethods()`, `impute_matrix()` | 2, 6, 17, 18 |
+| **MsQuality** | Bioc | Automated per-sample QC metrics based on the HUPO-PSI mzQC standard | `qualityMetrics()`, `calculateMetrics()`, `plotMetric()` | 6 |
+| **ProtGenerics** | Bioc | Shared S4 generics (`mz()`, `intensity()`, `rtime()`) | generic definitions | 5, 6 |
+| **MsExperiment** | Bioc | Links raw files, spectra, and sample metadata in one object | `MsExperiment()`, `sampleData()`, `spectra()` | 5, 6, 16 |
+| **MsIO / MsDataHub / MsBackendMetaboLights** | Bioc | Import/serialisation and access to public example data | `readMsObject()`, dataset accessors | 5, 6 |
+| **scp** | Bioc | Single-cell proteomics: extends QFeatures with SingleCellExperiment assays | `scp_qc()`, `normalizeScp()`, `joinAssays()`, `readSCP()` | E |
+| **scater** | Bioc | Single-cell QC and visualisation (PCA, UMAP, t-SNE) for SCE objects | `runPCA()`, `runUMAP()`, `plotPCA()`, `plotColData()` | E |
+
+## Quantitative containers
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **SummarizedExperiment** | Bioc | Feature × sample matrix with row/column metadata | `SummarizedExperiment()`, `assay()`, `colData()`, `rowData()` | 5, 6, 7 |
+| **QFeatures** | Bioc | Linked PSM → peptide → protein hierarchy | `readQFeatures()`, `aggregateFeatures()`, `filterFeatures()`, `filterNA()` | 6, 9, 12, 13 |
+| **MultiAssayExperiment** | Bioc | Coordinates multiple omics assays on shared samples | `MultiAssayExperiment()`, `intersectColumns()` | 22 |
+| **S4Vectors / IRanges** | Bioc | Foundational S4 vector and range classes | `DataFrame()`, `IRanges()` | 5, 6 |
+
+## Feature detection and metabolite annotation
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **xcms** | Bioc | Chromatographic peak detection, alignment, correspondence | `findChromPeaks()`, `adjustRtime()`, `groupChromPeaks()`, `fillChromPeaks()` | 7, 16 |
+| **CAMERA** | Bioc | Adduct/isotope grouping and annotation of xcms peaks | `xsAnnotate()`, `groupFWHM()`, `findIsotopes()`, `findAdducts()` | 10 |
+| **MetaboCoreUtils** | Bioc | Exact-mass calculators, adduct definitions, isotopes | `calculateMass()`, `mass2mz()`, `adducts()`, `isotopologues()` | 10, 11 |
+| **MetaboAnnotation** | Bioc | Parameterised m/z, spectra, and library matching | `matchValues()`, `matchSpectra()`, `MatchForwardReverseParam()` | 11 |
+| **CompoundDb** | Bioc | Build/query local compound and spectral libraries | `CompDb()`, `createCompDb()`, `Spectra()` accessor | 11 |
+
+## Identification (proteomics)
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **PSMatch** | Bioc | PSM handling, target–decoy FDR, shared-peptide graphs | `PSM()`, `filterPsmDecoy()`, `filterPsmRank()`, `makePeptideProteinGraph()` | 8, 9 |
+| **MSnbase** | Bioc | Established MS data structures (predecessor to Spectra) | `readMSData()`, `MSnSet`, `normalise()` | 2, 5, 13 |
+| **igraph** | CRAN | Graph analysis for protein-group inference | `graph_from_data_frame()`, `components()` | 9 |
+
+## Quantification, normalisation, and missing data
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **DEP** | Bioc | End-to-end LFQ differential expression pipeline | `make_se()`, `normalize_vsn()`, `impute()`, `test_diff()` | 13, 14 |
+| **MSstats** | Bioc | Linear mixed models for label-free, DDA, DIA, and SRM quantification | `dataProcess()`, `groupComparison()`, `groupComparisonPlots()` | 12, 13, 15 |
+| **MSstatsTMT** | Bioc | TMT-specific differential abundance with channel normalisation and purity correction | `proteinSummarization()`, `groupComparison()` | 12, 14 |
+| **MSstatsPTM** | Bioc | PTM quantification adjusted for parent protein abundance changes | `PTMsummarization()`, `groupComparisonPTM()` | 12 |
+| **MSstatsLiP** | Bioc | Limited proteolysis (LiP) structural proteomics | `LiPsummarization()` | 12 |
+| **MSstatsConvert** | Bioc | Import/conversion layer for search-engine exports (DIA-NN, FragPipe, MaxQuant, Spectronaut, Skyline) | `MSstatsConvert()`, `MSstatsLog()` | 12 |
+| **MSstatsShiny** | Bioc | GUI for interactive exploration of MSstats results | (GUI application) | 12 |
+| **MSstatsBig** | Bioc | Large-scale DIA datasets with out-of-memory processing | `dataProcessBig()` | 12 |
+| **vsn** | Bioc | Variance-stabilising normalisation | `justvsn()`, `normalizeVSN()` | 14, 17 |
+| **preprocessCore** | Bioc | Quantile normalisation | `normalize.quantiles()` | 17 |
+| **limma** | Bioc | `normalizeBetweenArrays()` (cyclic loess, quantile) | `normalizeBetweenArrays()` | 17 |
+| **sva** | Bioc | Batch correction (ComBat) and surrogate variables | `ComBat()`, `sva()` | 17 |
+| **impute** | Bioc | KNN imputation | `impute.knn()` | 18 |
+| **pcaMethods** | Bioc | BPCA / probabilistic PCA imputation | `pca()` with `method = "bpca"` | 18 |
+| **naniar** | CRAN | Missingness visualisation and diagnostics | `vis_miss()`, `gg_miss_var()` | 18 |
+
+## Statistical modelling and machine learning
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **limma** | Bioc | Linear models + empirical Bayes for differential abundance | `lmFit()`, `eBayes()`, `topTable()`, `makeContrasts()` | 19, 20 |
+| **variancePartition** | Bioc | Variance decomposition, mixed models (`dream`) | `fitExtractVarPartModel()`, `dream()` | 20 |
+| **lme4** | CRAN | Linear mixed-effects models | `lmer()` | 20 |
+| **broom / broom.mixed** | CRAN | Tidy model output | `tidy()`, `glance()` | 20, 21 |
+| **randomForest** | CRAN | Random-forest classification | `randomForest()` | 21 |
+| **glmnet** | CRAN | Regularised (LASSO/elastic-net) regression | `cv.glmnet()` | 21 |
+| **tidymodels / rsample** | CRAN | Resampling, nested cross-validation, workflows | `nested_cv()`, `vfold_cv()` | 21 |
+| **pROC** | CRAN | ROC curves with bootstrap confidence intervals | `roc()`, `ci.auc()` | 21 |
+| **survival / survminer** | CRAN | Survival analysis and Kaplan–Meier plots | `coxph()`, `survfit()`, `ggsurvplot()` | 21 |
+| **msqrob2** | Bioc | Robust ridge regression and hurdle/mixed-model workflows for LFQ | `MsqRob()`, `msqrob()` | 20 |
+| **proDA** | Bioc | Probabilistic dropout analysis for label-free proteomics | `proDA()`, `test_diff()`, `median_normalization()` | 20 |
+| **DEqMS** | Bioc | Variance adjustment by peptide/PSM count for protein-level testing | `spectraCounteBayes()`, `outputResult()` | 20 |
+| **limpa** | Bioc | Detection-probability-based quantification + limma differential analysis | `dpcQuant()`, `dpcDE()`, `dpc()` | 20 |
+| **PolySTest** | Bioc | Combined quantitative + missingness testing for low-replication designs | `PolySTest()`, `MissingStats()` | 20 |
+
+## Interpretation, integration, and enrichment
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **mixOmics** | CRAN | Multi-block PLS-DA (DIABLO), sparse multivariate | `block.splsda()`, `plotDiablo()`, `circosPlot()` | 22 |
+| **clusterProfiler** | Bioc | Over-representation and GSEA pathway enrichment | `enrichKEGG()`, `gseKEGG()`, `enrichGO()` | 22 |
+| **pathview** | Bioc | Render KEGG pathway maps with data overlay | `pathview()` | 22 |
+| **org.Hs.eg.db** (and organism `.db`) | Bioc | Gene/protein ID annotation mappings | `mapIds()`, `select()` | 22 |
+| **corrplot** | CRAN | Correlation-matrix visualisation | `corrplot()` | 22 |
+
+## Visualisation and reporting
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **ggplot2** | CRAN | Grammar-of-graphics plotting (used throughout) | `ggplot()`, `geom_*()`, `facet_wrap()` | all |
+| **ggrepel** | CRAN | Non-overlapping text labels (volcano/PCA plots) | `geom_text_repel()` | 19, 20 |
+| **patchwork** | CRAN | Compose multiple ggplots | `+`, `/`, `plot_layout()` | 7, 17 |
+| **pheatmap / ComplexHeatmap** | CRAN/Bioc | Annotated heatmaps | `pheatmap()`, `Heatmap()` | 13, 17, 19 |
+| **ComplexUpset** | CRAN | UpSet plots for set overlaps | `upset()` | 8 |
+| **factoextra** | CRAN | PCA/clustering visualisation helpers | `fviz_pca_ind()`, `fviz_eig()` | 13, 17 |
+| **gt / knitr** | CRAN | Publication tables | `gt()`, `kable()` | many |
+
+## Reproducibility toolchain
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|
+| **renv** | CRAN | Project-local library + version lockfile | `init()`, `snapshot()`, `restore()` | 3 |
+| **targets** | CRAN | Pipeline caching and dynamic branching | `tar_make()`, `tar_target()`, `tar_read()` | 3, 23 |
+| **tarchetypes** | CRAN | Target factories, including Quarto reports | `tar_quarto()` | 3, 23 |
+| **here** | CRAN | Project-root-relative file paths | `here()` | 3 |
+| **quarto** | CRAN | Render Quarto documents from R | `quarto_render()` | 3, 23 |
+| **sessioninfo** | CRAN | Rich session/environment capture | `session_info()` | many |
+| **testthat** | CRAN | Unit testing of custom functions | `test_that()`, `expect_*()` | 3 |
+| **tidyverse** (dplyr, tidyr, purrr, stringr, readr, tibble) | CRAN | Data wrangling used across chapters | `mutate()`, `filter()`, `pivot_longer()`, `map()` | many |
+
+## Mass spectrometry imaging
+
+| Package | Source | Role | Key functions | Chapters |
+|---|---|---|---|---|---|
+| **Cardinal** | Bioc | Statistical analysis of MS imaging experiments: preprocessing, PCA, spatial segmentation | `readImzML()`, `image()`, `normalize()`, `reduceBaseline()`, `peakPick()`, `PCA()`, `spatialShrunkenCentroids()` | App F |
+| **CardinalIO** | Bioc | Low-level I/O for imzML/ibd files (used by Cardinal) | `readImzML()`, `writeImzML()` | App F |
+| **CardinalWorkflows** | Bioc | Documented example MSI datasets for reproducible demonstration | `exampleMSIData("pig206")` | App F |
+
+## Example-data packages
+
+| Package | Source | Role | Chapters |
+|---|---|---|---|
+| **msdata** | Bioc | Bundled mzML/mzid/mzTab example files (no downloads) | 4, 5, 6, 7 |
+| **faahKO** | Bioc | Classic xcms metabolomics example dataset | 7, 16 |
+| **MsDataHub** | Bioc | Curated example MS datasets via `ExperimentHub` | 5 |
+| **scpdata** | Bioc | Single-cell proteomics example datasets (SCoPE2, TMTpro, diaPASEF) | E |
+
+All runnable examples in this book use bundled example data (`msdata`, `faahKO`, `MsDataHub`) so they reproduce without external downloads.
+
+## Broader ecosystem catalog
+
+This appendix lists only packages that are demonstrated in the book. The Bioconductor Mass Spectrometry ecosystem contains hundreds of additional packages. For exhaustive discovery, three CSV catalogs are maintained in the companion repository:
+
+- `bioconductor_ms_packages.csv` — all Bioconductor Mass Spectrometry packages (generated 2025 from Bioconductor ≥ 3.20)
+- `MS_omics_tools_all_sources.csv` — comprehensive MS omics tool index
+- `MS_omics_tools_github.csv` — GitHub-hosted MS analysis tools
+
+These catalogs are reference documents, not part of the book narrative. A package's presence in a catalog does not imply endorsement or that it has been tested against the book's workflows.
+
+## Where to find more
+
+- **R for Mass Spectrometry** initiative: <https://www.rformassspectrometry.org/> — coordinated `Spectra`, `QFeatures`, `MsCoreUtils`, `MetaboAnnotation`, `PSMatch` documentation and tutorials.
+- **Bioconductor** biocViews `MassSpectrometry`, `Proteomics`, `Metabolomics`: <https://bioconductor.org/packages/release/BiocViews.html>.
+- Each package's vignette (`browseVignettes("Spectra")`) is the authoritative, version-matched reference.

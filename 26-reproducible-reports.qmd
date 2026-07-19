@@ -1,0 +1,231 @@
+# Build Reproducible MS Reports
+
+A finished analysis is not a folder of scripts — it is a document that a reviewer, a collaborator, or your future self can regenerate from the raw data with one command, and a data deposit that lets the wider community reuse your work. This closing chapter takes the reproducibility infrastructure built in Chapter 3 (`renv`, `targets`, Docker, Git) and turns it outward: writing the report that communicates the analysis, and depositing the data and code so the study meets modern journal and community standards.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Letting the report recompute the analysis. If it reruns peak-picking or model fitting, it drifts out of sync with your pipeline and hides expensive errors. The report reads validated outputs — it never computes them.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Write a parameterized Quarto report that runs the same analysis across datasets, batches, or thresholds
+- Wire a report to a `targets` pipeline so it reads validated outputs instead of recomputing them
+- Export publication-ready figures and tables at the right size, resolution, and format
+- Choose the correct public repository for proteomics versus metabolomics data
+- Prepare a PRIDE (proteomics) or MetaboLights (metabolomics) submission that follows FAIR principles
+
+## From Reproducible Projects to Reproducible Reports
+
+Chapter 3 established the machinery of reproducibility: project structure, `renv` for package versions, `targets` for pipeline caching, Docker for system dependencies, and Git for version control. This chapter does not repeat that machinery — it *uses* it from the perspective of the deliverable.
+
+A mature MS reporting workflow separates three concerns:
+
+| Layer | Owned by | Stored as | Covered in |
+|---|---|---|---|
+| Computational environment | `renv` / container | `renv.lock`, `Dockerfile` | Chapter 3 |
+| Analysis pipeline | `targets` | `_targets.R`, cached outputs | Chapter 3 |
+| Human-readable report | Quarto | `.qmd`, rendered HTML/PDF | *this chapter* |
+
+The guiding rule: **the report reads, it does not compute.** Expensive steps — peak picking, feature detection, model fitting — belong in the pipeline. The report loads validated pipeline outputs and makes the final analytical decisions transparent. This keeps rendering fast, prevents the report and the analysis from drifting out of sync, and means a figure can never silently reflect stale results.
+
+## Parameterized Reports for Reusable MS Analysis
+
+The single most useful Quarto pattern for MS work is the **parameterized report**: one `.qmd` template that produces different outputs depending on parameters supplied at render time. It is what lets you run one analysis across many MS runs, generate a QC report per batch, or compare results under different FDR or normalization choices — without copy-pasting the document.
+
+Declare parameters in the YAML header:
+
+```yaml
+---
+title: "LC-MS Metabolomics Report"
+author: "Your Name"
+date: today
+params:
+  feature_matrix: "results/feature_matrix.csv"
+  fdr_threshold: 0.05
+  log2fc_threshold: 1.0
+  batch: "all"
+execute:
+  echo: false
+  warning: false
+---
+```
+
+Inside the document, the values are available as `params$fdr_threshold`, and so on:
+
+```{r}
+#| eval: false
+sig <- results |>
+  dplyr::filter(adj.P.Val < params$fdr_threshold,
+                abs(logFC)  > params$log2fc_threshold)
+```
+
+Render the same template with different parameters from R or the command line:
+
+```{r}
+#| eval: false
+# Default parameters
+quarto::quarto_render("analysis_report.qmd")
+
+# Stricter FDR, one batch — written to a distinct output file
+quarto::quarto_render(
+  "analysis_report.qmd",
+  execute_params = list(fdr_threshold = 0.01, batch = "B3"),
+  output_file    = "report_B3_fdr01.html"
+)
+```
+
+To generate a whole set of reports — for example, one per batch — map over the parameter values:
+
+```{r}
+#| eval: false
+batches <- c("B1", "B2", "B3")
+purrr::walk(batches, function(b) {
+  quarto::quarto_render(
+    "analysis_report.qmd",
+    execute_params = list(batch = b),
+    output_file    = paste0("report_", b, ".html")
+  )
+})
+```
+
+### Linking the Report to the Pipeline
+
+Rather than recomputing, load the objects the pipeline already validated:
+
+```{r}
+#| eval: false
+library(targets)
+feature_matrix <- tar_read(feature_matrix)
+annotations    <- tar_read(annotations)
+de_results     <- tar_read(de_results)
+```
+
+Then make the report itself a pipeline target with `tarchetypes::tar_quarto()`, so it re-renders only when an upstream dependency changes:
+
+```{r}
+#| eval: false
+# In _targets.R
+library(targets)
+library(tarchetypes)
+
+list(
+  tar_target(raw_data,   load_ms_data()),
+  tar_target(normalised, normalise_matrix(raw_data)),
+  tar_target(de_results, run_differential(normalised)),
+  tar_quarto(final_report, path = "reports/analysis_report.qmd")
+)
+```
+
+This closes the loop: the report is a node in the dependency graph, guaranteed to reflect the current analysis. No more "forgot to regenerate Figure 3."
+
+## Publication-Ready Figures and Tables
+
+Journals have concrete requirements; setting them once in the report saves a round of revisions.
+
+```{r}
+#| eval: false
+# Consistent, print-quality figure export
+ggplot2::ggsave(
+  "figures/volcano.pdf",   # vector format for line art / plots
+  plot   = volcano_plot,
+  width  = 88, height = 88, units = "mm",   # single-column width
+  dpi    = 300
+)
+# Raster fallback for journals that require TIFF/PNG
+ggplot2::ggsave("figures/volcano.tiff", volcano_plot,
+                width = 88, height = 88, units = "mm",
+                dpi = 300, compression = "lzw")
+```
+
+Practical guidance:
+
+- **Vector (PDF/SVG) for plots and diagrams**, raster (TIFF/PNG at ≥ 300 dpi) only when the journal demands it or the figure contains a heatmap/image.
+- **Size to the column**, not the screen: ~88 mm single-column, ~180 mm double-column is typical.
+- **Readable type**: base font ≥ 7 pt at final print size; set `theme(text = element_text(size = ...))` rather than scaling the image afterward.
+- **Tables** with `gt::gt()` or `knitr::kable()`; export numerical results as CSV alongside the figure so values are machine-readable.
+- **Colour**: use colour-blind-safe palettes (e.g. `viridis`) and never encode meaning by colour alone.
+
+## Depositing Data: FAIR Principles
+
+Published MS data should be **F**indable, **A**ccessible, **I**nteroperable, and **R**eusable. Most journals and funders now require deposition to a community repository with a citable accession before publication.
+
+### Choosing a repository
+
+| Repository | Data type | Accession | URL |
+|---|---|---|---|
+| **PRIDE** (via ProteomeXchange) | Proteomics raw + identifications | PXD###### | ebi.ac.uk/pride |
+| **MassIVE** (via ProteomeXchange) | Proteomics / any MS | MSV####### | massive.ucsd.edu |
+| **MetaboLights** | Metabolomics raw + metadata | MTBLS#### | ebi.ac.uk/metabolights |
+| **Metabolomics Workbench** | Metabolomics | ST######## | metabolomicsworkbench.org |
+| **Zenodo** | Code + small processed data | DOI | zenodo.org |
+
+Proteomics data goes to a **ProteomeXchange** partner (PRIDE or MassIVE); metabolomics goes to **MetaboLights** or **Metabolomics Workbench**. Deposit analysis *code* and small processed tables to **Zenodo** or a tagged GitHub release to mint a citable DOI.
+
+### Proteomics: a PRIDE / ProteomeXchange submission
+
+A "complete" ProteomeXchange submission bundles raw and processed evidence with structured metadata:
+
+- **Raw files** — original vendor files *and* converted `mzML`.
+- **Peak lists / identifications** — `mzIdentML` (`.mzid`) or search-engine output, plus the `mzTab` results table.
+- **Search parameters** — database (FASTA) version, enzyme, fixed/variable modifications, precursor/fragment tolerances, FDR threshold.
+- **Sample and experimental-design metadata** — the SDRF-Proteomics file (`sdrf.tsv`) mapping each raw file to its sample, condition, and label channel.
+
+The practical workflow: prepare the files locally, then upload with the **PRIDE Submission Tool** (`px-submission-tool`), which validates the bundle and issues a private PXD accession you can share with reviewers before public release. The `rpx` Bioconductor package lets you programmatically *retrieve* any ProteomeXchange dataset — useful for reanalysis and for confirming your own deposit:
+
+```{r}
+#| eval: false
+library(rpx)
+px <- PXDataset("PXD000001")
+pxfiles(px)             # list deposited files
+# fn <- pxget(px, "TMT_Erwinia_...mzML")   # download a specific file
+```
+
+### Metabolomics: a MetaboLights submission
+
+MetaboLights structures a study around the **ISA-Tab** framework (Investigation / Study / Assay):
+
+- **Raw data** — `mzML` preferred.
+- **`i_Investigation.txt`** — study description, contacts, publication.
+- **`s_Study.txt`** — sample metadata (organism, factors, collection).
+- **`a_Assay.txt`** — per-file acquisition metadata (chromatography, instrument, polarity).
+- **`m_metabolite.tsv`** — the metabolite assignment table (feature → annotation, MSI level).
+
+Assemble the study offline with the MetaboLights uploader (or the `MetaboLights` / `MsBackendMetaboLights` R packages to *read* studies back), validate against the ISA-Tab schema, and submit for a private MTBLS accession.
+
+### Minimum deposit checklist
+
+- [ ] Raw data (`mzML`) + original vendor files
+- [ ] Processed feature/identification tables (`mzTab` / `m_metabolite.tsv`)
+- [ ] Sample & experimental-design metadata (SDRF / ISA-Tab)
+- [ ] Search or processing parameters (explicit, not "default")
+- [ ] Analysis code + `renv.lock` (`_targets.R`) to Zenodo/GitHub with a DOI
+- [ ] Accession numbers cited in the manuscript's Data Availability statement
+
+## Session Information
+
+Always print session info at the end of a report so results can be debugged and reproduced post hoc.
+
+```{r}
+sessioninfo::session_info()
+```
+
+## Summary
+
+This chapter turned the reproducibility infrastructure of Chapter 3 into a communicable, shareable deliverable:
+
+- **Parameterized Quarto reports** run one analysis across datasets, batches, and thresholds.
+- **`tar_quarto()`** makes the report a pipeline target that reads validated outputs and never drifts from the analysis.
+- **Publication-ready export** sizes figures and tables to journal requirements.
+- **FAIR deposition** to PRIDE/MassIVE (proteomics), MetaboLights/Metabolomics Workbench (metabolomics), and Zenodo (code) gives the study citable, reusable accessions.
+
+Together with the statistical and workflow chapters that precede it, this completes the arc from a raw `mzML` file to a fully reproducible, publishable result.
+
+## Exercises
+
+1. Convert one of your analysis scripts into a parameterized Quarto report with at least two parameters (e.g. `fdr_threshold`, `batch`). Render it twice with different values and confirm the outputs differ appropriately.
+2. Write a three-step `_targets.R` pipeline (load mzML → build `Spectra` → export summary CSV) and add the report as a `tar_quarto()` target. Run `tar_visnetwork()` and describe the dependency graph.
+3. Export a volcano plot as both a single-column vector PDF and a 300-dpi TIFF sized for a journal. Compare file sizes and legibility.
+4. For (a) a label-free proteomics dataset and (b) an untargeted metabolomics dataset, identify the correct repository, the accession-number format, and the minimum metadata each requires.
+5. Use `rpx` to retrieve the file list for `PXD000001`, and describe what each file type contributes to a complete ProteomeXchange submission.

@@ -1,0 +1,632 @@
+# Build and Audit a Quantitative Proteomics Data Object
+
+You cannot measure a protein directly. You measure peptides, then argue your way up to the protein — propagating every filtering decision and every missing value as you go. Get that bookkeeping wrong and a "differentially abundant protein" can be an artifact of which peptides you happened to keep. This chapter builds the `QFeatures` object that keeps the PSM → peptide → protein hierarchy honest, linked, and auditable.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Aggregating peptides to proteins *before* filtering. Summarizing over contaminants, one-hit-wonders, and mostly-missing peptides bakes noise straight into the protein value. Filter first, then aggregate.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Describe how `QFeatures` organises the PSM → peptide → protein hierarchy
+- Import quantitative proteomics data and construct a `QFeatures` object
+- Filter, log-transform, normalize, and aggregate features across levels
+- Diagnose data quality with PCA and missing-value visualisation
+- Run a basic differential test and compare standard versus robust aggregation
+
+## Understanding Quantitative MS Data
+
+### Quantitation Methodologies
+
+There are several approaches to quantitative proteomics, each with distinct advantages:
+
+```{r}
+library(QFeatures)
+library(tidyverse)
+library(limma)
+library(ggplot2)
+library(pheatmap)
+
+factoextra_available <- suppressWarnings(requireNamespace("factoextra", quietly = TRUE))
+```
+
+#### Label-free MS1: Extracted Ion Chromatograms (XIC)
+
+In label-free quantitation, precursor peaks matching identified peptides are integrated over retention time.
+
+#### Labelled MS2: Isobaric Tagging (TMT/iTRAQ)
+
+Isobaric tags allow multiplexed quantitation where peptides from different samples are chemically labeled and analyzed together.
+
+#### Label-free MS2: Spectral Counting
+
+Simple counting of peptide-spectrum matches assigned to each protein.
+
+#### Labelled MS1: SILAC
+
+Stable isotope labeling allows direct comparison between heavy and light labeled samples.
+
+## The QFeatures Framework
+
+### QFeatures Class Structure
+
+`QFeatures` extends the `MultiAssayExperiment` class to handle the hierarchical nature of MS data (spectra → peptides → proteins).
+
+```{mermaid}
+%%| fig-width: 10
+%%| fig-height: 6
+flowchart TD
+    subgraph QF["QFeatures Object Structure"]
+        direction TB
+        A[QFeatures Container] --> B[colData<br/>Sample Metadata]
+        A --> C[Assays<br/>Hierarchical Levels]
+        A --> D[rowData<br/>Feature Annotations]
+        
+        C --> E1[PSMs Assay<br/>Rows: 5000 PSMs<br/>Cols: 10 Samples]
+        C --> E2[Peptides Assay<br/>Rows: 2500 Peptides<br/>Cols: 10 Samples]
+        C --> E3[Proteins Assay<br/>Rows: 800 Proteins<br/>Cols: 10 Samples]
+        
+        E1 -->|aggregateFeatures<br/>by Sequence| E2
+        E2 -->|aggregateFeatures<br/>by Protein| E3
+    end
+    
+    subgraph Meta["Metadata Propagation"]
+        F[Sample Info<br/>Condition, Batch, etc.] --> B
+        G1[PSM Annotations<br/>Scores, RT, m/z] --> D
+        G2[Peptide Info<br/>Sequence, Modifications] --> D
+        G3[Protein Info<br/>Accession, Gene] --> D
+    end
+    
+    subgraph Process["Data Processing"]
+        E3 --> H[filterNA<br/>Remove Missing]
+        H --> I[normalize<br/>Median/Quantile]
+        I --> J[impute<br/>KNN/MinProb]
+        J --> K[logTransform<br/>log2]
+        K --> L[limma Analysis<br/>Differential Expression]
+    end
+    
+  style QF fill:#D7E6FB,stroke:#27408B,stroke-width:3px,color:#102A43
+  style Meta fill:#FBE0FA,stroke:#B000B0,stroke-width:3px,color:#102A43
+  style Process fill:#D7E6FB,stroke:#27408B,stroke-width:3px,color:#102A43
+```
+
+::: {.callout-note}
+## QFeatures Advantages
+
+- **Traceability**: Links between PSMs, peptides, and proteins maintained throughout
+- **Flexibility**: Multiple assays can coexist (different processing strategies)
+- **Metadata**: Sample and feature annotations travel with the data
+- **Reproducibility**: Complete processing pipeline encoded in object
+:::
+
+```{r}
+# Load example data
+data(feat1)
+feat1
+```
+
+```{r}
+# Examine the structure
+colData(feat1)
+```
+
+```{r}
+# Access the PSM-level assay
+psms_assay <- feat1[["psms"]]
+psms_assay
+```
+
+```{r}
+# View quantitative data
+assay(psms_assay)
+```
+
+```{r}
+# Examine row annotations
+rowData(psms_assay)
+```
+
+### Feature Aggregation
+
+A key feature of `QFeatures` is the ability to aggregate features from lower to higher levels while maintaining traceability.
+
+```{r}
+# Aggregate PSMs to peptides based on sequence
+feat1 <- aggregateFeatures(feat1, 
+                          i = "psms",
+                          fcol = "Sequence", 
+                          name = "peptides",
+                          fun = colMeans)
+feat1
+```
+
+```{r}
+# Examine the peptide-level data
+assay(feat1[["peptides"]])
+```
+
+```{r}
+# Check aggregation statistics
+rowData(feat1[["peptides"]])
+```
+
+```{r}
+# Aggregate peptides to proteins
+feat1 <- aggregateFeatures(feat1,
+                          i = "peptides", 
+                          fcol = "Protein",
+                          name = "proteins",
+                          fun = colMedians)
+feat1
+```
+
+```{r}
+# View final protein quantification
+assay(feat1[["proteins"]])
+```
+
+### Subsetting and Filtering
+
+`QFeatures` maintains relationships between assays during subsetting operations.
+
+```{r}
+# Subset for a specific protein
+protein_a <- feat1["ProtA", , ]
+protein_a
+```
+
+```{r}
+# Filter features based on quality criteria
+feat1_filtered <- filterFeatures(feat1, ~ pval < 0.05)
+feat1_filtered
+```
+
+## Working with Real Data: CPTAC Dataset
+
+### Data Import
+
+```{r}
+library(MsDataHub)
+
+# Load CPTAC peptide data
+# Note: This is a simulated example based on the CPTAC study design
+set.seed(123)
+
+# Create sample metadata
+sample_info <- data.frame(
+  sample = paste0("Sample_", 1:6),
+  condition = rep(c("6A", "6B"), each = 3),
+  replicate = rep(1:3, 2),
+  row.names = paste0("Sample_", 1:6)
+)
+
+# Simulate peptide quantification data
+n_peptides <- 1000
+peptide_data <- matrix(
+  rlnorm(n_peptides * 6, meanlog = 10, sdlog = 1),
+  nrow = n_peptides,
+  ncol = 6,
+  dimnames = list(
+    paste0("Peptide_", 1:n_peptides),
+    rownames(sample_info)
+  )
+)
+
+# Add differential expression signal
+de_peptides <- 1:100  # First 100 peptides are differentially expressed
+peptide_data[de_peptides, 4:6] <- peptide_data[de_peptides, 4:6] * 1.5
+
+# Create row annotations
+peptide_annotations <- data.frame(
+  Sequence = paste0("SEQ", 1:n_peptides),
+  Proteins = sample(paste0("PROT", 1:200), n_peptides, replace = TRUE),
+  PEP = runif(n_peptides, 0, 0.1),
+  Score = runif(n_peptides, 20, 100),
+  row.names = rownames(peptide_data)
+)
+
+# Create SummarizedExperiment
+library(SummarizedExperiment)
+cptac_se <- SummarizedExperiment(
+  assays = list(peptides = peptide_data),
+  rowData = peptide_annotations,
+  colData = sample_info
+)
+
+# Create QFeatures object
+cptac_qf <- QFeatures(list(peptides = cptac_se))
+cptac_qf
+```
+
+### Data Preprocessing Pipeline
+
+```{r}
+# Log transformation
+cptac_qf <- logTransform(cptac_qf, 
+                        i = "peptides",
+                        name = "log_peptides")
+
+# Normalization (median centering)
+cptac_qf <- normalize(cptac_qf,
+                     i = "log_peptides", 
+                     name = "norm_peptides",
+                     method = "center.median")
+
+cptac_qf
+```
+
+### Missing Value Analysis
+
+```{r}
+# Introduce some missing values for demonstration
+assay_data <- assay(cptac_qf[["norm_peptides"]])
+# Set 10% of values to NA randomly
+missing_indices <- sample(length(assay_data), length(assay_data) * 0.1)
+assay_data[missing_indices] <- NA
+assay(cptac_qf[["norm_peptides"]]) <- assay_data
+
+# Analyze missing value patterns
+na_stats <- nNA(cptac_qf[["norm_peptides"]])
+cat("Overall missing values:", na_stats$nNA$pNA * 100, "%\n")
+```
+
+```{r}
+# Visualize missing value patterns
+missing_pattern <- na_stats$nNArows
+head(missing_pattern, 10)
+```
+
+```{r}
+# Filter peptides with too many missing values
+cptac_qf_clean <- filterNA(cptac_qf, i = "norm_peptides", pNA = 0.5)
+cat("Peptides after filtering:", nrow(cptac_qf_clean[["norm_peptides"]]), "\n")
+```
+
+### Protein Aggregation
+
+```{r}
+# Aggregate to protein level using median
+cptac_qf_clean <- aggregateFeatures(cptac_qf_clean,
+                                   i = "norm_peptides",
+                                   fcol = "Proteins", 
+                                   name = "proteins",
+                                   fun = colMedians,
+                                   na.rm = TRUE)
+
+cptac_qf_clean
+```
+
+```{r}
+# Examine aggregation results
+aggregation_stats <- rowData(cptac_qf_clean[["proteins"]])[".n"]
+table(aggregation_stats)
+```
+
+## Quality Control and Visualization
+
+### Principal Component Analysis
+
+```{r}
+# PCA on peptide-level data
+peptide_pca <- cptac_qf_clean[["norm_peptides"]] %>%
+  filterNA() %>%
+  assay() %>%
+  t() %>%
+  prcomp(scale = TRUE, center = TRUE)
+
+# Create PCA plot
+if (factoextra_available) {
+  factoextra::fviz_pca_ind(
+    peptide_pca,
+    habillage = colData(cptac_qf_clean)$condition,
+    title = "Peptide-level PCA"
+  )
+} else {
+  peptide_scores <- as.data.frame(peptide_pca$x[, 1:2])
+  peptide_scores$condition <- colData(cptac_qf_clean)$condition
+
+  ggplot(peptide_scores, aes(x = PC1, y = PC2, color = condition)) +
+    geom_point(size = 3, alpha = 0.8) +
+    labs(title = "Peptide-level PCA") +
+    theme_minimal()
+}
+```
+
+```{r}
+# PCA on protein-level data  
+protein_pca <- cptac_qf_clean[["proteins"]] %>%
+  filterNA() %>%
+  assay() %>%
+  t() %>%
+  prcomp(scale = TRUE, center = TRUE)
+
+if (factoextra_available) {
+  factoextra::fviz_pca_ind(
+    protein_pca,
+    habillage = colData(cptac_qf_clean)$condition,
+    title = "Protein-level PCA"
+  )
+} else {
+  protein_scores <- as.data.frame(protein_pca$x[, 1:2])
+  protein_scores$condition <- colData(cptac_qf_clean)$condition
+
+  ggplot(protein_scores, aes(x = PC1, y = PC2, color = condition)) +
+    geom_point(size = 3, alpha = 0.8) +
+    labs(title = "Protein-level PCA") +
+    theme_minimal()
+}
+```
+
+### Expression Profile Visualization
+
+```{r}
+# Extract data for a specific protein using longForm
+example_protein <- rownames(assay(cptac_qf_clean[["proteins"]]))[1]
+
+profile_data <- longForm(cptac_qf_clean[example_protein, , 
+                                       c("norm_peptides", "proteins")]) %>%
+  as_tibble()
+
+# Get column data and ensure unique column names
+col_data <- as_tibble(colData(cptac_qf_clean), rownames = "sample_id")
+
+# Join the data
+profile_data <- profile_data %>%
+  left_join(col_data, by = c("colname" = "sample_id"))
+
+ggplot(profile_data, aes(x = colname, y = value, color = condition)) +
+  geom_point(size = 3) +
+  geom_line(aes(group = rowname)) +
+  facet_wrap(~assay, scales = "free_y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = paste("Expression Profile:", example_protein),
+       x = "Sample", y = "Normalized Intensity")
+```
+
+## Statistical Analysis
+
+### Differential Expression with limma
+
+```{r}
+# Extract protein data for statistical analysis
+protein_data <- getWithColData(cptac_qf_clean, "proteins")
+
+# Set up design matrix
+design <- model.matrix(~ condition, data = colData(protein_data))
+colnames(design) <- c("Intercept", "Condition_6B_vs_6A")
+
+# Fit linear model
+fit <- lmFit(assay(protein_data), design)
+fit <- eBayes(fit)
+
+# Extract results
+results <- topTable(fit, coef = "Condition_6B_vs_6A", number = Inf) %>%
+  rownames_to_column("protein") %>%
+  as_tibble()
+
+head(results)
+```
+
+```{r}
+# Volcano plot
+results %>%
+  ggplot(aes(x = logFC, y = -log10(P.Value))) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "red") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "red") +
+  labs(title = "Volcano Plot",
+       x = "log2 Fold Change", 
+       y = "-log10 P-value") +
+  theme_minimal()
+```
+
+```{r}
+# Summary of differential expression
+significant_proteins <- results %>%
+  filter(adj.P.Val < 0.05, abs(logFC) > 1)
+
+cat("Significantly changed proteins:", nrow(significant_proteins), "\n")
+cat("Up-regulated:", sum(significant_proteins$logFC > 1), "\n")
+cat("Down-regulated:", sum(significant_proteins$logFC < -1), "\n")
+```
+
+### Heatmap of Significant Proteins
+
+```{r}
+if (nrow(significant_proteins) > 5) {
+  # Select top 20 most significant proteins
+  top_proteins <- head(significant_proteins, 20)$protein
+  
+  # Create heatmap data
+  heatmap_data <- assay(protein_data)[top_proteins, ]
+  
+  # Sample annotations
+  annotation_col <- data.frame(
+    Condition = colData(protein_data)$condition,
+    row.names = colnames(heatmap_data)
+  )
+  
+  # Generate heatmap
+  pheatmap(heatmap_data,
+           annotation_col = annotation_col,
+           scale = "row",
+           clustering_distance_rows = "euclidean",
+           clustering_distance_cols = "euclidean",
+           main = "Top Differentially Expressed Proteins")
+}
+```
+
+## Where MSstats Fits
+
+The workflow above stays within the Bioconductor `QFeatures` ecosystem: `limma` operates on the protein-level matrix produced by `aggregateFeatures()`. An alternative ecosystem, **MSstats**, approaches quantification from the opposite direction -- it models peptide- or transition-level intensities directly, using linear mixed models, and performs protein-level inference as part of the statistical test rather than as a separate aggregation step.
+
+### The MSstats Family
+
+The MSstats ecosystem has grown into a family of specialised packages, each tailored to a specific input type and experimental design:
+
+| Package | Input | Purpose |
+|---------|-------|---------|
+| **MSstats** | Peptide- or transition-level intensities | Linear mixed models for label-free, DDA, DIA, and SRM; run-level summarisation with `dataProcess()` and differential testing with `groupComparison()` |
+| **MSstatsTMT** | Reporter-ion intensities from TMT experiments | TMT-specific workflow: channel-level normalisation, purity correction, and protein-level inference across multiple TMT mixtures |
+| **MSstatsPTM** | PTM + global (unmodified) protein abundances | Adjusts post-translational modification quantifications for changes in the parent protein abundance |
+| **MSstatsLiP** | Limited proteolysis (LiP) data | Compares protease-accessible peptide profiles for structural proteomics |
+| **MSstatsConvert** | Search-engine/vendor export files | Import and conversion layer: transforms output from DIA-NN, FragPipe, MaxQuant, Spectronaut, Skyline, and others into the MSstats-compatible format |
+| **MSstatsShiny** | (GUI wrapper) | Point-and-click interface for interactive exploration; generates reproducible R scripts from the GUI session |
+| **MSstatsBig** | Large-scale DIA datasets (>10 GB PSM files) | Handles datasets too large for in-memory processing via the `arrow` backend; pre-filters features before normalisation to reduce memory footprint |
+
+### Standard MSstats Workflow
+
+A typical MSstats analysis proceeds through four steps:
+
+1. **Import and convert** --- `MSstatsConvert::MSstatsConvert()` reads search-engine output and converts it to the standard MSstats format
+2. **Summarise** --- `MSstats::dataProcess()` performs run-level summarisation, normalisation, and missing-value handling
+3. **Compare** --- `MSstats::groupComparison()` fits linear mixed models and returns differential-abundance results
+4. **Visualise** --- `MSstats::groupComparisonPlots()` produces volcano plots, comparison plots, and heatmaps
+
+```{r}
+#| eval: false
+# Typical MSstats pipeline
+library(MSstats)
+
+# Convert search-engine output
+# raw <- MSstatsConvert::MSstatsConvert(your_export_file)
+
+# Process and summarise
+# processed <- dataProcess(raw)
+
+# Compare conditions
+# comparison <- groupComparison(processed)
+
+# Visualise
+# groupComparisonPlots(comparison, type = "Volcano")
+```
+
+### Version Sensitivity of Converters
+
+The `MSstatsConvert` package is **version-sensitive**: different versions of search engines (MaxQuant, DIA-NN, FragPipe, Spectronaut, Skyline) may produce output formats that require specific converter versions. Always check the MSstats news and the converter vignette for the version compatibility table. If a converter fails, the first troubleshooting step is to update both the search engine and `MSstatsConvert` to their latest releases.
+
+### QFeatures vs MSstats: A Design Choice
+
+The `limma` + `QFeatures` workflow demonstrated earlier in this chapter stays within the Bioconductor ecosystem. The MSstats family uses its own data structures and modelling framework. Both approaches are valid; the choice depends on your input format and desired model complexity:
+
+- **Use QFeatures + limma** when you want full control over each preprocessing step, need to integrate with other Bioconductor objects (`SummarizedExperiment`, `MultiAssayExperiment`), or prefer a separation of aggregation and testing.
+- **Use MSstats** when your data comes from search engines with native MSstats converters, you need peptide-level modelling with automatic protein-level inference, or you work with complex multi-factorial designs that benefit from the linear mixed model framework.
+
+### Exercises
+
+1. Map three vendor/search-tool exports to the correct converter and downstream MSstats workflow: (a) MaxQuant `proteinGroups.txt`, (b) DIA-NN `report.tsv`, (c) Spectronaut `xyz_Report.tsv`.
+2. Compare the output of `MSstats::dataProcess()` with the protein-level matrix produced by `aggregateFeatures()` --- how do the summarised values differ?
+3. Explain why `MSstatsConvert` version matters when working with a recently updated version of DIA-NN or FragPipe.
+
+## Advanced Aggregation Methods
+
+### Robust Summarization
+
+```{r}
+library(MsCoreUtils)
+
+# Robust aggregation using robust summarization
+cptac_robust <- aggregateFeatures(cptac_qf_clean,
+                                 i = "norm_peptides",
+                                 fcol = "Proteins",
+                                 name = "proteins_robust", 
+                                 fun = MsCoreUtils::robustSummary,
+                                 na.rm = TRUE)
+
+# Compare standard vs robust aggregation
+comparison_data <- data.frame(
+  standard = assay(cptac_qf_clean[["proteins"]])[, 1],
+  robust = assay(cptac_robust[["proteins_robust"]])[, 1]
+) %>%
+  na.omit()
+
+ggplot(comparison_data, aes(x = standard, y = robust)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(title = "Standard vs Robust Aggregation",
+       x = "Standard (Median)",
+       y = "Robust Summarization") +
+  theme_minimal()
+```
+
+## Working with QFeatures Workflows
+
+### Visualization of Data Relationships
+
+```{r}
+# Visualize the relationship between assays
+plot(cptac_robust)
+```
+
+### Custom Processing Functions
+
+```{r}
+# Example: Custom normalization using addAssay
+quantile_normalize <- function(x) {
+  # Simple quantile normalization implementation
+  x_sorted <- apply(x, 2, sort, na.last = TRUE)
+  x_mean <- rowMeans(x_sorted, na.rm = TRUE)
+  
+  for (i in 1:ncol(x)) {
+    ranks <- rank(x[, i], na.last = "keep")
+    x[, i] <- x_mean[ranks]
+  }
+  return(x)
+}
+
+# Apply custom normalization
+log_peptides_se <- cptac_qf_clean[["log_peptides"]]
+quantile_norm_assay <- quantile_normalize(assay(log_peptides_se))
+
+# Create a new SummarizedExperiment with the normalized data
+library(SummarizedExperiment)
+quantile_norm_se <- SummarizedExperiment(
+  assays = list(quantile_norm = quantile_norm_assay),
+  rowData = rowData(log_peptides_se),
+  colData = colData(log_peptides_se)
+)
+
+# Add to QFeatures object
+cptac_custom <- addAssay(cptac_qf_clean,
+                        quantile_norm_se,
+                        name = "quantile_norm")
+
+# Add assay link - for a transformation, use simple string-based linking
+# This indicates that all features in quantile_norm come from log_peptides
+cptac_custom <- addAssayLink(cptac_custom,
+                            from = "log_peptides",
+                            to = "quantile_norm")
+
+cat("Custom normalization applied successfully\n")
+cat("Available assays:", names(cptac_custom), "\n")
+```
+
+## Exercises
+
+1. Load the CPTAC dataset and perform complete preprocessing pipeline
+2. Compare different aggregation methods (mean, median, robust)
+3. Implement missing value imputation strategies
+4. Perform differential expression analysis with multiple comparisons
+5. Create custom visualization functions for QFeatures objects
+
+## Summary
+
+This chapter introduced the `QFeatures` framework for quantitative proteomics analysis. Key concepts covered include:
+
+- Different quantitation methodologies in proteomics
+- The hierarchical structure of MS quantitative data
+- Feature aggregation strategies
+- Quality control and missing value handling
+- Statistical analysis workflows
+- Visualization of quantitative proteomics data
+
+The `QFeatures` infrastructure provides a robust foundation for reproducible quantitative proteomics analysis in R.
+
+## Session Information
+
+``` r
+sessionInfo()
+```

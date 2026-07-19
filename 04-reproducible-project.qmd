@@ -1,0 +1,333 @@
+# Build a Reproducible MS Analysis Project
+
+> *Six months from now, you will need to rerun this analysis. Will you still know what you did?*
+
+Mass spectrometry data analysis involves complex, computationally expensive, multi-step pipelines. From parsing raw `mzML` files to spectral preprocessing, feature alignment, and statistical modeling, a single parameter change can drastically alter your biological conclusions.
+
+The objective of reproducible data analysis is to allow others — including your future self — to see and repeat every computational step that led to a finding. Minimally, this means providing access to data and code. Button clicks inside graphical user interfaces are not easily reproduced, even with the same data and software. Scripts, on the other hand, describe every action explicitly.
+
+This chapter builds the modern, robust infrastructure for MS workflows: logical project organisation, literate programming with Quarto, dependency management with `renv`, pipeline automation with `targets`, and — for full-stack reproducibility — containers. We also cover how to handle many raw files efficiently, capture provenance, and set up continuous integration to catch breakage early.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Trusting "it works on my machine." Without a `renv.lock` and a scripted pipeline, a routine package update six months from now can silently change your results. Lock package versions and script every step from the start.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Organise an MS project directory so that any collaborator (or your future self) can navigate it immediately
+- Write literate, executable analysis documents with Quarto
+- Lock exact package versions with `renv` and extend that lock to the OS level with Docker
+- Build a caching pipeline with `targets` that re-runs only what has changed
+- Capture analysis parameters as explicit pipeline targets for full provenance
+- Write unit tests for custom MS functions and connect them to GitHub Actions CI
+
+---
+
+## Project and File Organisation
+
+Hardware and operating system specifics often derail reproducibility. Directory separators (`/` vs `\`), case-sensitive file systems, and absolute paths (e.g., `C:/Users/jo/Desktop/data.mzML`) are common pitfalls.
+
+There is no single consensus directory structure, but a central principle is **clarity**. A well-organised MS project using **RStudio Projects** (`.Rproj`) should look like this:
+
+```text
+my_ms_project/
+├── .Rproj.user/          # RStudio internal files (ignored)
+├── data/
+│   ├── raw/              # Unaltered vendor files or mzMLs (read-only!)
+│   └── processed/        # Feature tables, filtered Spectra objects, RDS files
+├── R/                    # Reusable R scripts and custom functions
+├── reports/              # Quarto (.qmd) documents and HTML/PDF outputs
+├── _targets/             # Targets cache (auto-generated, ignored)
+├── _targets.R            # The pipeline definition file
+├── renv.lock             # Package version lockfile
+├── Dockerfile            # Container definition (optional, see below)
+├── .github/workflows/    # CI configuration (optional)
+├── .gitignore
+└── my_ms_project.Rproj
+```
+
+To avoid fragile absolute paths, use the `here` package or base R's `file.path()`. The `here` package dynamically locates your project root across different machines.
+
+```r
+library(here)
+raw_file <- here("data", "raw", "sample_01.mzML")
+```
+
+### Companion Project: `r4ms_book`
+
+This book is accompanied by a complete, runnable project at `r4ms_book/` that implements every principle described in this chapter. It serves as both a reference implementation and a data provisioning pipeline — its download scripts fetch all open-access datasets used throughout the book from PRIDE, MetaboLights, and ProteomeXchange:
+
+```
+r4ms_book/
+├── raw/                       # Downloaded datasets (per-accession directories)
+│   ├── PXD004886/             # Ch 13, 19 — DIA benchmark (4,517 proteins)
+│   ├── PXD010154/             # Ch 9, 22  — Human tissue proteome atlas
+│   ├── PXD000547/             # Ch 20, 21 — DIA paired clinical samples
+│   ├── MTBLS38/               # Ch 7, 16  — Metabolomics standards (51 compounds)
+│   ├── MTBLS234/              # Ch 10     — Metabolite annotation library
+│   └── MTBLS1455/             # Ch 16     — Untargeted metabolomics cohort
+├── scripts/                   # Data download and verification scripts
+│   ├── download_pride.py      # PRIDE REST API + FTP downloader
+│   ├── download_all.sh        # SLURM batch download job
+│   └── download_mtbls.ps1     # MetaboLights downloader
+├── analysis/                  # Chapter-aligned analysis pipelines
+│   ├── proteomics_analysis.R  # Ch 13 + 19 — LFQ DE pipeline (PXD004886)
+│   ├── tissue_atlas_analysis.R# Ch 9 + 22  — Organ proteome comparison
+│   ├── clinical_spectronaut_analysis.R  # Ch 21 — Paired clinical DIA
+│   └── mtbls38_standards_analysis.R     # Ch 7 + 16 — Metabolomics standards
+│   └── results/               # Generated figures and tables
+├── pull.ps1 / push.ps1        # Cluster ↔ local sync scripts
+└── README.md
+```
+
+Each analysis script mirrors a chapter's workflow — load, filter, normalise, model, visualise, export — and can be run independently. The book's code chunks are pedagogical simplifications; the companion scripts are the production implementations, with error handling, portable paths, and parameter documentation. When a chapter references "the companion pipeline" or "the companion data repository," it means this project.
+
+---
+
+## Literate Programming with Quarto
+
+Donald Knuth coined the term *literate programming*: writing a natural language document that interleaves executable code. R supports this primarily through **Quarto** (the modern successor to R Markdown) and the `knitr` package.
+
+Quarto documents are plain text, making them portable and version-control friendly. A minimal YAML header:
+
+```yaml
+---
+title: "Base Peak Chromatograms"
+author: "Your Name"
+format: html
+---
+```
+
+Mix Markdown text with R code chunks:
+
+````markdown
+```{r}
+#| eval: false
+#| message: false
+library(Spectra)
+library(ggplot2)
+library(here)
+
+ms_data <- Spectra(here("data/raw/sample.mzML"))  # requires data/raw/sample.mzML
+bpc <- chromatogram(ms_data, aggregationFun = "max")
+plot(bpc)
+```
+````
+
+In the next section, we will link Quarto reports directly to a `targets` pipeline so they only re-render when inputs change.
+
+---
+
+## Environment Management — `renv` and Docker
+
+R evolves constantly. The built-in `sessionInfo()` shows your current packages, but it does not *enforce* them. A future R update or a package upgrade can silently break your script.
+
+### `renv` — Lock package versions
+
+The `renv` package creates a project-local R library and records exact package versions (including Bioconductor and GitHub sources) in a `renv.lock` file.
+
+```r
+renv::init()
+BiocManager::install(c("Spectra", "xcms", "QFeatures"))
+renv::snapshot()   # writes renv.lock
+```
+
+A collaborator can then run `renv::restore()` to recreate the exact environment.
+
+### Docker — Full-stack reproducibility
+
+`renv` captures R packages only. System dependencies (e.g., NetCDF, XML libraries) and non-R tools (e.g., `msconvert`, `OpenMS`) are not covered. For **full-stack reproducibility**, use containers.
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+FROM rocker/tidyverse:4.4.1
+RUN apt-get update && apt-get install -y libnetcdf-dev
+COPY . /project
+WORKDIR /project
+RUN R -e "renv::restore()"
+```
+
+Anyone can then run:
+
+```bash
+docker build -t my_ms_project .
+docker run my_ms_project R -e "targets::tar_make()"
+```
+
+This reproduces your entire analysis, independent of the host operating system.
+
+---
+
+## Caching Pipelines with `targets`
+
+MS data processing is computationally expensive. Rerunning peak picking on 50 samples from scratch after a minor text change is wasteful. The `targets` package caches the results of every step and re-runs only what is necessary.
+
+### Basic `_targets.R`
+
+```r
+library(targets)
+tar_option_set(packages = c("Spectra", "here"))
+
+list(
+  tar_target(raw_file, here("data/raw/sample.mzML"), format = "file")  # requires data/raw/sample.mzML,
+  tar_target(ms_data,  Spectra(raw_file, backend = MsBackendMzR())),
+  tar_target(bpc,      chromatogram(ms_data, aggregationFun = "max"))
+)
+```
+
+### Dynamic branching for many files
+
+```r
+tar_target(
+  raw_files,
+  list.files(here("data/raw"), pattern = "\\.mzML$", full.names = TRUE),
+  format = "file"
+)
+
+tar_target(
+  ms_data_list,
+  Spectra(raw_files, backend = MsBackendMzR()),
+  pattern = map(raw_files)   # one target per file, run in parallel
+)
+```
+
+Run `tar_make()` once; the second time, only new or changed files are processed.
+
+---
+
+## Provenance and Metadata Capture
+
+`renv.lock` and `Dockerfile` capture the software environment. But what about the *parameters* you used for peak picking, or the Git commit hash?
+
+- Use `tar_meta()` to inspect what `targets` tracked.
+- Save analysis parameters as explicit targets so any change invalidates downstream results:
+
+```r
+tar_target(ppm_tolerance, 5)
+tar_target(peaks, findChromPeaks(xset, ppm = ppm_tolerance))
+```
+
+- Use the **`workflowr`** package to generate a reproducibility report including the Git commit, session info, and output checksums.
+
+---
+
+## Testing MS Functions
+
+If you write custom R functions (e.g., in `R/ms_functions.R`), a small change can break downstream steps. Write unit tests with `testthat`:
+
+```r
+test_that("peak intensities are non-negative", {
+  expect_true(all(peaks$intensity >= 0))
+})
+```
+
+For runtime checks inside a `targets` pipeline:
+
+```r
+tar_target(peaks, findPeaks(ms_data))
+tar_assert_true(all(peaks$intensity >= 0), msg = "Negative intensities detected!")
+```
+
+---
+
+## Optimising for Large Data
+
+A `Spectra` or `MSnExp` object for a full LC-MS run can be several gigabytes. By default, `targets` serialises R objects with `saveRDS()`, which can be slow and memory-intensive. Use alternative serialisation formats:
+
+```r
+tar_target(large_object, compute_something(), format = "qs")   # requires qs package
+tar_target(data_frame,   compute_more(),      format = "fst")  # for data frames
+```
+
+Cap memory usage per target with `tar_option_set(resources = tar_resources(memory = 8000))`.
+
+---
+
+## Linking Quarto Reports to `targets`
+
+Use `tar_quarto()` from `tarchetypes` to make your HTML/PDF report a pipeline target:
+
+```r
+tarchetypes::tar_quarto(
+  final_report,
+  path  = "reports/my_analysis.qmd",
+  quiet = FALSE
+)
+```
+
+The report now only re-renders if any upstream data or code has changed. No more "forgot to regenerate Figure 3."
+
+---
+
+## Continuous Integration
+
+A pipeline that works on your machine might fail on a collaborator's. Set up **GitHub Actions** to run `tar_make()` automatically on every push. Create `.github/workflows/check.yml`:
+
+```yaml
+name: Reproducibility check
+on: [push]
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+      - run: R -e "renv::restore()"
+      - run: R -e "targets::tar_make()"
+```
+
+If the pipeline breaks, you get an immediate notification. This is the ultimate safety net for long-term reproducibility.
+
+---
+
+## Troubleshooting Common Non-Reproducible Scenarios
+
+Even with all the right tools, subtle issues creep in. Watch out for:
+
+- **`setwd()`** — always use `here::here()` or `targets`' automatic workspace instead.
+- **Missing random seeds** — call `set.seed(42)` before any stochastic step (imputation, PCA, cross-validation).
+- **Relying on package defaults** — explicitly set arguments; pin not only package versions but also global options such as `options(contrasts = c("contr.treatment", "contr.poly"))`.
+- **Incomplete `.gitignore`** — never commit raw data or `_targets/`. Your `renv.lock` and `Dockerfile` are lightweight and should be tracked.
+
+---
+
+## Advanced: Cloud and Virtual Machines
+
+For very large multi-omics projects, local computers may be insufficient. The **AnVIL project** (<https://anvilproject.org/>) provides a cloud platform for biomedical data science that integrates R/Bioconductor, Docker, and workflow languages. All the principles above — `renv`, `targets`, containers — translate directly to the cloud.
+
+---
+
+## Exercises
+
+1. Initialise an RStudio Project with the directory layout shown above, and use `here::here()` to build a path to `data/raw/`. Confirm the path resolves correctly after moving the project folder.
+2. Run `renv::init()` in a fresh project, install `Spectra` and `xcms`, and `renv::snapshot()`. Inspect the resulting `renv.lock` — which sources (CRAN vs Bioconductor) are recorded?
+3. Write a three-step `_targets.R` pipeline (raw file → `Spectra` object → summary) and run `tar_make()` twice. Confirm the second run skips unchanged targets.
+4. Add a `ppm_tolerance` parameter as an explicit target and change its value. Which downstream targets does `tar_make()` re-run, and why?
+5. Write a `testthat` test asserting that peak intensities are non-negative, and describe how you would wire it into the pipeline with `tar_assert_true()`.
+
+## Summary
+
+| Tool | Purpose |
+|------|---------|
+| `here` + RStudio Projects | Portable, absolute-path-free file references |
+| Quarto | Literate, executable reports |
+| `renv` | Lock R package versions |
+| Docker | Lock OS and system dependencies |
+| `targets` | Cache and automate pipelines |
+| `testthat` + `tar_assert` | Validate functions and data at runtime |
+| Git + GitHub Actions | Version control and continuous integration |
+
+By combining these tools, you guarantee that your MS analyses are robust, transparent, and fully reproducible — not just "works on my machine," but works anywhere.
+
+The next chapter covers MS data file formats and how to import them safely into R.
+
+---
+
+## Session Information
+
+```r
+sessionInfo()
+```

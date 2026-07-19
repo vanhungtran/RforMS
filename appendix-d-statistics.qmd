@@ -1,0 +1,142 @@
+# Statistical and Reproducibility Quick Reference {#sec-appendix-statistics .unnumbered}
+
+A condensed decision aid for the statistical steps in Parts IV–V. Each table pairs a method with *when to use it*, the R implementation, and the chapter where it is demonstrated. These are starting points, not substitutes for inspecting your data (PCA, RLE, and QC-pool CV before and after every transformation).
+
+## Normalization methods
+
+Applied to the log-transformed feature × sample matrix (Chapter 17). Goal: remove technical variation while preserving biological signal.
+
+| Method | Assumption / when to use | R implementation | Chapter |
+|---|---|---|---|
+| Log₂ transform | Stabilises variance of multiplicative intensity data; do first | `log2(x + 1)` | 17 |
+| Median / global scaling | Equal median signal across samples; mild loading differences | subtract column median | 14, 17 |
+| Quantile | Identical intensity *distribution* across samples; strong assumption | `preprocessCore::normalize.quantiles()`, `limma::normalizeBetweenArrays(method="quantile")` | 17 |
+| Cyclic loess | Pairwise MA-plot correction; robust to a minority of changing features | `limma::normalizeBetweenArrays(method="cyclicloess")` | 17 |
+| VSN | Variance-stabilising + normalising in one; low-intensity heteroscedasticity | `vsn::justvsn()` | 14, 17 |
+| TIC / total-ion scaling | Metabolomics; sample-to-sample dilution | divide by column sum | 16, 17 |
+| Median-of-ratios | Assumes most features unchanged (RNA-seq heritage) | `DESeq2::estimateSizeFactors()` | 17 |
+| IRS (internal reference scaling) | Multi-batch TMT with reference channels | manual reference-channel scaling | 13, 14 |
+
+::: {.callout-tip}
+Compare methods, don't assume. Use QC-pool coefficient of variation (CV) and PCA coloured by batch to pick the normalisation that minimises technical structure without flattening biology (Chapter 17).
+:::
+
+## Missing-value strategies
+
+Diagnose the mechanism before imputing (Chapter 18). MS data mixes **MCAR/MAR** (random, e.g. near LOD in some runs) with **MNAR** (left-censored, truly below detection).
+
+| Mechanism | Typical MS cause | Recommended handling |
+|---|---|---|
+| MCAR | Random instrument dropout | KNN, BPCA, or model-based |
+| MAR | Missingness depends on observed covariates (batch, run order) | KNN, BPCA; include covariate in model |
+| MNAR | Low abundance / below LOD (left-censored) | Left-shifted min (e.g. `MinProb`, `QRILC`), or downshifted-normal |
+
+| Imputation method | Mechanism it suits | R implementation | Chapter |
+|---|---|---|---|
+| Minimum / left-shifted normal | MNAR | `DEP::impute(method="MinProb")`, `MsCoreUtils::impute_matrix` | 18 |
+| QRILC | MNAR | `imputeLCMD::impute.QRILC()` | 18 |
+| KNN | MCAR/MAR | `impute::impute.knn()` | 18 |
+| BPCA | MCAR/MAR | `pcaMethods::pca(method="bpca")` | 18 |
+| Mixed (MNAR + MCAR) | Realistic MS | `DEP::impute(fun="MinProb"/"knn")` per feature class | 18 |
+
+**Rules of thumb:** filter features missing in most samples *before* imputing (`QFeatures::filterNA`); never impute across biological groups when missingness is group-driven; always run a **sensitivity analysis** — repeat the differential test under ≥2 imputation methods and report agreement (Chapter 18).
+
+## Differential-abundance methods
+
+| Method | When to use | R implementation | Chapter |
+|---|---|---|---|
+| Welch / moderated *t* | Two groups | `limma::eBayes()` on 2-group design | 19 |
+| limma linear model | Factorial designs, covariates, blocking | `lmFit()` + `makeContrasts()` + `eBayes()` | 19, 20 |
+| limma `duplicateCorrelation` | Repeated measures / technical replicates (one random effect) | `duplicateCorrelation()` + `block=` | 20 |
+| Mixed model (`dream`) | Complex random effects, unbalanced repeated measures | `variancePartition::dream()` | 20 |
+| MSstats family | Peptide-level modelling → protein inference with uncertainty; specialised variants for TMT, PTM, LiP, and large-scale DIA | `MSstats::groupComparison()`, `MSstatsTMT::proteinSummarization()`, `MSstatsPTM::groupComparisonPTM()` | 12, 13, 14, 15 |
+| Wilcoxon / permutation | Non-normal, small n, robustness check | `wilcox.test()`, custom permutation | 19 |
+
+> **Decision framework:** See the section "Choosing a Differential Abundance Method" in Chapter 20 for a comprehensive decision table, decision tree, and comparison of eight methods (limma, DEP, MSstats, msqrob2, proDA, DEqMS, limpa, PolySTest) covering input level, missing-value strategy, variance modelling, and design complexity.
+
+**Design-matrix reminders:** set an explicit reference level (`relevel()`); prefer means-model + `makeContrasts` for interpretable comparisons; include batch as a covariate rather than pre-removing it when you will model the data (double-correction inflates false positives).
+
+## Multiple-testing correction
+
+Always correct across the features tested in a contrast (Chapter 20).
+
+| Method | Controls | Use when | R call |
+|---|---|---|---|
+| Benjamini–Hochberg (BH) | FDR | Default for omics discovery | `p.adjust(p, "BH")` |
+| Benjamini–Yekutieli | FDR under dependence | Strongly correlated features | `p.adjust(p, "BY")` |
+| Storey q-value | FDR (with π₀ estimate) | Many tests, want more power | `qvalue::qvalue()` |
+| Bonferroni / Holm | FWER | Few tests, need strict control | `p.adjust(p, "holm")` |
+| IHW | FDR with informative covariate | Covariate predicts power (e.g. mean intensity) | `IHW::ihw()` |
+
+Report **adjusted** p-values and an effect-size threshold (e.g. |log₂FC| ≥ 1 **and** FDR < 0.05) — significance alone is not evidence of biological relevance.
+
+## Batch correction
+
+| Method | When to use | R implementation | Chapter |
+|---|---|---|---|
+| Model covariate | Batch known; downstream is a linear model | add `+ batch` to design | 17, 20 |
+| ComBat | Remove known batch for visualisation/clustering | `sva::ComBat()` | 17 |
+| ComBat-seq | Count-like data | `sva::ComBat_seq()` | 17 |
+| SVA / RUV | Unknown/latent technical factors | `sva::sva()`, `RUVSeq` | 17 |
+| IRS | TMT reference-channel batches | manual | 13, 14 |
+
+::: {.callout-warning}
+Do not both `ComBat`-correct **and** include batch in the model — that removes the effect twice and biases downstream inference. Correct for visualisation, *or* model the covariate for inference; keep the two paths separate.
+:::
+
+## Multivariate and integrative methods
+
+| Method | Purpose | R implementation | Chapter |
+|---|---|---|---|
+| PCA | Unsupervised structure, QC, outliers | `prcomp()`, `factoextra::fviz_pca_ind()` | 13, 17 |
+| Hierarchical clustering + heatmap | Sample/feature grouping | `pheatmap()`, `ComplexHeatmap::Heatmap()` | 17, 19 |
+| PLS-DA / sPLS-DA | Supervised class separation, feature selection | `mixOmics::splsda()` | 22 |
+| DIABLO (multi-block sPLS-DA) | Integrate multiple omics blocks | `mixOmics::block.splsda()` | 22 |
+| Correlation networks | Cross-omics association structure | `corrplot`, `igraph` | 22 |
+| Pathway enrichment (ORA/GSEA) | Biological interpretation of hits | `clusterProfiler::enrichKEGG()`, `gseKEGG()` | 22 |
+
+Supervised methods (PLS-DA, classifiers) **must** be validated on held-out data — cross-validate the *entire* pipeline, feature selection included (see below).
+
+## Machine-learning validation (avoiding data leakage)
+
+Chapter 23 covers three leakage sources; the antidote is putting every data-dependent step **inside** the resampling loop.
+
+| Step | Wrong (leaks) | Right |
+|---|---|---|
+| Normalisation / imputation | Fit on full dataset, then split | Fit on training fold, apply to test fold |
+| Feature selection | Select features on all samples | Select inside each training fold |
+| Hyperparameter tuning | Tune on the test set | Inner CV loop (nested CV) |
+| Performance estimate | Report best CV score | Report outer-loop held-out performance |
+
+| Task | Method | R implementation |
+|---|---|---|
+| Nested cross-validation | Outer/inner resampling | `rsample::nested_cv()`, `tidymodels` |
+| Classifier | Random forest / elastic net | `randomForest()`, `glmnet::cv.glmnet()` |
+| Discrimination | ROC + bootstrap CI for AUC | `pROC::roc()`, `pROC::ci.auc()` |
+| Calibration | Reliability curve, Brier score | `pROC`, custom |
+| Survival | Cox PH, Kaplan–Meier | `survival::coxph()`, `survminer::ggsurvplot()` |
+
+Report AUC with a confidence interval, the validation scheme, sample sizes per class, and the number of features entering the model. For small n, prefer repeated CV or bootstrap over a single train/test split.
+
+## Reproducibility checklist
+
+A pre-submission checklist condensing Chapters 3 and 23.
+
+- [ ] **Seeds set** before every stochastic step (`set.seed()` for imputation, CV, PCA).
+- [ ] **Package versions locked** with `renv` (`renv.lock` committed).
+- [ ] **System dependencies** captured in a `Dockerfile` where non-R tools are used (`msconvert`, etc.).
+- [ ] **Pipeline scripted** end-to-end (`targets`) — no manual button-clicks or ad-hoc console steps.
+- [ ] **Parameters are explicit** (peak-picking ppm, FDR, thresholds) and stored as pipeline targets, not buried in prose.
+- [ ] **Raw data read-only**; conversion command (`msconvert` version + filters) recorded.
+- [ ] **Session info** (`sessionInfo()` / `sessioninfo::session_info()`) printed in every report.
+- [ ] **Multiple-testing correction** applied and adjusted p-values reported.
+- [ ] **Sensitivity analysis** for imputation and normalisation choices.
+- [ ] **No data leakage** — preprocessing/feature-selection/tuning inside CV folds.
+- [ ] **Code + data deposited** (PRIDE/MetaboLights/MassIVE + Zenodo/GitHub), following FAIR (Chapter 25).
+- [ ] **Report regenerated from scratch** on a clean checkout before submission.
+
+## Reference
+
+- Benjamini Y, Hochberg Y (1995). *Controlling the false discovery rate.* J R Stat Soc B.
+- Ritchie ME *et al.* (2015). *limma powers differential expression analyses.* Nucleic Acids Res.
+- See `references.bib` for the full citation list.

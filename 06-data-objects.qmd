@@ -1,0 +1,412 @@
+# Construct Analysis-Ready Data Objects
+
+The difference between an afternoon of frustration and a clean analysis is almost always the object you put your data in. The same MS data can live as a pile of files, a flat matrix, or a linked hierarchy of peptides and proteins — and choosing wrong means fighting your tools at every step. This chapter introduces the four Bioconductor containers that hold MS data and, more importantly, teaches you when to reach for each.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Flattening a `QFeatures` hierarchy into a bare matrix too early. Once you drop the peptide-to-protein links, you can no longer trace a result back or re-aggregate it. Keep the linked object until the very last step.
+:::
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Construct and inspect `Spectra` objects and choose the right backend for your data size
+- Link raw spectra to sample metadata using `MsExperiment`
+- Build a `SummarizedExperiment` for feature-by-sample intensity data
+- Organise quantitative proteomics data in a `QFeatures` hierarchy (spectra -> peptides -> proteins)
+- Convert between data representations and export objects for downstream analysis
+
+## Analysis Environment
+
+Chapter 2 introduced the package ecosystem and Chapter 3 described project-level reproducibility. Here we assume the core packages are installed and focus on object construction rather than package setup.
+
+```r
+#| eval: false
+library(Spectra)
+library(MsExperiment)
+library(SummarizedExperiment)
+library(QFeatures)
+library(msdata)
+library(tidyverse)
+```
+
+For a new machine, install packages once from the setup guidance in Chapter 2 or record them in a project lockfile as described in Chapter 3.
+
+## Understanding the R for Mass Spectrometry Ecosystem
+
+### 2.1 Package Architecture
+
+The R for Mass Spectrometry initiative follows a **modular, backend-based architecture**:
+
+```text
+User workflows
+  Preprocessing -> feature detection -> statistics -> visualisation
+        |
+High-level packages
+  QFeatures | xcms | PSMatch | MetaboCoreUtils
+        |
+Core data structure
+  Spectra
+        |
+Backends
+  MsBackendMzR | MsBackendHdf5Peaks | MsBackendSql | ...
+```
+
+**Key concept**: The `Spectra` object separates **data manipulation logic** from **data storage**. Backends handle file I/O and memory management, allowing you to switch between in-memory, on-disk, or database storage without changing analysis code.
+
+```r
+# Available backends and their use cases
+backend_info <- tibble(
+  Backend = c("MsBackendMzR", "MsBackendDataFrame", 
+              "MsBackendHdf5Peaks", "MsBackendSql"),
+  Storage = c("File (mzML/mzXML)", "RAM", "HDF5", "SQL Database"),
+  Best_For = c("Raw data reading", "Small datasets (< 1000 spectra)", 
+               "Large datasets (10k-1M spectra)", "Multi-user/collaborative"),
+  Memory_Usage = c("Low", "High", "Medium", "Low")
+)
+
+print(backend_info)
+```
+
+### Choosing the Right Backend
+
+The backend you choose determines memory footprint, access speed, and scalability. Here is a decision guide:
+
+| Scenario | Recommended Backend | Reason |
+|----------|-------------------|--------|
+| A few small mzML files, interactive exploration | `MsBackendMzR` | Simple, no extra dependencies; reads directly from raw files |
+| Thousands of spectra, need fast random access | `MsBackendHdf5Peaks` | Stores peak data in HDF5; lazy loading; much faster than re-parsing mzML |
+| Multi-user lab, shared data, complex metadata queries | `MsBackendSql` | Stores spectra + metadata in a relational database; supports SQL queries across experiments |
+| Small synthetic or processed spectra in memory | `MsBackendDataFrame` | Good for testing and small result sets; everything in RAM |
+| Public repository data (MetaboLights, MassIVE) | `MsBackendMassIVE` or `MsBackendMetaboLights` | Direct access to deposited datasets without downloading (Chapter 16 covers `MsBackendMetaboLights` in the metabolomics workflow) |
+| Proteomics repository data (PRIDE) | `rpx` | Queries PRIDE and returns `Spectra` objects from deposited identifications (Chapter 25 covers `rpx` in the reproducible reporting workflow) |
+
+**General rule**: Use `MsBackendMzR` for initial exploration of a few files. Switch to `MsBackendHdf5Peaks` when your experiment grows beyond 10–20 runs or when loading times become noticeable. Reach for `MsBackendSql` when multiple people need to query the same data with different filters.
+
+```r
+# Converting between backends
+ms_data_hdf5 <- setBackend(ms_data, MsBackendHdf5Peaks())
+```
+
+### Why This Architecture Matters for MS Data
+
+Mass spectrometry data presents unique challenges:
+- **Large file sizes**: Single runs can be 1-10 GB
+- **Variable structure**: MS1 vs MS2 spectra, profile vs centroid data
+- **Complex metadata**: Instrument parameters, sample information, processing history
+
+The backend system addresses these by:
+1. **Lazy evaluation**: Data is only loaded when needed
+2. **Pluggable storage**: Same code works for 100 or 1 million spectra
+3. **Consistent interface**: Switch backends with one line of code
+
+## Core Data Structures for MS Data
+
+### Vectors and Matrices
+
+Mass spectra are fundamentally collections of **(m/z, intensity)** pairs, which map naturally to R's vector and matrix structures.
+
+```r
+# Example: Creating a simple spectrum with 5 peaks
+mz_values <- c(104.10, 205.20, 306.30, 407.40, 508.50)
+intensity_values <- c(1200, 3500, 8900, 2100, 450)
+
+# Option 1: Separate vectors (common for processing)
+cat("Spectrum as separate vectors:\n")
+cat("  m/z:", paste(mz_values, collapse = ", "), "\n")
+cat("  intensities:", paste(intensity_values, collapse = ", "), "\n\n")
+
+# Option 2: Matrix (efficient for computation)
+spectrum_matrix <- cbind(mz = mz_values, intensity = intensity_values)
+cat("Spectrum as matrix (nrow =", nrow(spectrum_matrix), "):\n")
+print(head(spectrum_matrix))
+
+# Option 3: Data frame (good for adding metadata)
+spectrum_df <- data.frame(
+  mz = mz_values,
+  intensity = intensity_values,
+  relative_intensity = intensity_values / max(intensity_values) * 100
+)
+```
+
+### Lists for Complex Data
+
+MS experiments contain heterogeneous data: spectral matrices, metadata, processing logs, and annotations.
+
+```r
+# Comprehensive MS run representation
+ms_run <- list(
+  # Metadata
+  instrument = list(
+    model = "Orbitrap Fusion Lumos",
+    source = "ESI",
+    resolution = 120000,
+    polarity = "positive"
+  ),
+  
+  # Acquisition parameters
+  acquisition = list(
+    date = Sys.Date(),
+    operator = "Researcher Name",
+    method = "DDA_top20",
+    ms1_resolution = 120000,
+    ms2_resolution = 30000
+  ),
+  
+  # Data summary
+  summary = list(
+    total_spectra = 28473,
+    ms1_spectra = 1423,
+    ms2_spectra = 27050,
+    rt_range_sec = c(120, 3540)
+  ),
+  
+  # Sample information
+  sample = list(
+    id = "QC_01",
+    type = "Quality Control",
+    injection_volume_ul = 2
+  )
+)
+
+# Access nested elements
+cat(sprintf("Instrument: %s %s\n", 
+            ms_run$instrument$model, 
+            ms_run$instrument$source))
+cat(sprintf("Total spectra: %d (MS1: %d, MS2: %d)\n",
+            ms_run$summary$total_spectra,
+            ms_run$summary$ms1_spectra,
+            ms_run$summary$ms2_spectra))
+```
+
+### Tibbles: Modern Data Frames for MS Metadata
+
+Tibbles (from `tidyverse`) are an improved version of data frames with better printing and behavior:
+
+```r
+# Create a tibble for multiple spectra metadata
+spectra_metadata <- tibble(
+  spectrum_id = 1:5,
+  ms_level = c(1, 2, 2, 1, 2),
+  retention_time = c(120.5, 121.3, 245.8, 367.2, 368.1),
+  precursor_mz = c(NA, 445.12, 782.45, NA, 556.78),
+  precursor_charge = c(NA, 2L, 3L, NA, 2L),
+  intensity_total = c(2.5e6, 8.3e5, 1.2e6, 3.1e6, 6.7e5)
+)
+
+# Tibbles show only first 10 rows and data types
+spectra_metadata
+```
+
+### The Split-Apply-Combine Pattern for MS Data
+
+This is the single most common pattern in MS data analysis: split data by a grouping variable, apply a computation to each group, and combine the results. In tidyverse, this is `group_by()` + `summarise()`:
+
+```r
+# Compute per-sample summary statistics from a feature matrix
+feature_df |>
+  pivot_longer(-feature_id, names_to = "sample", values_to = "intensity") |>
+  group_by(sample) |>
+  summarise(
+    n_features    = n(),
+    n_missing     = sum(is.na(intensity)),
+    median_log2   = median(log2(intensity + 1), na.rm = TRUE),
+    cv_pct        = sd(intensity, na.rm = TRUE) / mean(intensity, na.rm = TRUE) * 100,
+    .groups       = "drop"
+  )
+```
+
+This pattern appears in every chapter: QC metrics per sample, missingness rates per feature, CV in QC pools, differential testing per protein. Master it early.
+
+### Joins: Merging MS Metadata with Results
+
+MS data analysis constantly merges tables: metadata ↔ feature matrices, identification results ↔ quantification tables, protein annotations ↔ DE results. Use the `*_join()` family — never base R `merge()`:
+
+```r
+# left_join: keep all rows from the left table
+de_results |>
+  left_join(protein_annotations, by = "protein_id")
+
+# anti_join: find features in one table but not the other (QC check)
+features_in_matrix_only <- anti_join(
+  feature_ids_from_matrix,
+  feature_ids_from_metadata,
+  by = "feature_id"
+)
+```
+
+**Rule of thumb for joins in MS workflows:**
+| Join | Use Case |
+|------|----------|
+| `left_join()` | Add annotations to results (keep all results) |
+| `inner_join()` | Keep only rows present in both tables |
+| `anti_join()` | QC — find mismatches between metadata and data |
+| `full_join()` | Merge two feature tables with different coverage |
+
+## Data Import/Export
+
+### Common File Formats in Mass Spectrometry
+
+| Format | Extension | Type | Description | Primary Use |
+|--------|-----------|------|-------------|-------------|
+| **mzML** | `.mzML` | XML | Vendor-neutral standard (HUPO PSI) | Raw MS data storage |
+| **mzXML** | `.mzXML` | XML | Legacy standard, simpler than mzML | Older datasets |
+| **mz5** | `.mz5` | HDF5 | Compressed, fast random access | Large datasets |
+| **MGF** | `.mgf` | Text | Mascot Generic Format | MS/MS for database search |
+| **mzTab** | `.mztab` | Text | Tab-delimited results reporting | Analysis results sharing |
+
+### Reading MS Data with Spectra
+
+```r
+# Load example data from the msdata package
+library(msdata)
+
+# Get path to example proteomics file (mzML format)
+proteomics_files <- msdata::proteomics(full.names = TRUE)
+ms_file <- proteomics_files[1]
+cat("Example file:", basename(ms_file), "\n")
+cat("File size:", round(file.info(ms_file)$size / 1e6, 2), "MB\n")
+
+# Method 1: Read with automatic backend selection
+ms_data <- Spectra(ms_file)
+
+# Method 2: Explicitly specify backend (recommended for reproducibility)
+ms_data <- Spectra(ms_file, backend = MsBackendMzR())
+
+# Basic exploration
+cat("\n=== Dataset Summary ===\n")
+cat(sprintf("Total spectra:   %d\n", length(ms_data)))
+cat(sprintf("MS levels:       %s\n", 
+            paste(unique(msLevel(ms_data)), collapse = ", ")))
+cat(sprintf("Retention time:  %.1f - %.1f seconds (%.2f - %.2f min)\n",
+            min(rtime(ms_data)), max(rtime(ms_data)),
+            min(rtime(ms_data))/60, max(rtime(ms_data))/60))
+cat(sprintf("Polarity:        %s\n", 
+            ifelse(all(polarity(ms_data) == 1), "Positive", "Negative")))
+```
+
+### Working with Spectral Data
+
+```r
+# Access specific spectra
+first_spectrum <- ms_data[1]
+cat(sprintf("Spectrum 1: MS level %d at RT = %.2f sec\n",
+            msLevel(first_spectrum), rtime(first_spectrum)))
+
+# Extract peak data
+peaks <- peaksData(first_spectrum)[[1]]  # Returns [mz, intensity] matrix
+colnames(peaks) <- c("mz", "intensity")
+
+cat(sprintf("\nPeak information:\n"))
+cat(sprintf("  Number of peaks:  %d\n", nrow(peaks)))
+cat(sprintf("  m/z range:        %.2f - %.2f\n", min(peaks[,1]), max(peaks[,1])))
+cat(sprintf("  Intensity range:  %.2e - %.2e\n", min(peaks[,2]), max(peaks[,2])))
+
+# Find top 5 most intense peaks
+top_peaks <- peaks[order(peaks[,2], decreasing = TRUE)[1:5], ]
+cat("\nTop 5 most intense peaks:\n")
+print(top_peaks)
+
+# Filtering spectra
+ms2_spectra <- filterMsLevel(ms_data, 2L)
+cat(sprintf("\nFiltered to %d MS2 spectra (%.1f%% of total)\n",
+            length(ms2_spectra), length(ms2_spectra)/length(ms_data)*100))
+
+# RT filtering: first 10 minutes only
+early_spectra <- filterRt(ms_data, rt = c(0, 600))
+cat(sprintf("Spectra in first 10 min: %d\n", length(early_spectra)))
+```
+
+### Exporting Data
+
+```r
+#| eval: false
+#| echo: true
+# Export subsets to different formats
+
+# Export first 100 spectra as new mzML file
+export(ms_data[1:100], file = "subset_100spectra.mzML")
+
+# Export MS2 spectra to MGF for database searching
+ms2_data <- filterMsLevel(ms_data, 2L)
+export(ms2_data, file = "ms2_spectra.mgf")
+
+# Export metadata as CSV for reporting
+metadata_df <- spectraData(ms_data) %>%
+  as.data.frame() %>%
+  select(msLevel, rtime, precursorMz, precursorCharge, polarity) %>%
+  mutate(rt_min = rtime / 60)
+
+write.csv(metadata_df, "spectra_metadata.csv", row.names = FALSE)
+
+# Export peak lists for custom processing
+peak_lists <- lapply(ms_data[1:10], function(sp) {
+  peaks <- peaksData(sp)[[1]]
+  colnames(peaks) <- c("mz", "intensity")
+  peaks
+})
+saveRDS(peak_lists, "peak_lists.rds")
+```
+
+## Best Practices and Troubleshooting
+
+### Memory Management
+
+```r
+# Check memory usage of Spectra object
+object.size(ms_data) / 1e6  # Size in MB
+
+# Convert to memory-efficient backend for large datasets
+ms_data_hdf5 <- setBackend(ms_data, backend = MsBackendHdf5Peaks())
+
+# Remove large objects when no longer needed
+rm(ms_data_hdf5)
+gc()  # Force garbage collection
+```
+
+### Common Issues and Solutions
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| **mzR compilation fails** | Error installing MsBackendMzR | Install system dependencies: `libnetcdf-dev`, `libxml2-dev` |
+| **Out of memory** | R crashes or slows down | Use HDF5 or SQL backend instead of in-memory |
+| **Slow file reading** | `Spectra()` takes minutes | Use `backend = MsBackendHdf5Peaks()` for faster access |
+| **Missing precursor info** | `precursorMz` returns NA | Check if file contains MS2 spectra with `any(msLevel(ms_data) == 2)` |
+
+## Summary
+
+This chapter established the fundamental R skills and concepts essential for mass spectrometry data analysis:
+
+### Key Takeaways
+
+| Concept | Key Points |
+|---------|-------------|
+| **Ecosystem** | Bioconductor provides peer-reviewed, interoperable packages; backend architecture separates logic from storage |
+| **Data Structures** | Vectors (peak lists), matrices (peak tables), lists (metadata), tibbles (sample info) |
+| **Spectra Object** | Central data structure; supports filtering, access, and multiple backends |
+| **File I/O** | mzML (standard), MGF (MS/MS search), mzTab (results); use `Spectra()` for import |
+| **Best Practices** | Use appropriate backend for data size; always verify installations; document versions |
+
+
+### Additional Resources
+
+- [R for Mass Spectrometry Website](https://rformassspectrometry.org/)
+- [Spectra Package Documentation](https://rformassspectrometry.github.io/Spectra/)
+- [Bioconductor Support Forum](https://support.bioconductor.org/)
+- [MSnbase GitHub Tutorials](https://github.com/rformassspectrometry/MSnbase)
+
+
+## Exercises
+
+1.  **Spectra Construction**: Using the `msdata` package, load an mzML file into a `Spectra` object. Practice filtering it by MS level and retention time range.
+2.  **Metadata Linking**: Create a `MsExperiment` object that links three raw data files to a sample metadata table containing "Condition" and "Batch" columns.
+3.  **QFeatures Hierarchy**: Explain how the `QFeatures` container handles the relationship between PSMs, peptides, and proteins. Why is this hierarchy useful for proteomics?
+4.  **Real Data Exploration**: Load the `msdata::proteomics()` file and answer: (a) What is the ratio of MS1 to MS2 spectra? (b) What is the most common precursor charge state? (c) Create a histogram of retention times.
+5.  **Backend Comparison**: Load the same file using `MsBackendMzR` and `MsBackendDataFrame`. Compare loading time (use `system.time()`), memory usage, and time to access peaks of the 100th spectrum.
+6.  **Data Frame Operations**: Using a `spectra_metadata` tibble: add a column for retention time in minutes, filter to only MS2 spectra, and calculate the average precursor m/z by charge state.
+
+## Session Information
+
+``` r
+sessionInfo()
+```

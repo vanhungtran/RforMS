@@ -1,0 +1,546 @@
+﻿# TMT and Isobaric Labeling Analysis
+
+Isobaric labeling is a clever trick: tag up to eighteen samples with mass-identical labels, pool them, and quantify all of them in one run from tiny reporter ions released in MS2. The reward is throughput and near-complete data. The price is a subtle, systematic lie called *ratio compression* — co-isolated peptides drag every measured fold-change toward 1, quietly flattening the differences you came to find. This chapter covers the QC, normalization, and analysis that keep TMT honest, from reporter ion intensities to a differential result.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Reading TMT fold-changes at face value. Co-isolation compresses every ratio toward 1, so a "modest" change may be a strong real one. Apply purity correction and interpret compressed ratios accordingly.
+:::
+
+## Learning Objectives
+
+By the end of this program you will be able to:
+
+- Understand **TMT/iTRAQ reporter ion quantification** and its limitations (co-isolation interference)
+- Import reporter ion intensities into a `QFeatures` object
+- Apply **sample loading normalization** and **within-channel median scaling**
+- Assess quantification quality with reporter ion CV and expected vs observed ratio plots
+- Perform differential abundance analysis on TMT data using `limma`
+- Export a TMT quantification report
+
+## Datasets
+
+| Dataset | Source | Role |
+|---|---|---|
+| PXD000001 | PRIDE / `MsDataHub` | example TMT data |
+| TMT example from `QFeatures` | `QFeatures` vignette | tutorial |
+
+## Packages
+
+```{r}
+#| eval: false
+library(QFeatures)
+library(MSnbase)
+library(MsCoreUtils)
+library(limma)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+---
+
+## Background: How TMT Quantification Works
+
+In a TMT experiment:
+1. Each sample is digested to peptides.
+2. Peptides are labeled with **mass-balanced isobaric tags** (e.g., TMT-6plex, TMT-11plex, TMT-18plex).
+3. All labeled samples are pooled and analyzed together in one LC-MS/MS run.
+4. MS1 identifies precursor ions; MS2 fragmentation releases **reporter ions** (126–135 Da) whose intensities represent per-sample abundance.
+
+**Key limitation:** co-isolation of multiple precursors in the same MS2 window compresses observed ratios toward 1 ("ratio compression"). This is partially corrected by SPS-MS3 acquisition or interference correction algorithms.
+
+---
+
+## Step 1 — Import Reporter Ion Intensities
+
+```{r}
+#| eval: false
+# Example: load a PSM-level table with reporter ion columns
+# Replace with your actual data path
+psm_raw <- read.csv("data/tmt_psm_table.csv")
+
+# Identify reporter ion columns (TMT-6: 126, 127N, 127C, 128N, 128C, 129N)
+reporter_cols <- grep("^X12[6-9]|^X13[0-5]", colnames(psm_raw), value = TRUE)
+cat("Reporter channels:", reporter_cols, "\n")
+```
+
+---
+
+## Step 2 — Construct QFeatures Object
+
+```{r}
+#| eval: false
+se_psm <- SummarizedExperiment(
+  assays    = list(reporter = as.matrix(psm_raw[, reporter_cols])),
+  rowData   = DataFrame(psm_raw[, setdiff(colnames(psm_raw), reporter_cols)])
+)
+
+# Sample metadata
+col_meta <- DataFrame(
+  sample    = reporter_cols,
+  condition = c("Control", "Control", "Control", "Treatment", "Treatment", "Treatment"),
+  row.names = reporter_cols
+)
+colData(se_psm) <- col_meta
+
+qf <- QFeatures(list(psms = se_psm), colData = col_meta)
+qf
+```
+
+**Main output:** reporter ion intensity matrix + channel metadata table.
+
+---
+
+## Step 3 — Normalize: Sample Loading + Median Scaling
+
+```{r}
+#| eval: false
+# Step 3a: Sample-loading normalization (column sums equal)
+qf <- normalize(qf, i = "psms", name = "psms_sl",
+                method = "div.mean")
+
+# Step 3b: Within-channel median scaling
+qf <- normalize(qf, i = "psms_sl", name = "psms_norm",
+                method = "center.median")
+
+# Density plot comparison
+assay_before <- log2(assay(qf[["psms"]]) + 1)
+assay_after  <- log2(assay(qf[["psms_norm"]]) + 1)
+
+pivot_longer(as.data.frame(assay_after), everything(),
+             names_to = "channel", values_to = "intensity") |>
+  ggplot(aes(intensity, colour = channel)) +
+  geom_density(show.legend = FALSE) +
+  labs(title = "Normalized TMT reporter intensities", x = "log2 intensity") +
+  theme_minimal()
+```
+
+**Main output:** normalized TMT matrix.
+
+---
+
+## Step 4 — Expected vs Observed Ratio Plot
+
+For a dilution series or spike-in reference, compare expected fold changes to observed.
+
+```{r}
+#| eval: false
+# Simulated expected vs observed (replace with actual spike-in data)
+set.seed(42)
+n <- 200
+expected <- rep(c(1, 2, 4, 0.5), each = 50)
+observed <- expected * rnorm(n, mean = 1, sd = 0.2)
+
+data.frame(expected = log2(expected), observed = log2(observed)) |>
+  ggplot(aes(log2(expected), log2(observed))) +
+  geom_point(alpha = 0.5) +
+  geom_abline(colour = "red", linetype = "dashed") +
+  labs(title = "Expected vs observed TMT ratios",
+       x = "Expected log2 FC",
+       y = "Observed log2 FC") +
+  theme_minimal()
+```
+
+**Main output:** expected-versus-observed ratio plot.
+
+---
+
+## Step 5 — Channel-Level QC: CV Plot
+
+```{r}
+#| eval: false
+cv_per_channel <- apply(assay(qf[["psms_norm"]]), 2, function(x) {
+  sd(x, na.rm = TRUE) / abs(mean(x, na.rm = TRUE)) * 100
+})
+
+data.frame(channel = names(cv_per_channel), CV = cv_per_channel) |>
+  ggplot(aes(channel, CV, fill = channel)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Coefficient of variation per TMT channel", y = "CV (%)") +
+  theme_minimal()
+```
+
+**Main output:** channel-level QC plot.
+
+---
+
+## Step 6 — Aggregate PSMs to Protein Level
+
+```{r}
+#| eval: false
+qf <- aggregateFeatures(qf,
+  i       = "psms_norm",
+  name    = "proteins",
+  fcol    = "leading_protein",
+  fun     = MsCoreUtils::robustSummary
+)
+```
+
+---
+
+## Step 7 — Differential Abundance with `limma`
+
+```{r}
+#| eval: false
+prot_mat <- assay(qf[["proteins"]])
+design   <- model.matrix(~ condition, data = as.data.frame(colData(qf)))
+fit      <- lmFit(prot_mat, design)
+fit      <- eBayes(fit)
+results  <- topTable(fit, coef = "conditionTreatment", number = Inf, sort.by = "P")
+
+head(results)
+```
+
+**Main output:** differential abundance table.
+
+---
+
+## Step 8 — Export TMT Quantification Report
+
+```{r}
+#| eval: false
+write.csv(results, "results/tmt_differential_abundance.csv")
+```
+
+---
+
+## Example 3: TMT Proteomics Known-Ratio Benchmark
+
+### Project Question
+
+Can the analysis recover expected protein ratios in a TMT spike-in experiment?
+
+This example is designed to teach quantification reliability. Unlike a discovery experiment where the true fold changes are unknown, a spike-in benchmark gives expected ratios for a known subset of proteins. The analysis can therefore ask whether preprocessing, normalization, aggregation, and modeling recover the known truth or compress ratios toward 1.
+
+### Dataset and Scope
+
+Use PXD000001, a TMT spike-in proteomics dataset. ProteomeXchange describes expected reporter-ion ratios for Erwinia peptides and spike-in proteins, making it useful for benchmarking TMT quantification and ratio compression.
+
+The workflow below is table-oriented: it can start from mzTab, mzIdentML-linked reporter-ion exports, search-engine PSM tables, or reporter-ion quantification tables produced by external software. If raw mzML files are available, raw-level QC should also include TIC/BPC summaries and MS2 identification rates.
+
+### Workflow Map
+
+| Step | Implementation |
+|---|---|
+| Channel metadata and expected ratios | Create TMT reporter-channel metadata and known spike-in ratios |
+| Import | Read reporter-ion PSM table from mzTab, mzIdentML-linked output, or search-engine export |
+| Raw/run-level QC | Review TIC/BPC, MS2 identification rate, and reporter-ion intensity distributions when available |
+| Identification audit | Remove decoys, contaminants, low-confidence PSMs, rank > 1 entries, and high-interference PSMs |
+| Abundance matrix | Build reporter-ion PSM, peptide, and protein matrices |
+| Low-quality filtering | Remove missing reporter channels, low-intensity entries, and high-interference entries |
+| Normalization | Apply channel loading normalization and log2 ratios |
+| Missingness diagnosis | Check missing reporter channels and low-intensity proteins |
+| Statistical modeling | Use `limma` (shown below); for TMT-specific linear mixed models, `MSstatsTMT` provides a purpose-built workflow with channel-level normalisation and purity correction (see the MSstats overview in Chapter 12) |
+| Multiple testing | Apply Benjamini-Hochberg FDR |
+| Visualization | Expected-versus-observed ratio plot, PCA, volcano plot |
+| Benchmark interpretation | Focus on recovery of known spike-in proteins and ratio compression |
+| Reproducible export | Save filtered PSMs, normalized matrices, benchmark plots, and session info |
+
+### Setup and Metadata
+
+```{r}
+#| eval: false
+library(QFeatures)
+library(SummarizedExperiment)
+library(S4Vectors)
+library(PSMatch)
+library(MSnbase)
+library(MsCoreUtils)
+library(limma)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggrepel)
+library(sessioninfo)
+
+dir.create("results", showWarnings = FALSE)
+dir.create("figures", showWarnings = FALSE)
+dir.create("objects", showWarnings = FALSE)
+```
+
+Create one metadata row per reporter channel. Replace the expected ratios below with the exact PXD000001 channel design used in your downloaded table.
+
+```{r}
+#| eval: false
+channel_meta <- tibble(
+  channel = c("X126", "X127", "X128", "X129", "X130", "X131"),
+  condition = c("reference", "reference", "spike_low", "spike_low", "spike_high", "spike_high"),
+  expected_ratio_to_reference = c(1, 1, 2, 2, 10, 10)
+)
+
+write_csv(channel_meta, "results/tmt_00_channel_metadata.csv")
+```
+
+### Import and Audit PSM-Level Reporter Intensities
+
+The input table should contain PSM identifiers, protein accessions, reporter-ion intensity columns, and quality fields such as decoy status, contaminant status, score, rank, and interference if available.
+
+```{r}
+#| eval: false
+psm_raw <- read_csv("data/pxd000001_tmt_psm_reporters.csv")
+
+reporter_cols <- intersect(channel_meta$channel, colnames(psm_raw))
+stopifnot(length(reporter_cols) == nrow(channel_meta))
+
+psm_clean <- psm_raw |>
+  filter(
+    !if_any(matches("decoy|reverse", ignore.case = TRUE), ~ .x %in% c(TRUE, "+", "TRUE", "REV")),
+    !if_any(matches("contaminant", ignore.case = TRUE), ~ .x %in% c(TRUE, "+", "TRUE")),
+    if ("rank" %in% colnames(psm_raw)) rank == 1 else TRUE,
+    if ("interference" %in% colnames(psm_raw)) interference <= 0.3 else TRUE
+  ) |>
+  filter(if_all(all_of(reporter_cols), ~ !is.na(.x) & .x > 0))
+
+write_csv(psm_clean, "results/tmt_01_filtered_psm_table.csv")
+```
+
+```{r}
+#| eval: false
+reporter_matrix <- as.matrix(psm_clean[, reporter_cols])
+if ("psm_id" %in% colnames(psm_clean)) {
+  rownames(reporter_matrix) <- psm_clean$psm_id
+} else {
+  rownames(reporter_matrix) <- paste0("PSM_", seq_len(nrow(psm_clean)))
+}
+
+reporter_qc <- tibble(
+  channel = reporter_cols,
+  total_intensity = colSums(reporter_matrix, na.rm = TRUE),
+  median_intensity = apply(reporter_matrix, 2, median, na.rm = TRUE),
+  pct_missing = colMeans(is.na(reporter_matrix)) * 100
+)
+
+write_csv(reporter_qc, "results/tmt_02_reporter_channel_qc.csv")
+
+p_reporter_dist <- as_tibble(log2(reporter_matrix + 1)) |>
+  pivot_longer(everything(), names_to = "channel", values_to = "log2_intensity") |>
+  ggplot(aes(log2_intensity, color = channel)) +
+  geom_density() +
+  labs(title = "Reporter ion intensity distributions", x = "log2 reporter intensity") +
+  theme_bw()
+
+ggsave("figures/tmt_01_reporter_intensity_distributions.png",
+       p_reporter_dist, width = 8, height = 5, dpi = 300)
+```
+
+### Build QFeatures and Normalize TMT Channels
+
+```{r}
+#| eval: false
+row_meta <- psm_clean[, setdiff(colnames(psm_clean), reporter_cols)]
+
+se_psm <- SummarizedExperiment(
+  assays = list(reporter = reporter_matrix),
+  rowData = S4Vectors::DataFrame(row_meta)
+)
+
+colData(se_psm) <- S4Vectors::DataFrame(
+  channel_meta |>
+    as.data.frame() |>
+    tibble::column_to_rownames("channel")
+)
+
+qf <- QFeatures(list(psms = se_psm))
+
+qf <- normalize(qf, i = "psms", name = "psms_loading_norm", method = "div.sum")
+qf <- normalize(qf, i = "psms_loading_norm", name = "psms_norm", method = "center.median")
+
+saveRDS(qf, "objects/tmt_01_qfeatures_psm_normalized.rds")
+```
+
+### Aggregate to Protein Level
+
+Choose the protein column that matches the export. Common names include `leading_protein`, `Protein.IDs`, `accession`, or `protein_id`.
+
+```{r}
+#| eval: false
+protein_col <- intersect(
+  c("leading_protein", "Protein.IDs", "accession", "protein_id"),
+  colnames(rowData(qf[["psms_norm"]]))
+)[1]
+
+stopifnot(!is.na(protein_col))
+
+qf <- aggregateFeatures(
+  qf,
+  i = "psms_norm",
+  name = "proteins",
+  fcol = protein_col,
+  fun = MsCoreUtils::robustSummary
+)
+
+protein_mat <- assay(qf[["proteins"]])
+write_csv(
+  as_tibble(protein_mat, rownames = "protein_id"),
+  "results/tmt_03_normalized_protein_matrix.csv"
+)
+```
+
+### Expected-Versus-Observed Ratio Benchmark
+
+The benchmark compares each protein's observed channel ratio against the known spike-in ratio. Use reference channels as the denominator.
+
+```{r}
+#| eval: false
+reference_channels <- channel_meta |>
+  filter(expected_ratio_to_reference == 1) |>
+  pull(channel)
+
+protein_log2 <- log2(protein_mat + 1)
+reference_mean <- rowMeans(protein_log2[, reference_channels, drop = FALSE], na.rm = TRUE)
+
+observed_ratios <- lapply(seq_len(nrow(channel_meta)), function(i) {
+  channel <- channel_meta$channel[i]
+  tibble(
+    protein_id = rownames(protein_log2),
+    channel = channel,
+    expected_log2_ratio = log2(channel_meta$expected_ratio_to_reference[i]),
+    observed_log2_ratio = protein_log2[, channel] - reference_mean
+  )
+}) |>
+  bind_rows()
+
+write_csv(observed_ratios, "results/tmt_04_expected_vs_observed_ratios.csv")
+
+p_expected <- observed_ratios |>
+  filter(expected_log2_ratio != 0) |>
+  ggplot(aes(expected_log2_ratio, observed_log2_ratio)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ channel) +
+  labs(
+    title = "TMT benchmark: expected vs observed protein ratios",
+    x = "Expected log2 ratio",
+    y = "Observed log2 ratio"
+  ) +
+  theme_bw()
+
+ggsave("figures/tmt_02_expected_vs_observed_ratios.png",
+       p_expected, width = 9, height = 6, dpi = 300)
+```
+
+### Differential Abundance and Benchmark Recovery
+
+```{r}
+#| eval: false
+design <- model.matrix(~ 0 + condition, data = as.data.frame(colData(qf[["proteins"]])))
+colnames(design) <- make.names(colnames(design))
+
+contrast_matrix <- makeContrasts(
+  spike_high_vs_reference = conditionspike_high - conditionreference,
+  spike_low_vs_reference = conditionspike_low - conditionreference,
+  levels = design
+)
+
+fit <- lmFit(protein_log2, design)
+fit <- contrasts.fit(fit, contrast_matrix)
+fit <- eBayes(fit)
+
+tmt_results <- topTable(fit, coef = "spike_high_vs_reference", number = Inf, sort.by = "P") |>
+  rownames_to_column("protein_id")
+
+write_csv(tmt_results, "results/tmt_05_differential_abundance_table.csv")
+```
+
+```{r}
+#| eval: false
+benchmark_summary <- observed_ratios |>
+  filter(expected_log2_ratio != 0) |>
+  group_by(channel, expected_log2_ratio) |>
+  summarise(
+    median_observed_log2_ratio = median(observed_log2_ratio, na.rm = TRUE),
+    median_ratio_recovery = median_observed_log2_ratio / expected_log2_ratio,
+    n_proteins = sum(!is.na(observed_log2_ratio)),
+    .groups = "drop"
+  )
+
+write_csv(benchmark_summary, "results/tmt_06_benchmark_recovery_summary.csv")
+```
+
+### PCA and Volcano Plot
+
+```{r}
+#| eval: false
+pca <- prcomp(t(protein_log2), center = TRUE, scale. = TRUE)
+pca_df <- as_tibble(pca$x[, 1:2], rownames = "channel") |>
+  left_join(channel_meta, by = "channel")
+
+p_pca <- ggplot(pca_df, aes(PC1, PC2, color = condition, label = channel)) +
+  geom_point(size = 3) +
+  ggrepel::geom_text_repel() +
+  labs(title = "PCA of normalized TMT protein matrix") +
+  theme_bw()
+
+ggsave("figures/tmt_03_pca_normalized_proteins.png", p_pca, width = 7, height = 5, dpi = 300)
+
+volcano_df <- tmt_results |>
+  mutate(
+    significant = adj.P.Val < 0.05 & abs(logFC) > 1,
+    neg_log10_fdr = -log10(adj.P.Val)
+  )
+
+p_volcano <- ggplot(volcano_df, aes(logFC, neg_log10_fdr)) +
+  geom_point(aes(color = significant), alpha = 0.75) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(
+    title = "TMT differential abundance benchmark",
+    x = "log2 fold change",
+    y = "-log10 FDR"
+  ) +
+  theme_bw()
+
+ggsave("figures/tmt_04_volcano_spike_high_vs_reference.png",
+       p_volcano, width = 7, height = 6, dpi = 300)
+```
+
+### Main Outputs
+
+| Output | File |
+|---|---|
+| Filtered PSM table | `results/tmt_01_filtered_psm_table.csv` |
+| Reporter ion QC table | `results/tmt_02_reporter_channel_qc.csv` |
+| Normalized protein matrix | `results/tmt_03_normalized_protein_matrix.csv` |
+| Expected-versus-observed ratios | `results/tmt_04_expected_vs_observed_ratios.csv` |
+| Differential abundance table | `results/tmt_05_differential_abundance_table.csv` |
+| Benchmark recovery summary | `results/tmt_06_benchmark_recovery_summary.csv` |
+| Expected-versus-observed plot | `figures/tmt_02_expected_vs_observed_ratios.png` |
+| Quarto reproducibility record | `results/tmt_07_session_info.txt` |
+
+```{r}
+#| eval: false
+sessioninfo::session_info() |>
+  capture.output() |>
+  writeLines("results/tmt_07_session_info.txt")
+```
+
+---
+
+## Summary
+
+| Output | Description |
+|---|---|
+| Reporter ion intensity matrix | Raw per-channel intensities |
+| Channel metadata table | Sample–condition mapping |
+| Normalized TMT matrix | SL + median-scaled intensities |
+| Expected vs observed ratio plot | Compression assessment |
+| Channel-level QC plot | CV per channel |
+| Differential abundance table | limma results for all proteins |
+| Benchmark recovery summary | Median observed/expected ratio recovery by channel |
+| TMT quantification report | Full CSV export |
+
+## Exercises
+
+1. Given a PSM table with TMT-10 reporter columns, write the code to identify the reporter-ion columns and build a `QFeatures` object with correct channel-to-sample metadata.
+2. Apply sample-loading normalization followed by within-channel median scaling. Plot per-channel intensity densities before and after — what changes?
+3. Using the expected-versus-observed ratio plot, explain what *ratio compression* is and how co-isolation interference produces it.
+4. Compute the coefficient of variation per channel for a set of housekeeping proteins. What CV threshold would you use to flag a problematic channel?
+5. Aggregate PSMs to protein level and run a `limma` contrast between two conditions. How does isobaric labelling change the interpretation of the resulting log fold-changes compared with label-free quantification (Chapter 13)?
+
+## Session Information
+
+```{r}
+#| eval: false
+sessioninfo::session_info()
+```

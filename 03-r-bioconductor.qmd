@@ -1,0 +1,821 @@
+# R and Bioconductor for Mass Spectrometry
+
+A single proteomics run produces gigabytes of spectra; a metabolomics study, thousands of features across hundreds of samples. Spreadsheets buckle, point-and-click tools hide the decisions they make, and neither can be rerun a year later when a reviewer asks. R — and especially Bioconductor — is where computational mass spectrometry actually happens: a scriptable, peer-reviewed toolkit built specifically for high-throughput biology. This chapter gives you the working vocabulary the rest of the book assumes.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Installing Bioconductor packages with `install.packages()`. It ignores the version constraints that Bioconductor packages share and produces cryptic "undefined class" errors later. Always install with `BiocManager::install()`.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Explain why R and Bioconductor are the standard platform for computational MS analysis
+- Work confidently with R's core data structures — vectors, data frames, lists, and factors — and understand when Bioconductor's S4 objects extend them
+- Apply the tidyverse grammar (`dplyr`, `tidyr`, `ggplot2`) to MS metadata and result tables
+- Create publication-quality visualisations of chromatograms, spectra, and differential abundance results
+- Construct and inspect the four key Bioconductor containers: `Spectra`, `MsExperiment`, `QFeatures`, and `SummarizedExperiment`
+- Understand the modular backend architecture that lets the same R code work for 100 spectra or 1 million
+- Choose between R's three modeling paradigms (frequentist, robust, Bayesian) for different MS experimental designs
+- Run a minimal but complete end-to-end MS analysis pipeline — from raw mzML files to a differential abundance result — using only Bioconductor functions
+
+---
+
+## Why R?
+
+R is a programming language and free software environment for statistical computing and graphics. It has become the lingua franca of data science in many fields, including bioinformatics and computational mass spectrometry. R's strength lies in its extensive ecosystem of over 19,000 packages on the Comprehensive R Archive Network (CRAN). However, for omics data the real powerhouse is **Bioconductor** — a collection of more than 2,000 highly interoperable R packages specifically designed for the analysis and comprehension of high-throughput genomic, transcriptomic, proteomic, and metabolomic data.
+
+For mass spectrometry workflows, Bioconductor provides core infrastructure packages like `Spectra` (handling raw MS data), `MSnbase` (peak processing and identification), `xcms` (chromatographic alignment and feature detection), and `QFeatures` (quantitative proteomics). These packages are developed under rigorous peer review, follow consistent data structures, and come with comprehensive documentation and vignettes.
+
+Using R and Bioconductor together transforms MS data analysis from a series of manual, error-prone steps into a scriptable, transparent, and reproducible pipeline. All operations — from reading vendor-specific raw files (`mzML`, `mzXML`, `raw`) to peak picking, retention time alignment, statistical testing, and visualisation — are expressed in R code. This scriptability is the very foundation of the reproducibility principles covered in the next chapter.
+
+### The Two R Ecosystems: CRAN and Bioconductor
+
+R has two complementary package repositories, and knowing when to use each is essential:
+
+| Repository | Scope | Installation | Review Process | Example Packages |
+|-----------|-------|-------------|----------------|-----------------|
+| **CRAN** | General-purpose statistics, data science, machine learning | `install.packages()` | Automated checks | `ggplot2`, `dplyr`, `tidymodels`, `lme4` |
+| **Bioconductor** | High-throughput biological assays: genomics, proteomics, metabolomics | `BiocManager::install()` | Peer review + automated checks | `Spectra`, `xcms`, `QFeatures`, `limma` |
+
+Bioconductor releases are tied to R releases (twice yearly), ensuring all packages in a release are mutually compatible. CRAN has no such coordination — package A v2.0 may break package B. For MS analysis, you will use both: CRAN for data manipulation (`dplyr`) and visualisation (`ggplot2`), Bioconductor for everything MS-specific.
+
+### Installing Packages: The Right Way
+
+```r
+# CRAN packages
+install.packages(c("tidyverse", "ggplot2", "lme4"))
+
+# Bioconductor — ALWAYS use BiocManager, never install.packages()
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(c("Spectra", "xcms", "QFeatures", "limma"))
+
+# Bioconductor version must match your R version
+BiocManager::version()  # confirm before installing
+```
+
+**Why `BiocManager::install()` is mandatory for Bioconductor:** Bioconductor packages share common S4 class definitions. Installing with `install.packages()` ignores version dependencies between Bioconductor packages, producing cryptic errors about undefined classes. `BiocManager` resolves the entire dependency graph against the correct Bioconductor release.
+
+---
+
+## The R Mindset: Three Principles That Change Everything
+
+Before diving into data structures and functions, internalise three principles that distinguish effective R users from those who fight the language.
+
+### Principle 1: R Is Vectorised — Not Loops
+
+The single most important insight about R: it is optimised for vectorised operations. Write `x^2`, not `for (i in 1:n) x[i]^2`. Vectorised code is approximately 100× faster and far more readable.
+
+```r
+# Vectorised (fast, idiomatic)
+log_intensities <- log2(intensities + 1)
+
+# Loop equivalent (slow, unidiomatic — avoid)
+log_intensities <- numeric(length(intensities))
+for (i in seq_along(intensities)) {
+  log_intensities[i] <- log2(intensities[i] + 1)
+}
+```
+
+This principle extends to the `apply` family and `purrr::map()` — these are R's tools for applying functions across dimensions without explicit loops. In MS analysis, you will constantly apply operations across features, samples, or spectra. Learn the vectorised approach early.
+
+### Principle 2: The Formula Interface Is Universal
+
+R uses a consistent formula syntax `y ~ x1 + x2` across virtually all modeling functions. Learn it once, apply it everywhere:
+
+```r
+# Linear model
+lm(intensity ~ condition, data = metadata)
+
+# Mixed-effects model (random effects in parentheses)
+lmer(intensity ~ condition + (1 | batch), data = metadata)
+
+# Differential abundance (limma)
+lmFit(assay_matrix, design = model.matrix(~ condition, data = metadata))
+```
+
+For MS data analysis, the formula interface connects your experimental design directly to the statistical model. Every design matrix you build in later chapters follows this same grammar.
+
+### Principle 3: Three Modeling Paradigms, One Language
+
+R supports three complementary modeling approaches, all relevant to MS data:
+
+| Paradigm | R Functions | When to Use | Interpretation |
+|----------|-------------|-------------|----------------|
+| **Frequentist** | `lm()`, `glm()`, `lmer()` | Simple designs, large samples | Point estimates + CIs + p-values |
+| **Robust (GEE)** | `geeglm()` | Correlated data with population focus | Population-average effects, robust SEs |
+| **Bayesian** | `brm()`, `rstanarm()` | Complex hierarchies, small samples | Full posterior distributions, intuitive uncertainty |
+
+Chapters 20–23 apply all three paradigms to MS quantification data. The formula interface is the common thread that connects them.
+
+---
+
+## Core R Concepts You Must Understand
+
+Even before loading Bioconductor packages, you need a solid grasp of basic R data structures and control flow. They appear constantly in MS data manipulation.
+
+### The R Data Type Hierarchy
+
+R's data structures form a coherent hierarchy. Understanding where each type fits prevents subtle bugs:
+
+| Structure | Dimensionality | Homogeneous? | MS Example |
+|-----------|---------------|--------------|------------|
+| Atomic vector | 1D | Yes (same type) | m/z values: `c(100.1, 200.3, 300.5)` |
+| Matrix | 2D | Yes | Peak table: `cbind(mz, intensity)` |
+| List | 1D | No (any type) | MS run: `list(spectra, metadata, params)` |
+| Data frame / tibble | 2D | Yes within columns | Sample metadata, feature tables |
+| Factor | 1D | Categorical | Condition: `factor(c("Ctrl", "Treat"))` |
+
+**Critical distinction:** `[` returns a subset of the same type; `[[` extracts a single element (for lists and data frames). Confusing these is one of the most common R bugs:
+
+```r
+ms_list[[1]]    # extracts the first Spectra object
+ms_list[1]      # returns a list of length 1 containing that object
+metadata$batch  # equivalent to metadata[["batch"]]
+```
+
+### Vectors and Data Types
+
+```r
+# Numeric vector (e.g., m/z values)
+mz_vals <- c(100.1, 200.3, 300.5)
+
+# Character vector (e.g., sample names)
+sample_names <- c("control_1", "control_2", "treated_1")
+
+# Logical vector (e.g., filtering conditions)
+high_intensity <- c(TRUE, FALSE, TRUE)
+
+# Integer vector — append L to prevent unwanted coercion
+charge_states <- c(2L, 3L, 2L, 1L)
+```
+
+### Factors — Categorical Data Done Right
+
+Factors are vectors with predefined levels. Always specify `levels` explicitly to control ordering — the default alphabetical order is rarely what you want:
+
+```r
+condition <- factor(
+  c("Treatment", "Control", "Treatment"),
+  levels = c("Control", "Treatment")  # Control = reference level
+)
+```
+
+In MS analysis, factors appear in every design matrix. A factor's first level becomes the reference category in linear models — choose it deliberately (typically the control group).
+
+### Data Frames — The Workhorse for Metadata and Results
+
+```r
+# Create a data frame manually
+metadata <- data.frame(
+  sample_id       = c("S01", "S02", "S03"),
+  condition       = c("Control", "Treatment", "Treatment"),
+  batch           = c(1, 1, 2),
+  injection_order = c(3, 1, 2)
+)
+
+# Access columns with $ or [[]]
+metadata$condition
+
+# Filter rows
+control_samples <- metadata[metadata$condition == "Control", ]
+
+# Use dplyr for clarity (part of tidyverse)
+library(dplyr)
+filtered <- metadata |> filter(batch == 1) |> select(sample_id, condition)
+```
+
+**Prefer tibbles over data frames.** Tibbles (from `tibble`) never convert strings to factors, never do partial matching, and print more informatively. Every tidyverse function returns a tibble.
+
+### Lists — For Heterogeneous Collections
+
+```r
+# A list can hold different types (e.g., MS2 spectra per file)
+ms_data_list <- list(
+  file1      = Spectra("sample1.mzML"),
+  file2      = Spectra("sample2.mzML"),
+  parameters = list(ppm = 5, peakwidth = c(10, 60))
+)
+
+# Extract elements with [[ or $
+ms_data_list$file1
+```
+
+### Functions — Encapsulate Reusable Code
+
+R treats functions as first-class objects — they can be passed as arguments, returned from other functions, and stored in lists. This functional programming style appears throughout Bioconductor.
+
+```r
+# A simple function to compute CV (coefficient of variation)
+cv <- function(x, na.rm = TRUE) {
+  sd(x, na.rm = na.rm) / mean(x, na.rm = na.rm) * 100
+}
+
+intensities <- c(1200, 1300, 1250, 1400)
+cv(intensities)
+```
+
+**Best practices for writing R functions:**
+1. **Validate inputs** with `stopifnot(is.numeric(x))` — catch errors early
+2. **Handle NAs explicitly** — use `na.rm = TRUE` throughout
+3. **Return explicitly** — use `return()` for clarity, though it's optional in R
+
+### Iteration with `lapply()` and `purrr`
+
+Instead of writing loops, use functional programming. For MS data, you constantly apply the same operation to many files or features:
+
+```r
+file_list <- list.files("data/raw", pattern = "\\.mzML$", full.names = TRUE)
+
+# Base R
+ms_list <- lapply(file_list, Spectra)
+
+# purrr equivalent (more consistent, better error messages)
+library(purrr)
+ms_list <- map(file_list, Spectra)
+
+# vapply for type-safe iteration
+file_sizes <- vapply(file_list, file.size, numeric(1))
+```
+
+### Conditionals and Error Handling
+
+```r
+if (any(is.na(intensities))) {
+  warning("Missing values detected!")
+}
+
+# Gracefully skip corrupt files with purrr
+safe_read <- possibly(Spectra, otherwise = NULL)
+ms_data <- safe_read("corrupt_file.mzML")
+```
+
+### R Anti-Patterns to Avoid
+
+These common mistakes cause inefficient code and subtle bugs — recognise them in your own scripts:
+
+| Anti-pattern | Why It's Wrong | Do This Instead |
+|-------------|---------------|-----------------|
+| Growing objects in a loop: `x <- c(x, new)` | Copies the entire vector each iteration (quadratic) | Preallocate: `x <- vector("list", n)` |
+| Using `attach()` | Creates confusion; masks variables | Use `with()` or `$` |
+| `T` / `F` instead of `TRUE` / `FALSE` | `T` and `F` are reassignable variables | Always write `TRUE` and `FALSE` in full |
+| `setwd()` with absolute paths | Breaks on any other machine | Use `here::here()` or RStudio Projects |
+| `$` inside pipe: `df |> filter(df$var > 5)` | Duplicates `df`, breaks with grouped data | `df |> filter(var > 5)` |
+| `merge()` instead of `*_join()` | Slower, confusing defaults, less readable | `left_join()`, `inner_join()`, etc. |
+
+---
+
+## The Tidyverse Grammar for MS Data
+
+The tidyverse is a collection of R packages that share a common design philosophy: every function takes a data frame as its first argument, returns a data frame, and uses consistent argument names. For MS data analysis, three tidyverse packages do the heavy lifting:
+
+| Package | What It Does | MS Use Case |
+|---------|-------------|-------------|
+| `dplyr` | Data transformation | Filter PSMs by score, compute per-sample summary statistics, join metadata to feature tables |
+| `tidyr` | Data reshaping | Pivot feature matrices between wide (samples as columns) and long (tidy) formats |
+| `purrr` | Functional iteration | Apply the same operation to every file in a directory, safely handle corrupt mzML files |
+
+### The Five Verbs That Replace Most Loops
+
+`dplyr` provides five verbs that cover the vast majority of data manipulation tasks. Master these and you will rarely need to write a loop for metadata wrangling:
+
+```r
+library(dplyr)
+
+# 1. filter() — keep rows matching a condition
+ms2_only <- psm_table |> filter(msLevel == 2)
+
+# 2. select() — keep or drop columns
+psm_slim <- psm_table |> select(sequence, xcorr, q_value, protein_id)
+
+# 3. mutate() — create or transform columns
+psm_table <- psm_table |> mutate(
+  log_xcorr    = log10(xcorr),
+  mass_error   = abs(observed_mz - theoretical_mz) / theoretical_mz * 1e6
+)
+
+# 4. group_by() + summarise() — aggregate by groups
+protein_summary <- psm_table |>
+  group_by(protein_id) |>
+  summarise(
+    n_peptides  = n_distinct(sequence),
+    mean_xcorr  = mean(xcorr),
+    .groups     = "drop"
+  )
+
+# 5. arrange() — sort rows
+psm_table |> arrange(desc(xcorr))  # best-scoring PSMs first
+```
+
+### The Pipe: R's Assembly Line
+
+The native pipe `|>` (R 4.1+) chains operations left to right. Instead of nesting functions or creating intermediate variables, you build a pipeline that reads like a recipe:
+
+```r
+# Without pipe — hard to read, many intermediate variables
+tmp1 <- filter(psm_table, msLevel == 2)
+tmp2 <- mutate(tmp1, log_xcorr = log10(xcorr))
+tmp3 <- group_by(tmp2, protein_id)
+result <- summarise(tmp3, n = n())
+
+# With pipe — reads like a recipe, no intermediate clutter
+result <- psm_table |>
+  filter(msLevel == 2) |>
+  mutate(log_xcorr = log10(xcorr)) |>
+  group_by(protein_id) |>
+  summarise(n = n())
+```
+
+Every chapter in this book uses the pipe. You will see it applied to `Spectra` objects, `QFeatures` assays, feature tables, and differential abundance results.
+
+### Reshaping: Wide to Long and Back
+
+MS feature tables are naturally wide (features × samples), but ggplot2 and many modeling functions expect long (tidy) format. `tidyr::pivot_longer()` and `pivot_wider()` convert between them:
+
+```r
+library(tidyr)
+
+# Wide → Long (for plotting, modeling)
+feature_long <- feature_matrix |>
+  as.data.frame() |>
+  tibble::rownames_to_column("feature_id") |>
+  pivot_longer(
+    cols      = -feature_id,
+    names_to  = "sample",
+    values_to = "intensity"
+  )
+
+# Long → Wide (for matrix operations, export)
+feature_wide <- feature_long |>
+  pivot_wider(
+    names_from  = "sample",
+    values_from = "intensity"
+  )
+```
+
+---
+
+## Data Visualisation with ggplot2 for MS
+
+R's `ggplot2` package implements the **Grammar of Graphics**: every plot is built from data, aesthetic mappings (which variables map to x, y, colour, shape), and geometric objects (points, lines, bars). For MS data, a small set of plot types covers the majority of visualisation needs.
+
+### The ggplot2 Building Blocks
+
+```r
+library(ggplot2)
+
+ggplot(data = psm_table, aes(x = retention_time, y = xcorr, colour = msLevel)) +
+  geom_point(alpha = 0.5) +                         # geometric layer
+  scale_colour_brewer(palette = "Set1") +            # colour scale
+  labs(                                              # labels
+    title = "PSM scores across retention time",
+    x     = "Retention time (min)",
+    y     = "XCorr score",
+    colour = "MS Level"
+  ) +
+  theme_minimal(base_size = 12)                      # theme
+```
+
+### The Four Essential Plot Types for MS Data
+
+| Plot Type | ggplot2 Geom | MS Application | Chapter |
+|-----------|-------------|----------------|---------|
+| **Line plot** | `geom_line()` | TIC, BPC, EIC chromatograms | 6 |
+| **Scatter plot** | `geom_point()` | Volcano plot (log2FC vs −log10 p-value), mass error vs RT | 19 |
+| **Box plot** | `geom_boxplot()` | Intensity distributions per sample, CV per batch | 6, 17 |
+| **Heatmap** | `geom_tile()` or `pheatmap()` | Feature abundance matrix, correlation matrix, sample distances | 19, 22 |
+
+### Publication-Ready Figures
+
+ggplot2's defaults are sensible but not publication-ready. Three customisations make the difference:
+
+1.  **Choose a colour scale with purpose.** For categorical groups, use `scale_colour_brewer(palette = "Set1")` — perceptually distinct and colour-blind safe. For continuous gradients (fold-changes), use `scale_colour_gradient2(low = "blue", mid = "white", high = "red")`.
+
+2.  **Set a consistent theme.** `theme_minimal(base_size = 12)` removes chart junk. For multi-panel figures, use `theme_bw()`.
+
+3.  **Export at the right resolution.** `ggsave("figure.png", width = 8, height = 5, dpi = 300)` produces print-quality output.
+
+### ggplot2 Extensions for MS
+
+Several extension packages provide specialised plot types directly relevant to MS analysis:
+
+| Extension | What It Adds | MS Use |
+|-----------|-------------|--------|
+| `ggrepel` | Non-overlapping text labels | Gene/protein names on volcano plots |
+| `patchwork` | Compose multiple plots into one figure | QC panel: TIC + PCA + CV distribution |
+| `ggfortify` | Autoplot methods for statistical objects | `autoplot(prcomp_result)` for PCA |
+| `pheatmap` | Publication-ready heatmaps with annotations | Feature abundance heatmaps with sample metadata colour bars |
+
+**The principle for MS figures:** Start with the default, then strip away everything that does not communicate data. Grid lines, background colours, and decorative borders compete with the signal. A TIC overlay with five samples benefits from colour; a single-sample TIC benefits from nothing more than a clean line on a white background.
+
+---
+
+## The Bioconductor Ecosystem
+
+Bioconductor is more than a package repository — it is a software ecosystem built on shared data structures, rigorous review, and interoperable design. Understanding its architecture is essential for effective MS data analysis.
+
+### Why Bioconductor Exists
+
+General-purpose statistical packages assume small, clean data frames. MS data breaks these assumptions in every dimension:
+
+| MS Data Characteristic | Why Base R Fails | Bioconductor's Solution |
+|------------------------|------------------|------------------------|
+| **File size** (1–50 GB per run) | R loads everything into RAM | Lazy-loading backends; data stays on disk until accessed |
+| **Nested structure** (PSM → peptide → protein) | Data frames flatten hierarchy | `QFeatures` preserves multi-level relationships |
+| **Rich metadata** (scan headers, instrument params) | Lost when extracting to a matrix | `Spectra` and `MsExperiment` carry metadata alongside data |
+| **High dimensionality** ($p \gg n$) | Standard linear models overfit | `limma`'s empirical Bayes shrinkage stabilises variance estimates |
+
+### S4 Objects: What They Are and Why Bioconductor Uses Them
+
+R has two object-oriented systems. S3 (used by base R and the tidyverse) is lightweight — any object can be given a `class` attribute and dispatched via `UseMethod()`. S4 (used by Bioconductor) is formal — classes have explicitly defined slots with type checking.
+
+```r
+# S3: lightweight, no type enforcement
+obj <- list(mz = c(100, 200), intensity = c(1000, 2000))
+class(obj) <- "spectrum"  # no guarantee mz is numeric
+
+# S4: formal, slots are type-checked
+setClass("MassSpectrum",
+  slots = c(
+    mz        = "numeric",
+    intensity = "numeric",
+    msLevel   = "integer"
+  )
+)
+```
+
+Bioconductor chose S4 for two reasons: **interoperability** (packages from different authors can rely on consistent class definitions) and **safety** (type-checking prevents subtle bugs when one package passes data to another). You don't need to write S4 classes — you need to recognise them and know that Bioconductor objects are accessed with `@` (slots) or dedicated accessor functions (preferred):
+
+```r
+sp <- Spectra(mzml_file)
+sp@backend           # S4 slot access (works, but avoid in production code)
+rtime(sp)            # accessor function (preferred — stable across package versions)
+msLevel(sp)          # returns integer vector of MS levels
+```
+
+### The Modular Backend Architecture
+
+The most important architectural decision in the RforMassSpectrometry initiative is the separation of **data manipulation** (what you do) from **data storage** (where the data lives). The `Spectra` object provides a consistent interface regardless of whether your data is in RAM, on disk, or in a database:
+
+```
+User code (never changes):
+  filterMsLevel(sp, 2) |> filterRt(c(1200, 1800))
+
+Spectra object (consistent interface):
+  translates user intent into backend-specific instructions
+
+Backend (pluggable storage):
+  MsBackendMzR         → reads from mzML/mzXML files on disk
+  MsBackendDataFrame   → stores peak data in RAM (fast, limited to small data)
+  MsBackendHdf5Peaks   → stores in HDF5 files (large data, fast random access)
+  MsBackendSql         → stores in SQL database (multi-user, collaborative)
+```
+
+Switching backends requires changing one line of code. The rest of your analysis is unchanged:
+
+```r
+# In-memory: fast for < 1000 spectra
+sp <- Spectra(mzml_files, backend = MsBackendDataFrame())
+
+# On-disk: for production pipelines with many files
+sp <- Spectra(mzml_files, backend = MsBackendMzR())
+
+# HDF5: for 10,000–1,000,000+ spectra
+sp <- Spectra(mzml_files, backend = MsBackendHdf5Peaks())
+```
+
+This architecture is the reason R can handle MS data at all — without lazy loading and pluggable backends, a single Orbitrap run would exhaust available RAM.
+
+### The Four Core Containers
+
+These four object classes form the backbone of every MS analysis in this book. Chapter 5 constructs and inspects each in detail; here we establish what each one is for and when to use it.
+
+**`Spectra`** — The raw data container. Holds MS1 and MS2 spectra from one or more mzML/mzXML files. Supports filtering by MS level, retention time, m/z range, and precursor properties. Access with `peaksData()`, `rtime()`, `msLevel()`, `precursorMz()`.
+
+**`MsExperiment`** — Links raw spectra files to sample metadata. Think of it as a `Spectra` object married to a `data.frame` of sample annotations (condition, batch, injection order). Essential for ensuring metadata stays synchronised with spectral data across multi-file experiments.
+
+**`SummarizedExperiment`** — The general-purpose omics container. Stores a feature × sample matrix (the `assay`), row metadata (feature annotations), and column metadata (sample annotations) in a single object. Used by `xcms` for feature tables and by `DEP` for protein-level quantification.
+
+**`QFeatures`** — The proteomics-specific container. Organises quantitative data hierarchically: PSM-level intensities in one assay, peptide-level in the next, protein-level in the third. Each assay is a `SummarizedExperiment`, and the `QFeatures` object tracks the parent-child relationships between them.
+
+```
+QFeatures object
+├── assay[["PSMs"]]      → SummarizedExperiment: PSM × sample intensities
+│   └── rowData: PSM metadata (sequence, score, charge)
+├── assay[["peptides"]]  → SummarizedExperiment: peptide × sample intensities
+│   └── rowData: peptide metadata (sequence, protein mapping)
+└── assay[["proteins"]]  → SummarizedExperiment: protein × sample intensities
+    └── rowData: protein metadata (name, description, coverage)
+```
+
+### The Full RforMassSpectrometry Package Map
+
+Beyond the four containers, a rich ecosystem of specialised packages handles each stage of the MS workflow:
+
+| Stage | Key Packages | What They Do |
+|-------|-------------|--------------|
+| **Data import** | `mzR`, `MsBackendMzR`, `MsBackendHdf5Peaks` | Read mzML, mzXML, and vendor formats; provide storage backends |
+| **Raw data handling** | `Spectra`, `MSnbase`, `MsExperiment` | Store, filter, and query spectra; link to metadata |
+| **Feature detection** | `xcms`, `MSnbase` | Chromatographic peak detection (CentWave), RT alignment (Obiwarp), feature correspondence |
+| **Identification** | `PSMatch`, `mzR` | Parse search engine output, compute FDR, filter PSMs |
+| **Metabolite annotation** | `CAMERA`, `MetaboCoreUtils`, `MetaboAnnotation`, `CompoundDb` | Adduct deconvolution, exact mass search, spectral library matching |
+| **Quantitative proteomics** | `QFeatures`, `DEP`, `MSqRob`, `proDA` | PSM → peptide → protein aggregation; LFQ and TMT workflows; robust summarisation |
+| **Normalization & batch correction** | `limma`, `preprocessCore`, `sva` (ComBat), `pmp` | Median/quantile/LOESS normalisation; batch effect correction; QC metrics |
+| **Statistical modeling** | `limma`, `lme4`, `variancePartition` | Empirical Bayes differential analysis; mixed models; variance decomposition |
+| **Visualisation** | `Spectra` (plot methods), `pheatmap`, `ggplot2` | TIC/BPC, spectra plots, heatmaps, volcano plots |
+| **Pathway analysis** | `clusterProfiler`, `ReactomePA`, `igraph` | GO/KEGG enrichment, network visualisation |
+| **Infrastructure** | `BiocParallel`, `MsCoreUtils`, `ProtGenerics` | Parallel processing, common utilities, generic function definitions |
+
+This package map is your reference throughout the book. When you encounter a new task, consult this table to identify the right package — then consult that package's vignette for detailed guidance.
+
+---
+
+## Machine Learning in R for MS Biomarker Discovery
+
+Machine learning is increasingly used in MS-based omics for biomarker discovery, sample classification, and feature selection. R provides three major ML frameworks, each with different strengths for MS data.
+
+### Three ML Frameworks for R
+
+| Framework | Philosophy | Best For | MS Example |
+|-----------|-----------|----------|------------|
+| **tidymodels** | Tidyverse-consistent grammar; modular (recipe + model + workflow) | Modern pipelines, reproducibility | Biomarker classifier with nested CV |
+| **caret** | Unified interface to 200+ models; mature and well-documented | Quick prototyping, teaching | Comparing RF vs. SVM vs. LASSO for a feature table |
+| **mlr3** | Object-oriented, high-performance, extensible | Large-scale benchmarking, production | Grid search over 50 model configurations across 100 imputed datasets |
+
+This book uses `tidymodels` for machine learning and biomarker modeling (Chapters 22–23) because its explicit separation of preprocessing (`recipes`) from modeling (`parsnip`) makes it harder to accidentally leak test-set information — the most common error in MS biomarker studies.
+
+### A Minimal tidymodels Pipeline for MS Data
+
+```r
+library(tidymodels)
+
+# 1. Split BEFORE any preprocessing (critical — see Chapter 22)
+set.seed(42)
+data_split <- initial_split(feature_df, prop = 0.75, strata = condition)
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+# 2. Define preprocessing (imputation, scaling, feature filtering)
+preproc <- recipe(condition ~ ., data = train_data) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_impute_knn(all_numeric_predictors(), neighbors = 5) |>
+  step_nzv(all_numeric_predictors())  # remove near-zero-variance features
+
+# 3. Define model
+rf_model <- rand_forest(trees = 500, mtry = tune()) |>
+  set_engine("ranger", importance = "permutation") |>
+  set_mode("classification")
+
+# 4. Combine in a workflow
+wf <- workflow() |>
+  add_recipe(preproc) |>
+  add_model(rf_model)
+
+# 5. Nested cross-validation (outer: performance; inner: tuning)
+outer_folds <- vfold_cv(train_data, v = 5, strata = condition)
+tuned_results <- tune_grid(wf, resamples = outer_folds, grid = 10)
+
+# 6. Final evaluation on held-out test set
+final_wf <- finalize_workflow(wf, select_best(tuned_results, "roc_auc"))
+final_fit <- last_fit(final_wf, data_split)
+collect_metrics(final_fit)
+```
+
+**The key MS-specific considerations for ML:**
+- **$p \gg n$:** When features vastly outnumber samples (typical in MS), regularised models (LASSO, elastic net) and tree-based methods (random forest) are more reliable than unregularised logistic regression
+- **Feature selection inside CV:** Selecting the "top 50 features by t-test" using all samples, then cross-validating, produces catastrophically optimistic AUC estimates. Every step that uses data must be inside the cross-validation loop.
+- **Missing values are information:** In MS, a missing value is often a signal (below detection limit), not random noise. Imputing all missing values with zero or the minimum loses this information. Consider encoding missingness as a binary indicator alongside imputed values.
+
+---
+
+## Reproducible Research Infrastructure
+
+The difference between a script that works once and a pipeline that works forever is infrastructure. R provides a layered stack of tools for reproducibility that this book uses throughout.
+
+### The Reproducibility Stack
+
+```
+Layer 1: Code versioning    → Git + GitHub
+Layer 2: R environment      → renv (package versions)
+Layer 3: System environment → Docker / rocker containers
+Layer 4: Pipeline caching   → targets (only rerun what changed)
+Layer 5: Literate documents → Quarto (code + narrative together)
+```
+
+### renv: Lock Package Versions
+
+R packages change. A function that works today may behave differently (or disappear) after an update. `renv` creates a project-local library and records exact package versions in `renv.lock`:
+
+```r
+# Initialise a new project
+renv::init()
+
+# Install packages (uses BiocManager for Bioconductor)
+BiocManager::install(c("Spectra", "xcms", "QFeatures"))
+
+# Save the exact state
+renv::snapshot()
+```
+
+A collaborator — or your future self on a new machine — runs `renv::restore()` to recreate the exact environment. The `renv.lock` file is plain text; commit it to Git.
+
+### targets: Pipeline Caching
+
+MS data processing is expensive. Rerunning CentWave peak detection on 100 files because you changed a plot label is wasteful. The `targets` package tracks which steps depend on which inputs and only reruns what has changed:
+
+```r
+# _targets.R
+library(targets)
+tar_option_set(packages = c("Spectra", "xcms", "limma"))
+
+list(
+  tar_target(mzml_files, list.files("data/", pattern = "\\.mzML$",
+              full.names = TRUE), format = "file"),
+  tar_target(raw_data, readMSData(mzml_files, mode = "onDisk")),
+  tar_target(peaks, findChromPeaks(raw_data, CentWaveParam(ppm = 15))),
+  tar_target(feature_mat, featureValues(peaks, value = "into"))
+)
+```
+
+Run `tar_make()` and `targets` skips any step whose inputs haven't changed. `tar_visnetwork()` draws the dependency graph. Chapter 3 covers `targets` in depth; here the key concept is that **every MS project with more than 5 samples should use pipeline caching.**
+
+### Quarto: Literate Programming
+
+Quarto (the system used to write this book) integrates prose, code, and output in a single document. A `.qmd` file is Markdown text with executable R code chunks. When you render it, the code runs and its output — tables, figures, results — is embedded in the final HTML or PDF:
+
+````markdown
+---
+title: "My MS Analysis"
+author: "Your Name"
+format: html
+---
+
+## Quality Control
+
+```{r}
+#| echo: false
+#| warning: false
+library(ggplot2)
+ggplot(tic_data, aes(rt/60, intensity)) + geom_line()
+```
+
+The TIC trace shows consistent ion current across all samples.
+````
+
+The guarantee of literate programming is that your report never lies about your results — because the results are generated from the same code that the report displays. If the data changes, re-rendering updates everything automatically.
+
+### The Golden Rule of R Project Organisation
+
+1.  **Never use `setwd()`.** Use RStudio Projects (`.Rproj`) and the `here` package for portable paths.
+2.  **Always set a seed.** `set.seed(42)` at the top of every script. Without it, imputation, cross-validation splits, and random forest results change on every run.
+3.  **Record your session.** End every analysis with `sessionInfo()` — it documents R version, platform, and every loaded package with its version.
+4.  **Commit `renv.lock`, not `renv/library/`.** The library is regenerable; the lockfile is the recipe.
+5.  **A result you cannot reproduce is not a result.** If you cannot rerun your analysis six months from now, the published finding is untrustworthy regardless of the p-value.
+
+---
+
+## Practical MS Workflow with Bioconductor
+
+Below is a minimal end-to-end example using real `msdata` files, combining several Bioconductor packages. This walkthrough previews the full pipeline covered in detail across subsequent chapters.
+
+```r
+#| eval: false
+library(msdata)
+library(Spectra)
+library(xcms)
+library(SummarizedExperiment)
+library(limma)
+
+# 1. Locate example metabolomics files
+mzml_files <- metabolomics(full.names = TRUE)[1:4]
+
+# 2. Read as Spectra and plot TIC for each file (QC check)
+sp_list <- Spectra(mzml_files)
+
+# 3. Peak detection and alignment with xcms
+raw_data <- readMSData(mzml_files, mode = "onDisk")
+cwp  <- CentWaveParam(ppm = 15, peakwidth = c(10, 60))
+xset <- findChromPeaks(raw_data, param = cwp)
+xset <- adjustRtime(xset, param = ObiwarpParam())
+xset <- groupChromPeaks(xset,
+          param = PeakDensityParam(sampleGroups = rep(1:2, each = 2)))
+xset <- fillChromPeaks(xset)
+
+# 4. Extract feature matrix as SummarizedExperiment
+feature_mat <- featureValues(xset, value = "into")
+se <- SummarizedExperiment(
+  assays  = list(intensity = feature_mat),
+  colData = data.frame(condition = rep(c("Ctrl", "Treat"), each = 2))
+)
+
+# 5. Differential analysis with limma
+design  <- model.matrix(~ condition, data = as.data.frame(colData(se)))
+fit     <- lmFit(assay(se), design) |> eBayes()
+results <- topTable(fit, coef = 2, number = Inf)
+head(results)
+```
+
+This example uses only a handful of Bioconductor functions but already demonstrates a reproducible, scriptable MS pipeline. Each step is explored in depth in the chapters that follow.
+
+---
+
+## Summary
+
+This chapter established the conceptual foundation for every chapter that follows. Return to it when you encounter an unfamiliar data structure, need to choose between Bioconductor containers, or want to recall which package handles which stage of the MS workflow.
+
+### Key Takeaways
+
+| Concept | Key Point | Where It Appears |
+|---------|-----------|-----------------|
+| **Vectorisation** | R is 100× faster with vectorised code than loops | Every code chunk in the book |
+| **Formula interface** | `y ~ x1 + x2` is the universal modeling grammar | Chapters 20–23 |
+| **S4 objects** | Bioconductor's formal class system ensures interoperability | Chapters 5–16 |
+| **Backend architecture** | Same code works for 100 spectra or 1 million — just switch the backend | Chapters 4, 5 |
+| **tidyverse grammar** | Five verbs (`filter`, `select`, `mutate`, `summarise`, `arrange`) + pipe replace most loops | Chapters 5–26 |
+| **ggplot2 grammar** | Data + aesthetics + geometries + theme = publication figure | Chapters 6, 19, 22 |
+| **Bioconductor containers** | `Spectra` → `MsExperiment` → `SummarizedExperiment`/`QFeatures` — choose the right level of abstraction | All chapters |
+| **Reproducibility stack** | Git + renv + targets + Quarto = reproducible research | Chapters 3, 23 |
+| **ML in R** | tidymodels for modern pipelines; always split before preprocessing | Chapter 22 |
+| **RforMassSpectrometry** | 20+ interoperable packages covering the full MS pipeline | Package map in this chapter |
+
+### The Full RforMassSpectrometry Container Hierarchy
+
+```
+mzML files on disk
+    ↓ read with mzR backend
+Spectra (raw spectra, lazy-loaded)
+    ↓ link to sample metadata
+MsExperiment (spectra + sample annotations)
+    ↓ peak detection + alignment (xcms)
+SummarizedExperiment (feature × sample matrix)
+    ↓ identification + aggregation (for proteomics)
+QFeatures (PSM → peptide → protein hierarchy)
+    ↓ statistical modeling (limma, lme4)
+data.frame / tibble (differential abundance results)
+    ↓ visualisation (ggplot2)
+Published figures and reports (Quarto)
+```
+
+### Package Map Quick Reference
+
+| When you need to... | Use |
+|---------------------|-----|
+| Read mzML files | `Spectra(backend = MsBackendMzR())` |
+| Filter to MS2 spectra | `filterMsLevel(sp, 2)` |
+| Detect chromatographic peaks | `xcms::findChromPeaks()` |
+| Filter PSMs by FDR | `PSMatch::filterPSMs()` |
+| Aggregate peptides to proteins | `QFeatures::aggregateFeatures()` |
+| Normalise a feature matrix | `limma::normalizeBetweenArrays()` |
+| Test for differential abundance | `limma::lmFit()` + `eBayes()` |
+| Visualise results | `ggplot2` + `ggrepel` + `patchwork` |
+| Build a reproducible pipeline | `targets` + `renv` + Quarto |
+
+The next chapter covers the infrastructure for managing a real MS project: directory organisation, `renv` for package versioning, `targets` for pipeline automation, and continuous integration.
+
+---
+
+## Session Information
+
+```r
+sessionInfo()
+```
+
+## Exercises
+
+### Foundation
+
+1.  **Container Ecosystem**: List the four primary Bioconductor containers used in the RforMassSpectrometry ecosystem and describe the specific type of data each is designed to hold. For each container, name one Bioconductor function that creates it.
+
+2.  **Backend Selection**: You have three datasets: (a) 50 mzML files totalling 80 GB, (b) a single small mzML file with 200 spectra, (c) a collaborative project where 5 researchers share spectral data. Which backend (`MsBackendMzR`, `MsBackendDataFrame`, `MsBackendHdf5Peaks`, `MsBackendSql`) would you choose for each, and why?
+
+3.  **BiocManager**: Explain why `BiocManager::install()` is mandatory for Bioconductor packages while `install.packages()` suffices for CRAN. What specific problem does `BiocManager` solve?
+
+### Data Manipulation
+
+4.  **tidyverse Translation**: The following base R code filters a PSM table. Rewrite it using `dplyr` verbs and the pipe:
+
+    ```r
+    tmp1 <- psm_table[psm_table$msLevel == 2, ]
+    tmp2 <- tmp1[tmp1$xcorr >= 2.5, ]
+    tmp3 <- tmp2[order(tmp2$xcorr, decreasing = TRUE), ]
+    result <- tmp3[1:10, c("sequence", "xcorr", "protein_id")]
+    ```
+
+5.  **Split-Apply-Combine**: Given a feature matrix (rows = metabolites, columns = samples) and a metadata table with `sample_id` and `condition` columns, write tidyverse code to compute the mean intensity per condition for each metabolite.
+
+### Visualisation
+
+6.  **Build a Volcano Plot Skeleton**: Using the ggplot2 building blocks, write the code for a volcano plot with `log2FC` on the x-axis and `-log10(p_value)` on the y-axis. Points with `p_value < 0.05` should be coloured red; all others grey. Add dashed lines at the significance thresholds.
+
+7.  **Figure Composition**: You need to create a QC panel showing (a) TIC overlay of all samples and (b) boxplot of log-intensities per sample, arranged side by side. Which ggplot2 extension would you use, and what is the core function call?
+
+### Reproducibility
+
+8.  **Golden Rules**: List the five golden rules of R project organisation. For each, explain what can go wrong if the rule is violated in an MS analysis context.
+
+9.  **Pipeline Design**: Sketch a three-step `_targets.R` pipeline that (a) reads an mzML file, (b) creates a `Spectra` object, and (c) extracts and saves the scan-level metadata as a CSV. Which steps would `targets` re-run on the second invocation if only the CSV export code changed?
+
+### Integration
+
+10. **Full Pipeline Trace**: Starting from raw mzML files and ending with a differential abundance table, trace the path through Bioconductor containers. At each step, name the container type and the package that performs the transformation.

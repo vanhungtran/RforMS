@@ -1,0 +1,199 @@
+# What Is Mass Spectrometry and Why Use MS Data?
+
+Mass spectrometry (MS) is treated in this book as a **quantitative sensor** that converts complex chemical mixtures into digital data: spectra, chromatograms, and feature tables. To use that sensor effectively, you need to understand three things: what the instrument actually measures (mass‑to‑charge ratio, (m/z)), how different instrument designs affect that measurement, and how acquisition choices determine what ends up in your raw file.
+
+At its core, a mass spectrometer measures the **mass‑to‑charge ratio** (m/z) of gas‑phase ions. Neutral molecules are first converted into ions by an ion source, then separated according to (m/z) by a mass analyzer, and finally detected as electrical signals that are digitized. When MS is coupled to chromatographic separations such as liquid chromatography (LC) or gas chromatography (GC), this process generates a time series of mass spectra from which we extract chromatographic peaks and construct the feature matrices that underpin statistical analyses throughout this book.
+
+Most datasets you will encounter—proteomics, metabolomics, lipidomics, or small‑molecule panels—are generated on instruments using electrospray ionization (ESI) or matrix‑assisted laser desorption/ionization (MALDI) coupled to quadrupole, time‑of‑flight (TOF), or Orbitrap analyzers. Understanding the broad behavior of these combinations will help you interpret intensities, missing values, and identification confidence in later chapters. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/16614208/)
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Reading *m/z* as mass. The instrument measures mass-to-charge, not mass: a peak at 500 could be a 500 Da singly-charged ion or a 1000 Da doubly-charged one. Always resolve the charge state before you trust a mass.
+:::
+
+------------------------------------------------------------------------
+
+## Mass spectrometry for data analysts
+
+> **Reader’s note**\
+> This introductory discussion is written from the perspective of a data analyst. If you mainly want practical guidance, you can read the core concepts in the next few sections and then skip ahead to the discussion of acquisition strategies; detailed instrumental material is there as background.
+
+For a statistician or bioinformatician, MS is best seen as a flexible measurement technology that maps diverse experimental designs into a common numerical representation. Once your experiment is encoded as matrices of intensities and annotations, you can bring to bear familiar tools: regression, mixed‑effects modeling, clustering, dimensionality reduction, and Bayesian inference. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+
+What differentiates MS from many other omics technologies is its simultaneous access to quantitative intensity information and structural information via fragmentation patterns within the same experiment. This dual nature is powerful, but it also means that acquisition choices and instrument configuration have strong, sometimes non‑intuitive effects on missingness patterns, variance structure, and the meaning of “signal” and “noise” in your feature matrices.
+
+------------------------------------------------------------------------
+
+Core concepts: what the instrument actually measures
+
+Ions, not neutral molecules
+
+Despite routine talk of “weighing molecules,” a mass spectrometer never measures the mass of neutral species. It manipulates **ions**—charged molecules or fragments—because only charged particles respond to electric and magnetic fields. Conceptually, you can think of the instrument as a pinhole camera for ions: many ions are produced in the source, but only those that follow specific trajectories under carefully controlled fields are transmitted and recorded at the detector.
+
+This distinction has direct consequences for analysis. Any factor that modifies ionization efficiency or ion transmission—matrix composition, co‑eluting compounds, source contamination—directly affects what appears as “signal” in your data matrix, often without changing the true analyte amount in the injected sample.
+
+The meaning of (m/z)
+
+The fundamental output of the instrument is the **mass spectrum**, a list or plot of signal intensity versus (m/z). Here, (m/z) is defined as the ion’s mass (in Daltons) divided by its integer charge number (z); it is dimensionless and is the only quantity directly measured by the analyzer.
+
+For singly charged ions ((z = 1)), the horizontal axis can be read directly as mass. However, many soft ionization techniques, especially ESI, generate **multiply charged ions**. A 40 kDa protein that acquires 20 protons will appear at (m/z \approx 2000), not at 40 000, and typically manifests as a series of peaks corresponding to different charge states that must be deconvoluted to a neutral mass by software. [elhacker](https://elhacker.info/manuales/springer/2017_MassSpectrometry.pdf)
+
+> **Practical note**\
+> A frequent error in metabolomics and small‑molecule work is to treat all peaks as singly charged. Before assigning a molecular formula, always check isotopic spacing: approximately 1 Da between peaks for (z = 1), 0.5 Da for (z = 2), and 0.33 Da for (z = 3). Within the R ecosystem, infrastructure such as the R for Mass Spectrometry packages supports workflows that assume charge state information has been estimated from isotopic distributions or vendor tools (see the chapter on data import). [rformassspectrometry.github](https://rformassspectrometry.github.io/book/)
+
+Understanding that the instrument measures (m/z), not mass alone, explains several recurring features of MS data:
+
+-   The same analyte can give rise to multiple peaks at different (m/z) values, due to different charge states, adducts (for example, \[M+Na\]⁺, \[M+K\]⁺), and in‑source fragments.
+-   High‑resolution instruments can distinguish ions with nearly identical nominal masses but different elemental compositions, enabling narrow extraction windows and confident assignment of isobaric species.
+-   Adduct formation and source‑induced fragmentation systematically reshape apparent (m/z) distributions, complicating naive interpretations but also providing additional constraints for structure elucidation when modeled appropriately. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+
+Spectra and chromatograms
+
+In hyphenated techniques like LC–MS and GC–MS, the instrument acquires spectra continuously during a chromatographic separation, yielding a two‑dimensional dataset of retention time versus (m/z). Two complementary views of these data are particularly important: [sciencedirect](https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/mass-chromatogram)
+
+-   The **total ion chromatogram (TIC)**, which plots the sum of all ion intensities versus retention time; peaks in the TIC correspond to groups of compounds eluting from the column. [sciencedirect](https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/mass-chromatogram)
+-   Individual **mass spectra** at specific time points, which plot intensity versus (m/z) for the ions present at that instant.
+
+Data analysis tools exploit both dimensions. Peak detection algorithms search for coherent signals across time at specific (m/z) values, producing extracted ion chromatograms (XICs) and integrated peak areas. Database search engines in proteomics match observed MS/MS spectra to theoretical fragment patterns, generating peptide–spectrum matches that can be assembled into peptide‑ and protein‑level feature tables. We will return to these concepts when we import raw data using the `Spectra` infrastructure.
+
+------------------------------------------------------------------------
+
+From sample to digital data: three archetypal configurations
+
+Although commercial instruments differ in many implementation details, the critical pieces for a data analyst are the ion source, mass analyzer, and acquisition mode. Three archetypal configurations generate most of the datasets encountered in practice:
+
+-   **GC–EI–MS** (gas chromatography with electron ionization). Volatile, thermally stable small molecules are separated in the gas phase and then ionized by a high‑energy electron beam (commonly 70 eV), producing rich and highly reproducible fragmentation spectra; GC–EI–MS is widely used in environmental analysis and profiling of volatile compounds.
+
+-   **LC–ESI–MS(/MS)** (liquid chromatography with electrospray ionization). Polar and semi‑polar small molecules, peptides, and proteins are separated in solution and ionized at atmospheric pressure from charged droplets; this configuration is the workhorse of modern proteomics and metabolomics. [pubs.acs](https://pubs.acs.org/doi/10.1021/pr034082c)
+
+-   **MALDI–TOF(/TOF)** (matrix‑assisted laser desorption/ionization with time‑of‑flight detection). Solid‑phase analytes co‑crystallized with a matrix are desorbed by a pulsed laser and analyzed as predominantly singly charged ions, often in imaging experiments or intact mass measurements.
+
+> **Sidebar: Ionization techniques in brief**\
+> - **Electron ionization (EI)** – gas‑phase neutral molecules are bombarded by 70 eV electrons, yielding extensive fragmentation and highly reproducible spectra; standard for GC–MS.
+>
+> -   **Electrospray ionization (ESI)** – a soft ionization technique in which charged droplets are formed at atmospheric pressure and desolvated to yield gas‑phase ions; ESI readily generates multiply charged ions for peptides and proteins and dominates LC–MS workflows. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/) - **MALDI** – pulsed laser desorption from a solid matrix, producing mostly singly charged ions; used for imaging and high‑throughput intact mass analysis. From a data analysis perspective, most practical consequences of these techniques are already captured by the three archetypes above.
+
+> **Sidebar: Mass analyzers at a glance**\
+> - **Quadrupole** instruments provide unit‑mass resolution and are typical of targeted assays (selected ion monitoring, SIM; selected/multiple reaction monitoring, SRM/MRM). Full‑scan quadrupole data are obtained by scanning sequentially across the (m/z) range. **TOF** and **Orbitrap** instruments provide high resolution (often \>30 000 FWHM) and high mass accuracy (frequently \<5 ppm), enabling isotopic fine structure, narrow extraction windows, and confident elemental composition assignment in metabolomics and small‑molecule profiling. Later chapters will show how resolution affects feature detection: high‑resolution data can use narrow (m/z) windows (for example, 5–10 ppm), whereas low‑resolution data require wider windows (for example, 0.5–1 Da). [rformassspectrometry](https://www.rformassspectrometry.org/documentation/)
+
+------------------------------------------------------------------------
+
+Acquisition strategies and their impact on data
+
+The **acquisition strategy** determines which ions are recorded, how often, and with what kind of structural information, and thus shapes the structure of your data before any modeling. It is useful to distinguish **untargeted** modes, which aim to characterize many species at once, from **targeted** modes, which optimize for precise quantification of predefined analytes.
+
+Untargeted acquisition
+
+Full‑scan MS
+
+In full‑scan mode, the instrument repeatedly acquires MS1 spectra across a defined (m/z) range throughout the chromatographic run, providing a broad view of ionizable species but little direct structural information beyond isotopic patterns and adducts. This mode underpins many small‑molecule profiling workflows in which identification is based on accurate mass, retention time, and sometimes in‑source fragmentation behavior.
+
+Data‑dependent acquisition (DDA)
+
+Data‑dependent acquisition adds structural detail by interleaving MS1 scans with MS/MS scans triggered in real time. After each MS1 scan, the instrument selects the top N most intense precursors that satisfy predefined criteria, isolates them, fragments them, and records the resulting product ion spectra; dynamic exclusion is used to avoid repeatedly selecting the same precursor over its elution peak.
+
+From a data perspective:
+
+-   Files contain interlaced MS1 and MS/MS scans, each MS/MS scan linked to a precursor (m/z), charge, and retention time. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+-   Identification is based on matching MS/MS spectra to theoretical or empirical libraries through database search engines. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/16614208/)
+-   Quantification frequently relies on MS1‑level extracted ion chromatograms for identified features. [r](https://www.research-collection.ethz.ch/bitstreams/51c8cfbc-4cf6-4be2-bc98-fdd781b72857/download)
+
+> **What this means for your analysis**\
+> DDA exhibits **stochastic sampling** of lower‑abundance species: only a limited number of precursors can be selected per cycle, so many ions that are present in the sample may or may not be fragmented in a given run. If a peptide is not selected for fragmentation in a particular run, you have no MS/MS evidence for it there, contributing to missing values across replicate runs; this is an inherent property of DDA data, not a software bug.
+
+Data‑independent acquisition (DIA)
+
+Data‑independent acquisition seeks to capture fragmentation information for all detectable species in a reproducible manner. Instead of isolating individual precursors, the instrument steps through a series of wide (m/z) windows (for example, 20–25 Da each), fragmenting all ions within each window and recording composite MS/MS spectra.
+
+From a data perspective:
+
+-   Every run contains systematic fragment information across the full mass range, improving coverage and reproducibility. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+-   Product ion spectra are multiplexed: fragments from many co‑isolated precursors appear together, requiring specialized deconvolution algorithms and often prior spectral libraries, as implemented in tools such as DIA‑NN or Spectronaut.
+-   DIA yields dense data matrices with relatively few missing values but requires more sophisticated preprocessing pipelines.
+
+> **Key distinction for data analysts**\
+> In DDA data, you should expect many missing values for low‑abundance peptides or small molecules, reflecting stochastic precursor selection. In DIA data, you should expect dense matrices but more complex preprocessing, because identification and quantification depend on deconvolution models and their assumptions. There is no universally “better” strategy—only approaches that are more or less appropriate for specific biological and statistical questions.
+
+Targeted acquisition: SIM and SRM/MRM
+
+Targeted methods restrict acquisition to predefined analytes, trading global coverage for sensitivity, dynamic range, and quantitative precision. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+
+-   **Selected ion monitoring (SIM)** narrows MS1 acquisition to specific (m/z) values or small windows around them, increasing dwell time and improving signal‑to‑noise for those ions.
+-   **Selected/multiple reaction monitoring (SRM/MRM)** on triple quadrupoles goes further: Q1 selects a precursor (m/z), q2 induces fragmentation, and Q3 monitors one or more characteristic product (m/z) values, so only ions passing both filters contribute to the signal. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/20622845/)
+
+From a data standpoint, MRM files contain chromatographic traces for a small set of predefined transitions (precursor–fragment pairs), each typically integrated and modeled separately. These datasets usually show few missing values, broad linear dynamic ranges, and excellent precision—conditions that are ideal for regression, mixed‑effects modeling, and equivalence testing.
+
+------------------------------------------------------------------------
+
+What can go wrong: sample preparation and artifacts
+
+You do not need to carry out sample preparation yourself to analyze MS data, but you do need to recognize its artifacts. Three issues appear repeatedly in real datasets: [sciencedirect](https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/mass-chromatogram)
+
+1.  **Ion suppression**\
+    Ion suppression is the single most common problem in LC–ESI–MS. Co‑eluting matrix components compete with analytes for access to the droplet surface and for charge in the ESI source, reducing intensity or causing complete loss of signal despite the presence of analyte in the sample. This produces “missing not at random” patterns, especially in untargeted metabolomics and in complex samples such as plasma or urine. [sciencedirect](https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/mass-chromatogram)
+
+2.  **Contamination**\
+    Non‑volatile salts, detergents, plasticizers, and polymers can contaminate the system, suppressing signals and fouling the instrument. In raw spectra, contamination often appears as elevated background at low (m/z) or as characteristic repeating clusters (for example, polyethylene glycol with 44 Da spacing), and in chromatograms it can show up as slowly varying baselines or persistent features across batches.
+
+3.  **Standardized proteomics workflows**\
+    Most proteomics data derive from standardized bottom‑up workflows involving denaturation, reduction and alkylation, tryptic digestion, and peptide desalting. This helps explain why identification tables contain shared peptides across proteins, why missed cleavages are common, and why detectability varies strongly by sequence; all of these features affect how you aggregate peptide‑level data to the protein level. [pubmed.ncbi.nlm.nih](https://pubmed.ncbi.nlm.nih.gov/16614208/)
+
+> **Bridge to quality control**\
+> Quality control diagnostics based on TICs, base peak chromatograms, and (m/z) distributions are invaluable for detecting ion suppression and contamination before downstream modeling. [rformassspectrometry.github](https://rformassspectrometry.github.io/book/)
+
+------------------------------------------------------------------------
+
+From raw files to feature matrices
+
+Mass spectrometers from different vendors produce proprietary file formats, but most can be converted into open standards such as mzML, mzXML, or MGF. These formats encode instrument metadata (ion source, analyzer, acquisition mode), spectra (lists of (m/z) values and intensities for each scan), and chromatographic information (scan times, retention times), and they form the primary inputs for reproducible R‑based MS workflows. [rformassspectrometry](https://www.rformassspectrometry.org)
+
+Within the R ecosystem, the **R for Mass Spectrometry** initiative provides a community‑driven infrastructure for handling this entire path from raw spectra to quantitative feature tables. Key components include:
+
+-   **Spectra** for representing and manipulating MS spectra with backend‑agnostic access to large raw files.\
+-   **MSnbase** and related packages for spectrum‑level processing, quantification, and visualization.\
+-   **xcms** for chromatographic peak picking and alignment in untargeted LC–MS (metabolomics and small molecules).\
+-   **QFeatures** for organizing quantitative data across multiple levels (features, peptides, proteins) and integrating with wider Bioconductor infrastructure.
+
+For the purposes of this book, it is useful to keep in mind which parts of the ecosystem you will use when:
+
+-   For importing mzML/mzXML and basic spectrum handling, you will rely on `Spectra()` and its backends. [rformassspectrometry](https://www.rformassspectrometry.org/documentation/)
+-   For untargeted LC–MS metabolomics and small‑molecule profiling, you will use `xcms` for peak picking and alignment. [rformassspectrometry.github](https://rformassspectrometry.github.io/book/)
+-   For DIA workflows, you will typically start from output tables produced by tools such as DIA‑NN or Spectronaut and then import those into R.
+-   For proteomics identification and quantification (DDA and DIA), you will use QFeatures‑based structures to manage peptide and protein‑level data.
+
+The concepts introduced in this chapter—(m/z), acquisition modes, and common artifacts—form the physical and instrumental backdrop against which all those computational operations take place.
+
+------------------------------------------------------------------------
+
+Summary of key points for data analysts
+
+Before moving on, you should be able to answer these questions:
+
+-   **What does a mass spectrometer directly measure?**\
+    Mass‑to‑charge ratio (m/z), not mass; mass and charge must be inferred from (m/z) together with charge state information.
+
+-   **Why can the same molecule appear at multiple (m/z) values?**\
+    Because it can form ions with different charge states, adducts, and in‑source fragments, each with its own (m/z) peak.
+
+-   **What is the practical difference between DDA and DIA for missing values?**\
+    DDA has stochastic missingness—low‑abundance species may not be fragmented in each run—whereas DIA yields dense matrices with fewer missing values but requires deconvolution and more complex preprocessing.
+
+-   **What is the first thing to check when you see unexpected missing values in LC–MS data?**\
+    Ion suppression caused by co‑eluting matrix components, which can reduce or eliminate signal independently of true analyte concentration. [sciencedirect](https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/mass-chromatogram)
+
+-   **When would you use high‑resolution data instead of low‑resolution?**\
+    When you need to distinguish isobaric species, resolve isotopic fine structure, or assign elemental compositions with confidence, and when narrow extraction windows can reduce interference in complex matrices.
+
+------------------------------------------------------------------------
+
+Further reading
+
+-   Gross JH. *Mass Spectrometry: A Textbook*. 3rd ed. Springer; 2017.
+-   Domon B, Aebersold R. Options and considerations when selecting a quantitative proteomics strategy. *Nature Biotechnology*. 2010;28(7):710–721.
+-   R for Mass Spectrometry initiative. https://www.rformassspectrometry.org.
+-   Gatto L, Rainer J, et al. *R for Mass Spectrometry* (online book and documentation).
+
+## Exercises
+
+1.  **m/z vs. Mass**: Explain why a mass spectrometer measures the mass-to-charge ratio ($m/z$) rather than the absolute mass of a molecule. How does the charge state ($z$) affect the observed position of a peak?
+2.  **Acquisition Modes**: Compare Data-Dependent Acquisition (DDA) and Data-Independent Acquisition (DIA). Which mode typically results in more missing values across a large cohort, and why?
+3.  **Artifacts**: Describe the phenomenon of ion suppression. In which part of the LC-MS system does it occur, and how does it affect the accuracy of quantification?

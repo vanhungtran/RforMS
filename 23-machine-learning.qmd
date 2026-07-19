@@ -1,0 +1,327 @@
+# Machine Learning for MS Data
+
+> *A model is only as trustworthy as the resampling scheme that estimated it. In mass spectrometry, where features outnumber samples by orders of magnitude, the modelling framework matters more than the algorithm.*
+
+Earlier chapters produced a clean, normalised feature matrix and tested individual features for differential abundance (Chapters 20–21). This chapter takes the complementary, *multivariate* view: using many features together to **predict** a sample's class or outcome. That is the domain of supervised machine learning (ML).
+
+The emphasis here is on **doing it correctly with a reproducible framework** — `tidymodels` — rather than on any single algorithm. We cover regularised regression, random forests, and gradient boosting; principled resampling and hyperparameter tuning; the two problems that MS data raises most often (class imbalance and calibration); and how to interpret a fitted model. The *discipline* of leakage-free validation and clinical reporting is developed in the next chapter (Chapter 23), which applies these models to biomarker discovery.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Preparing data on the full dataset before splitting. Any step that sees the test set — scaling, imputation, feature selection, hyperparameter tuning — leaks information and inflates measured performance. Fit every step *inside* the resampling loop.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Distinguish supervised from unsupervised learning and recognise the $p \gg n$ regime typical of MS data
+- Build a modelling pipeline with `tidymodels` (`recipes`, `parsnip`, `workflows`, `rsample`, `tune`)
+- Fit and tune **regularised regression** (`glmnet`: LASSO, ridge, elastic net), **random forest**, and **gradient boosting** (`xgboost`)
+- Choose resampling schemes (stratified $k$-fold, repeated, nested CV) appropriate to small-sample MS studies
+- Handle **class imbalance** with stratification, resampling (`themis`), and imbalance-aware metrics (PR-AUC, F1, balanced accuracy, MCC)
+- Assess **model calibration** with reliability curves and the Brier score
+- Interpret a model with variable-importance and permutation-importance methods (`vip`)
+
+## When to Reach for ML — and When Not To
+
+| Question | Tool | Chapter |
+|---|---|---|
+| Is *this one feature* different between groups? | Univariate test + FDR (`limma`) | 20 |
+| Does a *combination* of features predict class/outcome? | Supervised ML (this chapter) | 22 |
+| Can I separate groups without labels / find structure? | Unsupervised (PCA, clustering, PLS-DA) | 17, 24 |
+| Is my classifier honestly validated for clinical use? | Leakage-free nested CV + reporting | 23 |
+
+Machine learning is not a substitute for a well-posed statistical question. If the goal is *inference* ("which proteins change?"), stay with the differential-abundance framework. Reach for ML when the goal is *prediction* from a multivariate signature.
+
+### The $p \gg n$ problem
+
+MS feature tables typically have thousands of features (`p`) and tens to low-hundreds of samples (`n`). When $p \gg n$ it is *always* possible to fit the training data perfectly — this is a mathematical inevitability, not a discovery. Two consequences follow, and they shape every choice in this chapter:
+
+1. **Regularisation is mandatory.** Unpenalised models overfit instantly. Prefer models with built-in shrinkage (elastic net) or ensembling (random forest, boosting with early stopping).
+2. **Honest resampling is non-negotiable.** A single train/test split is too noisy at small `n`; cross-validation — and, for reported performance, *nested* cross-validation — is the minimum standard.
+
+---
+
+## A `tidymodels` Skeleton
+
+`tidymodels` gives one consistent grammar for every model, so you can swap algorithms without rewriting the pipeline. The core objects:
+
+| Package | Role |
+|---|---|
+| `rsample` | Data splitting and resampling (`initial_split`, `vfold_cv`) |
+| `recipes` | Preprocessing as a **fitted** transformation (learned on the training fold only) |
+| `parsnip` | Unified model specification across engines |
+| `workflows` | Bundle recipe + model so they resample together |
+| `tune` / `dials` | Hyperparameter search |
+| `yardstick` | Metrics |
+
+The single most important reason to use a recipe is that preprocessing is **fitted inside resampling** — centring, scaling, and imputation parameters are learned from each training fold and applied to its assessment fold, which is exactly what prevents preprocessing leakage (Chapter 23).
+
+```r
+#| eval: false
+library(tidymodels)
+
+# `se` is a SummarizedExperiment; build a samples × features tibble
+X <- t(SummarizedExperiment::assay(se, "normalized"))
+df <- tibble::as_tibble(X) |>
+  dplyr::mutate(class = factor(se$condition)) |>
+  dplyr::relocate(class)
+
+set.seed(42)
+split    <- rsample::initial_split(df, prop = 0.75, strata = class)
+train_df <- rsample::training(split)
+test_df  <- rsample::testing(split)
+
+# Preprocessing recipe — every step is fitted on the analysis fold only
+rec <- recipes::recipe(class ~ ., data = train_df) |>
+  recipes::step_zv(recipes::all_predictors()) |>              # drop zero-variance features
+  recipes::step_YeoJohnson(recipes::all_numeric_predictors()) |>  # variance stabilisation
+  recipes::step_normalize(recipes::all_numeric_predictors()) |>   # centre + scale
+  recipes::step_impute_knn(recipes::all_numeric_predictors())     # if NAs remain
+
+# Stratified 5-fold CV, repeated 5× for a stable estimate at small n
+folds <- rsample::vfold_cv(train_df, v = 5, repeats = 5, strata = class)
+```
+
+Everything below reuses `rec` and `folds`.
+
+---
+
+## Regularised Regression with `glmnet`
+
+Penalised logistic regression is often the best first model for MS biomarker work: it is interpretable (non-zero coefficients *are* the selected features), it handles $p \gg n$, and the elastic-net mixture handles correlated features (isotopologues, adducts, co-eluting peptides) better than pure LASSO.
+
+The elastic-net penalty is
+$$ \lambda\left[(1-\alpha)\tfrac{1}{2}\lVert\beta\rVert_2^2 + \alpha\lVert\beta\rVert_1\right], $$
+where `penalty` $=\lambda$ controls overall shrinkage and `mixture` $=\alpha$ interpolates ridge ($\alpha=0$) and LASSO ($\alpha=1$). Both are tuned.
+
+```r
+#| eval: false
+glmnet_spec <- parsnip::logistic_reg(
+  penalty = tune(), mixture = tune()
+) |>
+  parsnip::set_engine("glmnet") |>
+  parsnip::set_mode("classification")
+
+glmnet_wf <- workflows::workflow() |>
+  workflows::add_recipe(rec) |>
+  workflows::add_model(glmnet_spec)
+
+grid <- dials::grid_regular(
+  dials::penalty(range = c(-4, 0)),   # log10 scale
+  dials::mixture(range = c(0, 1)),
+  levels = c(penalty = 30, mixture = 5)
+)
+
+set.seed(42)
+glmnet_res <- tune::tune_grid(
+  glmnet_wf,
+  resamples = folds,
+  grid      = grid,
+  metrics   = yardstick::metric_set(
+    yardstick::roc_auc, yardstick::pr_auc, yardstick::mn_log_loss
+  )
+)
+
+best <- tune::select_best(glmnet_res, metric = "roc_auc")
+tune::show_best(glmnet_res, metric = "roc_auc", n = 3)
+```
+
+The selected features are the predictors with non-zero coefficients in the final fit:
+
+```r
+#| eval: false
+final_glmnet <- tune::finalize_workflow(glmnet_wf, best) |>
+  parsnip::fit(data = train_df)
+
+final_glmnet |>
+  workflows::extract_fit_parsnip() |>
+  broom::tidy() |>
+  dplyr::filter(estimate != 0, term != "(Intercept)") |>
+  dplyr::arrange(dplyr::desc(abs(estimate)))
+```
+
+---
+
+## Tree Ensembles: Random Forest and Gradient Boosting
+
+Ensembles capture non-linearities and feature interactions that a linear model misses. They rarely need feature scaling, but they still overfit at small `n` unless tuned with honest resampling.
+
+```r
+#| eval: false
+# Random forest (ranger engine)
+rf_spec <- parsnip::rand_forest(
+  mtry = tune(), min_n = tune(), trees = 1000
+) |>
+  parsnip::set_engine("ranger", importance = "permutation") |>
+  parsnip::set_mode("classification")
+
+# Gradient boosting (xgboost engine) — early stopping guards against overfit
+xgb_spec <- parsnip::boost_tree(
+  trees = 1000, tree_depth = tune(), learn_rate = tune(),
+  loss_reduction = tune(), sample_size = tune(), mtry = tune(),
+  stop_iter = 20
+) |>
+  parsnip::set_engine("xgboost") |>
+  parsnip::set_mode("classification")
+
+rf_wf  <- workflows::workflow() |> workflows::add_recipe(rec) |> workflows::add_model(rf_spec)
+xgb_wf <- workflows::workflow() |> workflows::add_recipe(rec) |> workflows::add_model(xgb_spec)
+
+# Space-filling design is more efficient than a full grid for many parameters
+set.seed(42)
+rf_res <- tune::tune_grid(rf_wf, resamples = folds,
+                          grid = 20,
+                          metrics = yardstick::metric_set(yardstick::roc_auc, yardstick::pr_auc))
+```
+
+### Choosing between models
+
+Compare *resampled* metrics, never training-set fit. `workflowsets` can tune several models over the same folds and rank them:
+
+```r
+#| eval: false
+wfs <- workflowsets::workflow_set(
+  preproc = list(base = rec),
+  models  = list(glmnet = glmnet_spec, rf = rf_spec, xgb = xgb_spec)
+)
+set.seed(42)
+wfs_res <- workflowsets::workflow_map(
+  wfs, "tune_grid", resamples = folds, grid = 20,
+  metrics = yardstick::metric_set(yardstick::roc_auc, yardstick::pr_auc)
+)
+workflowsets::rank_results(wfs_res, rank_metric = "pr_auc", select_best = TRUE)
+```
+
+For most MS studies ($n = 50$–$200$), elastic net wins on interpretability and often ties tree ensembles on performance. Reach for boosting when `n` is larger and interactions are expected.
+
+---
+
+## Class Imbalance
+
+Clinical MS cohorts are usually imbalanced (few cases, many controls). Two failures follow if it is ignored: the model learns to predict the majority class, and **accuracy becomes meaningless** (99% "accuracy" by always predicting "control" when cases are 1%).
+
+**Fixes, in order of preference:**
+
+1. **Always stratify** resampling folds and the initial split on the outcome (`strata = class`, already done above) so every fold preserves the class ratio.
+2. **Use imbalance-aware metrics** — optimise and report **PR-AUC**, **balanced accuracy**, **F1**, or **Matthews correlation coefficient (MCC)** rather than accuracy or plain ROC-AUC.
+3. **Resample the minority class inside the recipe** with `themis`, so it happens *within* each training fold (never on the assessment fold):
+
+```r
+#| eval: false
+library(themis)
+rec_balanced <- rec |>
+  themis::step_smote(class)      # or step_downsample(class) / step_upsample(class)
+
+# Metric set for imbalanced problems
+imbal_metrics <- yardstick::metric_set(
+  yardstick::pr_auc, yardstick::roc_auc,
+  yardstick::f_meas, yardstick::bal_accuracy, yardstick::mcc
+)
+```
+
+::: {.callout-warning}
+Never apply SMOTE or up/down-sampling to the whole dataset before splitting — the synthetic minority points leak information across the split. Putting `step_smote()` *in the recipe* guarantees it is refitted inside each resample. This is the imbalance-specific case of the general leakage rule in Chapter 23.
+:::
+
+---
+
+## Model Calibration
+
+A model can rank cases well (high AUC) yet output probabilities that are systematically wrong — a predicted "0.9" that is only right 60% of the time. For any clinical use where the *probability itself* is acted on, calibration matters as much as discrimination.
+
+- **Reliability (calibration) curve** — bin predicted probabilities and plot observed vs. expected frequency; the diagonal is perfect.
+- **Brier score** — mean squared error between predicted probability and outcome; lower is better, and it decomposes into calibration + refinement.
+
+```r
+#| eval: false
+library(probably)
+
+cal_preds <- tune::collect_predictions(glmnet_res, parameters = best)
+
+# Reliability curve across resamples
+probably::cal_plot_breaks(cal_preds, truth = class, estimate = .pred_Disease)
+
+# Brier score
+yardstick::brier_class(cal_preds, truth = class, .pred_Disease)
+
+# If mis-calibrated, fit a post-hoc calibrator on held-out predictions
+cal_model <- probably::cal_estimate_logistic(cal_preds, truth = class)
+```
+
+Tree ensembles (especially boosting) are frequently over-confident and benefit most from post-hoc calibration; regularised logistic regression is usually well calibrated already.
+
+---
+
+## Interpreting the Model
+
+A predictive signature is only useful biologically if you can say *which features drive it*.
+
+```r
+#| eval: false
+library(vip)
+
+# Model-based importance (glmnet coefficients / RF permutation importance)
+final_rf <- tune::finalize_workflow(rf_wf, tune::select_best(rf_res, metric = "pr_auc")) |>
+  parsnip::fit(data = train_df)
+
+final_rf |>
+  workflows::extract_fit_parsnip() |>
+  vip::vip(num_features = 20)
+
+# Engine-agnostic permutation importance (works for any model)
+vip::vi_permute(
+  final_rf,
+  target    = "class",
+  metric    = "roc_auc",
+  train     = train_df,
+  pred_wrapper = function(object, newdata)
+    predict(object, newdata, type = "prob")$.pred_Disease
+)
+```
+
+Report importance **with stability**: features that are top-ranked in only one resample are unreliable. Aggregate importance across folds, and cross-check the selected features against the differential-abundance results (Chapter 20) and known biology (Chapter 24) before claiming a biomarker.
+
+::: {.callout-note}
+Model interpretation tells you what the model *used*, not what is *causal*. A feature can be important because it is a batch artefact correlated with the outcome. Always check that top features are not confounded with run order or batch (Chapter 17).
+:::
+
+---
+
+## Common Pitfalls in MS Machine Learning
+
+| Pitfall | Why it bites in MS | Guardrail |
+|---|---|---|
+| Preprocessing on the full matrix | Test-set means leak into scaling/imputation | Put every step in a `recipe`; it fits inside resampling |
+| Reporting accuracy on imbalanced data | Majority-class predictor looks "accurate" | Use PR-AUC / MCC / balanced accuracy |
+| One train/test split | Too noisy at small `n` | Repeated, stratified CV; nested CV for reported metrics (Chapter 23) |
+| Tuning on the test set | Optimistic, non-reproducible | Tune in an inner loop; touch test once |
+| Trusting uncalibrated probabilities | Boosting is over-confident | Brier score + reliability curve; post-hoc calibration |
+| Batch-confounded features top the importance list | Batch correlated with outcome | Check importance against batch (Chapter 17) |
+
+---
+
+## Summary
+
+- Machine learning answers *multivariate prediction* questions, complementing the univariate inference of Chapters 20–21.
+- The $p \gg n$ regime of MS data makes **regularisation** and **honest resampling** non-negotiable; the algorithm matters less than the framework around it.
+- `tidymodels` provides one grammar for splitting, preprocessing-as-a-fitted-recipe, model specification, tuning, and metrics — and it makes leakage-free preprocessing the default.
+- Elastic net (`glmnet`) is a strong, interpretable default; random forest and `xgboost` capture interactions when `n` is larger.
+- **Class imbalance** demands stratification, in-recipe resampling (`themis`), and imbalance-aware metrics; **calibration** demands reliability curves and the Brier score.
+- Interpret models with (permutation) importance, report importance with stability, and confirm against differential-abundance and biology.
+
+The next chapter turns from *building* models to *validating them without leakage* and reporting biomarker performance to publication standards.
+
+## Exercises
+
+1. **Framework fluency.** Build a `tidymodels` workflow that preprocesses an MS matrix with a recipe (zero-variance filter, normalise) and fits an elastic-net model. Confirm from `extract_recipe()` that scaling parameters come from the training fold only.
+2. **Model bake-off.** Using `workflowsets`, tune `glmnet`, `ranger`, and `xgboost` over the same repeated-CV folds. Rank them by PR-AUC. Which wins, and does the ranking change if you rank by ROC-AUC instead?
+3. **Imbalance.** Down-sample your control group to create a 1:9 imbalance. Compare a model trained with and without `step_smote()`, evaluated by accuracy *and* MCC. What does accuracy hide?
+4. **Calibration.** Plot reliability curves and compute the Brier score for your best `glmnet` and best `xgboost` models. Which is better calibrated, and does post-hoc `cal_estimate_logistic()` improve the worse one?
+5. **Stability of importance.** Extract permutation importance within each CV fold and count how often each feature appears in the top 20. Which "important" features are actually unstable?
+
+## Session Information
+
+```r
+sessionInfo()
+```

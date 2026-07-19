@@ -1,0 +1,667 @@
+# Match MS/MS Spectra to Libraries
+
+An MS/MS spectrum is a molecule's fingerprint. The fastest way to name an unknown is to ask whether anyone has recorded that fingerprint before — matching it against a reference library of spectra from known compounds. But "match" is a matter of degree, and a high similarity score is not the same as a correct answer. This chapter builds spectral library search in R and, just as importantly, teaches you to distrust it by the right amount.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Trusting the top hit by score alone. A high cosine similarity to the wrong adduct or a near-isomer is common. Always cross-check precursor mass, adduct, and retention time before believing a match.
+:::
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Understand the principles of spectral library matching and annotation confidence levels
+- Access and query public spectral databases from R (MassBank, MoNA, HMDB)
+- Build and manage local spectral libraries using `CompoundDb`
+- Perform cosine similarity-based library searches with `MetaboAnnotation`
+- Interpret and filter annotation results with appropriate confidence levels
+- Handle adducts and multiple ionization forms in matching workflows
+
+---
+
+## Introduction to Spectral Library Search
+
+### Why Spectral Library Matching?
+
+Raw MS/MS spectra contain rich structural information, but their identity remains unknown until matched against a reference. **Spectral library search** compares observed fragmentation patterns to curated databases, assigning putative identities based on spectral similarity.
+
+```
+Experimental Spectrum          Reference Spectrum (Library)
+        │                              │
+        ▼                              ▼
+   [M+H]+ at m/z 205.097         [M+H]+ at m/z 205.097
+        │                              │
+        ▼                              ▼
+   Fragments:                       Fragments:
+   m/z 158.06 (100%)               m/z 158.06 (100%)
+   m/z 144.08 (45%)                m/z 144.08 (48%)
+   m/z 130.07 (30%)                m/z 130.07 (28%)
+        │                              │
+        └──────────┬───────────────────┘
+                   ▼
+          Cosine Similarity = 0.95
+                   │
+                   ▼
+          Annotation: Tryptophan
+```
+
+### The Metabolomics Standards Initiative (MSI) Confidence Levels
+
+| Level | Name | Evidence Required | Confidence |
+|-------|------|-------------------|-------------|
+| **1** | Confirmed metabolite | Retention time + MS/MS + isotopic pattern match to authentic standard | Highest |
+| **2** | Putatively annotated | MS/MS match to library spectrum (no RT or standard) | High |
+| **3** | Putatively characterized class | Spectral similarity to class-specific fragments | Moderate |
+| **4** | Unknown feature | No match; only m/z and RT known | Low |
+
+> **Important:** Most untargeted studies achieve Level 2 for a subset of features. Level 1 requires purchasing and running authentic standards.
+
+### Key Matching Parameters
+
+| Parameter | Typical Range | Description |
+|-----------|---------------|-------------|
+| **Precursor m/z tolerance** | 5-20 ppm | How close precursor m/z must match between query and library |
+| **Fragment tolerance** | 0.01-0.05 Da (or 10-20 ppm) | Allowed m/z deviation for fragment ions |
+| **Cosine threshold** | 0.6-0.9 | Similarity score cutoff (1.0 = identical) |
+| **Min matched peaks** | 4-6 | Minimum number of common fragments |
+
+> **Resource note:** Matching thousands of spectra against libraries with >100,000 entries can be memory-intensive. For large experiments, consider subsetting libraries by precursor m/z range first, using `matchSpectra` with `chunksize = 1000`, or running on a machine with ≥16GB RAM.
+
+---
+
+## Setting Up the Environment
+
+### Required Packages
+
+```r
+#| eval: false
+# Install core annotation packages from Bioconductor
+BiocManager::install(c(
+  "MetaboAnnotation",  # High-level annotation workflows
+  "CompoundDb",        # Local compound/spectral databases
+  "Spectra",           # Core MS data structures
+  "MsBackendMassbank", # MassBank spectral backend
+  "MsBackendMsp",      # MSP file support
+  "MsCoreUtils"        # Similarity calculations
+))
+
+# For data manipulation and visualization
+install.packages(c("tidyverse", "RSQLite", "dbplyr"))
+```
+
+### Loading Libraries
+
+```r
+library(Spectra)
+library(MetaboAnnotation)
+library(CompoundDb)
+library(MsCoreUtils)
+library(tidyverse)
+
+# Check versions
+cat("MetaboAnnotation version:", packageVersion("MetaboAnnotation"), "\n")
+cat("CompoundDb version:", packageVersion("CompoundDb"), "\n")
+```
+
+---
+
+## Accessing Reference Spectral Libraries
+
+### Public Databases Accessible from R
+
+| Database | Coverage | Size | R Access Method |
+|----------|----------|------|-----------------|
+| **MassBank** | Multi-class, multi-instrument | >200,000 spectra | MSP download or `CompDb` |
+| **MoNA** (Massbank of North America) | Community-contributed | >800,000 spectra | Download MSP/SDF |
+| **HMDB** | Human metabolites | >50,000 spectra | `CompoundDb` / download |
+| **GNPS** | Natural products | >500,000 spectra | Web API |
+| **LipidBlast** | In-silico lipids | >200,000 spectra | Download MSP |
+
+### Building a Local CompoundDb Database
+
+For reproducible workflows, create a local SQLite database from downloaded spectral libraries:
+
+```r
+#| eval: false
+library(CompoundDb)
+
+# Option 1: From MSP file (e.g., MoNA export)
+# Download MoNA MSP file from https://mona.fiehnlab.ucdavis.edu/downloads
+msp_file <- "MoNA-export-GC-MS.msp"
+
+# Convert MSP to SQLite
+cdb <- createCompDb(
+  msp_file,
+  metadata = list(
+    source = "MoNA",
+    url = "https://mona.fiehnlab.ucdavis.edu/",
+    version = "2024-01",
+    download_date = as.character(Sys.Date())
+  ),
+  path = "."
+)
+
+# Option 2: From MassBank MSP download (more reliable than direct API)
+massbank_url <- "https://massbank.eu/MassBank/Downloads/MassBank_record.msp"
+download.file(massbank_url, destfile = "massbank.msp")
+
+cdb_massbank <- createCompDb(
+  "massbank.msp",
+  metadata = list(
+    source = "MassBank",
+    url = "https://massbank.eu/",
+    version = "2024-01"
+  ),
+  path = "."
+)
+
+# Option 3: From SDF file (HMDB, PubChem)
+sdf_file <- "hmdb_metabolites.sdf"
+cdb_hmdb <- compound_tbl_sdf(sdf_file) |>
+  createCompDb(
+    metadata = list(source = "HMDB", version = "5.0"),
+    path = "."
+  )
+
+# Explore the database
+cdb
+listTables(cdb)  # Show all tables in the database
+```
+
+### Querying a CompoundDb Database
+
+```r
+# Load existing database
+cdb <- CompDb("MoNA.sqlite")
+
+# Explore contents
+cdb
+
+# Count compounds and spectra
+n_compounds <- length(unique(compounds(cdb)$compound_id))
+n_spectra <- length(spectra(cdb))
+
+cat(sprintf("Database contains %d compounds with %d spectra\n", 
+            n_compounds, n_spectra))
+
+# Search by compound name
+tryptophan <- compounds(cdb) |>
+  filter(grepl("tryptophan", name, ignore.case = TRUE))
+
+print(tryptophan)
+
+# Retrieve spectra for a specific compound
+cmpd_id <- tryptophan$compound_id[1]
+cmpd_spectra <- Spectra(cdb, filter = ~ compound_id == cmpd_id)
+cat(sprintf("Spectra for %s: %d\n", 
+            tryptophan$name[1], length(cmpd_spectra)))
+```
+
+---
+
+## Preparing Experimental Data
+
+### Loading Query Spectra
+
+```r
+# Load example metabolomics data
+library(msdata)
+
+# metabolomics() returns paths to example files from a real LC-MS/MS experiment
+# First file contains MS1 and MS2 spectra from tomato samples
+query_file <- msdata::metabolomics(full.names = TRUE)[1]
+cat("File:", basename(query_file), "\n")
+cat("Size:", round(file.info(query_file)$size / 1e6, 2), "MB\n")
+
+# Load all spectra
+all_spectra <- Spectra(query_file)
+
+# Filter to MS2 spectra only
+query_sps <- filterMsLevel(all_spectra, 2L)
+
+# Basic statistics
+cat(sprintf("\nQuery data summary:\n"))
+cat(sprintf("  Total MS2 spectra: %d\n", length(query_sps)))
+cat(sprintf("  RT range: %.1f - %.1f sec (%.1f - %.1f min)\n",
+            min(rtime(query_sps)), max(rtime(query_sps)),
+            min(rtime(query_sps))/60, max(rtime(query_sps))/60))
+
+# Preview precursor information
+precursor_info <- data.frame(
+  spectrum_id = 1:min(10, length(query_sps)),
+  precursor_mz = precursorMz(query_sps[1:10]),
+  precursor_charge = precursorCharge(query_sps[1:10])
+)
+print(precursor_info)
+```
+
+### Quality Control of Query Spectra
+
+```r
+# Filter low-quality spectra before matching
+has_enough_peaks <- function(spectra, min_peaks = 5) {
+  npeaks <- lengths(peaksData(spectra))
+  npeaks >= min_peaks
+}
+
+has_precursor <- function(spectra) {
+  !is.na(precursorMz(spectra))
+}
+
+# Apply filters
+query_clean <- query_sps[has_enough_peaks(query_sps, min_peaks = 5)]
+query_clean <- query_clean[has_precursor(query_clean)]
+
+cat(sprintf("Quality filtering:\n"))
+cat(sprintf("  Original MS2: %d\n", length(query_sps)))
+cat(sprintf("  After ≥5 peaks: %d\n", sum(has_enough_peaks(query_sps))))
+cat(sprintf("  After precursor present: %d\n", length(query_clean)))
+```
+
+---
+
+## Spectral Matching with MetaboAnnotation
+
+### Basic Cosine Similarity Search
+
+`MetaboAnnotation` provides a unified interface for matching query spectra against reference spectra.
+
+```r
+#| eval: false
+# Prepare reference spectra from CompoundDb
+ref_sps <- Spectra(cdb)
+
+# Define matching parameters
+match_param <- CompareSpectraParam(
+  ppm = 10,                    # Precursor tolerance (parts per million)
+  tolerance = 0.05,            # Fragment m/z tolerance (Dalton)
+  score = "cosine",            # Similarity metric (0 = dissimilar, 1 = identical)
+  THRESHFUN = function(x) which(x >= 0.6),  # Keep only matches with score ≥ 0.6
+  requirePrecursor = TRUE      # Must match precursor m/z within ppm tolerance
+)
+
+# Run matching (this may take several minutes for large libraries)
+matches <- matchSpectra(
+  query = query_clean,
+  target = ref_sps,
+  param = match_param
+)
+
+# Examine results
+matches
+```
+
+### Understanding the Match Results
+
+```r
+# Extract match data as data frame
+match_df <- matchedData(matches)
+
+# Structure of results
+glimpse(match_df)
+
+# Key columns:
+# - query_idx: index in query_clean
+# - target_idx: index in ref_sps
+# - score: cosine similarity (0-1)
+# - precursorMz_query, precursorMz_target
+# - compound_name, compound_id
+
+# Summary statistics
+cat("\nMatch statistics:\n")
+cat(sprintf("  Queries with matches: %d / %d (%.1f%%)\n",
+            length(unique(match_df$query_idx)),
+            length(query_clean),
+            length(unique(match_df$query_idx)) / length(query_clean) * 100))
+cat(sprintf("  Total matches (hits): %d\n", nrow(match_df)))
+cat(sprintf("  Average hits per query: %.1f\n", 
+            nrow(match_df) / length(unique(match_df$query_idx))))
+```
+
+### Best Hit Per Spectrum
+
+```r
+# Keep only the top-scoring match for each query spectrum
+best_hits <- match_df |>
+  group_by(query_idx) |>
+  arrange(desc(score)) |>
+  slice_head(n = 1) |>
+  ungroup()
+
+# Distribution of top scores
+summary(best_hits$score)
+
+# Score distribution histogram
+ggplot(best_hits, aes(x = score)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of Best Match Cosine Similarities",
+    x = "Cosine Similarity Score",
+    y = "Number of Spectra"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Assigning MSI Confidence Levels
+
+### Score-Based Classification
+
+```r
+# Assign MSI confidence levels based on score thresholds
+best_hits <- best_hits |>
+  mutate(
+    msi_level = case_when(
+      score >= 0.9 ~ "Level 2 (Putative annotation)",
+      score >= 0.7 ~ "Level 3 (Probable compound class)",
+      score >= 0.5 ~ "Level 3 (Possible class match)",
+      TRUE         ~ "Level 4 (Unknown)"
+    ),
+    confidence_score = case_when(
+      score >= 0.9 ~ "High",
+      score >= 0.7 ~ "Medium",
+      score >= 0.5 ~ "Low",
+      TRUE ~ "None"
+    )
+  )
+
+# Summary by confidence level
+best_hits |>
+  count(msi_level, confidence_score) |>
+  arrange(desc(confidence_score))
+```
+
+### Adding Retention Time for Level 1
+
+For Level 1 confidence, you need retention time matching against authentic standards:
+
+```r
+# Example: If you have retention time data
+best_hits_with_rt <- best_hits |>
+  mutate(
+    # Assuming query RT is available and reference has predicted/measured RT
+    rt_difference_sec = abs(query_rt_sec - target_rt_sec),
+    rt_match = rt_difference_sec < 30,  # Within 30 seconds
+    msi_level = case_when(
+      score >= 0.9 & rt_match ~ "Level 1 (Confirmed)",
+      score >= 0.9 ~ "Level 2 (Putative)",
+      score >= 0.7 ~ "Level 3 (Probable class)",
+      TRUE ~ "Level 4 (Unknown)"
+    )
+  )
+```
+
+---
+
+## Visualizing Spectral Matches
+
+### Mirror Plots
+
+Mirror plots compare query spectrum (top) against library spectrum (bottom):
+
+```r
+#| eval: false
+# Plot best match for first annotated spectrum
+first_match <- best_hits$query_idx[1]
+first_target <- best_hits$target_idx[1]
+
+# Create mirror plot
+plotSpectraMirror(
+  x = query_clean[first_match],
+  y = ref_sps[first_target],
+  ppm = 10,
+  main = sprintf("Match: %s (cosine = %.3f)",
+                 best_hits$compound_name[1],
+                 best_hits$score[1])
+)
+```
+
+### Annotated Mirror Plot with Peak Labels
+
+```r
+#| eval: false
+# Enhanced mirror plot with peak annotations
+plotSpectraMirror(
+  x = query_clean[first_match],
+  y = ref_sps[first_target],
+  ppm = 10,
+  labelPeaks = TRUE,           # Label common peaks
+  labelTol = 0.05,             # Tolerance for labeling
+  main = "MS/MS Mirror Plot: Query vs Library",
+  xlab = "m/z",
+  ylab = "Relative Intensity (%)"
+)
+```
+
+---
+
+## Advanced Matching Strategies
+
+### Adduct-Aware Matching
+
+Metabolites appear as multiple adduct forms ([M+H]+, [M+Na]+, [M-H]-). Unaware matching inflates false negatives.
+
+```r
+#| eval: false
+# Adduct-aware matching
+matches_adducts <- matchSpectra(
+  query = query_clean,
+  target = ref_sps,
+  param = CompareSpectraParam(
+    ppm = 10,
+    tolerance = 0.05,
+    adducts = c("[M+H]+", "[M+Na]+", "[M+K]+", "[M+NH4]+"),
+    score = "cosine",
+    THRESHFUN = function(x) which(x >= 0.6)
+  )
+)
+
+# Compare with adduct-unaware matching
+n_matches_no_adduct <- nrow(matchedData(matches))
+n_matches_with_adduct <- nrow(matchedData(matches_adducts))
+
+cat(sprintf("Matches without adduct handling: %d\n", n_matches_no_adduct))
+cat(sprintf("Matches with adduct handling: %d\n", n_matches_with_adduct))
+cat(sprintf("Increase: %.1f%%\n", 
+            (n_matches_with_adduct - n_matches_no_adduct) / n_matches_no_adduct * 100))
+```
+
+### Using Different Similarity Metrics
+
+```r
+#| eval: false
+# Compare different scoring methods
+metrics <- c("cosine", "pearson", "spearman", "jaccard")
+
+scores_list <- list()
+for (metric in metrics) {
+  param <- CompareSpectraParam(
+    ppm = 10,
+    tolerance = 0.05,
+    score = metric,
+    THRESHFUN = function(x) which(x >= 0.5)
+  )
+  
+  matches_temp <- matchSpectra(query_clean[1:10], ref_sps, param)
+  scores_list[[metric]] <- matchedData(matches_temp)$score
+}
+
+# Compare score distributions
+score_comparison <- bind_rows(
+  lapply(names(scores_list), function(m) {
+    data.frame(metric = m, score = scores_list[[m]])
+  })
+)
+
+ggplot(score_comparison, aes(x = metric, y = score, fill = metric)) +
+  geom_boxplot() +
+  labs(
+    title = "Comparison of Similarity Metrics",
+    x = "Metric",
+    y = "Similarity Score"
+  ) +
+  theme_minimal()
+```
+
+### Reverse Search (Library vs Query)
+
+For quality control, you can also search library spectra against your queries:
+
+```r
+#| eval: false
+# Reverse search: find which library spectra match your queries
+reverse_matches <- matchSpectra(
+  query = ref_sps[1:100],    # Library spectra as "queries"
+  target = query_clean,       # Your data as "target"
+  param = CompareSpectraParam(
+    ppm = 10,
+    tolerance = 0.05,
+    THRESHFUN = function(x) which(x >= 0.7)
+  )
+)
+
+# High reverse scores indicate good library representation
+```
+
+---
+
+## Exporting and Reporting Annotations
+
+### Creating an Annotation Table
+
+```r
+# Create comprehensive annotation report
+annotation_report <- best_hits |>
+  select(
+    spectrum_id = query_idx,
+    compound_name,
+    compound_id,
+    cosine_score = score,
+    msi_level,
+    precursor_mz = precursorMz_query,
+    precursor_charge,
+    library_precursor_mz = precursorMz_target
+  ) |>
+  mutate(
+    mass_error_ppm = abs(precursor_mz - library_precursor_mz) / precursor_mz * 1e6,
+    match_quality = case_when(
+      cosine_score >= 0.9 ~ "excellent",
+      cosine_score >= 0.8 ~ "good",
+      cosine_score >= 0.7 ~ "fair",
+      TRUE ~ "poor"
+    )
+  )
+
+# View top annotations
+annotation_report |>
+  arrange(desc(cosine_score)) |>
+  head(10) |>
+  print()
+```
+
+### Export to CSV
+
+```r
+# Save full annotation results
+write_csv(annotation_report, "ms_annotations.csv")
+
+# Export high-confidence only (Level 2 and above)
+high_conf <- annotation_report |>
+  filter(str_detect(msi_level, "Level [12]"))
+
+write_csv(high_conf, "high_confidence_annotations.csv")
+
+cat(sprintf("Exported %d high-confidence annotations\n", nrow(high_conf)))
+```
+
+---
+
+## Common Pitfalls and Solutions
+
+| Pitfall | Problem | Solution |
+|---------|---------|----------|
+| **Low match rates** | <10% of spectra annotated | Check precursor tolerance; increase fragment tolerance; use adducts |
+| **False positives** | Wrong compounds with high scores | Increase cosine threshold to ≥0.8; require minimum matched peaks |
+| **Adduct confusion** | [M+Na]+ matched to [M+H]+ library | Use adduct-aware matching; check mass differences |
+| **Library bias** | Over-representation of certain classes | Use multiple libraries; consider spectral pooling |
+| **Noisy spectra** | Many matches due to random noise | Filter query spectra (minimum peaks, intensity threshold) |
+| **Memory issues** | Crash during matching | Use `chunksize = 1000`; subset library by m/z range first |
+
+---
+
+## Exercises
+
+### Exercise 1: Build a Local Spectral Library
+
+Download a small MSP file from MoNA (e.g., "MoNA-export-LipidBlast.msp") and import it into a `CompoundDb` database. Report:
+- Number of compounds and spectra
+- The top 5 compound names in the database
+
+```r
+# Your code here
+```
+
+### Exercise 2: Perform Library Search
+
+Load the example metabolomics file from `msdata::metabolomics()` and extract all MS2 spectra. Perform a library search against your database from Exercise 1 with cosine thresholds of 0.7 and 0.9. Compare the number of annotations.
+
+```r
+# Your code here
+```
+
+### Exercise 3: Adduct Handling
+
+Run the same search with and without adduct handling (`[M+H]+`, `[M+Na]+`, `[M+K]+`). How many additional matches are found with adducts enabled?
+
+```r
+# Your code here
+```
+
+### Exercise 4: Visualize Top Match
+
+Generate a mirror plot for the highest-scoring match from Exercise 2. Annotate at least 3 common fragment peaks.
+
+```r
+# Your code here
+```
+
+### Exercise 5: Annotation Report
+
+Create a summary table showing annotation statistics by MSI confidence level. Include counts and percentage of total annotated spectra.
+
+```r
+# Your code here
+```
+
+---
+
+## Summary
+
+### Key Takeaways
+
+| Concept | Key Points |
+|---------|-------------|
+| **MSI Levels** | Level 1 (standard) > Level 2 (library) > Level 3 (class) > Level 4 (unknown) |
+| **Matching Parameters** | Precursor tolerance (ppm), fragment tolerance (Da), cosine threshold (0.6-0.9) |
+| **Spectral Libraries** | MassBank, MoNA, HMDB → download MSP → import with `CompoundDb` |
+| **MetaboAnnotation** | `matchSpectra()` with `CompareSpectraParam` for cosine search |
+| **Adducts** | Always include common adducts ([M+H]+, [M+Na]+, [M+K]+) |
+| **Quality Control** | Filter query spectra (≥5 peaks, precursor present); require minimum score |
+| **Memory Management** | Use `chunksize` or subset libraries for large experiments |
+
+### Additional Resources
+
+- [MetaboAnnotation Reference](https://rformassspectrometry.github.io/MetaboAnnotation/)
+- [CompoundDb Tutorial](https://rformassspectrometry.github.io/CompoundDb/)
+- [MassBank Europe](https://massbank.eu/)
+- [MoNA Database](https://mona.fiehnlab.ucdavis.edu/)
+- [MSI Guidelines for Metabolomics](https://metabolomicssociety.org/msi)
+
+---
+
+## Session Information
+
+``` r
+sessionInfo()
+```

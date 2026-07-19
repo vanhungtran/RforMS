@@ -1,0 +1,278 @@
+# Annotate Metabolites from Feature Tables {#sec-annotate-metabolites}
+
+> *"You have successfully processed 100 gigabytes of raw LC-MS data. Your statistical analysis reveals 42 features that are significantly upregulated in your disease cohort. But a feature is just a mathematical coordinate: $m/z$ 205.097 at 4.2 minutes. What molecule is it? Until you answer that question, your biological narrative is stalled."*
+
+Metabolite annotation is the primary bottleneck in untargeted metabolomics. This chapter teaches you how to transition from anonymous $m/z$ features to putative chemical identities using the R ecosystem.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Reporting a database match as an identification. A matching mass is a *hypothesis* (MSI Level 3), not a named compound. Reserve the word "identified" for annotations confirmed by MS/MS or an authentic standard.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Explain the MSI confidence levels (1–4) and the annotation funnel
+- Deconvolve isotopes and adducts from a feature table with CAMERA
+- Compute exact monoisotopic masses and adduct $m/z$ values with `MetaboCoreUtils`
+- Search observed features against an exact-mass reference database within an instrument tolerance
+- Assemble a metabolite annotation report that distinguishes putative identities from unknowns
+
+## The Annotation Funnel
+
+Translating an exact mass to a biological identity is rarely a 1:1 mapping. A single metabolite can produce dozens of distinct features in a mass spectrometer due to isotopes, adduct formation (e.g., binding with sodium or potassium), and in-source fragmentation. Conversely, a single exact mass might correspond to hundreds of different isomeric structures (e.g., glucose and fructose have the exact same mass).
+
+To solve this, annotation is structured as a funnel of increasing confidence:
+
+```{mermaid}
+flowchart TD
+    A[Feature Matrix<br/>Thousands of m/z & RT pairs] -->|Deconvolution<br/>CAMERA| B[Pseudo-Spectra<br/>Grouped Adducts & Isotopes]
+    B -->|Exact Mass Search<br/>MetaboCoreUtils| C[Putative Candidates<br/>Database Matching]
+    C -->|Spectral Matching<br/>MsCoreUtils| D[Library Annotations<br/>MS/MS Scoring]
+    D -->|Authentic Standards| E[Confirmed Metabolites]
+    
+    style A fill:#D7E6FB,stroke:#27408B
+    style B fill:#FBE0FA,stroke:#B000B0
+    style C fill:#D7E6FB,stroke:#27408B
+    style D fill:#FBE0FA,stroke:#B000B0
+    style E fill:#ffffff,stroke:#27408B,stroke-width:2px
+```
+
+### The MSI Confidence Levels
+
+Before assigning a name to a feature, you must understand the **Metabolomics Standards Initiative (MSI)** confidence levels. Overstating confidence is a common trap in the literature.
+
+- **Level 1 (Confirmed):** The feature's retention time, exact mass, and MS/MS spectrum identically match an authentic chemical standard run on the *exact same instrument*.
+- **Level 2 (Putative Annotation):** The feature matches the exact mass and MS/MS spectrum of a public library (e.g., MassBank, MoNA), but no authentic standard was run locally.
+- **Level 3 (Putative Class):** The spectral evidence suggests a chemical class (e.g., "a phosphatidylcholine") but the exact isomeric structure cannot be determined.
+- **Level 4 (Unknown):** The exact mass is known, but it cannot be matched to any database or spectrum.
+
+This chapter focuses on achieving **Level 2 and Level 3** annotations computationally.
+
+---
+
+## Step 1: Deconvoluting Features with CAMERA
+
+If glucose ($\text{C}_6\text{H}_{12}\text{O}_6$) elutes from your chromatography column at 2.5 minutes, the mass spectrometer does not just see one peak. It typically sees:
+
+- `[M+H]+`: The protonated molecule
+- `[M+Na]+`: The sodium adduct
+- `[M+K]+`: The potassium adduct
+- `[M+H]+` (13C): The naturally occurring Carbon-13 isotope
+- `[M+H-H2O]+`: An in-source water loss fragment
+
+If you run statistical tests directly on the `xcms` feature table, glucose will appear as 5 separate "significant" features. This artificially inflates your results. The `CAMERA` package (Collection of Algorithms for MEtabolite pRofile Annotation) solves this by grouping these related features into a single "pseudo-spectrum" based on their perfectly correlated retention times and peak shapes.
+
+### Implementing CAMERA
+
+To use `CAMERA`, we take the `xcmsSet` or `XCMSnExp` object generated after peak detection and alignment (as covered in Chapter 7).
+
+```r
+#| message: false
+#| warning: false
+library(xcms)
+library(CAMERA)
+
+# Assume 'xdata' is your fully aligned and grouped XCMSnExp object
+# Step 1: Convert to xcmsSet (CAMERA's preferred format)
+# xset <- as(xdata, "xcmsSet")
+
+# Step 2: Initialize the CAMERA annotate object
+# xa <- xsAnnotate(xset)
+
+# Step 3: Group features by retention time and peak shape correlation
+# xa <- groupFWHM(xa, perfwhm = 0.6)
+# xa <- groupCorr(xa, calcIso = TRUE, calcCiS = TRUE, calcCaS = TRUE)
+
+# Step 4: Identify Isotopes and Adducts
+# xa <- findIsotopes(xa, mzabs = 0.015)
+# xa <- findAdducts(xa, polarity = "positive")
+
+# Step 5: Extract the deconvoluted peak table
+# annotated_peaks <- getPeaklist(xa)
+```
+
+The resulting `annotated_peaks` table will contain new columns:
+- `pcgroup`: The pseudo-spectrum group ID. All features with the same `pcgroup` likely originate from the same parent metabolite.
+- `isotopes`: Identifies if the feature is an [M+1] or [M+2] isotope.
+- `adduct`: Putative adduct annotations (e.g., `[M+Na]+`).
+
+By filtering this table to only keep the primary monoisotopic peaks (often the `[M+H]+` or `[M-H]-` adducts), you massively reduce the dimensionality of your data and focus only on true biological entities.
+
+---
+
+## Step 2: Chemical Math with MetaboCoreUtils
+
+Once you have a deconvoluted list of monoisotopic $m/z$ values, you need to calculate their theoretical neutral masses to search chemical databases.
+
+The `MetaboCoreUtils` package provides high-performance functions for chemical formula and adduct math. It bridges the gap between chemistry and data science.
+
+### Calculating Exact Masses and Adduct $m/z$
+
+Let's calculate the theoretical exact mass of Glucose and see what $m/z$ values we should expect to see in positive ionization mode.
+
+```r
+library(MetaboCoreUtils)
+
+# 1. Calculate the exact monoisotopic mass of Glucose
+glucose_formula <- "C6H12O6"
+glucose_mass <- calculateMass(glucose_formula)
+
+cat("Exact Mass of Glucose:", glucose_mass, "Da\n")
+
+# 2. Define the adducts we expect to see in Positive Mode ESI
+expected_adducts <- c("[M+H]+", "[M+Na]+", "[M+K]+", "[M+NH4]+")
+
+# 3. Calculate the expected m/z values for these adducts
+glucose_mz <- mass2mz(glucose_mass, adduct = expected_adducts)
+
+print(glucose_mz)
+```
+
+### Working Backwards: From $m/z$ to Mass
+
+In untargeted metabolomics, we work in reverse. We observe an $m/z$ in the instrument, and we must infer the neutral mass to search databases like HMDB or KEGG.
+
+```r
+# We observe a significant feature at m/z 203.0526
+observed_mz <- 203.0526
+
+# If we assume this feature is a Sodium adduct [M+Na]+
+# What is the neutral mass of the original molecule?
+neutral_mass <- mz2mass(observed_mz, adduct = "[M+Na]+")
+
+cat("Inferred Neutral Mass:", neutral_mass, "Da\n")
+```
+
+Notice that the inferred neutral mass (`180.0634`) matches the exact mass of Glucose. 
+
+::: {.callout-tip}
+#### Adduct Assumption Risk
+If you assume a feature is `[M+H]+` but it is actually `[M+Na]+`, your calculated neutral mass will be off by roughly ~22 Da. You will search the database for the completely wrong molecule. This highlights why `CAMERA` deconvolution (which clusters adducts together to define the true neutral mass) is critical *before* database searching.
+:::
+
+---
+
+## Step 3: Exact Mass Database Searching
+
+Armed with estimated neutral masses (or `[M+H]+` $m/z$ values), we can query biological databases. 
+
+For this example, we will simulate a local database lookup using `dplyr`. In practice, packages like `CompoundDb` allow you to build sophisticated SQLite databases from HMDB or MassBank, but the mathematical logic of the join remains the same.
+
+### Handling parts-per-million (ppm) Error
+
+Mass spectrometers are not perfectly accurate. An Orbitrap might have 3 ppm error, while a Q-TOF might have 10 ppm error. We cannot use a strict `==` operator to match our observed mass to the database mass. We must use a range join based on the instrument's ppm tolerance.
+
+```r
+library(dplyr)
+library(tidyr)
+
+# 1. Simulate a tiny reference database
+reference_db <- tibble::tribble(
+  ~compound_name, ~formula,   ~exact_mass,
+  "Glucose",      "C6H12O6",  180.063388,
+  "Fructose",     "C6H12O6",  180.063388, # Isomer of Glucose!
+  "Caffeine",     "C11H14N4O2", 204.101452,
+  "Serotonin",    "C11H12N2O",  176.094963,
+  "Alanine",      "C3H7NO2",  89.047678
+)
+
+# 2. Simulate our significant features from XCMS/CAMERA
+# We assume we have already deduced these are [M+H]+ adducts, 
+# so we converted them back to neutral exact masses.
+my_features <- tibble::tribble(
+  ~feature_id, ~observed_mass, ~retention_time,
+  "FT001",     180.0638,       2.5,
+  "FT002",     204.1011,       5.8,
+  "FT003",     300.1234,       8.2   # Unknown mass
+)
+```
+
+Now we perform the matching algorithm. We calculate the allowable lower and upper mass bounds for each observed feature based on a 5 ppm tolerance, and then filter the database for any compounds that fall within that window.
+
+```r
+# Define instrument tolerance
+ppm_tolerance <- 5
+
+# Calculate the mass window for our observed features
+my_features <- my_features %>%
+  mutate(
+    mass_lower = observed_mass - (observed_mass * ppm_tolerance / 1e6),
+    mass_upper = observed_mass + (observed_mass * ppm_tolerance / 1e6)
+  )
+
+# Perform a non-equi join (Range Join) using cross_join and filter
+annotated_features <- my_features %>%
+  cross_join(reference_db) %>%
+  filter(exact_mass >= mass_lower & exact_mass <= mass_upper) %>%
+  mutate(
+    # Calculate the actual ppm error of the match
+    ppm_error = abs(observed_mass - exact_mass) / exact_mass * 1e6
+  ) %>%
+  select(feature_id, observed_mass, compound_name, formula, ppm_error)
+
+print(annotated_features)
+```
+
+### The Isomer Problem
+
+Look closely at the output for `FT001`. It matched *both* Glucose and Fructose. This is biologically accurate—a mass spectrometer measuring exact mass alone cannot distinguish between stereoisomers. 
+
+This highlights why exact mass matching only achieves **Level 3 (Putative Class)** or weak **Level 2** confidence. To distinguish Glucose from Fructose, you must either:
+1. Match their distinct fragmentation patterns (MS/MS spectral library search).
+2. Compare their retention times against authentic standards run on your exact chromatography setup.
+
+---
+
+## Step 4: Synthesizing the Final Reporting Table
+
+Once you have mapped your features to putative IDs, you must fold these annotations back into your quantitative feature matrix for downstream statistical modeling and pathway analysis.
+
+Because one feature can match multiple isomers, we usually collapse the multiple matches into a single, delimited string so the feature matrix retains its strict $Features \times Samples$ rectangular dimensions.
+
+```r
+# Collapse multiple isomer matches into a single string
+collapsed_annotations <- annotated_features %>%
+  group_by(feature_id, observed_mass) %>%
+  summarize(
+    putative_identities = paste(compound_name, collapse = " | "),
+    formulas = paste(unique(formula), collapse = " | "),
+    min_ppm_error = min(ppm_error),
+    .groups = "drop"
+  )
+
+# Re-join with the original feature list to see what remained unknown
+final_report <- my_features %>%
+  select(feature_id, observed_mass, retention_time) %>%
+  left_join(collapsed_annotations, by = c("feature_id", "observed_mass")) %>%
+  mutate(
+    annotation_status = ifelse(is.na(putative_identities), 
+                               "Level 4 (Unknown)", 
+                               "Level 3 (Putative Mass Match)")
+  )
+
+print(final_report)
+```
+
+## Summary
+
+Metabolite annotation is an iterative process of shrinking the universe of chemical possibilities:
+
+1. **CAMERA** shrinks thousands of redundant features down to representative monoisotopic neutral masses by recognizing adducts and isotopes.
+2. **MetaboCoreUtils** provides the strict chemical math required to interconvert masses and $m/z$ ratios based on ionization rules.
+3. **PPM Range Joins** map your experimental observations to massive structural databases (like HMDB) while accounting for instrument error.
+4. **MSI Confidence Levels** govern how you report these findings, preventing you from overstating isomer-blind exact mass matches.
+
+In the next chapter, we will take these Level 3 exact-mass annotations and upgrade them to Level 2 by matching their MS/MS fragmentation patterns against spectral libraries.
+
+## Exercises
+
+1. **Adduct Math:** Using `MetaboCoreUtils`, calculate the exact mass of Caffeine (`C11H14N4O2`). What $m/z$ would you expect to see for its `[M+Na]+` adduct? What about a `[M-H]-` adduct in negative mode?
+2. **Tolerance Effects:** In the `dplyr` exact mass search code above, change the `ppm_tolerance` from 5 to 50 (mimicking an older TOF instrument). How does this affect the number of potential matches and your confidence in them?
+3. **Annotation Summaries:** Write a brief `dplyr` pipeline using the `final_report` table to calculate the percentage of features that were successfully annotated versus those that remain "Level 4 (Unknown)".
+
+## Session Information
+
+``` r
+sessionInfo()
+```

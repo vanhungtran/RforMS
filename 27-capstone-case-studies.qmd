@@ -1,0 +1,335 @@
+# Capstone: Two End-to-End Case Studies
+
+> *Every preceding chapter isolated one step. Here the steps become a study — twice, in two different fields, with the same toolchain.*
+
+This capstone runs two complete analyses from raw data to biological conclusion: a **label-free proteomics** experiment and an **untargeted metabolomics** experiment. Both use real, published datasets bundled in R packages, so you can reproduce every step without downloading anything.
+
+The point of running them side by side is the thesis of this book made concrete: **proteomics and metabolomics are different sciences that share one computational grammar in R.** Watch how the same containers (`SummarizedExperiment`, `QFeatures`), the same normalization and missing-data logic, the same `limma` modelling, and the same reproducibility discipline serve both — you learn the toolchain once and apply it to either field.
+
+### From Pedagogy to Production
+
+This chapter uses small, bundled datasets (`UbiLength`, `msdata`) so every code block runs without external downloads. For production-scale versions of the same workflows — running on real PRIDE and MetaboLights data with parameter tuning, multi-file processing, and cluster execution — the companion project `r4ms_book/` provides complete, documented pipelines:
+
+| Case Study | Pedagogical Version (This Chapter) | Production Version (Companion) |
+|-----------|-----------------------------------|-------------------------------|
+| LFQ proteomics | `DEP::UbiLength` (1,182 proteins) | `r4ms_book/analysis/proteomics_analysis.R` — PXD004886 (4,517 proteins × 22 samples, 11-site benchmark) |
+| Tissue proteomics | — | `r4ms_book/analysis/tissue_atlas_analysis.R` — PXD010154 (33,812 proteins × 12 organs) |
+| Clinical DIA | — | `r4ms_book/analysis/clinical_spectronaut_analysis.R` — PXD000547 (paired patient samples) |
+| Untargeted metabolomics | `msdata::metabolomics()` (4 files) | `r4ms_book/analysis/mtbls38_standards_analysis.R` — MTBLS38 (51 compounds with known identity) |
+
+The production scripts are the same logic scaled up — they run the same `limma` models, produce the same volcano plots, and follow the same reproducibility discipline. When you move from learning the toolchain to applying it to your own data, the companion scripts are your starting template.
+
+::: {.callout-warning title="The One Mistake to Avoid"}
+Assuming your data behaves like the example. The *workflow* transfers; the *parameters* do not. Re-tune feature detection, normalization, and imputation to your own study before trusting a single number.
+:::
+
+## Learning Objectives
+
+By the end of this chapter you will be able to:
+
+- Assemble a full analysis from the individual steps taught in Chapters 4–25
+- Run a label-free proteomics study end to end: import → `QFeatures` → filter → normalize → impute → differential abundance → interpretation → report
+- Run an untargeted metabolomics study end to end: import → `xcms` feature detection → normalize → annotate → differential abundance → interpretation → report
+- Recognise which parts of the workflow are shared across omics and which are domain-specific
+- Produce a reproducible, deposit-ready result for each study
+
+## How to Read This Chapter
+
+Each case study is a guided tour with pointers back to the chapter where each step is taught in depth. If a step is unfamiliar, follow the reference; here we keep commentary short and let the pipeline flow.
+
+| Stage | Proteomics tool | Metabolomics tool | Taught in |
+|---|---|---|---|
+| Import | `readQFeatures()` | `MsExperiment`, `Spectra` | Ch 4–5 |
+| Feature generation | search-engine PSMs | `xcms::findChromPeaks()` | Ch 7, 10 |
+| Container | `QFeatures` | `SummarizedExperiment` | Ch 5, 12 |
+| QC | detection rate, CV | TIC/BPC, QC-pool CV | Ch 6 |
+| Normalize | median / VSN | log + median / TIC | Ch 17 |
+| Missing data | filter + impute | filter + fill peaks | Ch 18 |
+| Identity | protein inference | adduct + mass search | Ch 11, 8–9 |
+| Model | `limma` | `limma` | Ch 20 |
+| Interpret | enrichment | pathway / networks | Ch 24 |
+| Report | Quarto + PRIDE | Quarto + MetaboLights | Ch 25 |
+
+::: {.callout-note}
+All code is shown with `#| eval: false` so the chapter renders without the full analysis stack installed. Each block runs as written against the bundled example data once the packages in the setup chunk are available.
+:::
+
+---
+
+# Case Study 1 — Label-Free Proteomics
+
+## The Study
+
+The `DEP` package bundles the **UbiLength** dataset (Zhang *et al.*): a label-free experiment comparing HeLa cells in which the deubiquitinase **Ubiquitin-specific protease** pathway is perturbed (`Ubi` knockdown) against controls, quantified by MaxQuant LFQ. The biological question: **which proteins change in abundance when the pathway is disrupted?**
+
+- **Design:** 2 conditions (control vs. Ubi), replicates per condition
+- **Input:** a MaxQuant `proteinGroups` table (real output)
+- **Goal:** a ranked, FDR-controlled list of differentially abundant proteins, interpreted and reported
+
+```r
+#| eval: false
+library(DEP)
+library(QFeatures)
+library(SummarizedExperiment)
+library(limma)
+library(tidyverse)
+
+data("UbiLength", package = "DEP")   # real MaxQuant proteinGroups table
+dim(UbiLength)                        # proteins × columns
+```
+
+## Step 1 — Build the Data Object (Ch 4–5, 12)
+
+Filter contaminants and reverse hits, resolve duplicate identifiers, and construct a `SummarizedExperiment`/`QFeatures` with a clean experimental design.
+
+```r
+#| eval: false
+# Remove contaminant + reverse-database hits (standard MaxQuant filtering)
+data <- UbiLength |>
+  dplyr::filter(Reverse != "+", Potential.contaminant != "+")
+
+# Unique protein identifiers
+data <- DEP::make_unique(data, names = "Gene.names", ids = "Protein.IDs")
+
+# LFQ intensity columns and an explicit experimental design
+lfq_cols   <- grep("^LFQ.intensity", colnames(data))
+experiment <- DEP::UbiLength_ExpDesign        # label / condition / replicate
+se <- DEP::make_se(data, lfq_cols, experiment)
+se
+```
+
+## Step 2 — Quality Control (Ch 6)
+
+Inspect protein counts per sample, the missing-value structure, and sample clustering before modelling.
+
+```r
+#| eval: false
+DEP::plot_frequency(se)     # proteins identified per sample
+DEP::plot_numbers(se)       # per-sample protein counts
+DEP::plot_missval(se)       # missing-value heatmap — is it structured (MNAR)?
+```
+
+## Step 3 — Normalize and Handle Missing Data (Ch 17–18)
+
+Variance-stabilise, then impute. The missingness here is largely **left-censored** (proteins below detection in one condition), so a minimum-based imputation is appropriate — exactly the MNAR reasoning from Chapter 18.
+
+```r
+#| eval: false
+se_norm <- DEP::normalize_vsn(se)
+DEP::plot_normalization(se, se_norm)
+
+# Filter proteins missing in too many replicates, then impute the rest
+se_filt <- DEP::filter_missval(se_norm, thr = 0)
+se_imp  <- DEP::impute(se_filt, fun = "MinProb", q = 0.01)   # MNAR-appropriate
+```
+
+## Step 4 — Differential Abundance (Ch 20)
+
+Fit the `limma` model and extract an FDR-controlled result. `DEP` wraps `limma` internally, so this is the empirical-Bayes moderation of Chapter 20 applied to the protein matrix.
+
+```r
+#| eval: false
+diff <- DEP::test_diff(se_imp, type = "control", control = "Ctrl")
+dep  <- DEP::add_rejections(diff, alpha = 0.05, lfc = 1)
+
+# Ranked results table
+results <- DEP::get_results(dep)
+results |>
+  dplyr::filter(significant) |>
+  dplyr::arrange(dplyr::desc(abs(Ubi_vs_Ctrl_ratio))) |>
+  dplyr::select(name, Ubi_vs_Ctrl_ratio, Ubi_vs_Ctrl_p.adj) |>
+  head(15)
+```
+
+## Step 5 — Visualise and Interpret (Ch 20, 23)
+
+A volcano plot for the headline result, then pathway enrichment on the significant set to move from a protein list to biology.
+
+```r
+#| eval: false
+DEP::plot_volcano(dep, contrast = "Ubi_vs_Ctrl", label_size = 3, add_names = TRUE)
+
+# Enrichment on the significant proteins (Ch 24)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+sig_genes <- results |> dplyr::filter(significant) |> dplyr::pull(name)
+ego <- clusterProfiler::enrichGO(
+  gene = sig_genes, OrgDb = org.Hs.eg.db,
+  keyType = "SYMBOL", ont = "BP", pAdjustMethod = "BH"
+)
+clusterProfiler::dotplot(ego, showCategory = 12)
+```
+
+## Step 6 — Report and Deposit (Ch 25)
+
+Export the figures and table, capture the environment, and prepare the ProteomeXchange deposit.
+
+```r
+#| eval: false
+dir.create("results", showWarnings = FALSE)
+readr::write_csv(results, "results/proteomics_DE.csv")
+sessioninfo::session_info() |> capture.output() |>
+  writeLines("results/proteomics_session.txt")
+# Deposit raw + mzIdentML + SDRF to PRIDE / ProteomeXchange (Ch 25)
+```
+
+**Result.** A reproducible, FDR-controlled list of proteins responding to the perturbation, with enriched pathways and a deposit-ready bundle — built entirely from the containers and models of Parts I–VI.
+
+---
+
+# Case Study 2 — Untargeted Metabolomics
+
+## The Study
+
+The `faahKO` package bundles a classic **real** LC–MS dataset: spinal-cord extracts from **fatty-acid amide hydrolase knockout (FAAH⁻/⁻) mice versus wild-type**, in which the knockouts accumulate fatty-acid amides. The question: **which metabolite features distinguish knockout from wild-type?** This is the canonical `xcms` demonstration dataset — and a complete study in its own right.
+
+- **Design:** 2 genotypes (KO vs. WT), replicates each
+- **Input:** real centroided `.CDF`/mzML files
+- **Goal:** an aligned feature matrix, differential features, and putative annotations
+
+```r
+#| eval: false
+library(xcms)
+library(MsExperiment)
+library(SummarizedExperiment)
+library(faahKO)
+
+cdf_files <- dir(system.file("cdf", package = "faahKO"),
+                 recursive = TRUE, full.names = TRUE)
+pheno <- data.frame(
+  sample_name  = sub("\\.CDF$", "", basename(cdf_files)),
+  sample_group = c(rep("KO", 6), rep("WT", 6))
+)
+mse <- MsExperiment::readMsExperiment(cdf_files, sampleData = pheno)
+mse
+```
+
+## Step 1 — Feature Detection with `xcms` (Ch 7)
+
+The full CentWave → alignment → correspondence → gap-filling pipeline of Chapter 7, condensed.
+
+```r
+#| eval: false
+# 1. Peak detection (CentWave)
+cwp <- xcms::CentWaveParam(peakwidth = c(20, 80), ppm = 25, snthresh = 10)
+xd  <- xcms::findChromPeaks(mse, param = cwp)
+
+# 2. Retention-time alignment (Obiwarp)
+xd  <- xcms::adjustRtime(xd, param = xcms::ObiwarpParam(binSize = 0.6))
+
+# 3. Correspondence (group peaks into features across samples)
+pdp <- xcms::PeakDensityParam(sampleGroups = pheno$sample_group,
+                              minFraction = 0.5, bw = 30)
+xd  <- xcms::groupChromPeaks(xd, param = pdp)
+
+# 4. Fill missing peaks so the matrix has no structural gaps
+xd  <- xcms::fillChromPeaks(xd)
+```
+
+## Step 2 — Extract the Feature Matrix (Ch 5, 12)
+
+Turn the `xcms` result into the same `SummarizedExperiment` used on the proteomics side — the moment the two workflows converge.
+
+```r
+#| eval: false
+se_metab <- xcms::quantify(xd, value = "into")   # SummarizedExperiment
+se_metab
+# assay(): features × samples; rowData(): mz/rt; colData(): genotype
+```
+
+## Step 3 — QC and Normalization (Ch 6, 17)
+
+```r
+#| eval: false
+# TIC per sample and log-transform + median normalization (Ch 17)
+assay(se_metab) <- log2(assay(se_metab) + 1)
+sample_medians  <- matrixStats::colMedians(assay(se_metab), na.rm = TRUE)
+assay(se_metab) <- sweep(assay(se_metab), 2, sample_medians - mean(sample_medians))
+
+# PCA to confirm genotype separates and no batch structure dominates
+pc <- prcomp(t(na.omit(assay(se_metab))), scale. = TRUE)
+```
+
+## Step 4 — Differential Features with `limma` (Ch 20)
+
+The *identical* modelling code from the proteomics study — the payoff of a shared container.
+
+```r
+#| eval: false
+library(limma)
+design <- model.matrix(~ 0 + factor(se_metab$sample_group))
+colnames(design) <- c("KO", "WT")
+fit <- limma::lmFit(assay(se_metab), design)
+fit <- limma::contrasts.fit(fit, limma::makeContrasts(KO - WT, levels = design))
+fit <- limma::eBayes(fit)
+top <- limma::topTable(fit, number = Inf, adjust.method = "BH")
+head(top, 15)
+```
+
+## Step 5 — Annotate the Hits (Ch 8–9)
+
+Convert the significant features' *m/z* to putative identities via exact-mass search — the annotation funnel of Chapter 8.
+
+```r
+#| eval: false
+library(MetaboCoreUtils)
+sig <- top |> tibble::rownames_to_column("feature") |>
+  dplyr::filter(adj.P.Val < 0.05)
+sig_mz <- SummarizedExperiment::rowData(se_metab)[sig$feature, "mzmed"]
+
+# Expected m/z for common adducts of candidate fatty-acid amides
+adduct_mz <- MetaboCoreUtils::mass2mz(
+  MetaboCoreUtils::calculateMass("C18H35NO"),   # e.g. oleamide
+  adduct = c("[M+H]+", "[M+Na]+")
+)
+# Match sig_mz against a reference library within tolerance (Ch 8–9)
+```
+
+## Step 6 — Interpret, Report, Deposit (Ch 24–25)
+
+```r
+#| eval: false
+readr::write_csv(top, "results/metabolomics_DE.csv")
+sessioninfo::session_info() |> capture.output() |>
+  writeLines("results/metabolomics_session.txt")
+# Deposit raw mzML + ISA-Tab metadata to MetaboLights (Ch 25)
+```
+
+**Result.** An aligned feature matrix, an FDR-controlled list of features separating knockout from wild-type (recovering the expected fatty-acid-amide accumulation), and a MetaboLights-ready deposit.
+
+---
+
+## What the Two Studies Shared
+
+Look back at the two pipelines. The **science** diverged — peptides vs. small molecules, protein inference vs. adduct deconvolution — but the **computation converged** the moment each produced a feature matrix:
+
+| Shared component | Proteomics | Metabolomics |
+|---|---|---|
+| `SummarizedExperiment` container | ✅ | ✅ |
+| log + median / VSN normalization | ✅ | ✅ |
+| Missing-data reasoning (MNAR-aware) | ✅ | ✅ (gap-fill) |
+| `limma` design → contrast → eBayes | ✅ (identical code) | ✅ (identical code) |
+| BH-controlled ranked result | ✅ | ✅ |
+| Quarto report + FAIR deposition | ✅ | ✅ |
+
+This is the argument for learning the R for Mass Spectrometry ecosystem rather than a single vendor pipeline: **one set of skills, transferable across the whole field.** A reader who has followed this book can now walk into either a proteomics or a metabolomics project and know exactly which container to build, which model to fit, and how to make the result reproducible.
+
+## Summary
+
+- A real label-free proteomics study (`DEP::UbiLength`) and a real untargeted metabolomics study (`faahKO`) were each carried from raw data to an interpreted, deposit-ready result.
+- The domain-specific work lives at the front (identification/feature detection); from the feature matrix onward, the workflows are essentially the same code.
+- Every step traces back to a chapter in Parts I–VI — the capstone is those chapters assembled into two complete analyses.
+
+## Exercises
+
+1. **Reproduce and extend.** Run Case Study 1 end to end. Add a heatmap of the top-20 differential proteins (Chapter 17) and describe the two sample clusters.
+2. **Swap the model.** In Case Study 1, replace the two-group contrast with a design that adjusts for replicate as a blocking factor (Chapter 21). Do the significant proteins change?
+3. **Full metabolomics annotation.** In Case Study 2, take the top 10 differential features and complete the annotation to MSI Level 2 using a spectral library search (Chapter 9). How many can you name?
+4. **Add a classifier.** Using the proteomics feature matrix, build a leakage-free classifier of condition following Chapters 22–23. Report the cross-validated AUC and compare its top features to the differential-abundance hits.
+5. **Make it a parameterized report.** Wrap either case study in a parameterized Quarto report (Chapter 25) that takes the FDR threshold as a parameter, and render it at 0.05 and 0.01.
+
+## Session Information
+
+```r
+sessionInfo()
+```

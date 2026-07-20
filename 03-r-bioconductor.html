@@ -1,0 +1,2301 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>2&nbsp; R and Bioconductor for Mass Spectrometry – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./04-reproducible-project.html" rel="next">
+<link href="./02-what-is-ms.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./03-r-bioconductor.html">Part I — Foundations: Reproducible MS Analysis in R</a></li><li class="breadcrumb-item"><a href="./03-r-bioconductor.html"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">2.1</span> Learning Objectives</a></li>
+  <li><a href="#why-r" id="toc-why-r" class="nav-link" data-scroll-target="#why-r"><span class="header-section-number">2.2</span> Why R?</a>
+  <ul class="collapse">
+  <li><a href="#the-two-r-ecosystems-cran-and-bioconductor" id="toc-the-two-r-ecosystems-cran-and-bioconductor" class="nav-link" data-scroll-target="#the-two-r-ecosystems-cran-and-bioconductor"><span class="header-section-number">2.2.1</span> The Two R Ecosystems: CRAN and Bioconductor</a></li>
+  <li><a href="#installing-packages-the-right-way" id="toc-installing-packages-the-right-way" class="nav-link" data-scroll-target="#installing-packages-the-right-way"><span class="header-section-number">2.2.2</span> Installing Packages: The Right Way</a></li>
+  </ul></li>
+  <li><a href="#the-r-mindset-three-principles-that-change-everything" id="toc-the-r-mindset-three-principles-that-change-everything" class="nav-link" data-scroll-target="#the-r-mindset-three-principles-that-change-everything"><span class="header-section-number">2.3</span> The R Mindset: Three Principles That Change Everything</a>
+  <ul class="collapse">
+  <li><a href="#principle-1-r-is-vectorised-not-loops" id="toc-principle-1-r-is-vectorised-not-loops" class="nav-link" data-scroll-target="#principle-1-r-is-vectorised-not-loops"><span class="header-section-number">2.3.1</span> Principle 1: R Is Vectorised — Not Loops</a></li>
+  <li><a href="#principle-2-the-formula-interface-is-universal" id="toc-principle-2-the-formula-interface-is-universal" class="nav-link" data-scroll-target="#principle-2-the-formula-interface-is-universal"><span class="header-section-number">2.3.2</span> Principle 2: The Formula Interface Is Universal</a></li>
+  <li><a href="#principle-3-three-modeling-paradigms-one-language" id="toc-principle-3-three-modeling-paradigms-one-language" class="nav-link" data-scroll-target="#principle-3-three-modeling-paradigms-one-language"><span class="header-section-number">2.3.3</span> Principle 3: Three Modeling Paradigms, One Language</a></li>
+  </ul></li>
+  <li><a href="#core-r-concepts-you-must-understand" id="toc-core-r-concepts-you-must-understand" class="nav-link" data-scroll-target="#core-r-concepts-you-must-understand"><span class="header-section-number">2.4</span> Core R Concepts You Must Understand</a>
+  <ul class="collapse">
+  <li><a href="#the-r-data-type-hierarchy" id="toc-the-r-data-type-hierarchy" class="nav-link" data-scroll-target="#the-r-data-type-hierarchy"><span class="header-section-number">2.4.1</span> The R Data Type Hierarchy</a></li>
+  <li><a href="#vectors-and-data-types" id="toc-vectors-and-data-types" class="nav-link" data-scroll-target="#vectors-and-data-types"><span class="header-section-number">2.4.2</span> Vectors and Data Types</a></li>
+  <li><a href="#factors-categorical-data-done-right" id="toc-factors-categorical-data-done-right" class="nav-link" data-scroll-target="#factors-categorical-data-done-right"><span class="header-section-number">2.4.3</span> Factors — Categorical Data Done Right</a></li>
+  <li><a href="#data-frames-the-workhorse-for-metadata-and-results" id="toc-data-frames-the-workhorse-for-metadata-and-results" class="nav-link" data-scroll-target="#data-frames-the-workhorse-for-metadata-and-results"><span class="header-section-number">2.4.4</span> Data Frames — The Workhorse for Metadata and Results</a></li>
+  <li><a href="#lists-for-heterogeneous-collections" id="toc-lists-for-heterogeneous-collections" class="nav-link" data-scroll-target="#lists-for-heterogeneous-collections"><span class="header-section-number">2.4.5</span> Lists — For Heterogeneous Collections</a></li>
+  <li><a href="#functions-encapsulate-reusable-code" id="toc-functions-encapsulate-reusable-code" class="nav-link" data-scroll-target="#functions-encapsulate-reusable-code"><span class="header-section-number">2.4.6</span> Functions — Encapsulate Reusable Code</a></li>
+  <li><a href="#iteration-with-lapply-and-purrr" id="toc-iteration-with-lapply-and-purrr" class="nav-link" data-scroll-target="#iteration-with-lapply-and-purrr"><span class="header-section-number">2.4.7</span> Iteration with <code>lapply()</code> and <code>purrr</code></a></li>
+  <li><a href="#conditionals-and-error-handling" id="toc-conditionals-and-error-handling" class="nav-link" data-scroll-target="#conditionals-and-error-handling"><span class="header-section-number">2.4.8</span> Conditionals and Error Handling</a></li>
+  <li><a href="#r-anti-patterns-to-avoid" id="toc-r-anti-patterns-to-avoid" class="nav-link" data-scroll-target="#r-anti-patterns-to-avoid"><span class="header-section-number">2.4.9</span> R Anti-Patterns to Avoid</a></li>
+  </ul></li>
+  <li><a href="#the-tidyverse-grammar-for-ms-data" id="toc-the-tidyverse-grammar-for-ms-data" class="nav-link" data-scroll-target="#the-tidyverse-grammar-for-ms-data"><span class="header-section-number">2.5</span> The Tidyverse Grammar for MS Data</a>
+  <ul class="collapse">
+  <li><a href="#the-five-verbs-that-replace-most-loops" id="toc-the-five-verbs-that-replace-most-loops" class="nav-link" data-scroll-target="#the-five-verbs-that-replace-most-loops"><span class="header-section-number">2.5.1</span> The Five Verbs That Replace Most Loops</a></li>
+  <li><a href="#the-pipe-rs-assembly-line" id="toc-the-pipe-rs-assembly-line" class="nav-link" data-scroll-target="#the-pipe-rs-assembly-line"><span class="header-section-number">2.5.2</span> The Pipe: R’s Assembly Line</a></li>
+  <li><a href="#reshaping-wide-to-long-and-back" id="toc-reshaping-wide-to-long-and-back" class="nav-link" data-scroll-target="#reshaping-wide-to-long-and-back"><span class="header-section-number">2.5.3</span> Reshaping: Wide to Long and Back</a></li>
+  </ul></li>
+  <li><a href="#data-visualisation-with-ggplot2-for-ms" id="toc-data-visualisation-with-ggplot2-for-ms" class="nav-link" data-scroll-target="#data-visualisation-with-ggplot2-for-ms"><span class="header-section-number">2.6</span> Data Visualisation with ggplot2 for MS</a>
+  <ul class="collapse">
+  <li><a href="#the-ggplot2-building-blocks" id="toc-the-ggplot2-building-blocks" class="nav-link" data-scroll-target="#the-ggplot2-building-blocks"><span class="header-section-number">2.6.1</span> The ggplot2 Building Blocks</a></li>
+  <li><a href="#the-four-essential-plot-types-for-ms-data" id="toc-the-four-essential-plot-types-for-ms-data" class="nav-link" data-scroll-target="#the-four-essential-plot-types-for-ms-data"><span class="header-section-number">2.6.2</span> The Four Essential Plot Types for MS Data</a></li>
+  <li><a href="#publication-ready-figures" id="toc-publication-ready-figures" class="nav-link" data-scroll-target="#publication-ready-figures"><span class="header-section-number">2.6.3</span> Publication-Ready Figures</a></li>
+  <li><a href="#ggplot2-extensions-for-ms" id="toc-ggplot2-extensions-for-ms" class="nav-link" data-scroll-target="#ggplot2-extensions-for-ms"><span class="header-section-number">2.6.4</span> ggplot2 Extensions for MS</a></li>
+  </ul></li>
+  <li><a href="#the-bioconductor-ecosystem" id="toc-the-bioconductor-ecosystem" class="nav-link" data-scroll-target="#the-bioconductor-ecosystem"><span class="header-section-number">2.7</span> The Bioconductor Ecosystem</a>
+  <ul class="collapse">
+  <li><a href="#why-bioconductor-exists" id="toc-why-bioconductor-exists" class="nav-link" data-scroll-target="#why-bioconductor-exists"><span class="header-section-number">2.7.1</span> Why Bioconductor Exists</a></li>
+  <li><a href="#s4-objects-what-they-are-and-why-bioconductor-uses-them" id="toc-s4-objects-what-they-are-and-why-bioconductor-uses-them" class="nav-link" data-scroll-target="#s4-objects-what-they-are-and-why-bioconductor-uses-them"><span class="header-section-number">2.7.2</span> S4 Objects: What They Are and Why Bioconductor Uses Them</a></li>
+  <li><a href="#the-modular-backend-architecture" id="toc-the-modular-backend-architecture" class="nav-link" data-scroll-target="#the-modular-backend-architecture"><span class="header-section-number">2.7.3</span> The Modular Backend Architecture</a></li>
+  <li><a href="#the-four-core-containers" id="toc-the-four-core-containers" class="nav-link" data-scroll-target="#the-four-core-containers"><span class="header-section-number">2.7.4</span> The Four Core Containers</a></li>
+  <li><a href="#the-full-rformassspectrometry-package-map" id="toc-the-full-rformassspectrometry-package-map" class="nav-link" data-scroll-target="#the-full-rformassspectrometry-package-map"><span class="header-section-number">2.7.5</span> The Full RforMassSpectrometry Package Map</a></li>
+  </ul></li>
+  <li><a href="#machine-learning-in-r-for-ms-biomarker-discovery" id="toc-machine-learning-in-r-for-ms-biomarker-discovery" class="nav-link" data-scroll-target="#machine-learning-in-r-for-ms-biomarker-discovery"><span class="header-section-number">2.8</span> Machine Learning in R for MS Biomarker Discovery</a>
+  <ul class="collapse">
+  <li><a href="#three-ml-frameworks-for-r" id="toc-three-ml-frameworks-for-r" class="nav-link" data-scroll-target="#three-ml-frameworks-for-r"><span class="header-section-number">2.8.1</span> Three ML Frameworks for R</a></li>
+  <li><a href="#a-minimal-tidymodels-pipeline-for-ms-data" id="toc-a-minimal-tidymodels-pipeline-for-ms-data" class="nav-link" data-scroll-target="#a-minimal-tidymodels-pipeline-for-ms-data"><span class="header-section-number">2.8.2</span> A Minimal tidymodels Pipeline for MS Data</a></li>
+  </ul></li>
+  <li><a href="#reproducible-research-infrastructure" id="toc-reproducible-research-infrastructure" class="nav-link" data-scroll-target="#reproducible-research-infrastructure"><span class="header-section-number">2.9</span> Reproducible Research Infrastructure</a>
+  <ul class="collapse">
+  <li><a href="#the-reproducibility-stack" id="toc-the-reproducibility-stack" class="nav-link" data-scroll-target="#the-reproducibility-stack"><span class="header-section-number">2.9.1</span> The Reproducibility Stack</a></li>
+  <li><a href="#renv-lock-package-versions" id="toc-renv-lock-package-versions" class="nav-link" data-scroll-target="#renv-lock-package-versions"><span class="header-section-number">2.9.2</span> renv: Lock Package Versions</a></li>
+  <li><a href="#targets-pipeline-caching" id="toc-targets-pipeline-caching" class="nav-link" data-scroll-target="#targets-pipeline-caching"><span class="header-section-number">2.9.3</span> targets: Pipeline Caching</a></li>
+  <li><a href="#quarto-literate-programming" id="toc-quarto-literate-programming" class="nav-link" data-scroll-target="#quarto-literate-programming"><span class="header-section-number">2.9.4</span> Quarto: Literate Programming</a></li>
+  <li><a href="#the-golden-rule-of-r-project-organisation" id="toc-the-golden-rule-of-r-project-organisation" class="nav-link" data-scroll-target="#the-golden-rule-of-r-project-organisation"><span class="header-section-number">2.9.5</span> The Golden Rule of R Project Organisation</a></li>
+  </ul></li>
+  <li><a href="#practical-ms-workflow-with-bioconductor" id="toc-practical-ms-workflow-with-bioconductor" class="nav-link" data-scroll-target="#practical-ms-workflow-with-bioconductor"><span class="header-section-number">2.10</span> Practical MS Workflow with Bioconductor</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">2.11</span> Summary</a>
+  <ul class="collapse">
+  <li><a href="#key-takeaways" id="toc-key-takeaways" class="nav-link" data-scroll-target="#key-takeaways"><span class="header-section-number">2.11.1</span> Key Takeaways</a></li>
+  <li><a href="#the-full-rformassspectrometry-container-hierarchy" id="toc-the-full-rformassspectrometry-container-hierarchy" class="nav-link" data-scroll-target="#the-full-rformassspectrometry-container-hierarchy"><span class="header-section-number">2.11.2</span> The Full RforMassSpectrometry Container Hierarchy</a></li>
+  <li><a href="#package-map-quick-reference" id="toc-package-map-quick-reference" class="nav-link" data-scroll-target="#package-map-quick-reference"><span class="header-section-number">2.11.3</span> Package Map Quick Reference</a></li>
+  </ul></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">2.12</span> Session Information</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">2.13</span> Exercises</a>
+  <ul class="collapse">
+  <li><a href="#foundation" id="toc-foundation" class="nav-link" data-scroll-target="#foundation"><span class="header-section-number">2.13.1</span> Foundation</a></li>
+  <li><a href="#data-manipulation" id="toc-data-manipulation" class="nav-link" data-scroll-target="#data-manipulation"><span class="header-section-number">2.13.2</span> Data Manipulation</a></li>
+  <li><a href="#visualisation" id="toc-visualisation" class="nav-link" data-scroll-target="#visualisation"><span class="header-section-number">2.13.3</span> Visualisation</a></li>
+  <li><a href="#reproducibility" id="toc-reproducibility" class="nav-link" data-scroll-target="#reproducibility"><span class="header-section-number">2.13.4</span> Reproducibility</a></li>
+  <li><a href="#integration" id="toc-integration" class="nav-link" data-scroll-target="#integration"><span class="header-section-number">2.13.5</span> Integration</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/03-r-bioconductor.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./03-r-bioconductor.html">Part I — Foundations: Reproducible MS Analysis in R</a></li><li class="breadcrumb-item"><a href="./03-r-bioconductor.html"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>A single proteomics run produces gigabytes of spectra; a metabolomics study, thousands of features across hundreds of samples. Spreadsheets buckle, point-and-click tools hide the decisions they make, and neither can be rerun a year later when a reviewer asks. R — and especially Bioconductor — is where computational mass spectrometry actually happens: a scriptable, peer-reviewed toolkit built specifically for high-throughput biology. This chapter gives you the working vocabulary the rest of the book assumes.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Installing Bioconductor packages with <code>install.packages()</code>. It ignores the version constraints that Bioconductor packages share and produces cryptic “undefined class” errors later. Always install with <code>BiocManager::install()</code>.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">2.1</span> Learning Objectives</h2>
+<p>By the end of this chapter you will be able to:</p>
+<ul>
+<li>Explain why R and Bioconductor are the standard platform for computational MS analysis</li>
+<li>Work confidently with R’s core data structures — vectors, data frames, lists, and factors — and understand when Bioconductor’s S4 objects extend them</li>
+<li>Apply the tidyverse grammar (<code>dplyr</code>, <code>tidyr</code>, <code>ggplot2</code>) to MS metadata and result tables</li>
+<li>Create publication-quality visualisations of chromatograms, spectra, and differential abundance results</li>
+<li>Construct and inspect the four key Bioconductor containers: <code>Spectra</code>, <code>MsExperiment</code>, <code>QFeatures</code>, and <code>SummarizedExperiment</code></li>
+<li>Understand the modular backend architecture that lets the same R code work for 100 spectra or 1 million</li>
+<li>Choose between R’s three modeling paradigms (frequentist, robust, Bayesian) for different MS experimental designs</li>
+<li>Run a minimal but complete end-to-end MS analysis pipeline — from raw mzML files to a differential abundance result — using only Bioconductor functions</li>
+</ul>
+<hr>
+</section>
+<section id="why-r" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="why-r"><span class="header-section-number">2.2</span> Why R?</h2>
+<p>R is a programming language and free software environment for statistical computing and graphics. It has become the lingua franca of data science in many fields, including bioinformatics and computational mass spectrometry. R’s strength lies in its extensive ecosystem of over 19,000 packages on the Comprehensive R Archive Network (CRAN). However, for omics data the real powerhouse is <strong>Bioconductor</strong> — a collection of more than 2,000 highly interoperable R packages specifically designed for the analysis and comprehension of high-throughput genomic, transcriptomic, proteomic, and metabolomic data.</p>
+<p>For mass spectrometry workflows, Bioconductor provides core infrastructure packages like <code>Spectra</code> (handling raw MS data), <code>MSnbase</code> (peak processing and identification), <code>xcms</code> (chromatographic alignment and feature detection), and <code>QFeatures</code> (quantitative proteomics). These packages are developed under rigorous peer review, follow consistent data structures, and come with comprehensive documentation and vignettes.</p>
+<p>Using R and Bioconductor together transforms MS data analysis from a series of manual, error-prone steps into a scriptable, transparent, and reproducible pipeline. All operations — from reading vendor-specific raw files (<code>mzML</code>, <code>mzXML</code>, <code>raw</code>) to peak picking, retention time alignment, statistical testing, and visualisation — are expressed in R code. This scriptability is the very foundation of the reproducibility principles covered in the next chapter.</p>
+<section id="the-two-r-ecosystems-cran-and-bioconductor" class="level3" data-number="2.2.1">
+<h3 data-number="2.2.1" class="anchored" data-anchor-id="the-two-r-ecosystems-cran-and-bioconductor"><span class="header-section-number">2.2.1</span> The Two R Ecosystems: CRAN and Bioconductor</h3>
+<p>R has two complementary package repositories, and knowing when to use each is essential:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 10%">
+<col style="width: 20%">
+<col style="width: 25%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Repository</th>
+<th>Scope</th>
+<th>Installation</th>
+<th>Review Process</th>
+<th>Example Packages</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>CRAN</strong></td>
+<td>General-purpose statistics, data science, machine learning</td>
+<td><code>install.packages()</code></td>
+<td>Automated checks</td>
+<td><code>ggplot2</code>, <code>dplyr</code>, <code>tidymodels</code>, <code>lme4</code></td>
+</tr>
+<tr class="even">
+<td><strong>Bioconductor</strong></td>
+<td>High-throughput biological assays: genomics, proteomics, metabolomics</td>
+<td><code>BiocManager::install()</code></td>
+<td>Peer review + automated checks</td>
+<td><code>Spectra</code>, <code>xcms</code>, <code>QFeatures</code>, <code>limma</code></td>
+</tr>
+</tbody>
+</table>
+<p>Bioconductor releases are tied to R releases (twice yearly), ensuring all packages in a release are mutually compatible. CRAN has no such coordination — package A v2.0 may break package B. For MS analysis, you will use both: CRAN for data manipulation (<code>dplyr</code>) and visualisation (<code>ggplot2</code>), Bioconductor for everything MS-specific.</p>
+</section>
+<section id="installing-packages-the-right-way" class="level3" data-number="2.2.2">
+<h3 data-number="2.2.2" class="anchored" data-anchor-id="installing-packages-the-right-way"><span class="header-section-number">2.2.2</span> Installing Packages: The Right Way</h3>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CRAN packages</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="fu">c</span>(<span class="st">"tidyverse"</span>, <span class="st">"ggplot2"</span>, <span class="st">"lme4"</span>))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Bioconductor — ALWAYS use BiocManager, never install.packages()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">"BiocManager"</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">install.packages</span>(<span class="st">"BiocManager"</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(<span class="st">"Spectra"</span>, <span class="st">"xcms"</span>, <span class="st">"QFeatures"</span>, <span class="st">"limma"</span>))</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Bioconductor version must match your R version</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">version</span>()  <span class="co"># confirm before installing</span></span></code></pre></div>
+<p><strong>Why <code>BiocManager::install()</code> is mandatory for Bioconductor:</strong> Bioconductor packages share common S4 class definitions. Installing with <code>install.packages()</code> ignores version dependencies between Bioconductor packages, producing cryptic errors about undefined classes. <code>BiocManager</code> resolves the entire dependency graph against the correct Bioconductor release.</p>
+<hr>
+</section>
+</section>
+<section id="the-r-mindset-three-principles-that-change-everything" class="level2" data-number="2.3">
+<h2 data-number="2.3" class="anchored" data-anchor-id="the-r-mindset-three-principles-that-change-everything"><span class="header-section-number">2.3</span> The R Mindset: Three Principles That Change Everything</h2>
+<p>Before diving into data structures and functions, internalise three principles that distinguish effective R users from those who fight the language.</p>
+<section id="principle-1-r-is-vectorised-not-loops" class="level3" data-number="2.3.1">
+<h3 data-number="2.3.1" class="anchored" data-anchor-id="principle-1-r-is-vectorised-not-loops"><span class="header-section-number">2.3.1</span> Principle 1: R Is Vectorised — Not Loops</h3>
+<p>The single most important insight about R: it is optimised for vectorised operations. Write <code>x^2</code>, not <code>for (i in 1:n) x[i]^2</code>. Vectorised code is approximately 100× faster and far more readable.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Vectorised (fast, idiomatic)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>log_intensities <span class="ot">&lt;-</span> <span class="fu">log2</span>(intensities <span class="sc">+</span> <span class="dv">1</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Loop equivalent (slow, unidiomatic — avoid)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>log_intensities <span class="ot">&lt;-</span> <span class="fu">numeric</span>(<span class="fu">length</span>(intensities))</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_along</span>(intensities)) {</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  log_intensities[i] <span class="ot">&lt;-</span> <span class="fu">log2</span>(intensities[i] <span class="sc">+</span> <span class="dv">1</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>This principle extends to the <code>apply</code> family and <code>purrr::map()</code> — these are R’s tools for applying functions across dimensions without explicit loops. In MS analysis, you will constantly apply operations across features, samples, or spectra. Learn the vectorised approach early.</p>
+</section>
+<section id="principle-2-the-formula-interface-is-universal" class="level3" data-number="2.3.2">
+<h3 data-number="2.3.2" class="anchored" data-anchor-id="principle-2-the-formula-interface-is-universal"><span class="header-section-number">2.3.2</span> Principle 2: The Formula Interface Is Universal</h3>
+<p>R uses a consistent formula syntax <code>y ~ x1 + x2</code> across virtually all modeling functions. Learn it once, apply it everywhere:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Linear model</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">lm</span>(intensity <span class="sc">~</span> condition, <span class="at">data =</span> metadata)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Mixed-effects model (random effects in parentheses)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">lmer</span>(intensity <span class="sc">~</span> condition <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> batch), <span class="at">data =</span> metadata)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Differential abundance (limma)</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">lmFit</span>(assay_matrix, <span class="at">design =</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition, <span class="at">data =</span> metadata))</span></code></pre></div>
+<p>For MS data analysis, the formula interface connects your experimental design directly to the statistical model. Every design matrix you build in later chapters follows this same grammar.</p>
+</section>
+<section id="principle-3-three-modeling-paradigms-one-language" class="level3" data-number="2.3.3">
+<h3 data-number="2.3.3" class="anchored" data-anchor-id="principle-3-three-modeling-paradigms-one-language"><span class="header-section-number">2.3.3</span> Principle 3: Three Modeling Paradigms, One Language</h3>
+<p>R supports three complementary modeling approaches, all relevant to MS data:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 19%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 30%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Paradigm</th>
+<th>R Functions</th>
+<th>When to Use</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Frequentist</strong></td>
+<td><code>lm()</code>, <code>glm()</code>, <code>lmer()</code></td>
+<td>Simple designs, large samples</td>
+<td>Point estimates + CIs + p-values</td>
+</tr>
+<tr class="even">
+<td><strong>Robust (GEE)</strong></td>
+<td><code>geeglm()</code></td>
+<td>Correlated data with population focus</td>
+<td>Population-average effects, robust SEs</td>
+</tr>
+<tr class="odd">
+<td><strong>Bayesian</strong></td>
+<td><code>brm()</code>, <code>rstanarm()</code></td>
+<td>Complex hierarchies, small samples</td>
+<td>Full posterior distributions, intuitive uncertainty</td>
+</tr>
+</tbody>
+</table>
+<p>Chapters 20–23 apply all three paradigms to MS quantification data. The formula interface is the common thread that connects them.</p>
+<hr>
+</section>
+</section>
+<section id="core-r-concepts-you-must-understand" class="level2" data-number="2.4">
+<h2 data-number="2.4" class="anchored" data-anchor-id="core-r-concepts-you-must-understand"><span class="header-section-number">2.4</span> Core R Concepts You Must Understand</h2>
+<p>Even before loading Bioconductor packages, you need a solid grasp of basic R data structures and control flow. They appear constantly in MS data manipulation.</p>
+<section id="the-r-data-type-hierarchy" class="level3" data-number="2.4.1">
+<h3 data-number="2.4.1" class="anchored" data-anchor-id="the-r-data-type-hierarchy"><span class="header-section-number">2.4.1</span> The R Data Type Hierarchy</h3>
+<p>R’s data structures form a coherent hierarchy. Understanding where each type fits prevents subtle bugs:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 21%">
+<col style="width: 28%">
+<col style="width: 26%">
+<col style="width: 23%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Structure</th>
+<th>Dimensionality</th>
+<th>Homogeneous?</th>
+<th>MS Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Atomic vector</td>
+<td>1D</td>
+<td>Yes (same type)</td>
+<td>m/z values: <code>c(100.1, 200.3, 300.5)</code></td>
+</tr>
+<tr class="even">
+<td>Matrix</td>
+<td>2D</td>
+<td>Yes</td>
+<td>Peak table: <code>cbind(mz, intensity)</code></td>
+</tr>
+<tr class="odd">
+<td>List</td>
+<td>1D</td>
+<td>No (any type)</td>
+<td>MS run: <code>list(spectra, metadata, params)</code></td>
+</tr>
+<tr class="even">
+<td>Data frame / tibble</td>
+<td>2D</td>
+<td>Yes within columns</td>
+<td>Sample metadata, feature tables</td>
+</tr>
+<tr class="odd">
+<td>Factor</td>
+<td>1D</td>
+<td>Categorical</td>
+<td>Condition: <code>factor(c("Ctrl", "Treat"))</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical distinction:</strong> <code>[</code> returns a subset of the same type; <code>[[</code> extracts a single element (for lists and data frames). Confusing these is one of the most common R bugs:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ms_list[[<span class="dv">1</span>]]    <span class="co"># extracts the first Spectra object</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ms_list[<span class="dv">1</span>]      <span class="co"># returns a list of length 1 containing that object</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>metadata<span class="sc">$</span>batch  <span class="co"># equivalent to metadata[["batch"]]</span></span></code></pre></div>
+</section>
+<section id="vectors-and-data-types" class="level3" data-number="2.4.2">
+<h3 data-number="2.4.2" class="anchored" data-anchor-id="vectors-and-data-types"><span class="header-section-number">2.4.2</span> Vectors and Data Types</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Numeric vector (e.g., m/z values)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>mz_vals <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">100.1</span>, <span class="fl">200.3</span>, <span class="fl">300.5</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Character vector (e.g., sample names)</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>sample_names <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"control_1"</span>, <span class="st">"control_2"</span>, <span class="st">"treated_1"</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Logical vector (e.g., filtering conditions)</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>high_intensity <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="cn">TRUE</span>, <span class="cn">FALSE</span>, <span class="cn">TRUE</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Integer vector — append L to prevent unwanted coercion</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>charge_states <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2</span>L, <span class="dv">3</span>L, <span class="dv">2</span>L, <span class="dv">1</span>L)</span></code></pre></div>
+</section>
+<section id="factors-categorical-data-done-right" class="level3" data-number="2.4.3">
+<h3 data-number="2.4.3" class="anchored" data-anchor-id="factors-categorical-data-done-right"><span class="header-section-number">2.4.3</span> Factors — Categorical Data Done Right</h3>
+<p>Factors are vectors with predefined levels. Always specify <code>levels</code> explicitly to control ordering — the default alphabetical order is rarely what you want:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>condition <span class="ot">&lt;-</span> <span class="fu">factor</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"Treatment"</span>, <span class="st">"Control"</span>, <span class="st">"Treatment"</span>),</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Treatment"</span>)  <span class="co"># Control = reference level</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p>In MS analysis, factors appear in every design matrix. A factor’s first level becomes the reference category in linear models — choose it deliberately (typically the control group).</p>
+</section>
+<section id="data-frames-the-workhorse-for-metadata-and-results" class="level3" data-number="2.4.4">
+<h3 data-number="2.4.4" class="anchored" data-anchor-id="data-frames-the-workhorse-for-metadata-and-results"><span class="header-section-number">2.4.4</span> Data Frames — The Workhorse for Metadata and Results</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a data frame manually</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>metadata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_id       =</span> <span class="fu">c</span>(<span class="st">"S01"</span>, <span class="st">"S02"</span>, <span class="st">"S03"</span>),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition       =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Treatment"</span>, <span class="st">"Treatment"</span>),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">batch           =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>),</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">injection_order =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Access columns with $ or [[]]</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>metadata<span class="sc">$</span>condition</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter rows</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>control_samples <span class="ot">&lt;-</span> metadata[metadata<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">"Control"</span>, ]</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Use dplyr for clarity (part of tidyverse)</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>filtered <span class="ot">&lt;-</span> metadata <span class="sc">|&gt;</span> <span class="fu">filter</span>(batch <span class="sc">==</span> <span class="dv">1</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(sample_id, condition)</span></code></pre></div>
+<p><strong>Prefer tibbles over data frames.</strong> Tibbles (from <code>tibble</code>) never convert strings to factors, never do partial matching, and print more informatively. Every tidyverse function returns a tibble.</p>
+</section>
+<section id="lists-for-heterogeneous-collections" class="level3" data-number="2.4.5">
+<h3 data-number="2.4.5" class="anchored" data-anchor-id="lists-for-heterogeneous-collections"><span class="header-section-number">2.4.5</span> Lists — For Heterogeneous Collections</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># A list can hold different types (e.g., MS2 spectra per file)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>ms_data_list <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">file1      =</span> <span class="fu">Spectra</span>(<span class="st">"sample1.mzML"</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">file2      =</span> <span class="fu">Spectra</span>(<span class="st">"sample2.mzML"</span>),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">parameters =</span> <span class="fu">list</span>(<span class="at">ppm =</span> <span class="dv">5</span>, <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">60</span>))</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract elements with [[ or $</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>ms_data_list<span class="sc">$</span>file1</span></code></pre></div>
+</section>
+<section id="functions-encapsulate-reusable-code" class="level3" data-number="2.4.6">
+<h3 data-number="2.4.6" class="anchored" data-anchor-id="functions-encapsulate-reusable-code"><span class="header-section-number">2.4.6</span> Functions — Encapsulate Reusable Code</h3>
+<p>R treats functions as first-class objects — they can be passed as arguments, returned from other functions, and stored in lists. This functional programming style appears throughout Bioconductor.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># A simple function to compute CV (coefficient of variation)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>cv <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) {</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sd</span>(x, <span class="at">na.rm =</span> na.rm) <span class="sc">/</span> <span class="fu">mean</span>(x, <span class="at">na.rm =</span> na.rm) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>intensities <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">1200</span>, <span class="dv">1300</span>, <span class="dv">1250</span>, <span class="dv">1400</span>)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cv</span>(intensities)</span></code></pre></div>
+<p><strong>Best practices for writing R functions:</strong> 1. <strong>Validate inputs</strong> with <code>stopifnot(is.numeric(x))</code> — catch errors early 2. <strong>Handle NAs explicitly</strong> — use <code>na.rm = TRUE</code> throughout 3. <strong>Return explicitly</strong> — use <code>return()</code> for clarity, though it’s optional in R</p>
+</section>
+<section id="iteration-with-lapply-and-purrr" class="level3" data-number="2.4.7">
+<h3 data-number="2.4.7" class="anchored" data-anchor-id="iteration-with-lapply-and-purrr"><span class="header-section-number">2.4.7</span> Iteration with <code>lapply()</code> and <code>purrr</code></h3>
+<p>Instead of writing loops, use functional programming. For MS data, you constantly apply the same operation to many files or features:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>file_list <span class="ot">&lt;-</span> <span class="fu">list.files</span>(<span class="st">"data/raw"</span>, <span class="at">pattern =</span> <span class="st">"</span><span class="sc">\\</span><span class="st">.mzML$"</span>, <span class="at">full.names =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Base R</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>ms_list <span class="ot">&lt;-</span> <span class="fu">lapply</span>(file_list, Spectra)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co"># purrr equivalent (more consistent, better error messages)</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(purrr)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>ms_list <span class="ot">&lt;-</span> <span class="fu">map</span>(file_list, Spectra)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co"># vapply for type-safe iteration</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>file_sizes <span class="ot">&lt;-</span> <span class="fu">vapply</span>(file_list, file.size, <span class="fu">numeric</span>(<span class="dv">1</span>))</span></code></pre></div>
+</section>
+<section id="conditionals-and-error-handling" class="level3" data-number="2.4.8">
+<h3 data-number="2.4.8" class="anchored" data-anchor-id="conditionals-and-error-handling"><span class="header-section-number">2.4.8</span> Conditionals and Error Handling</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">any</span>(<span class="fu">is.na</span>(intensities))) {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">warning</span>(<span class="st">"Missing values detected!"</span>)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Gracefully skip corrupt files with purrr</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>safe_read <span class="ot">&lt;-</span> <span class="fu">possibly</span>(Spectra, <span class="at">otherwise =</span> <span class="cn">NULL</span>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>ms_data <span class="ot">&lt;-</span> <span class="fu">safe_read</span>(<span class="st">"corrupt_file.mzML"</span>)</span></code></pre></div>
+</section>
+<section id="r-anti-patterns-to-avoid" class="level3" data-number="2.4.9">
+<h3 data-number="2.4.9" class="anchored" data-anchor-id="r-anti-patterns-to-avoid"><span class="header-section-number">2.4.9</span> R Anti-Patterns to Avoid</h3>
+<p>These common mistakes cause inefficient code and subtle bugs — recognise them in your own scripts:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 28%">
+<col style="width: 33%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Anti-pattern</th>
+<th>Why It’s Wrong</th>
+<th>Do This Instead</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Growing objects in a loop: <code>x &lt;- c(x, new)</code></td>
+<td>Copies the entire vector each iteration (quadratic)</td>
+<td>Preallocate: <code>x &lt;- vector("list", n)</code></td>
+</tr>
+<tr class="even">
+<td>Using <code>attach()</code></td>
+<td>Creates confusion; masks variables</td>
+<td>Use <code>with()</code> or <code>$</code></td>
+</tr>
+<tr class="odd">
+<td><code>T</code> / <code>F</code> instead of <code>TRUE</code> / <code>FALSE</code></td>
+<td><code>T</code> and <code>F</code> are reassignable variables</td>
+<td>Always write <code>TRUE</code> and <code>FALSE</code> in full</td>
+</tr>
+<tr class="even">
+<td><code>setwd()</code> with absolute paths</td>
+<td>Breaks on any other machine</td>
+<td>Use <code>here::here()</code> or RStudio Projects</td>
+</tr>
+<tr class="odd">
+<td><code>$</code> inside pipe: <code>df |&gt; filter(df$var &gt; 5)</code></td>
+<td>Duplicates <code>df</code>, breaks with grouped data</td>
+<td><code>df |&gt; filter(var &gt; 5)</code></td>
+</tr>
+<tr class="even">
+<td><code>merge()</code> instead of <code>*_join()</code></td>
+<td>Slower, confusing defaults, less readable</td>
+<td><code>left_join()</code>, <code>inner_join()</code>, etc.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+</section>
+<section id="the-tidyverse-grammar-for-ms-data" class="level2" data-number="2.5">
+<h2 data-number="2.5" class="anchored" data-anchor-id="the-tidyverse-grammar-for-ms-data"><span class="header-section-number">2.5</span> The Tidyverse Grammar for MS Data</h2>
+<p>The tidyverse is a collection of R packages that share a common design philosophy: every function takes a data frame as its first argument, returns a data frame, and uses consistent argument names. For MS data analysis, three tidyverse packages do the heavy lifting:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 37%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Package</th>
+<th>What It Does</th>
+<th>MS Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>dplyr</code></td>
+<td>Data transformation</td>
+<td>Filter PSMs by score, compute per-sample summary statistics, join metadata to feature tables</td>
+</tr>
+<tr class="even">
+<td><code>tidyr</code></td>
+<td>Data reshaping</td>
+<td>Pivot feature matrices between wide (samples as columns) and long (tidy) formats</td>
+</tr>
+<tr class="odd">
+<td><code>purrr</code></td>
+<td>Functional iteration</td>
+<td>Apply the same operation to every file in a directory, safely handle corrupt mzML files</td>
+</tr>
+</tbody>
+</table>
+<section id="the-five-verbs-that-replace-most-loops" class="level3" data-number="2.5.1">
+<h3 data-number="2.5.1" class="anchored" data-anchor-id="the-five-verbs-that-replace-most-loops"><span class="header-section-number">2.5.1</span> The Five Verbs That Replace Most Loops</h3>
+<p><code>dplyr</code> provides five verbs that cover the vast majority of data manipulation tasks. Master these and you will rarely need to write a loop for metadata wrangling:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. filter() — keep rows matching a condition</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>ms2_only <span class="ot">&lt;-</span> psm_table <span class="sc">|&gt;</span> <span class="fu">filter</span>(msLevel <span class="sc">==</span> <span class="dv">2</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. select() — keep or drop columns</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>psm_slim <span class="ot">&lt;-</span> psm_table <span class="sc">|&gt;</span> <span class="fu">select</span>(sequence, xcorr, q_value, protein_id)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. mutate() — create or transform columns</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>psm_table <span class="ot">&lt;-</span> psm_table <span class="sc">|&gt;</span> <span class="fu">mutate</span>(</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">log_xcorr    =</span> <span class="fu">log10</span>(xcorr),</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">mass_error   =</span> <span class="fu">abs</span>(observed_mz <span class="sc">-</span> theoretical_mz) <span class="sc">/</span> theoretical_mz <span class="sc">*</span> <span class="fl">1e6</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. group_by() + summarise() — aggregate by groups</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>protein_summary <span class="ot">&lt;-</span> psm_table <span class="sc">|&gt;</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(protein_id) <span class="sc">|&gt;</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_peptides  =</span> <span class="fu">n_distinct</span>(sequence),</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_xcorr  =</span> <span class="fu">mean</span>(xcorr),</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups     =</span> <span class="st">"drop"</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. arrange() — sort rows</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>psm_table <span class="sc">|&gt;</span> <span class="fu">arrange</span>(<span class="fu">desc</span>(xcorr))  <span class="co"># best-scoring PSMs first</span></span></code></pre></div>
+</section>
+<section id="the-pipe-rs-assembly-line" class="level3" data-number="2.5.2">
+<h3 data-number="2.5.2" class="anchored" data-anchor-id="the-pipe-rs-assembly-line"><span class="header-section-number">2.5.2</span> The Pipe: R’s Assembly Line</h3>
+<p>The native pipe <code>|&gt;</code> (R 4.1+) chains operations left to right. Instead of nesting functions or creating intermediate variables, you build a pipeline that reads like a recipe:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Without pipe — hard to read, many intermediate variables</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>tmp1 <span class="ot">&lt;-</span> <span class="fu">filter</span>(psm_table, msLevel <span class="sc">==</span> <span class="dv">2</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>tmp2 <span class="ot">&lt;-</span> <span class="fu">mutate</span>(tmp1, <span class="at">log_xcorr =</span> <span class="fu">log10</span>(xcorr))</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>tmp3 <span class="ot">&lt;-</span> <span class="fu">group_by</span>(tmp2, protein_id)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> <span class="fu">summarise</span>(tmp3, <span class="at">n =</span> <span class="fu">n</span>())</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co"># With pipe — reads like a recipe, no intermediate clutter</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> psm_table <span class="sc">|&gt;</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(msLevel <span class="sc">==</span> <span class="dv">2</span>) <span class="sc">|&gt;</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_xcorr =</span> <span class="fu">log10</span>(xcorr)) <span class="sc">|&gt;</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(protein_id) <span class="sc">|&gt;</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>())</span></code></pre></div>
+<p>Every chapter in this book uses the pipe. You will see it applied to <code>Spectra</code> objects, <code>QFeatures</code> assays, feature tables, and differential abundance results.</p>
+</section>
+<section id="reshaping-wide-to-long-and-back" class="level3" data-number="2.5.3">
+<h3 data-number="2.5.3" class="anchored" data-anchor-id="reshaping-wide-to-long-and-back"><span class="header-section-number">2.5.3</span> Reshaping: Wide to Long and Back</h3>
+<p>MS feature tables are naturally wide (features × samples), but ggplot2 and many modeling functions expect long (tidy) format. <code>tidyr::pivot_longer()</code> and <code>pivot_wider()</code> convert between them:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Wide → Long (for plotting, modeling)</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>feature_long <span class="ot">&lt;-</span> feature_matrix <span class="sc">|&gt;</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">"feature_id"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">cols      =</span> <span class="sc">-</span>feature_id,</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">names_to  =</span> <span class="st">"sample"</span>,</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_to =</span> <span class="st">"intensity"</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Long → Wide (for matrix operations, export)</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>feature_wide <span class="ot">&lt;-</span> feature_long <span class="sc">|&gt;</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">names_from  =</span> <span class="st">"sample"</span>,</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_from =</span> <span class="st">"intensity"</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="data-visualisation-with-ggplot2-for-ms" class="level2" data-number="2.6">
+<h2 data-number="2.6" class="anchored" data-anchor-id="data-visualisation-with-ggplot2-for-ms"><span class="header-section-number">2.6</span> Data Visualisation with ggplot2 for MS</h2>
+<p>R’s <code>ggplot2</code> package implements the <strong>Grammar of Graphics</strong>: every plot is built from data, aesthetic mappings (which variables map to x, y, colour, shape), and geometric objects (points, lines, bars). For MS data, a small set of plot types covers the majority of visualisation needs.</p>
+<section id="the-ggplot2-building-blocks" class="level3" data-number="2.6.1">
+<h3 data-number="2.6.1" class="anchored" data-anchor-id="the-ggplot2-building-blocks"><span class="header-section-number">2.6.1</span> The ggplot2 Building Blocks</h3>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="at">data =</span> psm_table, <span class="fu">aes</span>(<span class="at">x =</span> retention_time, <span class="at">y =</span> xcorr, <span class="at">colour =</span> msLevel)) <span class="sc">+</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span>                         <span class="co"># geometric layer</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_brewer</span>(<span class="at">palette =</span> <span class="st">"Set1"</span>) <span class="sc">+</span>            <span class="co"># colour scale</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(                                              <span class="co"># labels</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"PSM scores across retention time"</span>,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x     =</span> <span class="st">"Retention time (min)"</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y     =</span> <span class="st">"XCorr score"</span>,</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"MS Level"</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)                      <span class="co"># theme</span></span></code></pre></div>
+</section>
+<section id="the-four-essential-plot-types-for-ms-data" class="level3" data-number="2.6.2">
+<h3 data-number="2.6.2" class="anchored" data-anchor-id="the-four-essential-plot-types-for-ms-data"><span class="header-section-number">2.6.2</span> The Four Essential Plot Types for MS Data</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 22%">
+<col style="width: 26%">
+<col style="width: 32%">
+<col style="width: 18%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Plot Type</th>
+<th>ggplot2 Geom</th>
+<th>MS Application</th>
+<th>Chapter</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Line plot</strong></td>
+<td><code>geom_line()</code></td>
+<td>TIC, BPC, EIC chromatograms</td>
+<td>6</td>
+</tr>
+<tr class="even">
+<td><strong>Scatter plot</strong></td>
+<td><code>geom_point()</code></td>
+<td>Volcano plot (log2FC vs −log10 p-value), mass error vs RT</td>
+<td>19</td>
+</tr>
+<tr class="odd">
+<td><strong>Box plot</strong></td>
+<td><code>geom_boxplot()</code></td>
+<td>Intensity distributions per sample, CV per batch</td>
+<td>6, 17</td>
+</tr>
+<tr class="even">
+<td><strong>Heatmap</strong></td>
+<td><code>geom_tile()</code> or <code>pheatmap()</code></td>
+<td>Feature abundance matrix, correlation matrix, sample distances</td>
+<td>19, 22</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="publication-ready-figures" class="level3" data-number="2.6.3">
+<h3 data-number="2.6.3" class="anchored" data-anchor-id="publication-ready-figures"><span class="header-section-number">2.6.3</span> Publication-Ready Figures</h3>
+<p>ggplot2’s defaults are sensible but not publication-ready. Three customisations make the difference:</p>
+<ol type="1">
+<li><p><strong>Choose a colour scale with purpose.</strong> For categorical groups, use <code>scale_colour_brewer(palette = "Set1")</code> — perceptually distinct and colour-blind safe. For continuous gradients (fold-changes), use <code>scale_colour_gradient2(low = "blue", mid = "white", high = "red")</code>.</p></li>
+<li><p><strong>Set a consistent theme.</strong> <code>theme_minimal(base_size = 12)</code> removes chart junk. For multi-panel figures, use <code>theme_bw()</code>.</p></li>
+<li><p><strong>Export at the right resolution.</strong> <code>ggsave("figure.png", width = 8, height = 5, dpi = 300)</code> produces print-quality output.</p></li>
+</ol>
+</section>
+<section id="ggplot2-extensions-for-ms" class="level3" data-number="2.6.4">
+<h3 data-number="2.6.4" class="anchored" data-anchor-id="ggplot2-extensions-for-ms"><span class="header-section-number">2.6.4</span> ggplot2 Extensions for MS</h3>
+<p>Several extension packages provide specialised plot types directly relevant to MS analysis:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 34%">
+<col style="width: 40%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Extension</th>
+<th>What It Adds</th>
+<th>MS Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ggrepel</code></td>
+<td>Non-overlapping text labels</td>
+<td>Gene/protein names on volcano plots</td>
+</tr>
+<tr class="even">
+<td><code>patchwork</code></td>
+<td>Compose multiple plots into one figure</td>
+<td>QC panel: TIC + PCA + CV distribution</td>
+</tr>
+<tr class="odd">
+<td><code>ggfortify</code></td>
+<td>Autoplot methods for statistical objects</td>
+<td><code>autoplot(prcomp_result)</code> for PCA</td>
+</tr>
+<tr class="even">
+<td><code>pheatmap</code></td>
+<td>Publication-ready heatmaps with annotations</td>
+<td>Feature abundance heatmaps with sample metadata colour bars</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The principle for MS figures:</strong> Start with the default, then strip away everything that does not communicate data. Grid lines, background colours, and decorative borders compete with the signal. A TIC overlay with five samples benefits from colour; a single-sample TIC benefits from nothing more than a clean line on a white background.</p>
+<hr>
+</section>
+</section>
+<section id="the-bioconductor-ecosystem" class="level2" data-number="2.7">
+<h2 data-number="2.7" class="anchored" data-anchor-id="the-bioconductor-ecosystem"><span class="header-section-number">2.7</span> The Bioconductor Ecosystem</h2>
+<p>Bioconductor is more than a package repository — it is a software ecosystem built on shared data structures, rigorous review, and interoperable design. Understanding its architecture is essential for effective MS data analysis.</p>
+<section id="why-bioconductor-exists" class="level3" data-number="2.7.1">
+<h3 data-number="2.7.1" class="anchored" data-anchor-id="why-bioconductor-exists"><span class="header-section-number">2.7.1</span> Why Bioconductor Exists</h3>
+<p>General-purpose statistical packages assume small, clean data frames. MS data breaks these assumptions in every dimension:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 36%">
+<col style="width: 27%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>MS Data Characteristic</th>
+<th>Why Base R Fails</th>
+<th>Bioconductor’s Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>File size</strong> (1–50 GB per run)</td>
+<td>R loads everything into RAM</td>
+<td>Lazy-loading backends; data stays on disk until accessed</td>
+</tr>
+<tr class="even">
+<td><strong>Nested structure</strong> (PSM → peptide → protein)</td>
+<td>Data frames flatten hierarchy</td>
+<td><code>QFeatures</code> preserves multi-level relationships</td>
+</tr>
+<tr class="odd">
+<td><strong>Rich metadata</strong> (scan headers, instrument params)</td>
+<td>Lost when extracting to a matrix</td>
+<td><code>Spectra</code> and <code>MsExperiment</code> carry metadata alongside data</td>
+</tr>
+<tr class="even">
+<td><strong>High dimensionality</strong> (<span class="math inline">p \gg n</span>)</td>
+<td>Standard linear models overfit</td>
+<td><code>limma</code>’s empirical Bayes shrinkage stabilises variance estimates</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="s4-objects-what-they-are-and-why-bioconductor-uses-them" class="level3" data-number="2.7.2">
+<h3 data-number="2.7.2" class="anchored" data-anchor-id="s4-objects-what-they-are-and-why-bioconductor-uses-them"><span class="header-section-number">2.7.2</span> S4 Objects: What They Are and Why Bioconductor Uses Them</h3>
+<p>R has two object-oriented systems. S3 (used by base R and the tidyverse) is lightweight — any object can be given a <code>class</code> attribute and dispatched via <code>UseMethod()</code>. S4 (used by Bioconductor) is formal — classes have explicitly defined slots with type checking.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># S3: lightweight, no type enforcement</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>obj <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">mz =</span> <span class="fu">c</span>(<span class="dv">100</span>, <span class="dv">200</span>), <span class="at">intensity =</span> <span class="fu">c</span>(<span class="dv">1000</span>, <span class="dv">2000</span>))</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(obj) <span class="ot">&lt;-</span> <span class="st">"spectrum"</span>  <span class="co"># no guarantee mz is numeric</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co"># S4: formal, slots are type-checked</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="fu">setClass</span>(<span class="st">"MassSpectrum"</span>,</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">slots =</span> <span class="fu">c</span>(</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">mz        =</span> <span class="st">"numeric"</span>,</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">intensity =</span> <span class="st">"numeric"</span>,</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">msLevel   =</span> <span class="st">"integer"</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p>Bioconductor chose S4 for two reasons: <strong>interoperability</strong> (packages from different authors can rely on consistent class definitions) and <strong>safety</strong> (type-checking prevents subtle bugs when one package passes data to another). You don’t need to write S4 classes — you need to recognise them and know that Bioconductor objects are accessed with <code>@</code> (slots) or dedicated accessor functions (preferred):</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sp <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(mzml_file)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>sp<span class="sc">@</span>backend           <span class="co"># S4 slot access (works, but avoid in production code)</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">rtime</span>(sp)            <span class="co"># accessor function (preferred — stable across package versions)</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">msLevel</span>(sp)          <span class="co"># returns integer vector of MS levels</span></span></code></pre></div>
+</section>
+<section id="the-modular-backend-architecture" class="level3" data-number="2.7.3">
+<h3 data-number="2.7.3" class="anchored" data-anchor-id="the-modular-backend-architecture"><span class="header-section-number">2.7.3</span> The Modular Backend Architecture</h3>
+<p>The most important architectural decision in the RforMassSpectrometry initiative is the separation of <strong>data manipulation</strong> (what you do) from <strong>data storage</strong> (where the data lives). The <code>Spectra</code> object provides a consistent interface regardless of whether your data is in RAM, on disk, or in a database:</p>
+<pre><code>User code (never changes):
+  filterMsLevel(sp, 2) |&gt; filterRt(c(1200, 1800))
+
+Spectra object (consistent interface):
+  translates user intent into backend-specific instructions
+
+Backend (pluggable storage):
+  MsBackendMzR         → reads from mzML/mzXML files on disk
+  MsBackendDataFrame   → stores peak data in RAM (fast, limited to small data)
+  MsBackendHdf5Peaks   → stores in HDF5 files (large data, fast random access)
+  MsBackendSql         → stores in SQL database (multi-user, collaborative)</code></pre>
+<p>Switching backends requires changing one line of code. The rest of your analysis is unchanged:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In-memory: fast for &lt; 1000 spectra</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>sp <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(mzml_files, <span class="at">backend =</span> <span class="fu">MsBackendDataFrame</span>())</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># On-disk: for production pipelines with many files</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>sp <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(mzml_files, <span class="at">backend =</span> <span class="fu">MsBackendMzR</span>())</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="co"># HDF5: for 10,000–1,000,000+ spectra</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>sp <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(mzml_files, <span class="at">backend =</span> <span class="fu">MsBackendHdf5Peaks</span>())</span></code></pre></div>
+<p>This architecture is the reason R can handle MS data at all — without lazy loading and pluggable backends, a single Orbitrap run would exhaust available RAM.</p>
+</section>
+<section id="the-four-core-containers" class="level3" data-number="2.7.4">
+<h3 data-number="2.7.4" class="anchored" data-anchor-id="the-four-core-containers"><span class="header-section-number">2.7.4</span> The Four Core Containers</h3>
+<p>These four object classes form the backbone of every MS analysis in this book. Chapter 5 constructs and inspects each in detail; here we establish what each one is for and when to use it.</p>
+<p><strong><code>Spectra</code></strong> — The raw data container. Holds MS1 and MS2 spectra from one or more mzML/mzXML files. Supports filtering by MS level, retention time, m/z range, and precursor properties. Access with <code>peaksData()</code>, <code>rtime()</code>, <code>msLevel()</code>, <code>precursorMz()</code>.</p>
+<p><strong><code>MsExperiment</code></strong> — Links raw spectra files to sample metadata. Think of it as a <code>Spectra</code> object married to a <code>data.frame</code> of sample annotations (condition, batch, injection order). Essential for ensuring metadata stays synchronised with spectral data across multi-file experiments.</p>
+<p><strong><code>SummarizedExperiment</code></strong> — The general-purpose omics container. Stores a feature × sample matrix (the <code>assay</code>), row metadata (feature annotations), and column metadata (sample annotations) in a single object. Used by <code>xcms</code> for feature tables and by <code>DEP</code> for protein-level quantification.</p>
+<p><strong><code>QFeatures</code></strong> — The proteomics-specific container. Organises quantitative data hierarchically: PSM-level intensities in one assay, peptide-level in the next, protein-level in the third. Each assay is a <code>SummarizedExperiment</code>, and the <code>QFeatures</code> object tracks the parent-child relationships between them.</p>
+<pre><code>QFeatures object
+├── assay[["PSMs"]]      → SummarizedExperiment: PSM × sample intensities
+│   └── rowData: PSM metadata (sequence, score, charge)
+├── assay[["peptides"]]  → SummarizedExperiment: peptide × sample intensities
+│   └── rowData: peptide metadata (sequence, protein mapping)
+└── assay[["proteins"]]  → SummarizedExperiment: protein × sample intensities
+    └── rowData: protein metadata (name, description, coverage)</code></pre>
+</section>
+<section id="the-full-rformassspectrometry-package-map" class="level3" data-number="2.7.5">
+<h3 data-number="2.7.5" class="anchored" data-anchor-id="the-full-rformassspectrometry-package-map"><span class="header-section-number">2.7.5</span> The Full RforMassSpectrometry Package Map</h3>
+<p>Beyond the four containers, a rich ecosystem of specialised packages handles each stage of the MS workflow:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 38%">
+<col style="width: 41%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Stage</th>
+<th>Key Packages</th>
+<th>What They Do</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Data import</strong></td>
+<td><code>mzR</code>, <code>MsBackendMzR</code>, <code>MsBackendHdf5Peaks</code></td>
+<td>Read mzML, mzXML, and vendor formats; provide storage backends</td>
+</tr>
+<tr class="even">
+<td><strong>Raw data handling</strong></td>
+<td><code>Spectra</code>, <code>MSnbase</code>, <code>MsExperiment</code></td>
+<td>Store, filter, and query spectra; link to metadata</td>
+</tr>
+<tr class="odd">
+<td><strong>Feature detection</strong></td>
+<td><code>xcms</code>, <code>MSnbase</code></td>
+<td>Chromatographic peak detection (CentWave), RT alignment (Obiwarp), feature correspondence</td>
+</tr>
+<tr class="even">
+<td><strong>Identification</strong></td>
+<td><code>PSMatch</code>, <code>mzR</code></td>
+<td>Parse search engine output, compute FDR, filter PSMs</td>
+</tr>
+<tr class="odd">
+<td><strong>Metabolite annotation</strong></td>
+<td><code>CAMERA</code>, <code>MetaboCoreUtils</code>, <code>MetaboAnnotation</code>, <code>CompoundDb</code></td>
+<td>Adduct deconvolution, exact mass search, spectral library matching</td>
+</tr>
+<tr class="even">
+<td><strong>Quantitative proteomics</strong></td>
+<td><code>QFeatures</code>, <code>DEP</code>, <code>MSqRob</code>, <code>proDA</code></td>
+<td>PSM → peptide → protein aggregation; LFQ and TMT workflows; robust summarisation</td>
+</tr>
+<tr class="odd">
+<td><strong>Normalization &amp; batch correction</strong></td>
+<td><code>limma</code>, <code>preprocessCore</code>, <code>sva</code> (ComBat), <code>pmp</code></td>
+<td>Median/quantile/LOESS normalisation; batch effect correction; QC metrics</td>
+</tr>
+<tr class="even">
+<td><strong>Statistical modeling</strong></td>
+<td><code>limma</code>, <code>lme4</code>, <code>variancePartition</code></td>
+<td>Empirical Bayes differential analysis; mixed models; variance decomposition</td>
+</tr>
+<tr class="odd">
+<td><strong>Visualisation</strong></td>
+<td><code>Spectra</code> (plot methods), <code>pheatmap</code>, <code>ggplot2</code></td>
+<td>TIC/BPC, spectra plots, heatmaps, volcano plots</td>
+</tr>
+<tr class="even">
+<td><strong>Pathway analysis</strong></td>
+<td><code>clusterProfiler</code>, <code>ReactomePA</code>, <code>igraph</code></td>
+<td>GO/KEGG enrichment, network visualisation</td>
+</tr>
+<tr class="odd">
+<td><strong>Infrastructure</strong></td>
+<td><code>BiocParallel</code>, <code>MsCoreUtils</code>, <code>ProtGenerics</code></td>
+<td>Parallel processing, common utilities, generic function definitions</td>
+</tr>
+</tbody>
+</table>
+<p>This package map is your reference throughout the book. When you encounter a new task, consult this table to identify the right package — then consult that package’s vignette for detailed guidance.</p>
+<hr>
+</section>
+</section>
+<section id="machine-learning-in-r-for-ms-biomarker-discovery" class="level2" data-number="2.8">
+<h2 data-number="2.8" class="anchored" data-anchor-id="machine-learning-in-r-for-ms-biomarker-discovery"><span class="header-section-number">2.8</span> Machine Learning in R for MS Biomarker Discovery</h2>
+<p>Machine learning is increasingly used in MS-based omics for biomarker discovery, sample classification, and feature selection. R provides three major ML frameworks, each with different strengths for MS data.</p>
+<section id="three-ml-frameworks-for-r" class="level3" data-number="2.8.1">
+<h3 data-number="2.8.1" class="anchored" data-anchor-id="three-ml-frameworks-for-r"><span class="header-section-number">2.8.1</span> Three ML Frameworks for R</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 22%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Framework</th>
+<th>Philosophy</th>
+<th>Best For</th>
+<th>MS Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>tidymodels</strong></td>
+<td>Tidyverse-consistent grammar; modular (recipe + model + workflow)</td>
+<td>Modern pipelines, reproducibility</td>
+<td>Biomarker classifier with nested CV</td>
+</tr>
+<tr class="even">
+<td><strong>caret</strong></td>
+<td>Unified interface to 200+ models; mature and well-documented</td>
+<td>Quick prototyping, teaching</td>
+<td>Comparing RF vs.&nbsp;SVM vs.&nbsp;LASSO for a feature table</td>
+</tr>
+<tr class="odd">
+<td><strong>mlr3</strong></td>
+<td>Object-oriented, high-performance, extensible</td>
+<td>Large-scale benchmarking, production</td>
+<td>Grid search over 50 model configurations across 100 imputed datasets</td>
+</tr>
+</tbody>
+</table>
+<p>This book uses <code>tidymodels</code> for machine learning and biomarker modeling (Chapters 22–23) because its explicit separation of preprocessing (<code>recipes</code>) from modeling (<code>parsnip</code>) makes it harder to accidentally leak test-set information — the most common error in MS biomarker studies.</p>
+</section>
+<section id="a-minimal-tidymodels-pipeline-for-ms-data" class="level3" data-number="2.8.2">
+<h3 data-number="2.8.2" class="anchored" data-anchor-id="a-minimal-tidymodels-pipeline-for-ms-data"><span class="header-section-number">2.8.2</span> A Minimal tidymodels Pipeline for MS Data</h3>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidymodels)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Split BEFORE any preprocessing (critical — see Chapter 22)</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>data_split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(feature_df, <span class="at">prop =</span> <span class="fl">0.75</span>, <span class="at">strata =</span> condition)</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>train_data <span class="ot">&lt;-</span> <span class="fu">training</span>(data_split)</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>test_data  <span class="ot">&lt;-</span> <span class="fu">testing</span>(data_split)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Define preprocessing (imputation, scaling, feature filtering)</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>preproc <span class="ot">&lt;-</span> <span class="fu">recipe</span>(condition <span class="sc">~</span> ., <span class="at">data =</span> train_data) <span class="sc">|&gt;</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_normalize</span>(<span class="fu">all_numeric_predictors</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_impute_knn</span>(<span class="fu">all_numeric_predictors</span>(), <span class="at">neighbors =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">step_nzv</span>(<span class="fu">all_numeric_predictors</span>())  <span class="co"># remove near-zero-variance features</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Define model</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>rf_model <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="dv">500</span>, <span class="at">mtry =</span> <span class="fu">tune</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>, <span class="at">importance =</span> <span class="st">"permutation"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Combine in a workflow</span></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">|&gt;</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_recipe</span>(preproc) <span class="sc">|&gt;</span></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(rf_model)</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Nested cross-validation (outer: performance; inner: tuning)</span></span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>outer_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(train_data, <span class="at">v =</span> <span class="dv">5</span>, <span class="at">strata =</span> condition)</span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>tuned_results <span class="ot">&lt;-</span> <span class="fu">tune_grid</span>(wf, <span class="at">resamples =</span> outer_folds, <span class="at">grid =</span> <span class="dv">10</span>)</span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Final evaluation on held-out test set</span></span>
+<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a>final_wf <span class="ot">&lt;-</span> <span class="fu">finalize_workflow</span>(wf, <span class="fu">select_best</span>(tuned_results, <span class="st">"roc_auc"</span>))</span>
+<span id="cb21-31"><a href="#cb21-31" aria-hidden="true" tabindex="-1"></a>final_fit <span class="ot">&lt;-</span> <span class="fu">last_fit</span>(final_wf, data_split)</span>
+<span id="cb21-32"><a href="#cb21-32" aria-hidden="true" tabindex="-1"></a><span class="fu">collect_metrics</span>(final_fit)</span></code></pre></div>
+<p><strong>The key MS-specific considerations for ML:</strong> - <strong><span class="math inline">p \gg n</span>:</strong> When features vastly outnumber samples (typical in MS), regularised models (LASSO, elastic net) and tree-based methods (random forest) are more reliable than unregularised logistic regression - <strong>Feature selection inside CV:</strong> Selecting the “top 50 features by t-test” using all samples, then cross-validating, produces catastrophically optimistic AUC estimates. Every step that uses data must be inside the cross-validation loop. - <strong>Missing values are information:</strong> In MS, a missing value is often a signal (below detection limit), not random noise. Imputing all missing values with zero or the minimum loses this information. Consider encoding missingness as a binary indicator alongside imputed values.</p>
+<hr>
+</section>
+</section>
+<section id="reproducible-research-infrastructure" class="level2" data-number="2.9">
+<h2 data-number="2.9" class="anchored" data-anchor-id="reproducible-research-infrastructure"><span class="header-section-number">2.9</span> Reproducible Research Infrastructure</h2>
+<p>The difference between a script that works once and a pipeline that works forever is infrastructure. R provides a layered stack of tools for reproducibility that this book uses throughout.</p>
+<section id="the-reproducibility-stack" class="level3" data-number="2.9.1">
+<h3 data-number="2.9.1" class="anchored" data-anchor-id="the-reproducibility-stack"><span class="header-section-number">2.9.1</span> The Reproducibility Stack</h3>
+<pre><code>Layer 1: Code versioning    → Git + GitHub
+Layer 2: R environment      → renv (package versions)
+Layer 3: System environment → Docker / rocker containers
+Layer 4: Pipeline caching   → targets (only rerun what changed)
+Layer 5: Literate documents → Quarto (code + narrative together)</code></pre>
+</section>
+<section id="renv-lock-package-versions" class="level3" data-number="2.9.2">
+<h3 data-number="2.9.2" class="anchored" data-anchor-id="renv-lock-package-versions"><span class="header-section-number">2.9.2</span> renv: Lock Package Versions</h3>
+<p>R packages change. A function that works today may behave differently (or disappear) after an update. <code>renv</code> creates a project-local library and records exact package versions in <code>renv.lock</code>:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialise a new project</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>renv<span class="sc">::</span><span class="fu">init</span>()</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Install packages (uses BiocManager for Bioconductor)</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(<span class="st">"Spectra"</span>, <span class="st">"xcms"</span>, <span class="st">"QFeatures"</span>))</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Save the exact state</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>renv<span class="sc">::</span><span class="fu">snapshot</span>()</span></code></pre></div>
+<p>A collaborator — or your future self on a new machine — runs <code>renv::restore()</code> to recreate the exact environment. The <code>renv.lock</code> file is plain text; commit it to Git.</p>
+</section>
+<section id="targets-pipeline-caching" class="level3" data-number="2.9.3">
+<h3 data-number="2.9.3" class="anchored" data-anchor-id="targets-pipeline-caching"><span class="header-section-number">2.9.3</span> targets: Pipeline Caching</h3>
+<p>MS data processing is expensive. Rerunning CentWave peak detection on 100 files because you changed a plot label is wasteful. The <code>targets</code> package tracks which steps depend on which inputs and only reruns what has changed:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># _targets.R</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(targets)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tar_option_set</span>(<span class="at">packages =</span> <span class="fu">c</span>(<span class="st">"Spectra"</span>, <span class="st">"xcms"</span>, <span class="st">"limma"</span>))</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="fu">list</span>(</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tar_target</span>(mzml_files, <span class="fu">list.files</span>(<span class="st">"data/"</span>, <span class="at">pattern =</span> <span class="st">"</span><span class="sc">\\</span><span class="st">.mzML$"</span>,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>              <span class="at">full.names =</span> <span class="cn">TRUE</span>), <span class="at">format =</span> <span class="st">"file"</span>),</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tar_target</span>(raw_data, <span class="fu">readMSData</span>(mzml_files, <span class="at">mode =</span> <span class="st">"onDisk"</span>)),</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tar_target</span>(peaks, <span class="fu">findChromPeaks</span>(raw_data, <span class="fu">CentWaveParam</span>(<span class="at">ppm =</span> <span class="dv">15</span>))),</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tar_target</span>(feature_mat, <span class="fu">featureValues</span>(peaks, <span class="at">value =</span> <span class="st">"into"</span>))</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p>Run <code>tar_make()</code> and <code>targets</code> skips any step whose inputs haven’t changed. <code>tar_visnetwork()</code> draws the dependency graph. Chapter 3 covers <code>targets</code> in depth; here the key concept is that <strong>every MS project with more than 5 samples should use pipeline caching.</strong></p>
+</section>
+<section id="quarto-literate-programming" class="level3" data-number="2.9.4">
+<h3 data-number="2.9.4" class="anchored" data-anchor-id="quarto-literate-programming"><span class="header-section-number">2.9.4</span> Quarto: Literate Programming</h3>
+<p>Quarto (the system used to write this book) integrates prose, code, and output in a single document. A <code>.qmd</code> file is Markdown text with executable R code chunks. When you render it, the code runs and its output — tables, figures, results — is embedded in the final HTML or PDF:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> "My MS Analysis"</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="an">author:</span><span class="co"> "Your Name"</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span><span class="co"> html</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="fu">## Quality Control</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="in">```r</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: false</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(tic_data, <span class="fu">aes</span>(rt<span class="sc">/</span><span class="dv">60</span>, intensity)) <span class="sc">+</span> <span class="fu">geom_line</span>()</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>The TIC trace shows consistent ion current across all samples.</span></code></pre></div>
+<p>The guarantee of literate programming is that your report never lies about your results — because the results are generated from the same code that the report displays. If the data changes, re-rendering updates everything automatically.</p>
+</section>
+<section id="the-golden-rule-of-r-project-organisation" class="level3" data-number="2.9.5">
+<h3 data-number="2.9.5" class="anchored" data-anchor-id="the-golden-rule-of-r-project-organisation"><span class="header-section-number">2.9.5</span> The Golden Rule of R Project Organisation</h3>
+<ol type="1">
+<li><strong>Never use <code>setwd()</code>.</strong> Use RStudio Projects (<code>.Rproj</code>) and the <code>here</code> package for portable paths.</li>
+<li><strong>Always set a seed.</strong> <code>set.seed(42)</code> at the top of every script. Without it, imputation, cross-validation splits, and random forest results change on every run.</li>
+<li><strong>Record your session.</strong> End every analysis with <code>sessionInfo()</code> — it documents R version, platform, and every loaded package with its version.</li>
+<li><strong>Commit <code>renv.lock</code>, not <code>renv/library/</code>.</strong> The library is regenerable; the lockfile is the recipe.</li>
+<li><strong>A result you cannot reproduce is not a result.</strong> If you cannot rerun your analysis six months from now, the published finding is untrustworthy regardless of the p-value.</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="practical-ms-workflow-with-bioconductor" class="level2" data-number="2.10">
+<h2 data-number="2.10" class="anchored" data-anchor-id="practical-ms-workflow-with-bioconductor"><span class="header-section-number">2.10</span> Practical MS Workflow with Bioconductor</h2>
+<p>Below is a minimal end-to-end example using real <code>msdata</code> files, combining several Bioconductor packages. This walkthrough previews the full pipeline covered in detail across subsequent chapters.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Spectra)</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xcms)</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(SummarizedExperiment)</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Locate example metabolomics files</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> <span class="fu">metabolomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Read as Spectra and plot TIC for each file (QC check)</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>sp_list <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(mzml_files)</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Peak detection and alignment with xcms</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>raw_data <span class="ot">&lt;-</span> <span class="fu">readMSData</span>(mzml_files, <span class="at">mode =</span> <span class="st">"onDisk"</span>)</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>cwp  <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(<span class="at">ppm =</span> <span class="dv">15</span>, <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">60</span>))</span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(raw_data, <span class="at">param =</span> cwp)</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">adjustRtime</span>(xset, <span class="at">param =</span> <span class="fu">ObiwarpParam</span>())</span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">groupChromPeaks</span>(xset,</span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>          <span class="at">param =</span> <span class="fu">PeakDensityParam</span>(<span class="at">sampleGroups =</span> <span class="fu">rep</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">each =</span> <span class="dv">2</span>)))</span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">fillChromPeaks</span>(xset)</span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Extract feature matrix as SummarizedExperiment</span></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a>feature_mat <span class="ot">&lt;-</span> <span class="fu">featureValues</span>(xset, <span class="at">value =</span> <span class="st">"into"</span>)</span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>se <span class="ot">&lt;-</span> <span class="fu">SummarizedExperiment</span>(</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">assays  =</span> <span class="fu">list</span>(<span class="at">intensity =</span> feature_mat),</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">colData =</span> <span class="fu">data.frame</span>(<span class="at">condition =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Ctrl"</span>, <span class="st">"Treat"</span>), <span class="at">each =</span> <span class="dv">2</span>))</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Differential analysis with limma</span></span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>design  <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition, <span class="at">data =</span> <span class="fu">as.data.frame</span>(<span class="fu">colData</span>(se)))</span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>fit     <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(<span class="fu">assay</span>(se), design) <span class="sc">|&gt;</span> <span class="fu">eBayes</span>()</span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit, <span class="at">coef =</span> <span class="dv">2</span>, <span class="at">number =</span> <span class="cn">Inf</span>)</span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(results)</span></code></pre></div>
+<p>This example uses only a handful of Bioconductor functions but already demonstrates a reproducible, scriptable MS pipeline. Each step is explored in depth in the chapters that follow.</p>
+<hr>
+</section>
+<section id="summary" class="level2" data-number="2.11">
+<h2 data-number="2.11" class="anchored" data-anchor-id="summary"><span class="header-section-number">2.11</span> Summary</h2>
+<p>This chapter established the conceptual foundation for every chapter that follows. Return to it when you encounter an unfamiliar data structure, need to choose between Bioconductor containers, or want to recall which package handles which stage of the MS workflow.</p>
+<section id="key-takeaways" class="level3" data-number="2.11.1">
+<h3 data-number="2.11.1" class="anchored" data-anchor-id="key-takeaways"><span class="header-section-number">2.11.1</span> Key Takeaways</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 29%">
+<col style="width: 45%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Key Point</th>
+<th>Where It Appears</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Vectorisation</strong></td>
+<td>R is 100× faster with vectorised code than loops</td>
+<td>Every code chunk in the book</td>
+</tr>
+<tr class="even">
+<td><strong>Formula interface</strong></td>
+<td><code>y ~ x1 + x2</code> is the universal modeling grammar</td>
+<td>Chapters 20–23</td>
+</tr>
+<tr class="odd">
+<td><strong>S4 objects</strong></td>
+<td>Bioconductor’s formal class system ensures interoperability</td>
+<td>Chapters 5–16</td>
+</tr>
+<tr class="even">
+<td><strong>Backend architecture</strong></td>
+<td>Same code works for 100 spectra or 1 million — just switch the backend</td>
+<td>Chapters 4, 5</td>
+</tr>
+<tr class="odd">
+<td><strong>tidyverse grammar</strong></td>
+<td>Five verbs (<code>filter</code>, <code>select</code>, <code>mutate</code>, <code>summarise</code>, <code>arrange</code>) + pipe replace most loops</td>
+<td>Chapters 5–26</td>
+</tr>
+<tr class="even">
+<td><strong>ggplot2 grammar</strong></td>
+<td>Data + aesthetics + geometries + theme = publication figure</td>
+<td>Chapters 6, 19, 22</td>
+</tr>
+<tr class="odd">
+<td><strong>Bioconductor containers</strong></td>
+<td><code>Spectra</code> → <code>MsExperiment</code> → <code>SummarizedExperiment</code>/<code>QFeatures</code> — choose the right level of abstraction</td>
+<td>All chapters</td>
+</tr>
+<tr class="even">
+<td><strong>Reproducibility stack</strong></td>
+<td>Git + renv + targets + Quarto = reproducible research</td>
+<td>Chapters 3, 23</td>
+</tr>
+<tr class="odd">
+<td><strong>ML in R</strong></td>
+<td>tidymodels for modern pipelines; always split before preprocessing</td>
+<td>Chapter 22</td>
+</tr>
+<tr class="even">
+<td><strong>RforMassSpectrometry</strong></td>
+<td>20+ interoperable packages covering the full MS pipeline</td>
+<td>Package map in this chapter</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-full-rformassspectrometry-container-hierarchy" class="level3" data-number="2.11.2">
+<h3 data-number="2.11.2" class="anchored" data-anchor-id="the-full-rformassspectrometry-container-hierarchy"><span class="header-section-number">2.11.2</span> The Full RforMassSpectrometry Container Hierarchy</h3>
+<pre><code>mzML files on disk
+    ↓ read with mzR backend
+Spectra (raw spectra, lazy-loaded)
+    ↓ link to sample metadata
+MsExperiment (spectra + sample annotations)
+    ↓ peak detection + alignment (xcms)
+SummarizedExperiment (feature × sample matrix)
+    ↓ identification + aggregation (for proteomics)
+QFeatures (PSM → peptide → protein hierarchy)
+    ↓ statistical modeling (limma, lme4)
+data.frame / tibble (differential abundance results)
+    ↓ visualisation (ggplot2)
+Published figures and reports (Quarto)</code></pre>
+</section>
+<section id="package-map-quick-reference" class="level3" data-number="2.11.3">
+<h3 data-number="2.11.3" class="anchored" data-anchor-id="package-map-quick-reference"><span class="header-section-number">2.11.3</span> Package Map Quick Reference</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>When you need to…</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Read mzML files</td>
+<td><code>Spectra(backend = MsBackendMzR())</code></td>
+</tr>
+<tr class="even">
+<td>Filter to MS2 spectra</td>
+<td><code>filterMsLevel(sp, 2)</code></td>
+</tr>
+<tr class="odd">
+<td>Detect chromatographic peaks</td>
+<td><code>xcms::findChromPeaks()</code></td>
+</tr>
+<tr class="even">
+<td>Filter PSMs by FDR</td>
+<td><code>PSMatch::filterPSMs()</code></td>
+</tr>
+<tr class="odd">
+<td>Aggregate peptides to proteins</td>
+<td><code>QFeatures::aggregateFeatures()</code></td>
+</tr>
+<tr class="even">
+<td>Normalise a feature matrix</td>
+<td><code>limma::normalizeBetweenArrays()</code></td>
+</tr>
+<tr class="odd">
+<td>Test for differential abundance</td>
+<td><code>limma::lmFit()</code> + <code>eBayes()</code></td>
+</tr>
+<tr class="even">
+<td>Visualise results</td>
+<td><code>ggplot2</code> + <code>ggrepel</code> + <code>patchwork</code></td>
+</tr>
+<tr class="odd">
+<td>Build a reproducible pipeline</td>
+<td><code>targets</code> + <code>renv</code> + Quarto</td>
+</tr>
+</tbody>
+</table>
+<p>The next chapter covers the infrastructure for managing a real MS project: directory organisation, <code>renv</code> for package versioning, <code>targets</code> for pipeline automation, and continuous integration.</p>
+<hr>
+</section>
+</section>
+<section id="session-information" class="level2" data-number="2.12">
+<h2 data-number="2.12" class="anchored" data-anchor-id="session-information"><span class="header-section-number">2.12</span> Session Information</h2>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+</section>
+<section id="exercises" class="level2" data-number="2.13">
+<h2 data-number="2.13" class="anchored" data-anchor-id="exercises"><span class="header-section-number">2.13</span> Exercises</h2>
+<section id="foundation" class="level3" data-number="2.13.1">
+<h3 data-number="2.13.1" class="anchored" data-anchor-id="foundation"><span class="header-section-number">2.13.1</span> Foundation</h3>
+<ol type="1">
+<li><p><strong>Container Ecosystem</strong>: List the four primary Bioconductor containers used in the RforMassSpectrometry ecosystem and describe the specific type of data each is designed to hold. For each container, name one Bioconductor function that creates it.</p></li>
+<li><p><strong>Backend Selection</strong>: You have three datasets: (a) 50 mzML files totalling 80 GB, (b) a single small mzML file with 200 spectra, (c) a collaborative project where 5 researchers share spectral data. Which backend (<code>MsBackendMzR</code>, <code>MsBackendDataFrame</code>, <code>MsBackendHdf5Peaks</code>, <code>MsBackendSql</code>) would you choose for each, and why?</p></li>
+<li><p><strong>BiocManager</strong>: Explain why <code>BiocManager::install()</code> is mandatory for Bioconductor packages while <code>install.packages()</code> suffices for CRAN. What specific problem does <code>BiocManager</code> solve?</p></li>
+</ol>
+</section>
+<section id="data-manipulation" class="level3" data-number="2.13.2">
+<h3 data-number="2.13.2" class="anchored" data-anchor-id="data-manipulation"><span class="header-section-number">2.13.2</span> Data Manipulation</h3>
+<ol start="4" type="1">
+<li><p><strong>tidyverse Translation</strong>: The following base R code filters a PSM table. Rewrite it using <code>dplyr</code> verbs and the pipe:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>tmp1 <span class="ot">&lt;-</span> psm_table[psm_table<span class="sc">$</span>msLevel <span class="sc">==</span> <span class="dv">2</span>, ]</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>tmp2 <span class="ot">&lt;-</span> tmp1[tmp1<span class="sc">$</span>xcorr <span class="sc">&gt;=</span> <span class="fl">2.5</span>, ]</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>tmp3 <span class="ot">&lt;-</span> tmp2[<span class="fu">order</span>(tmp2<span class="sc">$</span>xcorr, <span class="at">decreasing =</span> <span class="cn">TRUE</span>), ]</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> tmp3[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, <span class="fu">c</span>(<span class="st">"sequence"</span>, <span class="st">"xcorr"</span>, <span class="st">"protein_id"</span>)]</span></code></pre></div></li>
+<li><p><strong>Split-Apply-Combine</strong>: Given a feature matrix (rows = metabolites, columns = samples) and a metadata table with <code>sample_id</code> and <code>condition</code> columns, write tidyverse code to compute the mean intensity per condition for each metabolite.</p></li>
+</ol>
+</section>
+<section id="visualisation" class="level3" data-number="2.13.3">
+<h3 data-number="2.13.3" class="anchored" data-anchor-id="visualisation"><span class="header-section-number">2.13.3</span> Visualisation</h3>
+<ol start="6" type="1">
+<li><p><strong>Build a Volcano Plot Skeleton</strong>: Using the ggplot2 building blocks, write the code for a volcano plot with <code>log2FC</code> on the x-axis and <code>-log10(p_value)</code> on the y-axis. Points with <code>p_value &lt; 0.05</code> should be coloured red; all others grey. Add dashed lines at the significance thresholds.</p></li>
+<li><p><strong>Figure Composition</strong>: You need to create a QC panel showing (a) TIC overlay of all samples and (b) boxplot of log-intensities per sample, arranged side by side. Which ggplot2 extension would you use, and what is the core function call?</p></li>
+</ol>
+</section>
+<section id="reproducibility" class="level3" data-number="2.13.4">
+<h3 data-number="2.13.4" class="anchored" data-anchor-id="reproducibility"><span class="header-section-number">2.13.4</span> Reproducibility</h3>
+<ol start="8" type="1">
+<li><p><strong>Golden Rules</strong>: List the five golden rules of R project organisation. For each, explain what can go wrong if the rule is violated in an MS analysis context.</p></li>
+<li><p><strong>Pipeline Design</strong>: Sketch a three-step <code>_targets.R</code> pipeline that (a) reads an mzML file, (b) creates a <code>Spectra</code> object, and (c) extracts and saves the scan-level metadata as a CSV. Which steps would <code>targets</code> re-run on the second invocation if only the CSV export code changed?</p></li>
+</ol>
+</section>
+<section id="integration" class="level3" data-number="2.13.5">
+<h3 data-number="2.13.5" class="anchored" data-anchor-id="integration"><span class="header-section-number">2.13.5</span> Integration</h3>
+<ol start="10" type="1">
+<li><strong>Full Pipeline Trace</strong>: Starting from raw mzML files and ending with a differential abundance table, trace the path through Bioconductor containers. At each step, name the container type and the package that performs the transformation.</li>
+</ol>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./02-what-is-ms.html" class="pagination-link" aria-label="What Is Mass Spectrometry and Why Use MS Data?">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./04-reproducible-project.html" class="pagination-link" aria-label="Build a Reproducible MS Analysis Project">
+        <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/03-r-bioconductor.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

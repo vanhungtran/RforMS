@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>7&nbsp; Detect Chromatographic Features with xcms – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./09-annotate-metabolites.html" rel="next">
+<link href="./07-initial-qc.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+<script src="site_libs/quarto-diagram/mermaid.min.js"></script>
+<script src="site_libs/quarto-diagram/mermaid-init.js"></script>
+<link href="site_libs/quarto-diagram/mermaid.css" rel="stylesheet">
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./08-detect-features.html">Part II — Feature Detection and Identification</a></li><li class="breadcrumb-item"><a href="./08-detect-features.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">7.1</span> Learning Objectives</a></li>
+  <li><a href="#what-is-a-chromatographic-feature" id="toc-what-is-a-chromatographic-feature" class="nav-link" data-scroll-target="#what-is-a-chromatographic-feature"><span class="header-section-number">7.2</span> What Is a Chromatographic Feature?</a>
+  <ul class="collapse">
+  <li><a href="#the-centwave-triad-three-parameters-that-control-everything" id="toc-the-centwave-triad-three-parameters-that-control-everything" class="nav-link" data-scroll-target="#the-centwave-triad-three-parameters-that-control-everything"><span class="header-section-number">7.2.1</span> The CentWave Triad: Three Parameters That Control Everything</a></li>
+  </ul></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup"><span class="header-section-number">7.3</span> Setup</a></li>
+  <li><a href="#step-1-peak-detection-with-centwave" id="toc-step-1-peak-detection-with-centwave" class="nav-link" data-scroll-target="#step-1-peak-detection-with-centwave"><span class="header-section-number">7.4</span> Step 1 — Peak Detection with CentWave</a>
+  <ul class="collapse">
+  <li><a href="#how-centwave-works" id="toc-how-centwave-works" class="nav-link" data-scroll-target="#how-centwave-works"><span class="header-section-number">7.4.1</span> How CentWave works</a></li>
+  <li><a href="#key-parameters" id="toc-key-parameters" class="nav-link" data-scroll-target="#key-parameters"><span class="header-section-number">7.4.2</span> Key parameters</a></li>
+  <li><a href="#inspecting-detected-peaks" id="toc-inspecting-detected-peaks" class="nav-link" data-scroll-target="#inspecting-detected-peaks"><span class="header-section-number">7.4.3</span> Inspecting detected peaks</a></li>
+  <li><a href="#visualising-a-detected-peak" id="toc-visualising-a-detected-peak" class="nav-link" data-scroll-target="#visualising-a-detected-peak"><span class="header-section-number">7.4.4</span> Visualising a detected peak</a></li>
+  </ul></li>
+  <li><a href="#validating-peak-detection-with-known-standards" id="toc-validating-peak-detection-with-known-standards" class="nav-link" data-scroll-target="#validating-peak-detection-with-known-standards"><span class="header-section-number">7.5</span> Validating Peak Detection with Known Standards</a>
+  <ul class="collapse">
+  <li><a href="#extract-the-expected-ion-chromatogram" id="toc-extract-the-expected-ion-chromatogram" class="nav-link" data-scroll-target="#extract-the-expected-ion-chromatogram"><span class="header-section-number">7.5.1</span> Extract the Expected Ion Chromatogram</a></li>
+  <li><a href="#run-centwave-on-the-known-mass-trace" id="toc-run-centwave-on-the-known-mass-trace" class="nav-link" data-scroll-target="#run-centwave-on-the-known-mass-trace"><span class="header-section-number">7.5.2</span> Run CentWave on the Known Mass Trace</a></li>
+  <li><a href="#visualising-the-detected-peak" id="toc-visualising-the-detected-peak" class="nav-link" data-scroll-target="#visualising-the-detected-peak"><span class="header-section-number">7.5.3</span> Visualising the Detected Peak</a></li>
+  <li><a href="#mass-accuracy-across-26-standards" id="toc-mass-accuracy-across-26-standards" class="nav-link" data-scroll-target="#mass-accuracy-across-26-standards"><span class="header-section-number">7.5.4</span> Mass Accuracy Across 26 Standards</a></li>
+  <li><a href="#effect-of-snr-threshold" id="toc-effect-of-snr-threshold" class="nav-link" data-scroll-target="#effect-of-snr-threshold"><span class="header-section-number">7.5.5</span> Effect of SNR Threshold</a></li>
+  </ul></li>
+  <li><a href="#step-2-retention-time-alignment" id="toc-step-2-retention-time-alignment" class="nav-link" data-scroll-target="#step-2-retention-time-alignment"><span class="header-section-number">7.6</span> Step 2 — Retention Time Alignment</a>
+  <ul class="collapse">
+  <li><a href="#checking-alignment-quality" id="toc-checking-alignment-quality" class="nav-link" data-scroll-target="#checking-alignment-quality"><span class="header-section-number">7.6.1</span> Checking alignment quality</a></li>
+  </ul></li>
+  <li><a href="#step-3-feature-correspondence" id="toc-step-3-feature-correspondence" class="nav-link" data-scroll-target="#step-3-feature-correspondence"><span class="header-section-number">7.7</span> Step 3 — Feature Correspondence</a></li>
+  <li><a href="#step-4-fill-missing-peak-areas" id="toc-step-4-fill-missing-peak-areas" class="nav-link" data-scroll-target="#step-4-fill-missing-peak-areas"><span class="header-section-number">7.8</span> Step 4 — Fill Missing Peak Areas</a></li>
+  <li><a href="#step-5-extract-the-feature-matrix" id="toc-step-5-extract-the-feature-matrix" class="nav-link" data-scroll-target="#step-5-extract-the-feature-matrix"><span class="header-section-number">7.9</span> Step 5 — Extract the Feature Matrix</a></li>
+  <li><a href="#quality-metrics" id="toc-quality-metrics" class="nav-link" data-scroll-target="#quality-metrics"><span class="header-section-number">7.10</span> Quality Metrics</a>
+  <ul class="collapse">
+  <li><a href="#detection-rate-per-feature" id="toc-detection-rate-per-feature" class="nav-link" data-scroll-target="#detection-rate-per-feature"><span class="header-section-number">7.10.1</span> Detection rate per feature</a></li>
+  <li><a href="#coefficient-of-variation-in-qc-pools" id="toc-coefficient-of-variation-in-qc-pools" class="nav-link" data-scroll-target="#coefficient-of-variation-in-qc-pools"><span class="header-section-number">7.10.2</span> Coefficient of variation in QC pools</a></li>
+  </ul></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">7.11</span> Summary</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">7.12</span> Exercises</a></li>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading"><span class="header-section-number">7.13</span> Further Reading</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">7.14</span> Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/08-detect-features.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./08-detect-features.html">Part II — Feature Detection and Identification</a></li><li class="breadcrumb-item"><a href="./08-detect-features.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“A feature is just a number until you know which peaks from which samples agree that it is real.”</em></p>
+</blockquote>
+<p>A raw LC–MS file is a haystack of millions of intensity readings. Buried inside are the few thousand chromatographic peaks that correspond to real molecules — and every result that follows depends on finding them faithfully, then finding them again in the same place across every sample. Set the detection parameters too loose and you drown in noise; too tight and you lose the biology. This chapter is the <code>xcms</code> pipeline that turns raw signal into a trustworthy feature matrix.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Copying someone else’s CentWave parameters. Peak-width and ppm depend on <em>your</em> chromatography and instrument; borrowed settings silently miss real peaks or invent noise ones. Tune them on your own QC samples.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="7.1">
+<h2 data-number="7.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">7.1</span> Learning Objectives</h2>
+<p>By the end of this chapter you will be able to:</p>
+<ul>
+<li>Explain what a chromatographic <strong>feature</strong> is and how it differs from a raw spectral peak</li>
+<li>Configure and run <strong>CentWave</strong> peak detection with <code>findChromPeaks()</code></li>
+<li>Diagnose poor parameter choices using peak count and signal-to-noise metrics</li>
+<li>Align retention times across samples with <code>adjustRtime()</code></li>
+<li>Correspond peaks across samples into features with <code>groupChromPeaks()</code></li>
+<li>Recover missed signal with <code>fillChromPeaks()</code> and export a quantitative feature matrix</li>
+</ul>
+<hr>
+</section>
+<section id="what-is-a-chromatographic-feature" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="what-is-a-chromatographic-feature"><span class="header-section-number">7.2</span> What Is a Chromatographic Feature?</h2>
+<p>In untargeted LC-MS, the instrument acquires a full-scan mass spectrum every fraction of a second across the chromatographic run. The raw dataset is therefore two-dimensional: retention time × <em>m/z</em>. From this continuous surface we need to extract a compact, comparable representation — a <strong>feature table</strong> where each row is one compound and each column is one sample.</p>
+<p>Two terms are important to keep distinct:</p>
+<ul>
+<li>A <strong>chromatographic peak</strong> is a locally elevated signal in a single sample at a specific <em>m/z</em> and retention time range. It corresponds to one compound eluting from the column in that run.</li>
+<li>A <strong>feature</strong> is the cross-sample correspondence: peaks from different runs that share the same <em>m/z</em> and (after alignment) the same retention time are grouped into a single feature. Features become the rows of your final intensity matrix.</li>
+</ul>
+<p>The path from raw data to feature matrix follows four sequential steps:</p>
+<div class="cell" data-fig-width="9" data-fig-height="3" data-layout-align="default">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode default"><code class="sourceCode default"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>flowchart LR</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    A[Raw mzML\nSpectra] --&gt;|findChromPeaks| B[Peaks per\nsample]</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    B --&gt;|adjustRtime| C[RT-aligned\npeaks]</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    C --&gt;|groupChromPeaks| D[Features across\nsamples]</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    D --&gt;|fillChromPeaks\n+ featureValues| E[Intensity\nmatrix]</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    style A fill:#D7E6FB,stroke:#27408B</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    style E fill:#ffffff,stroke:#27408B,stroke-width:2px</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart LR
+    A[Raw mzML\nSpectra] --&gt;|findChromPeaks| B[Peaks per\nsample]
+    B --&gt;|adjustRtime| C[RT-aligned\npeaks]
+    C --&gt;|groupChromPeaks| D[Features across\nsamples]
+    D --&gt;|fillChromPeaks\n+ featureValues| E[Intensity\nmatrix]
+
+    style A fill:#D7E6FB,stroke:#27408B
+    style E fill:#ffffff,stroke:#27408B,stroke-width:2px
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<section id="the-centwave-triad-three-parameters-that-control-everything" class="level3" data-number="7.2.1">
+<h3 data-number="7.2.1" class="anchored" data-anchor-id="the-centwave-triad-three-parameters-that-control-everything"><span class="header-section-number">7.2.1</span> The CentWave Triad: Three Parameters That Control Everything</h3>
+<p>The CentWave algorithm (<code>findChromPeaks</code> with <code>CentWaveParam</code>) detects chromatographic peaks by looking for regions of the <em>m/z</em>-RT plane where the signal exceeds a noise threshold. Three parameters dominate its behaviour:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 23%">
+<col style="width: 36%">
+<col style="width: 19%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>What It Controls</th>
+<th>Too Low</th>
+<th>Too High</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong><code>ppm</code></strong></td>
+<td>m/z tolerance for grouping data points into a peak</td>
+<td>Merges distinct peaks; inflated peak width</td>
+<td>Splits real peaks; missed features</td>
+</tr>
+<tr class="even">
+<td><strong><code>peakwidth</code></strong></td>
+<td>Expected chromatographic peak width range (seconds)</td>
+<td>Picks up noise spikes; long computation</td>
+<td>Misses narrow peaks</td>
+</tr>
+<tr class="odd">
+<td><strong><code>snthresh</code></strong></td>
+<td>Signal-to-noise ratio cutoff</td>
+<td>Picks up noise; inflated feature count</td>
+<td>Misses low-abundance features</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The diagnostic principle:</strong> After peak detection, always check: 1. <strong>Number of peaks per sample</strong> — should be roughly equal across samples. A sample with 10× fewer peaks than others has an injection or acquisition problem. 2. <strong>Peak width distribution</strong> — should be unimodal around your LC peak width (~10–60 s for UHPLC). Bimodal distributions suggest <code>peakwidth</code> is mis-specified. 3. <strong>Peak density along retention time</strong> — should be roughly uniform. Gaps indicate regions of poor chromatographic performance.</p>
+<p><strong>Parameter tuning strategy for untargeted metabolomics:</strong> 1. Start with <code>ppm = 15–30</code> for Q-TOF, <code>ppm = 5–10</code> for Orbitrap 2. Set <code>peakwidth = c(10, 60)</code> for UHPLC, <code>c(20, 120)</code> for HPLC 3. Set <code>snthresh = 10</code> initially; increase to 20 if too many noise peaks 4. Run on 2–3 representative samples, check diagnostics, adjust iteratively</p>
+<p>This chapter works through all four steps using <code>xcms</code> and the example LC-MS metabolomics files from the <code>msdata</code> package.</p>
+<hr>
+</section>
+</section>
+<section id="setup" class="level2" data-number="7.3">
+<h2 data-number="7.3" class="anchored" data-anchor-id="setup"><span class="header-section-number">7.3</span> Setup</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xcms)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MSnbase)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(SummarizedExperiment)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)</span></code></pre></div>
+</details>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Four example metabolomics files: 2 control, 2 treatment</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> <span class="fu">proteomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>sample_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_name =</span> <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.mzML$"</span>, <span class="st">""</span>, <span class="fu">basename</span>(mzml_files)),</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition   =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Control"</span>, <span class="st">"Treatment"</span>, <span class="st">"Treatment"</span>),</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names   =</span> <span class="fu">basename</span>(mzml_files)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</details>
+</div>
+<p>Read the data in <strong>on-disk mode</strong>: spectral metadata are held in memory; raw intensity arrays are fetched from the file only when needed. This keeps memory usage low for large experiments.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>raw_data <span class="ot">&lt;-</span> <span class="fu">readMSData</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  mzml_files,</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">pdata =</span> <span class="fu">new</span>(<span class="st">"NAnnotatedDataFrame"</span>, sample_meta),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">mode  =</span> <span class="st">"onDisk"</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>raw_data</span></code></pre></div>
+</details>
+</div>
+<hr>
+</section>
+<section id="step-1-peak-detection-with-centwave" class="level2" data-number="7.4">
+<h2 data-number="7.4" class="anchored" data-anchor-id="step-1-peak-detection-with-centwave"><span class="header-section-number">7.4</span> Step 1 — Peak Detection with CentWave</h2>
+<section id="how-centwave-works" class="level3" data-number="7.4.1">
+<h3 data-number="7.4.1" class="anchored" data-anchor-id="how-centwave-works"><span class="header-section-number">7.4.1</span> How CentWave works</h3>
+<p><code>xcms</code> provides several peak-detection algorithms; <strong>CentWave</strong> is the standard choice for high-resolution data (Orbitrap, Q-TOF). It works in two stages:</p>
+<ol type="1">
+<li><strong>Mass-trace detection</strong> — it scans for consecutive spectra where a narrow <em>m/z</em> window contains signal above a noise floor, forming a “trace” in the retention-time dimension.</li>
+<li><strong>Wavelet-based peak-shape analysis</strong> — within each mass trace it applies a continuous wavelet transform (CWT) to locate peaks with a Gaussian-like shape, reporting the apex, boundaries, and integrated area.</li>
+</ol>
+</section>
+<section id="key-parameters" class="level3" data-number="7.4.2">
+<h3 data-number="7.4.2" class="anchored" data-anchor-id="key-parameters"><span class="header-section-number">7.4.2</span> Key parameters</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Meaning</th>
+<th>Typical starting value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ppm</code></td>
+<td>Maximum <em>m/z</em> deviation for a mass trace (parts per million)</td>
+<td>5–15 ppm for Orbitrap; 15–25 ppm for Q-TOF</td>
+</tr>
+<tr class="even">
+<td><code>peakwidth</code></td>
+<td>Expected chromatographic peak width range in seconds</td>
+<td><code>c(5, 60)</code> for a 30-min run</td>
+</tr>
+<tr class="odd">
+<td><code>snthresh</code></td>
+<td>Signal-to-noise threshold for reporting a peak</td>
+<td>10</td>
+</tr>
+<tr class="even">
+<td><code>noise</code></td>
+<td>Absolute intensity floor; signals below this are ignored</td>
+<td>1 000</td>
+</tr>
+<tr class="odd">
+<td><code>prefilter</code></td>
+<td>Minimum scan count and intensity required before evaluating a trace</td>
+<td><code>c(3, 100)</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p><strong>Tuning tip</strong>: Start with <code>snthresh = 10</code> and inspect peak counts per sample. Far fewer peaks than expected suggests <code>ppm</code> or <code>noise</code> is too restrictive; far more suggests the thresholds are too permissive. Plot the XIC of a known internal standard and verify its peak is detected cleanly.</p>
+</blockquote>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm        =</span> <span class="dv">15</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth  =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh   =</span> <span class="dv">10</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise      =</span> <span class="dv">1000</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter  =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(raw_data, <span class="at">param =</span> cwp)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>xset</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="inspecting-detected-peaks" class="level3" data-number="7.4.3">
+<h3 data-number="7.4.3" class="anchored" data-anchor-id="inspecting-detected-peaks"><span class="header-section-number">7.4.3</span> Inspecting detected peaks</h3>
+<p>Each detected peak is one row in <code>chromPeaks()</code>:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(xset)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(peaks)</span></code></pre></div>
+</details>
+</div>
+<p>Key columns:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mz</code>, <code>mzmin</code>, <code>mzmax</code></td>
+<td><em>m/z</em> centroid and boundaries</td>
+</tr>
+<tr class="even">
+<td><code>rt</code>, <code>rtmin</code>, <code>rtmax</code></td>
+<td>Retention time at apex and peak boundaries (seconds)</td>
+</tr>
+<tr class="odd">
+<td><code>into</code></td>
+<td>Integrated peak area — the primary quantification value</td>
+</tr>
+<tr class="even">
+<td><code>sn</code></td>
+<td>Signal-to-noise ratio</td>
+</tr>
+<tr class="odd">
+<td><code>sample</code></td>
+<td>Sample index</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Peaks per sample — a large imbalance signals instrument instability</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># or sub-optimal parameters</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="fu">chromPeaks</span>(xset)[, <span class="st">"sample"</span>])</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="visualising-a-detected-peak" class="level3" data-number="7.4.4">
+<h3 data-number="7.4.4" class="anchored" data-anchor-id="visualising-a-detected-peak"><span class="header-section-number">7.4.4</span> Visualising a detected peak</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and plot the XIC for the most intense peak in sample 1</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> peaks[peaks[, <span class="st">"sample"</span>] <span class="sc">==</span> <span class="dv">1</span>L, ]</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> top_peak[<span class="fu">which.max</span>(top_peak[, <span class="st">"maxo"</span>]), ]</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  xset,</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> <span class="fu">c</span>(top_peak[<span class="st">"mzmin"</span>], top_peak[<span class="st">"mzmax"</span>]),</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">rt =</span> <span class="fu">c</span>(top_peak[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">10</span>, top_peak[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">10</span>)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(chr, <span class="at">main =</span> <span class="fu">paste0</span>(<span class="st">"m/z "</span>, <span class="fu">round</span>(top_peak[<span class="st">"mz"</span>], <span class="dv">4</span>)))</span></code></pre></div>
+</details>
+</div>
+<hr>
+</section>
+</section>
+<section id="validating-peak-detection-with-known-standards" class="level2 real-data" data-number="7.5">
+<h2 class="real-data anchored" data-number="7.5" data-anchor-id="validating-peak-detection-with-known-standards"><span class="header-section-number">7.5</span> Validating Peak Detection with Known Standards</h2>
+<blockquote class="blockquote">
+<p><strong>Real Data:</strong> MTBLS38 — 71 pure metabolite standards measured on an LTQ Orbitrap Velos (Thermo Fisher) in both positive and negative ESI mode. Each mzML file contains one known compound at known monoisotopic mass. Full ChEBI annotations are available via <a href="https://www.ebi.ac.uk/metabolights/MTBLS38">MetaboLights</a>.</p>
+</blockquote>
+<p>Before applying CentWave to complex biological samples, it is essential to verify that the algorithm can correctly detect peaks of <em>known identity</em>. The MTBLS38 dataset provides pure standards whose exact monoisotopic masses are documented in ChEBI and PubChem, making it a gold-standard benchmark.</p>
+<section id="extract-the-expected-ion-chromatogram" class="level3" data-number="7.5.1">
+<h3 data-number="7.5.1" class="anchored" data-anchor-id="extract-the-expected-ion-chromatogram"><span class="header-section-number">7.5.1</span> Extract the Expected Ion Chromatogram</h3>
+<p>For a pure standard, we know the compound’s exact mass. Rather than running CentWave on the entire MS1 space (which detects thousands of unrelated background peaks), we first extract the <strong>extracted ion chromatogram (EIC)</strong> in a narrow <em>m/z</em> window around the expected mass:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Load biotin standard and extract EIC</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MSnbase)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xcms)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># This block requires the MTBLS38 dataset (~12 GB, 71 mzML files).</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Download: ./code/download_mtbls.ps1 -Datasets MTBLS38</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co"># The pre-computed results are shown in the figures below.</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>biotin_file <span class="ot">&lt;-</span> <span class="st">"raw/MTBLS38/biotin.mzML"</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract EIC within 25 ppm of expected mass</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>mz_target <span class="ot">&lt;-</span> <span class="fl">245.0955</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(raw,</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> mz_target <span class="sc">*</span> <span class="fu">c</span>(<span class="dv">1</span> <span class="sc">-</span> <span class="fl">25e-6</span>, <span class="dv">1</span> <span class="sc">+</span> <span class="fl">25e-6</span>),</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">aggregationFun =</span> <span class="st">"max"</span>)</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>rtime_vals <span class="ot">&lt;-</span> <span class="fu">rtime</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>intens_vals <span class="ot">&lt;-</span> <span class="fu">intensity</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"EIC extracted: %d scans over %.1f–%.1f s</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">length</span>(rtime_vals), <span class="fu">min</span>(rtime_vals), <span class="fu">max</span>(rtime_vals)))</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="run-centwave-on-the-known-mass-trace" class="level3" data-number="7.5.2">
+<h3 data-number="7.5.2" class="anchored" data-anchor-id="run-centwave-on-the-known-mass-trace"><span class="header-section-number">7.5.2</span> Run CentWave on the Known Mass Trace</h3>
+<p>Now apply CentWave to the extracted EIC. Because we know the expected peak is real, we can use a moderately stringent signal-to-noise threshold (<code>snthresh = 10</code>) and expect 1–5 peaks (the main compound peak plus possible minor isomers or adducts):</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm       =</span> <span class="dv">25</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh  =</span> <span class="dv">10</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise     =</span> <span class="dv">1000</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> cwp)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>peaks_found <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(peaks)</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Peaks detected: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">nrow</span>(peaks_found)))</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Find the peak closest to the expected mass</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>mass_errors <span class="ot">&lt;-</span> <span class="fu">abs</span>(peaks_found[, <span class="st">"mz"</span>] <span class="sc">-</span> mz_target) <span class="sc">/</span> mz_target <span class="sc">*</span> <span class="fl">1e6</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>best_idx <span class="ot">&lt;-</span> <span class="fu">which.min</span>(mass_errors)</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Best match:</span><span class="sc">\n</span><span class="st">"</span>))</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  m/z found:  %.5f (expected %.5f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"mz"</span>], mz_target))</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Mass error: %.2f ppm</span><span class="sc">\n</span><span class="st">"</span>, mass_errors[best_idx]))</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  RT:         %.1f s</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"rt"</span>]))</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Area:       %.0f</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"into"</span>]))</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  SNR:        %.0f</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"into"</span>] <span class="sc">/</span> peaks_found[best_idx, <span class="st">"intb"</span>]))</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="visualising-the-detected-peak" class="level3" data-number="7.5.3">
+<h3 data-number="7.5.3" class="anchored" data-anchor-id="visualising-the-detected-peak"><span class="header-section-number">7.5.3</span> Visualising the Detected Peak</h3>
+<p>The <code>chromatogram()</code> object contains the full EIC trace. We can overlay the CentWave-detected peak boundaries to visualise the peak anatomy:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>bp <span class="ot">&lt;-</span> peaks_found[best_idx, ]</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>eic_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">rt =</span> rtime_vals, <span class="at">intensity =</span> intens_vals)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Zoom to the peak region</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>zoom_df <span class="ot">&lt;-</span> <span class="fu">subset</span>(eic_df, rt <span class="sc">&gt;=</span> bp[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">20</span> <span class="sc">&amp;</span> rt <span class="sc">&lt;=</span> bp[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">20</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(zoom_df, <span class="fu">aes</span>(<span class="at">x =</span> rt, <span class="at">y =</span> intensity)) <span class="sc">+</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_area</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.15</span>) <span class="sc">+</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>,</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">xmin =</span> bp[<span class="st">"rtmin"</span>], <span class="at">xmax =</span> bp[<span class="st">"rtmax"</span>],</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">ymin =</span> <span class="dv">0</span>, <span class="at">ymax =</span> <span class="fu">max</span>(zoom_df<span class="sc">$</span>intensity) <span class="sc">*</span> <span class="fl">1.05</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>],</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>           <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"label"</span>,</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>] <span class="sc">*</span> <span class="fl">1.1</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"m/z = %.4f</span><span class="sc">\n</span><span class="st">rt = %.1f s</span><span class="sc">\n</span><span class="st">SNR = %.0f"</span>,</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"mz"</span>], bp[<span class="st">"rt"</span>],</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"into"</span>] <span class="sc">/</span> bp[<span class="st">"intb"</span>]),</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">size =</span> <span class="fl">3.5</span>, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">title   =</span> <span class="st">"Peak Anatomy — Biotin Standard"</span>,</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Dashed box = CentWave peak boundaries | Red dot = apex"</span>,</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">x       =</span> <span class="st">"Retention Time (s)"</span>,</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">y       =</span> <span class="st">"Intensity"</span>) <span class="sc">+</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">13</span>)</span></code></pre></div>
+</details>
+</div>
+<div id="fig-peak-anatomy" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-peak-anatomy-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data/figures/02_peak_anatomy.png" class="img-fluid figure-img" style="width:80.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-peak-anatomy-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7.1: Peak anatomy of biotin standard (m/z 245.0955) detected by CentWave. Dashed box = peak boundaries (rtmin–rtmax). Red dot = apex. SNR = 10.
+</figcaption>
+</figure>
+</div>
+<div class="callout callout-style-simple callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Interpreting the Figure
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Red dashed lines</strong> mark <code>rtmin</code> and <code>rtmax</code> — the boundaries CentWave assigned to this peak. A well-shaped peak has smooth Gaussian-like rise and fall within these bounds.</li>
+<li><strong>Red dot</strong> marks the peak apex (<code>rt</code>). CentWave identifies this as the point of maximum intensity after wavelet smoothing.</li>
+<li><strong>SNR</strong> = signal-to-noise ratio. The <code>into</code> (integrated area) divided by <code>intb</code> (baseline-corrected background). SNR &gt; 10 indicates a reliable detection.</li>
+<li>The <strong>filled area</strong> represents the integrated signal that becomes the quantitative value for this feature.</li>
+</ul>
+</div>
+</div>
+<div id="fig-standards-gallery" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-standards-gallery-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data/figures/01_standards_gallery.png" class="img-fluid figure-img" style="width:100.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-standards-gallery-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7.2: Chromatogram gallery of 9 pure metabolite standards. Each panel shows the EIC within ±25 ppm of the known monoisotopic mass. All compounds were correctly identified with sub-ppm mass accuracy.
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="mass-accuracy-across-26-standards" class="level3" data-number="7.5.4">
+<h3 data-number="7.5.4" class="anchored" data-anchor-id="mass-accuracy-across-26-standards"><span class="header-section-number">7.5.4</span> Mass Accuracy Across 26 Standards</h3>
+<p>We repeated this analysis on all 26 MTBLS38 standards with known monoisotopic masses. The results validate CentWave on an Orbitrap platform. The pre-computed figure below shows the mass accuracy distribution:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the pre-computed validation table</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>peak_val <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/mtbls38/peak_validation.csv"</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(peak_val, <span class="fu">aes</span>(<span class="at">x =</span> ppm_error)) <span class="sc">+</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">15</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>                 <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">25</span>, <span class="dv">25</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="sc">-</span><span class="dv">30</span>, <span class="at">y =</span> <span class="dv">3</span>,</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"Median = %.2f ppm"</span>, <span class="fu">median</span>(peak_val<span class="sc">$</span>ppm_error)),</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Mass Accuracy of CentWave Peak Detection"</span>,</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">paste</span>(<span class="fu">nrow</span>(peak_val), <span class="st">"pure standards, Orbitrap LTQ Velos"</span>),</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">x        =</span> <span class="st">"Mass Error (ppm)"</span>,</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">y        =</span> <span class="st">"Number of Compounds"</span>) <span class="sc">+</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div id="fig-mass-accuracy-code" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-mass-accuracy-code-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-detect-features_files/figure-html/fig-mass-accuracy-code-1.png" class="img-fluid figure-img" width="2400">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-mass-accuracy-code-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7.3: Mass accuracy of CentWave-detected peaks vs.&nbsp;known monoisotopic masses across 26 pure metabolite standards.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div id="fig-mass-accuracy" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-mass-accuracy-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data/figures/03_mass_accuracy.png" class="img-fluid figure-img" style="width:70.0%">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-mass-accuracy-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;7.4: Mass accuracy of CentWave-detected peaks vs.&nbsp;known monoisotopic masses for 26 pure metabolite standards. All peaks fall within ±3 ppm (Orbitrap specification). Median error = 0.57 ppm.
+</figcaption>
+</figure>
+</div>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Standards tested</td>
+<td>26</td>
+</tr>
+<tr class="even">
+<td>Detection rate</td>
+<td><strong>100 %</strong> (26 / 26)</td>
+</tr>
+<tr class="odd">
+<td>Median mass error</td>
+<td><strong>0.57 ppm</strong></td>
+</tr>
+<tr class="even">
+<td>Best accuracy</td>
+<td>glycine betaine: 0.002 ppm</td>
+</tr>
+<tr class="odd">
+<td>Range</td>
+<td>0.001–2.52 ppm — all within ±3 ppm</td>
+</tr>
+</tbody>
+</table>
+<div class="callout callout-style-simple callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Why This Matters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ol type="1">
+<li><p><strong>CentWave works.</strong> All 26 known compounds were detected at the expected mass with sub-ppm accuracy. If CentWave cannot find your compound of interest in a biological sample, the issue is likely concentration or matrix suppression — not the peak detection algorithm.</p></li>
+<li><p><strong>Mass accuracy is not the same as identification.</strong> A 0.57 ppm match tells you the <em>elemental composition</em> is consistent, but it does not distinguish isomers (e.g., glucose vs.&nbsp;galactose, both C₆H₁₂O₆ at m/z 179.0556). Chapters 10–11 address how to combine retention time, MS/MS spectra, and isotopic patterns for confident identification.</p></li>
+<li><p><strong>Parameter tuning matters.</strong> The 26 standards span a wide chromatographic range (RT 7–597 s) and a wide concentration range (intensity 1.3 × 10⁴–5.7 × 10⁷). A single <code>peakwidth</code> and <code>noise</code> setting correctly detected all of them, demonstrating that CentWave’s default parameters are robust for Orbitrap data.</p></li>
+</ol>
+</div>
+</div>
+</section>
+<section id="effect-of-snr-threshold" class="level3" data-number="7.5.5">
+<h3 data-number="7.5.5" class="anchored" data-anchor-id="effect-of-snr-threshold"><span class="header-section-number">7.5.5</span> Effect of SNR Threshold</h3>
+<p>The <code>snthresh</code> parameter is the most impactful tuning knob in CentWave. Setting it too low produces many false-positive peaks; setting it too high misses low-abundance compounds. Using the biotin standard, we tested SNR thresholds from 5 to 100:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>snr_values <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>snr_counts <span class="ot">&lt;-</span> <span class="fu">sapply</span>(snr_values, <span class="cf">function</span>(s) {</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(<span class="at">ppm =</span> <span class="dv">25</span>, <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                     <span class="at">snthresh =</span> s, <span class="at">noise =</span> <span class="dv">1000</span>, <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>))</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>(<span class="fu">chromPeaks</span>(<span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> p)))</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>snr_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">SNR =</span> <span class="fu">factor</span>(snr_values), <span class="at">Peaks =</span> snr_counts)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(snr_df, <span class="fu">aes</span>(<span class="at">x =</span> SNR, <span class="at">y =</span> Peaks)) <span class="sc">+</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> Peaks), <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">size =</span> <span class="fl">4.5</span>) <span class="sc">+</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Effect of SNR Threshold — Biotin Standard"</span>,</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"snthresh = 10 is the sweet spot for Orbitrap data"</span>,</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"snthresh"</span>,</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Peaks Detected"</span>) <span class="sc">+</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span></code></pre></div>
+</details>
+</div>
+<p>At <code>snthresh = 5</code>, CentWave reports 13 peaks (many noise-derived). At <code>snthresh = 10</code>, it reports 13 peaks as well — but with a cleaner baseline. At <code>snthresh = 50</code>, only 8 peaks remain, and at <code>snthresh = 100</code>, only 4. <strong>The recommended starting value for Orbitrap data is <code>snthresh = 10</code></strong>, accepting 1–20 peaks per compound and filtering further by mass accuracy and retention time consistency in downstream steps.</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Exercise: Validate With Your Own Data
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>If you have access to internal standards or a standard mixture, run the workflow above on your own mzML files:</p>
+<ol type="1">
+<li>Look up the exact monoisotopic mass of your standard from <a href="https://pubchem.ncbi.nlm.nih.gov/">PubChem</a> or <a href="https://www.ebi.ac.uk/chebi/">ChEBI</a>.</li>
+<li>Extract the EIC within ±25 ppm using <code>chromatogram(raw, mz = ...)</code>.</li>
+<li>Run <code>findChromPeaks()</code> with <code>CentWaveParam</code> and compare the detected <code>mz</code> to the known mass.</li>
+<li>Compute the mass error in ppm: <code>abs(mz_found - mz_expected) / mz_expected * 1e6</code>.</li>
+<li>If the error exceeds 5 ppm, check your instrument’s mass calibration.</li>
+</ol>
+<p>This single test can diagnose instrument performance, parameter settings, and software bugs before you invest hours in processing a full batch.</p>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="step-2-retention-time-alignment" class="level2" data-number="7.6">
+<h2 data-number="7.6" class="anchored" data-anchor-id="step-2-retention-time-alignment"><span class="header-section-number">7.6</span> Step 2 — Retention Time Alignment</h2>
+<p>Even identical instrument settings produce small RT drifts between injections due to column aging, temperature fluctuations, and solvent equilibration. Alignment corrects these systematic shifts before peaks are grouped across samples.</p>
+<p><code>xcms</code> provides two alignment algorithms:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ObiwarpParam</code></td>
+<td>Global warping; robust when drift is large or samples differ broadly</td>
+</tr>
+<tr class="even">
+<td><code>PeakGroupsParam</code></td>
+<td>Loess-based correction using shared landmark peaks; fast and interpretable when runs are already close</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">adjustRtime</span>(xset, <span class="at">param =</span> <span class="fu">ObiwarpParam</span>(<span class="at">binSize =</span> <span class="fl">0.6</span>))</span></code></pre></div>
+</details>
+</div>
+<section id="checking-alignment-quality" class="level3" data-number="7.6.1">
+<h3 data-number="7.6.1" class="anchored" data-anchor-id="checking-alignment-quality"><span class="header-section-number">7.6.1</span> Checking alignment quality</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Overlay adjusted vs. raw retention times; tight curves indicate good alignment</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plotAdjustedRtime</span>(xset)</span></code></pre></div>
+</details>
+</div>
+<p>If adjustment produces sharp, noisy deviations, reduce <code>binSize</code>. If large drift remains, increase it or switch to Obiwarp with a smaller <code>gapInit</code> penalty.</p>
+<hr>
+</section>
+</section>
+<section id="step-3-feature-correspondence" class="level2" data-number="7.7">
+<h2 data-number="7.7" class="anchored" data-anchor-id="step-3-feature-correspondence"><span class="header-section-number">7.7</span> Step 3 — Feature Correspondence</h2>
+<p>Peak grouping answers the question: <em>which peaks in different samples correspond to the same compound?</em> <code>groupChromPeaks()</code> with <code>PeakDensityParam</code> groups peaks that fall within a shared <em>m/z</em> and RT window across samples, assigning each group a <strong>feature ID</strong>.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>pdp <span class="ot">&lt;-</span> <span class="fu">PeakDensityParam</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">sampleGroups =</span> sample_meta<span class="sc">$</span>condition,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">bw           =</span> <span class="dv">30</span>,      <span class="co"># RT bandwidth for density estimation (seconds)</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">minFraction  =</span> <span class="fl">0.5</span>,     <span class="co"># Feature must appear in ≥50 % of samples in at least one group</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">minSamples   =</span> <span class="dv">1</span>,</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">binSize      =</span> <span class="fl">0.025</span>    <span class="co"># m/z bin size (Daltons)</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">groupChromPeaks</span>(xset, <span class="at">param =</span> pdp)</span></code></pre></div>
+</details>
+</div>
+<p><code>minFraction</code> is the most important tuning parameter here: too low and noise peaks form spurious features; too high and genuine low-abundance compounds are discarded.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Feature summary</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>feat_def <span class="ot">&lt;-</span> <span class="fu">featureDefinitions</span>(xset)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(feat_def)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(feat_def[, <span class="fu">c</span>(<span class="st">"mzmed"</span>, <span class="st">"rtmed"</span>, <span class="st">"npeaks"</span>)])</span></code></pre></div>
+</details>
+</div>
+<hr>
+</section>
+<section id="step-4-fill-missing-peak-areas" class="level2" data-number="7.8">
+<h2 data-number="7.8" class="anchored" data-anchor-id="step-4-fill-missing-peak-areas"><span class="header-section-number">7.8</span> Step 4 — Fill Missing Peak Areas</h2>
+<p>After grouping, many features have <code>NA</code> in samples where CentWave did not detect a peak. Some are genuine absences; others are real signals that fell just below the detection threshold. <code>fillChromPeaks()</code> re-integrates the signal in the expected <em>m/z</em>–RT window for every such sample.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">fillChromPeaks</span>(xset, <span class="at">param =</span> <span class="fu">ChromPeakAreaParam</span>())</span></code></pre></div>
+</details>
+</div>
+<blockquote class="blockquote">
+<p><strong>Caution</strong>: <code>fillChromPeaks()</code> will integrate noise if the compound is truly absent. Features where the majority of samples required filling warrant lower confidence in downstream analyses and should be flagged accordingly.</p>
+</blockquote>
+<hr>
+</section>
+<section id="step-5-extract-the-feature-matrix" class="level2" data-number="7.9">
+<h2 data-number="7.9" class="anchored" data-anchor-id="step-5-extract-the-feature-matrix"><span class="header-section-number">7.9</span> Step 5 — Extract the Feature Matrix</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>feat_mat <span class="ot">&lt;-</span> <span class="fu">featureValues</span>(xset, <span class="at">value =</span> <span class="st">"into"</span>, <span class="at">method =</span> <span class="st">"sum"</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(feat_mat)   <span class="co"># features × samples</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrap in a SummarizedExperiment for downstream analysis</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>se <span class="ot">&lt;-</span> <span class="fu">SummarizedExperiment</span>(</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">assays  =</span> <span class="fu">list</span>(<span class="at">intensity =</span> feat_mat),</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">colData =</span> sample_meta</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>se</span></code></pre></div>
+</details>
+</div>
+<hr>
+</section>
+<section id="quality-metrics" class="level2" data-number="7.10">
+<h2 data-number="7.10" class="anchored" data-anchor-id="quality-metrics"><span class="header-section-number">7.10</span> Quality Metrics</h2>
+<section id="detection-rate-per-feature" class="level3" data-number="7.10.1">
+<h3 data-number="7.10.1" class="anchored" data-anchor-id="detection-rate-per-feature"><span class="header-section-number">7.10.1</span> Detection rate per feature</h3>
+<p>Features detected in fewer than half the samples are often noise-derived. Inspect the distribution before carrying them into statistical models:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>detection_rate <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="sc">!</span><span class="fu">is.na</span>(feat_mat))</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(detection_rate) <span class="sc">|&gt;</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(detection_rate)) <span class="sc">+</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">fill =</span> <span class="st">"#4472C4"</span>, <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fraction of samples with detected signal"</span>,</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Number of features"</span>,</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Feature detection rate"</span>) <span class="sc">+</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+</div>
+</section>
+<section id="coefficient-of-variation-in-qc-pools" class="level3" data-number="7.10.2">
+<h3 data-number="7.10.2" class="anchored" data-anchor-id="coefficient-of-variation-in-qc-pools"><span class="header-section-number">7.10.2</span> Coefficient of variation in QC pools</h3>
+<p>If pooled QC samples were injected, compute the per-feature CV to assess technical reproducibility:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>qc_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="fu">colData</span>(se)<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">"QC"</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(qc_idx) <span class="sc">&gt;=</span> <span class="dv">2</span>) {</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  cv_qc <span class="ot">&lt;-</span> <span class="fu">apply</span>(</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assay</span>(se)[, qc_idx], <span class="dv">1</span>,</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">function</span>(x) <span class="fu">sd</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">mean</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">message</span>(<span class="st">"Median CV in QC samples: "</span>, <span class="fu">round</span>(<span class="fu">median</span>(cv_qc, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="dv">1</span>), <span class="st">" %"</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+</details>
+</div>
+<p>A median CV below 30 % indicates acceptable technical reproducibility for untargeted profiling.</p>
+<hr>
+</section>
+</section>
+<section id="summary" class="level2" data-number="7.11">
+<h2 data-number="7.11" class="anchored" data-anchor-id="summary"><span class="header-section-number">7.11</span> Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th><code>xcms</code> function</th>
+<th>Key parameter to tune</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Peak detection</td>
+<td><code>findChromPeaks(CentWaveParam())</code></td>
+<td><code>ppm</code>, <code>peakwidth</code></td>
+</tr>
+<tr class="even">
+<td>RT alignment</td>
+<td><code>adjustRtime(ObiwarpParam())</code></td>
+<td><code>binSize</code></td>
+</tr>
+<tr class="odd">
+<td>Feature grouping</td>
+<td><code>groupChromPeaks(PeakDensityParam())</code></td>
+<td><code>minFraction</code>, <code>bw</code></td>
+</tr>
+<tr class="even">
+<td>Peak filling</td>
+<td><code>fillChromPeaks(ChromPeakAreaParam())</code></td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>Feature matrix export</td>
+<td><code>featureValues(value = "into")</code></td>
+<td><code>method</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>SummarizedExperiment</code> produced at the end of this chapter is the input for the identification chapters that follow (Chapters 8–11) and for the quantification and statistical workflows in Parts III–V.</p>
+</section>
+<section id="exercises" class="level2" data-number="7.12">
+<h2 data-number="7.12" class="anchored" data-anchor-id="exercises"><span class="header-section-number">7.12</span> Exercises</h2>
+<ol type="1">
+<li><strong>Parameter Exploration</strong>: Run <code>findChromPeaks()</code> on the <code>faahKO</code> dataset with <code>ppm = c(10, 20, 40)</code>. Plot the number of detected features against <code>ppm</code>. At what point do diminishing returns set in?</li>
+<li><strong>Alignment Diagnosis</strong>: Before and after <code>adjustRtime()</code>, extract the retention times of a known internal standard peak. Compute the CV of its RT across all runs. Did alignment improve the CV?</li>
+<li><strong>Grouping Sensitivity</strong>: Vary <code>minFraction</code> from 0.3 to 0.9 in steps of 0.1 and report how the number of consensus features changes. Propose a defensible <code>minFraction</code> for a study with 12 samples per group and explain your choice.</li>
+<li><strong>Gap-Filling Impact</strong>: Compare the percentage of missing values in your feature matrix before and after <code>fillChromPeaks()</code>. In which types of features (abundant vs.&nbsp;low-intensity) does gap filling recover the most values?</li>
+</ol>
+<hr>
+</section>
+<section id="further-reading" class="level2" data-number="7.13">
+<h2 data-number="7.13" class="anchored" data-anchor-id="further-reading"><span class="header-section-number">7.13</span> Further Reading</h2>
+<ul>
+<li>Smith CA, Want EJ, O’Maille G, Abagyan R, Siuzdak G. XCMS: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification. <em>Analytical Chemistry</em>. 2006;78(3):779–787.</li>
+<li>Benton HP, Want EJ, Ebbels TMD. Correction of mass calibration gaps in liquid chromatography–mass spectrometry metabolomics data. <em>Bioinformatics</em>. 2010;26(19):2488–2489.</li>
+<li>Rainer J, Vicini A, Salzer L, et al.&nbsp;A modular and expandable ecosystem for metabolomics data annotation in R. <em>Metabolites</em>. 2022;12(2):173.</li>
+<li>xcms package documentation: <a href="https://bioconductor.org/packages/xcms" class="uri">https://bioconductor.org/packages/xcms</a></li>
+</ul>
+</section>
+<section id="session-information" class="level2" data-number="7.14">
+<h2 data-number="7.14" class="anchored" data-anchor-id="session-information"><span class="header-section-number">7.14</span> Session Information</h2>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./07-initial-qc.html" class="pagination-link" aria-label="Perform Initial Quality Control">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./09-annotate-metabolites.html" class="pagination-link" aria-label="Annotate Metabolites from Feature Tables">
+        <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/08-detect-features.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

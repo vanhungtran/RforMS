@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Single-Cell Proteomics Analysis with scp – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./appendix-f-ms-imaging.html" rel="next">
+<link href="./appendix-d-statistics.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./appendix-a-packages.html">Appendices</a></li><li class="breadcrumb-item"><a href="./appendix-e-single-cell-proteomics.html">Single-Cell Proteomics Analysis with <code>scp</code></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives">Learning Objectives</a></li>
+  <li><a href="#what-changes-from-bulk-proteomics" id="toc-what-changes-from-bulk-proteomics" class="nav-link" data-scroll-target="#what-changes-from-bulk-proteomics">What Changes from Bulk Proteomics</a>
+  <ul class="collapse">
+  <li><a href="#low-input-and-identification-sparsity" id="toc-low-input-and-identification-sparsity" class="nav-link" data-scroll-target="#low-input-and-identification-sparsity">Low Input and Identification Sparsity</a></li>
+  <li><a href="#batch-and-acquisition-structure" id="toc-batch-and-acquisition-structure" class="nav-link" data-scroll-target="#batch-and-acquisition-structure">Batch and Acquisition Structure</a></li>
+  <li><a href="#carrier-and-reference-channels" id="toc-carrier-and-reference-channels" class="nav-link" data-scroll-target="#carrier-and-reference-channels">Carrier and Reference Channels</a></li>
+  </ul></li>
+  <li><a href="#the-scp-data-model" id="toc-the-scp-data-model" class="nav-link" data-scroll-target="#the-scp-data-model">The <code>scp</code> Data Model</a></li>
+  <li><a href="#import-and-inspection" id="toc-import-and-inspection" class="nav-link" data-scroll-target="#import-and-inspection">Import and Inspection</a></li>
+  <li><a href="#cell-annotation-audit-and-quality-control" id="toc-cell-annotation-audit-and-quality-control" class="nav-link" data-scroll-target="#cell-annotation-audit-and-quality-control">Cell Annotation Audit and Quality Control</a></li>
+  <li><a href="#filtering-and-aggregation-from-psms-to-proteins" id="toc-filtering-and-aggregation-from-psms-to-proteins" class="nav-link" data-scroll-target="#filtering-and-aggregation-from-psms-to-proteins">Filtering and Aggregation from PSMs to Proteins</a>
+  <ul class="collapse">
+  <li><a href="#psm-level-filtering" id="toc-psm-level-filtering" class="nav-link" data-scroll-target="#psm-level-filtering">PSM-Level Filtering</a></li>
+  <li><a href="#aggregation-psm-to-peptide-peptide-to-protein" id="toc-aggregation-psm-to-peptide-peptide-to-protein" class="nav-link" data-scroll-target="#aggregation-psm-to-peptide-peptide-to-protein">Aggregation: PSM to Peptide, Peptide to Protein</a></li>
+  </ul></li>
+  <li><a href="#normalization-and-batch-assessment" id="toc-normalization-and-batch-assessment" class="nav-link" data-scroll-target="#normalization-and-batch-assessment">Normalization and Batch Assessment</a>
+  <ul class="collapse">
+  <li><a href="#normalization-strategy" id="toc-normalization-strategy" class="nav-link" data-scroll-target="#normalization-strategy">Normalization Strategy</a></li>
+  <li><a href="#batch-assessment" id="toc-batch-assessment" class="nav-link" data-scroll-target="#batch-assessment">Batch Assessment</a></li>
+  </ul></li>
+  <li><a href="#dimensional-reduction-and-visualization" id="toc-dimensional-reduction-and-visualization" class="nav-link" data-scroll-target="#dimensional-reduction-and-visualization">Dimensional Reduction and Visualization</a></li>
+  <li><a href="#statistical-modeling" id="toc-statistical-modeling" class="nav-link" data-scroll-target="#statistical-modeling">Statistical Modeling</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises">Exercises</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information">Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/appendix-e-single-cell-proteomics.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./appendix-a-packages.html">Appendices</a></li><li class="breadcrumb-item"><a href="./appendix-e-single-cell-proteomics.html">Single-Cell Proteomics Analysis with <code>scp</code></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-appendix-scp" class="quarto-section-identifier">Single-Cell Proteomics Analysis with <code>scp</code></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="learning-objectives" class="level2">
+<h2 class="anchored" data-anchor-id="learning-objectives">Learning Objectives</h2>
+<p>By the end of this appendix you will be able to:</p>
+<ul>
+<li>Identify the key analytical challenges that distinguish single-cell proteomics (SCP) from bulk proteomics</li>
+<li>Describe how the <code>scp</code> package extends <code>QFeatures</code> with <code>SingleCellExperiment</code> assays</li>
+<li>Load and inspect an SCP dataset from <code>scpdata</code></li>
+<li>Perform cell-level quality control and annotation audit</li>
+<li>Filter PSMs and aggregate to peptide- and protein-level quantification</li>
+<li>Normalize and assess batch structure in SCP data</li>
+<li>Conduct or cross-reference statistical methods for differential abundance in SCP</li>
+</ul>
+</section>
+<section id="what-changes-from-bulk-proteomics" class="level2">
+<h2 class="anchored" data-anchor-id="what-changes-from-bulk-proteomics">What Changes from Bulk Proteomics</h2>
+<section id="low-input-and-identification-sparsity" class="level3">
+<h3 class="anchored" data-anchor-id="low-input-and-identification-sparsity">Low Input and Identification Sparsity</h3>
+<p>Single-cell proteomics starts with picogram amounts of protein per cell — orders of magnitude less than a typical bulk proteomics experiment. The immediate consequence is <strong>identification sparsity</strong>: a bulk TMT experiment may quantify 6000–8000 proteins per sample, while a single cell typically yields 1000–3000 identified proteins. Many peptides that are present are not detected in every cell, producing a high proportion of missing values that follows a structure-dependent pattern rather than a purely random one.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="Sparsity is not a bug">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Sparsity is not a bug
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Do not treat SCP missingness as a universal property. The fraction of missing values depends on the acquisition method (TMT, label-free, diaPASEF), the instrument, the carrier-channel strategy, and the depth of the fractionation. Always report the detection rate and missingness pattern for your specific dataset.</p>
+</div>
+</div>
+</section>
+<section id="batch-and-acquisition-structure" class="level3">
+<h3 class="anchored" data-anchor-id="batch-and-acquisition-structure">Batch and Acquisition Structure</h3>
+<p>Most SCP experiments use multiplexed acquisition (TMT, TMTpro, or similar isobaric labels) to measure multiple single cells simultaneously. A typical design places each cell in one TMT channel, includes a <strong>carrier channel</strong> (100–200 cell-equivalents of peptide) to boost identification, and often a <strong>reference channel</strong> (a pool of all samples) for normalization across batches. Several TMT runs are combined into an experiment, so the data has a nested structure:</p>
+<ul>
+<li><strong>Cells</strong> are the biological unit (individual cells loaded into channels)</li>
+<li><strong>Channels</strong> are the TMT reporter-ion slots within a single run</li>
+<li><strong>Acquisition runs</strong> (also called batches) group a set of channels measured together</li>
+<li><strong>Biological replicates</strong> are independent cell populations; a single experiment may have only technical replication at the cell level</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled" title="Distinguishing levels of replication">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Distinguishing levels of replication
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A 16-plex TMTpro run with 14 single cells, one carrier, and one reference channel provides 14 technical replicates of the cell type, not 14 biological replicates. True biological replication requires cells from independent cultures, organisms, or tissue samples. State your replication structure explicitly in any SCP analysis.</p>
+</div>
+</div>
+</section>
+<section id="carrier-and-reference-channels" class="level3">
+<h3 class="anchored" data-anchor-id="carrier-and-reference-channels">Carrier and Reference Channels</h3>
+<p>The <strong>carrier (or booster) channel</strong> is a distinctive feature of TMT-based SCP. It contains a relatively large amount of peptide (often 50–200 cell-equivalents) from the same cell type. During MS acquisition, the carrier boosts the precursor intensity, improving the chance that low-abundance single-cell peptides are selected for fragmentation and identification. The carrier’s reporter ion signal is usually an order of magnitude higher than the single-cell channels and is excluded from downstream quantification.</p>
+<p>The <strong>reference channel</strong> (a pooled sample from all conditions) provides a common anchor across batches. After median normalization, each single-cell channel within a run is scaled so that the reference channel has the same median intensity across runs, enabling between-run comparison.</p>
+</section>
+</section>
+<section id="the-scp-data-model" class="level2">
+<h2 class="anchored" data-anchor-id="the-scp-data-model">The <code>scp</code> Data Model</h2>
+<p>The <code>scp</code> package builds on the <code>QFeatures</code> container (Chapter 5) to represent the multi-level structure of SCP data. Each <strong>acquisition run</strong> (a single TMT experiment) is stored as one <code>assay</code> in the <code>QFeatures</code> object:</p>
+<ul>
+<li>Each assay is a <code>SingleCellExperiment</code> (SCE) object, which extends <code>SummarizedExperiment</code> with methods designed for single-cell data</li>
+<li><strong>Columns</strong> of the SCE correspond to <strong>channels</strong> (individual cell samples, plus carrier and reference channels)</li>
+<li><strong>Rows</strong> correspond to <strong>identified PSMs</strong> (in the raw assays) or to peptides/proteins (in aggregated assays)</li>
+<li><strong><code>colData</code></strong> stores channel-level metadata: the cell annotation, the acquisition run, the TMT channel index, and quality metrics</li>
+<li><strong><code>rowData</code></strong> stores feature-level identification information: peptide sequence, protein accession, search score, posterior error probability (PEP), and any decoy/contaminant flags</li>
+</ul>
+<p>Multiple acquisition runs are kept as separate assays until they are joined (via <code>joinAssays()</code>) for a combined analysis. The aggregation functions <code>aggregateFeatures()</code> from <code>QFeatures</code> collapse PSMs first to peptides and then to proteins, each step producing a new <code>SingleCellExperiment</code> assay within the same <code>QFeatures</code> container.</p>
+<pre><code>QFeatures object
+├── Assay 1: single_cell_psms (SCE)   ← PSM-level, one per run
+├── Assay 2: single_cell_psms_2 (SCE) ← PSM-level, run 2
+├── ...
+├── joined_psms (SCE)                  ← all runs joined
+├── peptides (SCE)                     ← aggregated PSMs → peptides
+└── proteins (SCE)                     ← aggregated peptides → proteins</code></pre>
+<p>This hierarchical structure lets each step of the workflow — filtering, normalization, aggregation, and modeling — operate at the appropriate level while preserving the provenance of each quantitative value.</p>
+</section>
+<section id="import-and-inspection" class="level2">
+<h2 class="anchored" data-anchor-id="import-and-inspection">Import and Inspection</h2>
+<p>We use the <code>leduc2022</code> dataset from <code>scpdata</code> for this appendix. This is a TMTpro-16 experiment profiling the proteome of naive, primed, and naive-reset pluripotent stem cell states <span class="citation" data-cites="leduc2022pluripotent">(<a href="references.html#ref-leduc2022pluripotent" role="doc-biblioref">Leduc et al. 2022</a>)</span>. It was chosen because it represents a single 16-plex run, making it compact enough for routine book rendering while illustrating the core SCP workflow. The full dataset includes a carrier channel and a reference channel alongside single-cell channels from three pluripotency conditions.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Dataset rationale">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Dataset rationale
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code>leduc2022</code> is a single-run TMTpro-16 experiment, so it avoids the complexity of multi-run joining while preserving all essential SCP features: carrier channel, reference channel, and cell-level annotation with condition labels. If your computer has limited memory, further subset the PSM table by removing the carrier channel rows before aggregation; the code below demonstrates this.</p>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(scp)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: QFeatures</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: MultiAssayExperiment</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: SummarizedExperiment</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: MatrixGenerics</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: matrixStats</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'MatrixGenerics'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:matrixStats':
+
+    colAlls, colAnyNAs, colAnys, colAvgsPerRowSet, colCollapse,
+    colCounts, colCummaxs, colCummins, colCumprods, colCumsums,
+    colDiffs, colIQRDiffs, colIQRs, colLogSumExps, colMadDiffs,
+    colMads, colMaxs, colMeans2, colMedians, colMins, colOrderStats,
+    colProds, colQuantiles, colRanges, colRanks, colSdDiffs, colSds,
+    colSums2, colTabulates, colVarDiffs, colVars, colWeightedMads,
+    colWeightedMeans, colWeightedMedians, colWeightedSds,
+    colWeightedVars, rowAlls, rowAnyNAs, rowAnys, rowAvgsPerColSet,
+    rowCollapse, rowCounts, rowCummaxs, rowCummins, rowCumprods,
+    rowCumsums, rowDiffs, rowIQRDiffs, rowIQRs, rowLogSumExps,
+    rowMadDiffs, rowMads, rowMaxs, rowMeans2, rowMedians, rowMins,
+    rowOrderStats, rowProds, rowQuantiles, rowRanges, rowRanks,
+    rowSdDiffs, rowSds, rowSums2, rowTabulates, rowVarDiffs, rowVars,
+    rowWeightedMads, rowWeightedMeans, rowWeightedMedians,
+    rowWeightedSds, rowWeightedVars</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: GenomicRanges</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: stats4</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: BiocGenerics</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: generics</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'generics'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    as.difftime, as.factor, as.ordered, intersect, is.element, setdiff,
+    setequal, union</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'BiocGenerics'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:stats':
+
+    IQR, mad, sd, var, xtabs</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    anyDuplicated, aperm, append, as.data.frame, basename, cbind,
+    colnames, dirname, do.call, duplicated, eval, evalq, Filter, Find,
+    get, grep, grepl, is.unsorted, lapply, Map, mapply, match, mget,
+    order, paste, pmax, pmax.int, pmin, pmin.int, Position, rank,
+    rbind, Reduce, rownames, sapply, saveRDS, table, tapply, unique,
+    unsplit, which.max, which.min</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: S4Vectors</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'S4Vectors'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:utils':
+
+    findMatches</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    expand.grid, I, unname</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: IRanges</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'IRanges'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:grDevices':
+
+    windows</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: GenomeInfoDb</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: Biobase</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with
+    'browseVignettes()'. To cite Bioconductor, see
+    'citation("Biobase")', and for packages 'citation("pkgname")'.</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'Biobase'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:MatrixGenerics':
+
+    rowMedians</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:matrixStats':
+
+    anyMissing, rowMedians</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'QFeatures'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:base':
+
+    sweep</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(scpdata)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: ExperimentHub</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: AnnotationHub</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: BiocFileCache</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: dbplyr</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'AnnotationHub'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:Biobase':
+
+    cache</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+This is scpdata version 1.16.1.
+Use 'scpdata()' to list available data sets.</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(scater)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: SingleCellExperiment</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: scuttle</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: ggplot2</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'dplyr'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:dbplyr':
+
+    ident, sql</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:Biobase':
+
+    combine</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:GenomicRanges':
+
+    intersect, setdiff, union</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:GenomeInfoDb':
+
+    intersect</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:IRanges':
+
+    collapse, desc, intersect, setdiff, slice, union</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:S4Vectors':
+
+    first, intersect, rename, setdiff, setequal, union</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:BiocGenerics':
+
+    combine, intersect, setdiff, setequal, union</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:generics':
+
+    explain</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:matrixStats':
+
+    count</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:stats':
+
+    filter, lag</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'tidyr'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:S4Vectors':
+
+    expand</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span></code></pre></div>
+</details>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the leduc2022 dataset</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>leduc <span class="ot">&lt;-</span> <span class="fu">leduc2022</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>see ?scpdata and browseVignettes('scpdata') for documentation</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>loading from cache</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>leduc</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>An instance of class QFeatures containing 138 set(s):
+ [1] eAL00219: SingleCellExperiment with 6269 rows and 18 columns 
+ [2] eAL00220: SingleCellExperiment with 6603 rows and 18 columns 
+ [3] eAL00221: SingleCellExperiment with 6511 rows and 18 columns 
+ ...
+ [136] peptides_log: SingleCellExperiment with 12284 rows and 1543 columns 
+ [137] proteins_norm2: SingleCellExperiment with 2844 rows and 1543 columns 
+ [138] proteins_processed: SingleCellExperiment with 2844 rows and 1543 columns </code></pre>
+</div>
+</div>
+<p>Inspect the available assays and their dimensions:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(leduc)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>  [1] "eAL00219"           "eAL00220"           "eAL00221"          
+  [4] "eAL00222"           "eAL00223"           "eAL00224"          
+  [7] "eAL00225"           "eAL00226"           "eAL00227"          
+ [10] "eAL00228"           "eAL00229"           "eAL00230"          
+ [13] "eAL00231"           "eAL00232"           "eAL00233"          
+ [16] "eAL00234"           "eAL00235"           "eAL00236"          
+ [19] "eAL00237"           "eAL00238"           "eAL00239"          
+ [22] "eAL00240"           "eAL00241"           "eAL00242"          
+ [25] "eAL00243"           "eAL00244"           "eAL00245"          
+ [28] "eAL00246"           "eAL00247"           "eAL00248"          
+ [31] "eAL00249"           "eAL00250"           "eAL00251"          
+ [34] "eAL00252"           "eAL00253"           "eAL00254"          
+ [37] "eAL00255"           "eAL00256"           "eAL00257"          
+ [40] "eAL00258"           "eAL00259"           "eAL00260"          
+ [43] "eAL00261"           "eAL00262"           "eAL00263"          
+ [46] "eAL00264"           "eAL00265"           "eAL00266"          
+ [49] "wAL00200"           "wAL00201"           "wAL00202"          
+ [52] "wAL00203"           "wAL00204"           "wAL00205"          
+ [55] "wAL00206"           "wAL00207"           "wAL00208"          
+ [58] "wAL00209"           "wAL00210"           "wAL00211"          
+ [61] "wAL00212"           "wAL00213"           "wAL00214"          
+ [64] "wAL00215"           "wAL00216"           "wAL00217"          
+ [67] "wAL00218"           "wAL00219"           "wAL00220"          
+ [70] "wAL00221"           "wAL00222"           "wAL00223"          
+ [73] "wAL00224"           "wAL00225"           "wAL00226"          
+ [76] "wAL00227"           "wAL00228"           "wAL00229"          
+ [79] "wAL00230"           "wAL00231"           "wAL00232"          
+ [82] "wAL00233"           "wAL00234"           "wAL00235"          
+ [85] "wAL00236"           "wAL00237"           "wAL00238"          
+ [88] "wAL00239"           "wAL00240"           "wAL00241"          
+ [91] "wAL00242"           "wAL00243"           "wAL00244"          
+ [94] "wAL00245"           "wAL00246"           "wAL00247"          
+ [97] "wAL00248"           "wAL00249"           "wAL00250"          
+[100] "wAL00251"           "wAL00252"           "wAL00254"          
+[103] "wAL00255"           "wAL00256"           "wAL00257"          
+[106] "wAL00258"           "wAL00259"           "wAL00260"          
+[109] "wAL00261"           "wAL00262"           "wAL00263"          
+[112] "wAL00264"           "wAL00265"           "wAL00266"          
+[115] "wAL00267"           "wAL00268"           "wAL00269"          
+[118] "wAL00270"           "wAL00271"           "wAL00272"          
+[121] "wAL00273"           "wAL00274"           "wAL00275"          
+[124] "wAL00276"           "wAL00277"           "wAL00278"          
+[127] "wAL00279"           "wAL00280"           "wAL00281"          
+[130] "wAL00282"           "wAL00283"           "wAL00284"          
+[133] "wAL00285"           "wAL00286"           "peptides"          
+[136] "peptides_log"       "proteins_norm2"     "proteins_processed"</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb70"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="fu">dims</span>(leduc)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>     eAL00219 eAL00220 eAL00221 eAL00222 eAL00223 eAL00224 eAL00225 eAL00226
+[1,]     6269     6603     6511     6591     6525     6542     6474     6548
+[2,]       18       18       18       18       18       18       18       18
+     eAL00227 eAL00228 eAL00229 eAL00230 eAL00231 eAL00232 eAL00233 eAL00234
+[1,]     6506     6641     6502     6576     6400     6531     6333     6558
+[2,]       18       18       18       18       18       18       18       18
+     eAL00235 eAL00236 eAL00237 eAL00238 eAL00239 eAL00240 eAL00241 eAL00242
+[1,]     6423     6293     6379     6372     6436     6487     6273     6320
+[2,]       18       18       18       18       18       18       18       18
+     eAL00243 eAL00244 eAL00245 eAL00246 eAL00247 eAL00248 eAL00249 eAL00250
+[1,]     6420     6392     6362     6427     6365     6361     6331     6435
+[2,]       18       18       18       18       18       18       18       18
+     eAL00251 eAL00252 eAL00253 eAL00254 eAL00255 eAL00256 eAL00257 eAL00258
+[1,]     6271     6327     6320     6330     6272     6311     6249     6273
+[2,]       18       18       18       18       18       18       18       18
+     eAL00259 eAL00260 eAL00261 eAL00262 eAL00263 eAL00264 eAL00265 eAL00266
+[1,]     6192     6240     6331     6252     4540     5020     4655     5968
+[2,]       18       18       18       18       18       18       18       18
+     wAL00200 wAL00201 wAL00202 wAL00203 wAL00204 wAL00205 wAL00206 wAL00207
+[1,]     5151     6539     6561     6529     6479     4987     5208     5699
+[2,]       18       18       18       18       18       18       18       18
+     wAL00208 wAL00209 wAL00210 wAL00211 wAL00212 wAL00213 wAL00214 wAL00215
+[1,]     6180     6491     6085     6284     6176     6298     5426     5810
+[2,]       18       18       18       18       18       18       18       18
+     wAL00216 wAL00217 wAL00218 wAL00219 wAL00220 wAL00221 wAL00222 wAL00223
+[1,]     6111     5022     5293     6333     6345     6445     6402     5375
+[2,]       18       18       18       18       18       18       18       18
+     wAL00224 wAL00225 wAL00226 wAL00227 wAL00228 wAL00229 wAL00230 wAL00231
+[1,]     6340     6014     6295     5807     6417     6363     3028     5609
+[2,]       18       18       18       18       18       18       18       18
+     wAL00232 wAL00233 wAL00234 wAL00235 wAL00236 wAL00237 wAL00238 wAL00239
+[1,]     6434     4986     5679     5141     6476     6349     6388     6296
+[2,]       18       18       18       18       18       18       18       18
+     wAL00240 wAL00241 wAL00242 wAL00243 wAL00244 wAL00245 wAL00246 wAL00247
+[1,]     6348     6119     6338     6355     6218     6207     6216     6347
+[2,]       18       18       18       18       18       18       18       18
+     wAL00248 wAL00249 wAL00250 wAL00251 wAL00252 wAL00254 wAL00255 wAL00256
+[1,]     6316     6340     6338     6294     6306     6313     6278     6333
+[2,]       18       18       18       18       18       18       18       18
+     wAL00257 wAL00258 wAL00259 wAL00260 wAL00261 wAL00262 wAL00263 wAL00264
+[1,]     6310     5220     6340     4636     6350     5296     6303     5403
+[2,]       18       18       18       18       18       18       18       18
+     wAL00265 wAL00266 wAL00267 wAL00268 wAL00269 wAL00270 wAL00271 wAL00272
+[1,]     6276     6085     6399     6278     6254     6218     6183     6273
+[2,]       18       18       18       18       18       18       18       18
+     wAL00273 wAL00274 wAL00275 wAL00276 wAL00277 wAL00278 wAL00279 wAL00280
+[1,]     6346     6293     6243     6328     6167     6259     6295     6182
+[2,]       18       18       18       18       18       18       18       18
+     wAL00281 wAL00282 wAL00283 wAL00284 wAL00285 wAL00286 peptides
+[1,]     6306     6179     6213     6264     6281     6389    20804
+[2,]       18       18       18       18       18       18     1556
+     peptides_log proteins_norm2 proteins_processed
+[1,]        12284           2844               2844
+[2,]         1543           1543               1543</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb72"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Inspect column metadata</span></span>
+<span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colData</span>(leduc) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>DataFrame with 6 rows and 18 columns
+                    Set  WellPooled  Channel SampleAnnotation  SampleType
+            &lt;character&gt; &lt;character&gt; &lt;factor&gt;      &lt;character&gt; &lt;character&gt;
+eAL00219RI1    eAL00219          N1  TMT126           carrier     Carrier
+eAL00219RI2    eAL00219          N1  TMT127N        reference   Reference
+eAL00219RI3    eAL00219          N1  TMT127C           unused      Unused
+eAL00219RI4    eAL00219          N1  TMT128N           unused      Unused
+eAL00219RI5    eAL00219          N1  TMT128C                u    Monocyte
+eAL00219RI6    eAL00219          N1  TMT129N                u    Monocyte
+                lcbatch     sortday      digest MelanomaSubCluster
+            &lt;character&gt; &lt;character&gt; &lt;character&gt;        &lt;character&gt;
+eAL00219RI1           C           B          88                 NA
+eAL00219RI2           C           B          88                 NA
+eAL00219RI3           C           B          88                 NA
+eAL00219RI4           C           B          88                 NA
+eAL00219RI5           C           B          88                 NA
+eAL00219RI6           C           B          88                 NA
+            IsolationTimeStamp  Diameter Elongation GlassSlide     Field
+                     &lt;POSIXlt&gt; &lt;numeric&gt;  &lt;numeric&gt;  &lt;numeric&gt; &lt;numeric&gt;
+eAL00219RI1                 NA        NA         NA         NA        NA
+eAL00219RI2                 NA        NA         NA         NA        NA
+eAL00219RI3                 NA        NA         NA         NA        NA
+eAL00219RI4                 NA        NA         NA         NA        NA
+eAL00219RI5      2021-09-28...     17.60       1.58          2         2
+eAL00219RI6      2021-09-28...     22.78       1.53          2         2
+             XPosDrop  YPosDrop XPosPickup YPosPickup
+            &lt;numeric&gt; &lt;numeric&gt;  &lt;numeric&gt;  &lt;numeric&gt;
+eAL00219RI1        NA        NA         NA         NA
+eAL00219RI2        NA        NA         NA         NA
+eAL00219RI3        NA        NA         NA         NA
+eAL00219RI4        NA        NA         NA         NA
+eAL00219RI5        21        56         15         58
+eAL00219RI6         9        60         15         58</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb74"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Inspect row metadata of the PSM-level assay</span></span>
+<span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a><span class="fu">rowData</span>(leduc[[<span class="dv">1</span>]]) <span class="sc">|&gt;</span></span>
+<span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb74-4"><a href="#cb74-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(Sequence, Proteins, Reverse, Potential.contaminant, PEP, Score) <span class="sc">|&gt;</span></span>
+<span id="cb74-5"><a href="#cb74-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">head</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>              Sequence             Proteins Reverse Potential.contaminant
+PSM1       AAAAAAALQAK  sp|P36578|RL4_HUMAN                              
+PSM67  AAAEDVNVTFEDQQK sp|Q9NQP4|PFD4_HUMAN                              
+PSM68  AAAEDVNVTFEDQQK sp|Q9NQP4|PFD4_HUMAN                              
+PSM110  AAAEVNQDYGLDPK sp|P07954|FUMH_HUMAN                              
+PSM236   AAALQGVMGQSAR                            +                      
+PSM240   AAAPGVEDEPLLR sp|P31350|RIR2_HUMAN                              
+              PEP   Score
+PSM1   1.5936e-05 96.3310
+PSM67  9.9245e-02  5.9041
+PSM68  6.3073e-11 76.5880
+PSM110 9.8826e-08 59.2270
+PSM236 9.5802e-02 12.1650
+PSM240 1.2308e-03 38.3030</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb76"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Table of cell types / conditions represented</span></span>
+<span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colData</span>(leduc)<span class="sc">$</span>SampleType <span class="sc">|&gt;</span> <span class="fu">table</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  Carrier  Melanoma  Monocyte  Negative Reference    Unused 
+      134       878       877       120       134       269 </code></pre>
+</div>
+</div>
+<p>The output confirms the presence of single-cell channels, a carrier channel, and a reference channel. The <code>colData</code> contains the annotation we need for downstream analysis: the cell condition (SampleType), the TMT channel, and the acquisition run.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Subsetting for memory-constrained rendering">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Subsetting for memory-constrained rendering
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>If the full PSM table causes memory issues during book rendering, subset the dataset to exclude the carrier channel and keep only the single-cell channels before aggregation:</p>
+<div class="sourceCode" id="cb78"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb78-1"><a href="#cb78-1" aria-hidden="true" tabindex="-1"></a>leduc <span class="ot">&lt;-</span> <span class="fu">subsetByColData</span>(leduc,</span>
+<span id="cb78-2"><a href="#cb78-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">colData</span>(leduc)<span class="sc">$</span>SampleType <span class="sc">!=</span> <span class="st">"Carrier"</span>)</span></code></pre></div>
+<p>This removes the high-intensity carrier channel that contributes many PSM identifications but is not part of the quantitative comparison.</p>
+</div>
+</div>
+</section>
+<section id="cell-annotation-audit-and-quality-control" class="level2">
+<h2 class="anchored" data-anchor-id="cell-annotation-audit-and-quality-control">Cell Annotation Audit and Quality Control</h2>
+<p>We compute per-channel quality metrics directly from the PSM-level assay:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb79"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of PSMs identified per channel (non-NA quantifications)</span></span>
+<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a>n_psms <span class="ot">&lt;-</span> <span class="fu">colSums</span>(<span class="sc">!</span><span class="fu">is.na</span>(<span class="fu">assay</span>(leduc[[<span class="dv">1</span>]])))</span>
+<span id="cb79-3"><a href="#cb79-3" aria-hidden="true" tabindex="-1"></a>nFeatures <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb79-4"><a href="#cb79-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">leduc2022_psms =</span> n_psms,</span>
+<span id="cb79-5"><a href="#cb79-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">row.names =</span> <span class="fu">names</span>(n_psms)</span>
+<span id="cb79-6"><a href="#cb79-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb79-7"><a href="#cb79-7" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(nFeatures)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "leduc2022_psms"</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb81"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(nFeatures)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>            leduc2022_psms
+eAL00219RI1           6269
+eAL00219RI2           6269
+eAL00219RI3           6269
+eAL00219RI4           6269
+eAL00219RI5           6269
+eAL00219RI6           6269</code></pre>
+</div>
+</div>
+<p>These metrics help flag problematic channels: channels with very few identifications, abnormally low total intensity, or unusual missingness patterns.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb83"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Visualise per-channel identification counts</span></span>
+<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a>nPSM_data <span class="ot">&lt;-</span> nFeatures <span class="sc">|&gt;</span></span>
+<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a>    tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">"channel"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">left_join</span>(</span>
+<span id="cb83-5"><a href="#cb83-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">colData</span>(leduc) <span class="sc">|&gt;</span></span>
+<span id="cb83-6"><a href="#cb83-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb83-7"><a href="#cb83-7" aria-hidden="true" tabindex="-1"></a>            tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">"channel"</span>),</span>
+<span id="cb83-8"><a href="#cb83-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">by =</span> <span class="st">"channel"</span></span>
+<span id="cb83-9"><a href="#cb83-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb83-10"><a href="#cb83-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb83-11"><a href="#cb83-11" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(nPSM_data, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(channel, leduc2022_psms), <span class="at">y =</span> leduc2022_psms, <span class="at">fill =</span> SampleType)) <span class="sc">+</span></span>
+<span id="cb83-12"><a href="#cb83-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_col</span>() <span class="sc">+</span></span>
+<span id="cb83-13"><a href="#cb83-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb83-14"><a href="#cb83-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Channel"</span>, <span class="at">y =</span> <span class="st">"Number of PSMs"</span>, <span class="at">fill =</span> <span class="st">"Sample type"</span>) <span class="sc">+</span></span>
+<span id="cb83-15"><a href="#cb83-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span>
+<span id="cb83-16"><a href="#cb83-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb83-17"><a href="#cb83-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Total intensity per channel</span></span>
+<span id="cb83-18"><a href="#cb83-18" aria-hidden="true" tabindex="-1"></a><span class="fu">qplot</span>(<span class="fu">colSums</span>(<span class="fu">assay</span>(leduc[[<span class="dv">1</span>]]), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">+</span></span>
+<span id="cb83-19"><a href="#cb83-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Total reporter-ion intensity (log10)"</span>, <span class="at">y =</span> <span class="st">"Channels"</span>) <span class="sc">+</span></span>
+<span id="cb83-20"><a href="#cb83-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_x_log10</span>() <span class="sc">+</span></span>
+<span id="cb83-21"><a href="#cb83-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>QC metrics per channel: number of identified PSMs and total intensity.</figcaption>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb84"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>p1</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-10-2.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>QC metrics per channel: number of identified PSMs and total intensity.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Carrier channels should show substantially higher intensity and more identifications. If a single-cell channel approaches carrier-level intensity, it may indicate a doublet (two cells in one channel). Conversely, channels with very low counts may represent empty channels or failed labeling.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb85"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Proportion of missing values per column</span></span>
+<span id="cb85-2"><a href="#cb85-2" aria-hidden="true" tabindex="-1"></a>pct_missing <span class="ot">&lt;-</span> <span class="fu">apply</span>(<span class="fu">assay</span>(leduc[[<span class="dv">1</span>]]), <span class="dv">2</span>, <span class="cf">function</span>(x) <span class="fu">mean</span>(<span class="fu">is.na</span>(x))) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb85-3"><a href="#cb85-3" aria-hidden="true" tabindex="-1"></a><span class="fu">qplot</span>(pct_missing, <span class="at">bins =</span> <span class="dv">15</span>) <span class="sc">+</span></span>
+<span id="cb85-4"><a href="#cb85-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Missing PSMs (%)"</span>, <span class="at">y =</span> <span class="st">"Number of channels"</span>) <span class="sc">+</span></span>
+<span id="cb85-5"><a href="#cb85-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>Missing value proportion per channel.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled" title="Do not impute SCP data with bulk methods">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Do not impute SCP data with bulk methods
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Bulk-proteomics imputation methods (Chapter 18), especially those designed for MCAR/MAR mechanisms, assume a relatively low proportion of missing values distributed across features. SCP data routinely exceeds 40–60 % missing values, and the missingness is driven by the stochastic nature of precursor selection in data-dependent acquisition (DDA). Bulk-style imputation under these conditions can introduce severe bias. Filter features with excessive missingness instead, and consider specialized SCP imputation approaches only after careful evaluation.</p>
+</div>
+</div>
+</section>
+<section id="filtering-and-aggregation-from-psms-to-proteins" class="level2">
+<h2 class="anchored" data-anchor-id="filtering-and-aggregation-from-psms-to-proteins">Filtering and Aggregation from PSMs to Proteins</h2>
+<section id="psm-level-filtering" class="level3">
+<h3 class="anchored" data-anchor-id="psm-level-filtering">PSM-Level Filtering</h3>
+<p>Before aggregation, remove common artefactual identifications:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb86"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb86-1"><a href="#cb86-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"PSMs before filtering:"</span>, <span class="fu">nrow</span>(leduc[[<span class="dv">1</span>]]), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>PSMs before filtering: 6269 </code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb88"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a>leduc <span class="ot">&lt;-</span> <span class="fu">filterFeatures</span>(leduc,</span>
+<span id="cb88-2"><a href="#cb88-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">i =</span> <span class="dv">1</span>,</span>
+<span id="cb88-3"><a href="#cb88-3" aria-hidden="true" tabindex="-1"></a>    <span class="sc">~</span> Reverse <span class="sc">!=</span> <span class="st">"+"</span> <span class="sc">&amp;</span></span>
+<span id="cb88-4"><a href="#cb88-4" aria-hidden="true" tabindex="-1"></a>        Potential.contaminant <span class="sc">!=</span> <span class="st">"+"</span> <span class="sc">&amp;</span></span>
+<span id="cb88-5"><a href="#cb88-5" aria-hidden="true" tabindex="-1"></a>        PEP <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
+<span id="cb88-6"><a href="#cb88-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb88-7"><a href="#cb88-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"PSMs after filtering:"</span>, <span class="fu">nrow</span>(leduc[[<span class="dv">1</span>]]), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>PSMs after filtering: 4597 </code></pre>
+</div>
+</div>
+<p>Optional: remove the carrier channel from the quantitative assays, keeping only single-cell and reference channels:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb90"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb90-1"><a href="#cb90-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Remove carrier channel (high-intensity booster not used in quant comparison)</span></span>
+<span id="cb90-2"><a href="#cb90-2" aria-hidden="true" tabindex="-1"></a>leduc <span class="ot">&lt;-</span> <span class="fu">subsetByColData</span>(leduc,</span>
+<span id="cb90-3"><a href="#cb90-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">colData</span>(leduc)<span class="sc">$</span>SampleType <span class="sc">!=</span> <span class="st">"Carrier"</span>)</span>
+<span id="cb90-4"><a href="#cb90-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb90-5"><a href="#cb90-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Channels after carrier removal:"</span>, <span class="fu">ncol</span>(leduc[[<span class="dv">1</span>]]), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Channels after carrier removal: 17 </code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb92"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb92-1"><a href="#cb92-1" aria-hidden="true" tabindex="-1"></a><span class="fu">colData</span>(leduc)<span class="sc">$</span>SampleType <span class="sc">|&gt;</span> <span class="fu">table</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+ Melanoma  Monocyte  Negative Reference    Unused 
+      878       877       120       134       269 </code></pre>
+</div>
+</div>
+</section>
+<section id="aggregation-psm-to-peptide-peptide-to-protein" class="level3">
+<h3 class="anchored" data-anchor-id="aggregation-psm-to-peptide-peptide-to-protein">Aggregation: PSM to Peptide, Peptide to Protein</h3>
+<p>Aggregation collapses multiple quantitative observations (PSMs mapping to the same peptide, or peptides mapping to the same protein) into a single value per cell. The <code>scp</code> package uses <code>aggregateFeatures()</code> from <code>QFeatures</code>, which creates a new assay at each aggregation level.</p>
+<p>The <code>leduc2022</code> dataset ships pre-aggregated, so we can inspect the peptide and protein assays directly rather than re-aggregating from the individual PSM files:</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb94"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb94-1"><a href="#cb94-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Peptide assay dimensions:"</span>, <span class="fu">dim</span>(leduc[[<span class="st">"peptides"</span>]]), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Peptide assay dimensions: 20804 1556 </code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb96"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb96-1"><a href="#cb96-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Protein assay dimensions:"</span>, <span class="fu">dim</span>(leduc[[<span class="st">"proteins_processed"</span>]]), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Protein assay dimensions: 2844 1543 </code></pre>
+</div>
+</div>
+<pre><code>
+The `QFeatures` container retains all preceding assays, so you can always trace a protein's quantification back to its constituent peptides and PSMs:
+
+```r
+# Trace the provenance of a specific protein
+which_protein &lt;- "P14625"  # example accession
+provenance &lt;- leduc |&gt;
+    subsetByFeature(which_protein)
+provenance</code></pre>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb99"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb99-1"><a href="#cb99-1" aria-hidden="true" tabindex="-1"></a>peptides_per_protein <span class="ot">&lt;-</span> <span class="fu">rowData</span>(leduc[[<span class="st">"peptides"</span>]]) <span class="sc">|&gt;</span></span>
+<span id="cb99-2"><a href="#cb99-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb99-3"><a href="#cb99-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">count</span>(Leading.razor.protein)</span>
+<span id="cb99-4"><a href="#cb99-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb99-5"><a href="#cb99-5" aria-hidden="true" tabindex="-1"></a><span class="fu">qplot</span>(peptides_per_protein<span class="sc">$</span>n, <span class="at">bins =</span> <span class="dv">20</span>) <span class="sc">+</span></span>
+<span id="cb99-6"><a href="#cb99-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Peptides per protein"</span>, <span class="at">y =</span> <span class="st">"Protein groups"</span>) <span class="sc">+</span></span>
+<span id="cb99-7"><a href="#cb99-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>Number of peptides per protein in the aggregated data.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="normalization-and-batch-assessment" class="level2">
+<h2 class="anchored" data-anchor-id="normalization-and-batch-assessment">Normalization and Batch Assessment</h2>
+<section id="normalization-strategy" class="level3">
+<h3 class="anchored" data-anchor-id="normalization-strategy">Normalization Strategy</h3>
+<p>SCP normalization must address technical variation between cells within a run and, when multiple runs are present, between runs. The <code>scp</code> package provides <code>normalizeScp()</code> for this purpose.</p>
+<p>The key assumptions underlying median-based normalization in SCP are:</p>
+<ol type="1">
+<li><strong>Most proteins do not change</strong> between the cells being compared — the median protein intensity is assumed stable.</li>
+<li><strong>Technical variation is multiplicative</strong> — a scaling factor per channel is sufficient to align the intensity distributions.</li>
+<li><strong>The reference channel (if present) is compositionally identical across runs</strong> — it serves as an anchor for cross-run scaling.</li>
+</ol>
+<p>When these assumptions are violated — for example, when comparing very different cell types — more conservative normalization (e.g., quantile) or the use of spike-in controls may be warranted.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb100"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb100-1"><a href="#cb100-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Median normalization of the protein assay</span></span>
+<span id="cb100-2"><a href="#cb100-2" aria-hidden="true" tabindex="-1"></a>prot_mat <span class="ot">&lt;-</span> <span class="fu">assay</span>(leduc[[<span class="st">"proteins_processed"</span>]])</span>
+<span id="cb100-3"><a href="#cb100-3" aria-hidden="true" tabindex="-1"></a>scale_factors <span class="ot">&lt;-</span> <span class="fu">apply</span>(prot_mat, <span class="dv">2</span>, median, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb100-4"><a href="#cb100-4" aria-hidden="true" tabindex="-1"></a>prot_norm <span class="ot">&lt;-</span> <span class="fu">sweep</span>(prot_mat, <span class="dv">2</span>, scale_factors, <span class="st">"/"</span>, <span class="at">check.margin =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb100-5"><a href="#cb100-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb100-6"><a href="#cb100-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Normalized protein matrix dimensions:"</span>, <span class="fu">dim</span>(prot_norm), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Normalized protein matrix dimensions: 2844 1543 </code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb102"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb102-1"><a href="#cb102-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract protein data before and after normalization</span></span>
+<span id="cb102-2"><a href="#cb102-2" aria-hidden="true" tabindex="-1"></a>before <span class="ot">&lt;-</span> <span class="fu">assay</span>(leduc[[<span class="st">"proteins_processed"</span>]])</span>
+<span id="cb102-3"><a href="#cb102-3" aria-hidden="true" tabindex="-1"></a>after <span class="ot">&lt;-</span> prot_norm</span>
+<span id="cb102-4"><a href="#cb102-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb102-5"><a href="#cb102-5" aria-hidden="true" tabindex="-1"></a>compare <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb102-6"><a href="#cb102-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">channel =</span> <span class="fu">colnames</span>(before),</span>
+<span id="cb102-7"><a href="#cb102-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_before =</span> <span class="fu">apply</span>(before, <span class="dv">2</span>, median, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb102-8"><a href="#cb102-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_after =</span> <span class="fu">apply</span>(after, <span class="dv">2</span>, median, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb102-9"><a href="#cb102-9" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb102-10"><a href="#cb102-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pivot_longer</span>(<span class="sc">-</span>channel, <span class="at">names_to =</span> <span class="st">"step"</span>, <span class="at">values_to =</span> <span class="st">"median_intensity"</span>)</span>
+<span id="cb102-11"><a href="#cb102-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb102-12"><a href="#cb102-12" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(compare, <span class="fu">aes</span>(<span class="at">x =</span> step, <span class="at">y =</span> <span class="fu">log10</span>(median_intensity), <span class="at">group =</span> channel)) <span class="sc">+</span></span>
+<span id="cb102-13"><a href="#cb102-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb102-14"><a href="#cb102-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">color =</span> step)) <span class="sc">+</span></span>
+<span id="cb102-15"><a href="#cb102-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">""</span>, <span class="at">y =</span> <span class="st">"log10(median intensity)"</span>) <span class="sc">+</span></span>
+<span id="cb102-16"><a href="#cb102-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>Per-channel median intensity before and after normalization.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="batch-assessment" class="level3">
+<h3 class="anchored" data-anchor-id="batch-assessment">Batch Assessment</h3>
+<p>In the <code>leduc2022</code> dataset, all cells come from a single TMTpro-16 run, so there is only one batch. The concepts below apply when your experiment includes multiple TMT runs.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb103"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb103-1"><a href="#cb103-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Log-transform normalized protein data</span></span>
+<span id="cb103-2"><a href="#cb103-2" aria-hidden="true" tabindex="-1"></a>prots_log <span class="ot">&lt;-</span> <span class="fu">log2</span>(prot_norm <span class="sc">+</span> <span class="dv">1</span>)</span>
+<span id="cb103-3"><a href="#cb103-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-4"><a href="#cb103-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace non-finite values with NA and keep proteins</span></span>
+<span id="cb103-5"><a href="#cb103-5" aria-hidden="true" tabindex="-1"></a><span class="co"># detected in at least 50 % of cells</span></span>
+<span id="cb103-6"><a href="#cb103-6" aria-hidden="true" tabindex="-1"></a>prots_log[<span class="sc">!</span><span class="fu">is.finite</span>(prots_log)] <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb103-7"><a href="#cb103-7" aria-hidden="true" tabindex="-1"></a>detect_rate <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="sc">!</span><span class="fu">is.na</span>(prots_log))</span>
+<span id="cb103-8"><a href="#cb103-8" aria-hidden="true" tabindex="-1"></a>prots_log <span class="ot">&lt;-</span> prots_log[detect_rate <span class="sc">&gt;=</span> <span class="fl">0.5</span>, ]</span>
+<span id="cb103-9"><a href="#cb103-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-10"><a href="#cb103-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Impute remaining NAs with row means for PCA (prcomp cannot handle NAs)</span></span>
+<span id="cb103-11"><a href="#cb103-11" aria-hidden="true" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="fu">is.na</span>(prots_log), <span class="at">arr.ind =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb103-12"><a href="#cb103-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">nrow</span>(k) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb103-13"><a href="#cb103-13" aria-hidden="true" tabindex="-1"></a>    row_means <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(prots_log, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb103-14"><a href="#cb103-14" aria-hidden="true" tabindex="-1"></a>    prots_log[k] <span class="ot">&lt;-</span> row_means[k[, <span class="dv">1</span>]]</span>
+<span id="cb103-15"><a href="#cb103-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb103-16"><a href="#cb103-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-17"><a href="#cb103-17" aria-hidden="true" tabindex="-1"></a><span class="co"># PCA</span></span>
+<span id="cb103-18"><a href="#cb103-18" aria-hidden="true" tabindex="-1"></a>pca <span class="ot">&lt;-</span> <span class="fu">prcomp</span>(<span class="fu">t</span>(prots_log), <span class="at">scale. =</span> <span class="cn">TRUE</span>, <span class="at">center =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb103-19"><a href="#cb103-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-20"><a href="#cb103-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare plot data using colData matching the assay columns</span></span>
+<span id="cb103-21"><a href="#cb103-21" aria-hidden="true" tabindex="-1"></a>pca_data <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(pca<span class="sc">$</span>x)</span>
+<span id="cb103-22"><a href="#cb103-22" aria-hidden="true" tabindex="-1"></a>pca_data<span class="sc">$</span>SampleType <span class="ot">&lt;-</span> <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])<span class="sc">$</span>SampleType</span>
+<span id="cb103-23"><a href="#cb103-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-24"><a href="#cb103-24" aria-hidden="true" tabindex="-1"></a>pca_var <span class="ot">&lt;-</span> <span class="fu">summary</span>(pca)<span class="sc">$</span>importance[<span class="dv">2</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>] <span class="sc">*</span> <span class="dv">100</span>  <span class="co"># variance explained</span></span>
+<span id="cb103-25"><a href="#cb103-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb103-26"><a href="#cb103-26" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(pca_data, <span class="fu">aes</span>(<span class="at">x =</span> PC1, <span class="at">y =</span> PC2, <span class="at">color =</span> SampleType)) <span class="sc">+</span></span>
+<span id="cb103-27"><a href="#cb103-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb103-28"><a href="#cb103-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">stat_ellipse</span>(<span class="at">level =</span> <span class="fl">0.7</span>, <span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb103-29"><a href="#cb103-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="fu">sprintf</span>(<span class="st">"PC1 (%.1f%%)"</span>, pca_var[<span class="dv">1</span>]),</span>
+<span id="cb103-30"><a href="#cb103-30" aria-hidden="true" tabindex="-1"></a>         <span class="at">y =</span> <span class="fu">sprintf</span>(<span class="st">"PC2 (%.1f%%)"</span>, pca_var[<span class="dv">2</span>])) <span class="sc">+</span></span>
+<span id="cb103-31"><a href="#cb103-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_brewer</span>(<span class="at">palette =</span> <span class="st">"Set1"</span>) <span class="sc">+</span></span>
+<span id="cb103-32"><a href="#cb103-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>PCA of protein-level data colored by cell condition.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>PCA separation by cell condition after normalization suggests that biological differences are recoverable despite technical variation. If PCA instead separated by acquisition run (in a multi-run experiment), that would signal a residual batch effect requiring additional correction. Approaches include using the reference channel for batch normalization or including batch as a covariate in the statistical model (see Chapter 18 for batch-effect concepts and Chapter 20 for mixed-effect modeling).</p>
+</section>
+</section>
+<section id="dimensional-reduction-and-visualization" class="level2">
+<h2 class="anchored" data-anchor-id="dimensional-reduction-and-visualization">Dimensional Reduction and Visualization</h2>
+<p>Beyond PCA, the <code>scater</code> package provides dedicated single-cell visualization methods. These help answer specific questions about data structure:</p>
+<ul>
+<li><strong>Do cells cluster by condition or by technical factors (run, channel position)?</strong></li>
+<li><strong>Are there outlier cells with unusual protein profiles?</strong></li>
+<li><strong>How much of the variance is explained by known biological and technical covariates?</strong></li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb104"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb104-1"><a href="#cb104-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a SingleCellExperiment for scater functions</span></span>
+<span id="cb104-2"><a href="#cb104-2" aria-hidden="true" tabindex="-1"></a>sce <span class="ot">&lt;-</span> <span class="fu">SingleCellExperiment</span>(</span>
+<span id="cb104-3"><a href="#cb104-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">assays =</span> <span class="fu">list</span>(<span class="at">logcounts =</span> prots_log),</span>
+<span id="cb104-4"><a href="#cb104-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">colData =</span> <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])</span>
+<span id="cb104-5"><a href="#cb104-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb104-6"><a href="#cb104-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb104-7"><a href="#cb104-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run UMAP (via scater which uses scater::runUMAP, itself wrapping uwot)</span></span>
+<span id="cb104-8"><a href="#cb104-8" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2024</span>)</span>
+<span id="cb104-9"><a href="#cb104-9" aria-hidden="true" tabindex="-1"></a>sce <span class="ot">&lt;-</span> <span class="fu">runUMAP</span>(sce)</span>
+<span id="cb104-10"><a href="#cb104-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb104-11"><a href="#cb104-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plotUMAP</span>(sce, <span class="at">colour_by =</span> <span class="st">"SampleType"</span>) <span class="sc">+</span></span>
+<span id="cb104-12"><a href="#cb104-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_brewer</span>(<span class="at">palette =</span> <span class="st">"Set1"</span>) <span class="sc">+</span></span>
+<span id="cb104-13"><a href="#cb104-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"UMAP by cell condition"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>UMAP embedding of single-cell proteome profiles, colored by cell condition.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb105"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb105-1"><a href="#cb105-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Variance explained by condition vs other available covariates</span></span>
+<span id="cb105-2"><a href="#cb105-2" aria-hidden="true" tabindex="-1"></a><span class="co"># This uses variancePartition-style logic as shown in Chapter 20</span></span>
+<span id="cb105-3"><a href="#cb105-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">requireNamespace</span>(<span class="st">"variancePartition"</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)) {</span>
+<span id="cb105-4"><a href="#cb105-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tryCatch</span>({</span>
+<span id="cb105-5"><a href="#cb105-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">library</span>(variancePartition)</span>
+<span id="cb105-6"><a href="#cb105-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Build formula with available covariates from colData</span></span>
+<span id="cb105-7"><a href="#cb105-7" aria-hidden="true" tabindex="-1"></a>        form <span class="ot">&lt;-</span> <span class="er">~</span> SampleType <span class="sc">+</span> Channel</span>
+<span id="cb105-8"><a href="#cb105-8" aria-hidden="true" tabindex="-1"></a>        varPart <span class="ot">&lt;-</span> <span class="fu">fitExtractVarPartModel</span>(prots_log, form, <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]]))</span>
+<span id="cb105-9"><a href="#cb105-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">plotVarPart</span>(<span class="fu">sortCols</span>(varPart)) <span class="sc">+</span></span>
+<span id="cb105-10"><a href="#cb105-10" aria-hidden="true" tabindex="-1"></a>            <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Variance decomposition"</span>)</span>
+<span id="cb105-11"><a href="#cb105-11" aria-hidden="true" tabindex="-1"></a>    }, <span class="at">error =</span> <span class="cf">function</span>(e) {</span>
+<span id="cb105-12"><a href="#cb105-12" aria-hidden="true" tabindex="-1"></a>        <span class="fu">cat</span>(<span class="st">"Variance decomposition skipped (package compatibility issue):</span><span class="sc">\n</span><span class="st">  "</span>, <span class="fu">conditionMessage</span>(e), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb105-13"><a href="#cb105-13" aria-hidden="true" tabindex="-1"></a>    })</span>
+<span id="cb105-14"><a href="#cb105-14" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb105-15"><a href="#cb105-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">cat</span>(<span class="st">"Install variancePartition for variance decomposition analysis.</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb105-16"><a href="#cb105-16" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Variance decomposition skipped (package compatibility issue):
+   Initial model failed:
+the 'findbars' function has moved to the reformulas package. Please update your imports, or ask an upstream package maintainer to do so. </code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="When to use scater vs. scp functions">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>When to use scater vs.&nbsp;scp functions
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Use <code>scp::scp_qc()</code> and <code>scp::normalizeScp()</code> for SCP-specific operations (QC metrics, normalization within the QFeatures hierarchy). Use <code>scater::plotPCA()</code>, <code>scater::runUMAP()</code>, and <code>scater::plotColData()</code> for exploratory visualization that benefits from single-cell-oriented defaults (point transparency, color scales, feature-name annotation).</p>
+</div>
+</div>
+</section>
+<section id="statistical-modeling" class="level2">
+<h2 class="anchored" data-anchor-id="statistical-modeling">Statistical Modeling</h2>
+<p>Differential abundance analysis in SCP faces two challenges: the high proportion of missing values and the modest number of cells per condition (often 10–50). The principles from the book’s statistical chapters apply with the following adjustments:</p>
+<ul>
+<li><strong>Design matrices</strong> follow the same structure as Chapter 19 (two-group, multi-group, or factorial designs). For the <code>leduc2022</code> dataset, compare naive vs.&nbsp;primed conditions.</li>
+<li><strong>Empirical Bayes moderation</strong> (<code>limma</code>, Chapter 19) can be applied to the protein-level matrix after filtering out proteins with excessive missingness. Limma’s moderated <em>t</em>-test stabilizes variance estimates when the number of cells is small.</li>
+<li><strong>Missing values</strong> must be handled before limma. A common SCP strategy is to keep only proteins detected in at least 50–70 % of cells in at least one condition, then impute the remaining missing values per condition (e.g., with <code>impute::impute.knn()</code> or minimum-value imputation). Be aware that the choice of imputation method can strongly affect the results; see Chapter 18 for imputation sensitivity analysis.</li>
+<li><strong>Mixed models</strong> (Chapter 20) are appropriate when multiple acquisition runs exist, with <code>SampleType</code> as a fixed effect and <code>Run</code> as a random intercept: <code>~ SampleType + (1 | Run)</code>.</li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb107"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb107-1"><a href="#cb107-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter: keep proteins with at least 50% detection in at least one condition</span></span>
+<span id="cb107-2"><a href="#cb107-2" aria-hidden="true" tabindex="-1"></a>keep <span class="ot">&lt;-</span> <span class="fu">apply</span>(prots_log, <span class="dv">1</span>, <span class="cf">function</span>(x) {</span>
+<span id="cb107-3"><a href="#cb107-3" aria-hidden="true" tabindex="-1"></a>    by_cond <span class="ot">&lt;-</span> <span class="fu">split</span>(x, <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])<span class="sc">$</span>SampleType)</span>
+<span id="cb107-4"><a href="#cb107-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">any</span>(<span class="fu">sapply</span>(by_cond, <span class="cf">function</span>(y) <span class="fu">mean</span>(<span class="sc">!</span><span class="fu">is.na</span>(y)) <span class="sc">&gt;=</span> <span class="fl">0.5</span>))</span>
+<span id="cb107-5"><a href="#cb107-5" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb107-6"><a href="#cb107-6" aria-hidden="true" tabindex="-1"></a>prots_filt <span class="ot">&lt;-</span> prots_log[keep, ]</span>
+<span id="cb107-7"><a href="#cb107-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Proteins retained after filtering:"</span>, <span class="fu">sum</span>(keep), <span class="st">"/"</span>, <span class="fu">nrow</span>(prots_log), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Proteins retained after filtering: 1388 / 1388 </code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb109"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb109-1"><a href="#cb109-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simple imputation by condition median</span></span>
+<span id="cb109-2"><a href="#cb109-2" aria-hidden="true" tabindex="-1"></a>prots_imp <span class="ot">&lt;-</span> prots_filt</span>
+<span id="cb109-3"><a href="#cb109-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (cond <span class="cf">in</span> <span class="fu">unique</span>(<span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])<span class="sc">$</span>SampleType)) {</span>
+<span id="cb109-4"><a href="#cb109-4" aria-hidden="true" tabindex="-1"></a>    idx <span class="ot">&lt;-</span> <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])<span class="sc">$</span>SampleType <span class="sc">==</span> cond</span>
+<span id="cb109-5"><a href="#cb109-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(prots_imp))) {</span>
+<span id="cb109-6"><a href="#cb109-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (<span class="fu">is.na</span>(prots_imp[i, idx][<span class="dv">1</span>])) {</span>
+<span id="cb109-7"><a href="#cb109-7" aria-hidden="true" tabindex="-1"></a>            cond_vals <span class="ot">&lt;-</span> prots_filt[i, idx]</span>
+<span id="cb109-8"><a href="#cb109-8" aria-hidden="true" tabindex="-1"></a>            prots_imp[i, idx][<span class="fu">is.na</span>(prots_imp[i, idx])] <span class="ot">&lt;-</span></span>
+<span id="cb109-9"><a href="#cb109-9" aria-hidden="true" tabindex="-1"></a>                <span class="fu">median</span>(cond_vals, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb109-10"><a href="#cb109-10" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb109-11"><a href="#cb109-11" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb109-12"><a href="#cb109-12" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb109-13"><a href="#cb109-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb109-14"><a href="#cb109-14" aria-hidden="true" tabindex="-1"></a><span class="co"># limma differential abundance (Melanoma vs Monocyte)</span></span>
+<span id="cb109-15"><a href="#cb109-15" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb109-16"><a href="#cb109-16" aria-hidden="true" tabindex="-1"></a>cd <span class="ot">&lt;-</span> <span class="fu">colData</span>(leduc[[<span class="st">"proteins_processed"</span>]])</span>
+<span id="cb109-17"><a href="#cb109-17" aria-hidden="true" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> <span class="dv">0</span> <span class="sc">+</span> cd<span class="sc">$</span>SampleType)</span>
+<span id="cb109-18"><a href="#cb109-18" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(design) <span class="ot">&lt;-</span> <span class="fu">levels</span>(<span class="fu">factor</span>(cd<span class="sc">$</span>SampleType))</span>
+<span id="cb109-19"><a href="#cb109-19" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(prots_imp, design)</span>
+<span id="cb109-20"><a href="#cb109-20" aria-hidden="true" tabindex="-1"></a>cont <span class="ot">&lt;-</span> <span class="fu">makeContrasts</span>(</span>
+<span id="cb109-21"><a href="#cb109-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">melanoma_vs_monocyte =</span> Melanoma <span class="sc">-</span> Monocyte,</span>
+<span id="cb109-22"><a href="#cb109-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">levels =</span> design</span>
+<span id="cb109-23"><a href="#cb109-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb109-24"><a href="#cb109-24" aria-hidden="true" tabindex="-1"></a>fit2 <span class="ot">&lt;-</span> <span class="fu">contrasts.fit</span>(fit, cont)</span>
+<span id="cb109-25"><a href="#cb109-25" aria-hidden="true" tabindex="-1"></a>fit2 <span class="ot">&lt;-</span> <span class="fu">eBayes</span>(fit2)</span>
+<span id="cb109-26"><a href="#cb109-26" aria-hidden="true" tabindex="-1"></a>tt <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit2, <span class="at">number =</span> <span class="cn">Inf</span>)</span>
+<span id="cb109-27"><a href="#cb109-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb109-28"><a href="#cb109-28" aria-hidden="true" tabindex="-1"></a><span class="co"># Volcano plot</span></span>
+<span id="cb109-29"><a href="#cb109-29" aria-hidden="true" tabindex="-1"></a>tt<span class="sc">$</span>sig <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(tt<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span> <span class="sc">&amp;</span> <span class="fu">abs</span>(tt<span class="sc">$</span>logFC) <span class="sc">&gt;</span> <span class="dv">1</span>,</span>
+<span id="cb109-30"><a href="#cb109-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ifelse</span>(tt<span class="sc">$</span>logFC <span class="sc">&gt;</span> <span class="dv">0</span>, <span class="st">"Up in melanoma"</span>, <span class="st">"Up in monocyte"</span>),</span>
+<span id="cb109-31"><a href="#cb109-31" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Not significant"</span></span>
+<span id="cb109-32"><a href="#cb109-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb109-33"><a href="#cb109-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb109-34"><a href="#cb109-34" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(tt, <span class="fu">aes</span>(<span class="at">x =</span> logFC, <span class="at">y =</span> <span class="sc">-</span><span class="fu">log10</span>(adj.P.Val), <span class="at">color =</span> sig)) <span class="sc">+</span></span>
+<span id="cb109-35"><a href="#cb109-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb109-36"><a href="#cb109-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="sc">-</span><span class="fu">log10</span>(<span class="fl">0.05</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb109-37"><a href="#cb109-37" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb109-38"><a href="#cb109-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Up in monocyte"</span> <span class="ot">=</span> <span class="st">"#2166AC"</span>,</span>
+<span id="cb109-39"><a href="#cb109-39" aria-hidden="true" tabindex="-1"></a>                                   <span class="st">"Not significant"</span> <span class="ot">=</span> <span class="st">"grey60"</span>,</span>
+<span id="cb109-40"><a href="#cb109-40" aria-hidden="true" tabindex="-1"></a>                                   <span class="st">"Up in melanoma"</span> <span class="ot">=</span> <span class="st">"#B2182B"</span>)) <span class="sc">+</span></span>
+<span id="cb109-41"><a href="#cb109-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"log2 fold change (melanoma / monocyte)"</span>,</span>
+<span id="cb109-42"><a href="#cb109-42" aria-hidden="true" tabindex="-1"></a>         <span class="at">y =</span> <span class="st">"-log10(adjusted p-value)"</span>,</span>
+<span id="cb109-43"><a href="#cb109-43" aria-hidden="true" tabindex="-1"></a>         <span class="at">title =</span> <span class="st">"Melanoma vs. monocyte differential abundance"</span>) <span class="sc">+</span></span>
+<span id="cb109-44"><a href="#cb109-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb109-45"><a href="#cb109-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(<span class="at">legend.title =</span> <span class="fu">element_blank</span>())</span></code></pre></div>
+</details>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="appendix-e-single-cell-proteomics_files/figure-html/unnamed-chunk-21-1.png" class="img-fluid figure-img" width="2400"></p>
+<figcaption>Volcano plot comparing melanoma vs.&nbsp;monocyte cells.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb110"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb110-1"><a href="#cb110-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Top differentially abundant proteins (melanoma vs. monocyte):</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Top differentially abundant proteins (melanoma vs. monocyte):</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb112"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb112-1"><a href="#cb112-1" aria-hidden="true" tabindex="-1"></a>tt <span class="sc">|&gt;</span></span>
+<span id="cb112-2"><a href="#cb112-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>) <span class="sc">|&gt;</span></span>
+<span id="cb112-3"><a href="#cb112-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(adj.P.Val) <span class="sc">|&gt;</span></span>
+<span id="cb112-4"><a href="#cb112-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>            logFC  AveExpr          t      P.Value    adj.P.Val        B
+Q00722  1.1652079 6.088055  13.914156 5.012549e-42 6.957418e-39 84.41068
+Q9NPE2 -1.0853291 5.223452 -11.382728 4.160294e-29 2.887244e-26 55.18474
+Q9BW85 -0.8490741 6.822443 -10.550152 2.419214e-25 1.119290e-22 46.68323
+Q86UK7 -0.9236239 5.933815 -10.461660 5.876803e-25 2.039251e-22 45.81330
+Q9BZI7 -0.8270949 5.492459 -10.013529 4.756965e-23 1.320533e-20 41.50869
+Q14185 -0.8888405 6.534603  -9.645978 1.539055e-21 3.560347e-19 38.10497
+Q8TDI7  0.7266349 8.433314   9.238708 6.333276e-20 1.255798e-17 34.46863
+Q5TZA2 -0.7965977 5.090671  -9.197902 9.119082e-20 1.582161e-17 34.11219
+O75365 -0.7987679 5.443318  -9.129466 1.675206e-19 2.583540e-17 33.51765
+Q99805  0.7684635 6.050195   9.110769 1.976600e-19 2.743521e-17 33.35592
+                   sig
+Q00722  Up in melanoma
+Q9NPE2  Up in monocyte
+Q9BW85 Not significant
+Q86UK7 Not significant
+Q9BZI7 Not significant
+Q14185 Not significant
+Q8TDI7 Not significant
+Q5TZA2 Not significant
+O75365 Not significant
+Q99805 Not significant</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled" title="Biological replication matters">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Biological replication matters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The differential analysis above uses cells as observations. These are <strong>technical replicates</strong> of the cell-culture condition, not independent biological replicates. A finding that holds across cells from one culture may not generalize to cells from an independently cultured population. For publication-level results, plan experiments with multiple biological replicates (independent cultures or tissue samples), with each replicate contributing several cells to a TMT run.</p>
+</div>
+</div>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<p>Single-cell proteomics analysis with <code>scp</code> adapts the familiar <code>QFeatures</code> framework to the unique challenges of low-input proteomics:</p>
+<ul>
+<li><strong>Data model</strong>: <code>scp</code> stores acquisition runs as <code>SingleCellExperiment</code> assays within a <code>QFeatures</code> container, providing access to both <code>QFeatures</code> aggregation methods and <code>scater</code>/<code>scran</code> single-cell visualisation and normalization functions.</li>
+<li><strong>QC</strong>: The <code>scp_qc()</code> function computes per-channel identification counts, total intensity, and missingness proportions, flagging problematic channels (doublets, empty channels, failed labeling).</li>
+<li><strong>Filtering and aggregation</strong>: Standard PSM-level filters (remove reverse hits, contaminants, low PEP score) precede aggregation PSM → peptide → protein via <code>aggregateFeatures()</code>.</li>
+<li><strong>Normalization</strong>: Median-based scaling per channel, anchored by a reference channel when available, aligns intensity distributions across cells within and between runs.</li>
+<li><strong>Visualization</strong>: PCA and UMAP (via <code>scater</code>) reveal structure driven by cell condition, run, or channel position.</li>
+<li><strong>Statistical modeling</strong>: The limma framework from Chapter 19 applies after filtering and imputation, with the caveat that cell-level replication does not substitute for biological replication.</li>
+</ul>
+</section>
+<section id="exercises" class="level2">
+<h2 class="anchored" data-anchor-id="exercises">Exercises</h2>
+<ol type="1">
+<li><p><strong>Subsetting practice.</strong> Filter the <code>leduc</code> object to keep only the naive and primed conditions, then repeat the PCA. Does the separation improve?</p></li>
+<li><p><strong>Normalization comparison.</strong> Replace the median normalization with <code>method = "colScale"</code> in <code>normalizeScp()</code>. Compare the PCA before and after this alternative normalization.</p></li>
+<li><p><strong>Missingness filtering.</strong> Vary the detection-rate threshold (used in the statistical modeling section) from 30 % to 70 %. How does the number of retained proteins and the number of significant hits change?</p></li>
+<li><p><strong>Multi-run workflow (conceptual).</strong> If your experiment had three TMTpro-16 runs, which steps would change? Describe how <code>joinAssays()</code> fits into the pipeline and where the reference channel is used for batch normalization.</p></li>
+<li><p><strong>Cross-reference with Chapter 20.</strong> The limma analysis in this appendix compares two groups (naive vs.&nbsp;primed). If the experiment added a third condition (e.g., reset), what design matrix and contrasts would you use? Write the <code>model.matrix()</code> call.</p></li>
+</ol>
+</section>
+<section id="session-information" class="level2">
+<h2 class="anchored" data-anchor-id="session-information">Session Information</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb114"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb114-1"><a href="#cb114-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>R version 4.5.1 (2025-06-13 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26200)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=English_Switzerland.utf8  LC_CTYPE=English_Switzerland.utf8   
+[3] LC_MONETARY=English_Switzerland.utf8 LC_NUMERIC=C                        
+[5] LC_TIME=English_Switzerland.utf8    
+
+time zone: Europe/Zurich
+tzcode source: internal
+
+attached base packages:
+[1] stats4    stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+ [1] variancePartition_1.38.1    BiocParallel_1.42.2        
+ [3] limma_3.64.3                patchwork_1.3.2            
+ [5] tidyr_1.3.2                 dplyr_1.2.1                
+ [7] scater_1.36.0               ggplot2_4.0.3              
+ [9] scuttle_1.18.0              SingleCellExperiment_1.30.1
+[11] scpdata_1.16.1              ExperimentHub_2.16.1       
+[13] AnnotationHub_3.16.1        BiocFileCache_2.16.2       
+[15] dbplyr_2.5.2                scp_1.18.0                 
+[17] QFeatures_1.18.0            MultiAssayExperiment_1.34.0
+[19] SummarizedExperiment_1.38.1 Biobase_2.68.0             
+[21] GenomicRanges_1.60.0        GenomeInfoDb_1.44.3        
+[23] IRanges_2.42.0              S4Vectors_0.46.0           
+[25] BiocGenerics_0.54.1         generics_0.1.4             
+[27] MatrixGenerics_1.20.0       matrixStats_1.5.0          
+
+loaded via a namespace (and not attached):
+  [1] RColorBrewer_1.1-3      jsonlite_2.0.0          magrittr_2.0.4         
+  [4] ggbeeswarm_0.7.3        nloptr_2.2.1            farver_2.1.2           
+  [7] rmarkdown_2.31          vctrs_0.7.2             minqa_1.2.8            
+ [10] memoise_2.0.1           htmltools_0.5.9         S4Arrays_1.8.1         
+ [13] BiocBaseUtils_1.10.0    curl_7.1.0              broom_1.0.13           
+ [16] BiocNeighbors_2.2.0     SparseArray_1.8.1       KernSmooth_2.23-26     
+ [19] htmlwidgets_1.6.4       pbkrtest_0.5.5          plyr_1.8.9             
+ [22] cachem_1.1.0            igraph_2.3.2            iterators_1.0.14       
+ [25] mime_0.13               lifecycle_1.0.5         pkgconfig_2.0.3        
+ [28] rsvd_1.0.5              Matrix_1.7-3            R6_2.6.1               
+ [31] fastmap_1.2.0           GenomeInfoDbData_1.2.14 rbibutils_2.4.1        
+ [34] clue_0.3-68             numDeriv_2016.8-1.1     digest_0.6.39          
+ [37] fdrtool_1.2.18          AnnotationDbi_1.70.0    RSpectra_0.16-2        
+ [40] irlba_2.3.7             lpsymphony_1.36.0       RSQLite_3.53.1         
+ [43] beachmat_2.24.0         filelock_1.0.3          labeling_0.4.3         
+ [46] httr_1.4.8              abind_1.4-8             compiler_4.5.1         
+ [49] aod_1.3.3               bit64_4.8.2             withr_3.0.3            
+ [52] backports_1.5.1         S7_0.2.2                viridis_0.6.5          
+ [55] DBI_1.3.0               gplots_3.3.0            MASS_7.3-65            
+ [58] rappdirs_0.3.4          DelayedArray_0.34.1     corpcor_1.6.10         
+ [61] caTools_1.18.3          gtools_3.9.5            tools_4.5.1            
+ [64] vipor_0.4.7             otel_0.2.0              beeswarm_0.4.0         
+ [67] remaCor_0.0.20          glue_1.8.0              nlme_3.1-168           
+ [70] grid_4.5.1              cluster_2.1.8.2         reshape2_1.4.5         
+ [73] gtable_0.3.6            BiocSingular_1.24.0     ScaledMatrix_1.16.0    
+ [76] metapod_1.16.0          XVector_0.48.0          ggrepel_0.9.8          
+ [79] BiocVersion_3.21.1      pillar_1.11.1           stringr_1.6.0          
+ [82] splines_4.5.1           lattice_0.22-7          FNN_1.1.4.1            
+ [85] bit_4.6.0               tidyselect_1.2.1        Biostrings_2.76.0      
+ [88] knitr_1.51              reformulas_0.4.4        gridExtra_2.3.1        
+ [91] ProtGenerics_1.40.0     IHW_1.36.0              RhpcBLASctl_0.23-42    
+ [94] xfun_0.60               statmod_1.5.2           stringi_1.8.7          
+ [97] UCSC.utils_1.4.0        boot_1.3-31             lazyeval_0.2.3         
+[100] yaml_2.3.12             evaluate_1.0.5          codetools_0.2-20       
+[103] nipals_1.0              MsCoreUtils_1.23.10     tibble_3.3.1           
+[106] BiocManager_1.30.27     cli_3.6.6               uwot_0.2.4             
+[109] Rdpack_2.6.6            Rcpp_1.1.2              EnvStats_3.1.0         
+[112] png_0.1-9               parallel_4.5.1          blob_1.3.0             
+[115] AnnotationFilter_1.32.0 bitops_1.0-9            lme4_2.0-1             
+[118] mvtnorm_1.4-1           viridisLite_0.4.3       slam_0.1-55            
+[121] lmerTest_3.2-1          scales_1.4.0            purrr_1.2.2            
+[124] crayon_1.5.3            fANCOVA_0.6-1           rlang_1.3.0            
+[127] cowplot_1.2.0           KEGGREST_1.48.1        </code></pre>
+</div>
+</div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-leduc2022pluripotent" class="csl-entry" role="listitem">
+Leduc, Andrew, R. Gray Huffman, Jenna Cantlon, and Nikolai Slavov. 2022. <span>“Comprehensive and Deep Profiling of the Proteome of Naive, Primed, and Naive-Reset Pluripotent States Using TMTpro-16 Labeling.”</span> <em>bioRxiv</em>, ahead of print. <a href="https://doi.org/10.1101/2022.08.04.502764">https://doi.org/10.1101/2022.08.04.502764</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./appendix-d-statistics.html" class="pagination-link" aria-label="Statistical and Reproducibility Quick Reference">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Statistical and Reproducibility Quick Reference</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./appendix-f-ms-imaging.html" class="pagination-link" aria-label="Mass Spectrometry Imaging with Cardinal">
+        <span class="nav-page-text">Mass Spectrometry Imaging with Cardinal</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/appendix-e-single-cell-proteomics.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>21&nbsp; Modeling Covariates and Repeated Measures for MS Data – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./23-machine-learning.html" rel="next">
+<link href="./21-differential-abundance.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./20-experimental-design.html">Part V — Statistical Modeling and Machine Learning</a></li><li class="breadcrumb-item"><a href="./22-covariates-repeated.html"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">21.1</span> Learning Objectives</a></li>
+  <li><a href="#why-modeling-structure-matters-for-ms-data" id="toc-why-modeling-structure-matters-for-ms-data" class="nav-link" data-scroll-target="#why-modeling-structure-matters-for-ms-data"><span class="header-section-number">21.2</span> Why Modeling Structure Matters for MS Data</a>
+  <ul class="collapse">
+  <li><a href="#the-icc-why-you-cannot-ignore-correlation" id="toc-the-icc-why-you-cannot-ignore-correlation" class="nav-link" data-scroll-target="#the-icc-why-you-cannot-ignore-correlation"><span class="header-section-number">21.2.1</span> The ICC: Why You Cannot Ignore Correlation</a></li>
+  <li><a href="#mixed-models-vs.-gee-two-frameworks-for-correlated-ms-data" id="toc-mixed-models-vs.-gee-two-frameworks-for-correlated-ms-data" class="nav-link" data-scroll-target="#mixed-models-vs.-gee-two-frameworks-for-correlated-ms-data"><span class="header-section-number">21.2.2</span> Mixed Models vs.&nbsp;GEE: Two Frameworks for Correlated MS Data</a></li>
+  <li><a href="#choosing-the-covariance-structure" id="toc-choosing-the-covariance-structure" class="nav-link" data-scroll-target="#choosing-the-covariance-structure"><span class="header-section-number">21.2.3</span> Choosing the Covariance Structure</a></li>
+  </ul></li>
+  <li><a href="#datasets-for-this-chapter" id="toc-datasets-for-this-chapter" class="nav-link" data-scroll-target="#datasets-for-this-chapter"><span class="header-section-number">21.3</span> Datasets for This Chapter</a></li>
+  <li><a href="#setup-and-package-installation" id="toc-setup-and-package-installation" class="nav-link" data-scroll-target="#setup-and-package-installation"><span class="header-section-number">21.4</span> Setup and Package Installation</a></li>
+  <li><a href="#step-1-model-formula-reference-table" id="toc-step-1-model-formula-reference-table" class="nav-link" data-scroll-target="#step-1-model-formula-reference-table"><span class="header-section-number">21.5</span> Step 1: Model Formula Reference Table</a></li>
+  <li><a href="#step-2-simulate-a-realistic-ms-feature-table" id="toc-step-2-simulate-a-realistic-ms-feature-table" class="nav-link" data-scroll-target="#step-2-simulate-a-realistic-ms-feature-table"><span class="header-section-number">21.6</span> Step 2: Simulate a Realistic MS Feature Table</a></li>
+  <li><a href="#step-3-covariateadjusted-model-with-limma-batch-sex-etc." id="toc-step-3-covariateadjusted-model-with-limma-batch-sex-etc." class="nav-link" data-scroll-target="#step-3-covariateadjusted-model-with-limma-batch-sex-etc."><span class="header-section-number">21.7</span> Step 3: Covariate‑Adjusted Model with <code>limma</code> (Batch, Sex, etc.)</a>
+  <ul class="collapse">
+  <li><a href="#the-problem" id="toc-the-problem" class="nav-link" data-scroll-target="#the-problem"><span class="header-section-number">21.7.1</span> The Problem</a></li>
+  <li><a href="#build-design-matrix" id="toc-build-design-matrix" class="nav-link" data-scroll-target="#build-design-matrix"><span class="header-section-number">21.7.2</span> Build Design Matrix</a></li>
+  <li><a href="#fit-the-model-for-all-metabolites" id="toc-fit-the-model-for-all-metabolites" class="nav-link" data-scroll-target="#fit-the-model-for-all-metabolites"><span class="header-section-number">21.7.3</span> Fit the Model for All Metabolites</a></li>
+  <li><a href="#compare-adjusted-vs-unadjusted-ignoring-batchsex" id="toc-compare-adjusted-vs-unadjusted-ignoring-batchsex" class="nav-link" data-scroll-target="#compare-adjusted-vs-unadjusted-ignoring-batchsex"><span class="header-section-number">21.7.4</span> Compare Adjusted vs Unadjusted (Ignoring Batch/Sex)</a></li>
+  </ul></li>
+  <li><a href="#step-4-paired-blocked-model-for-matched-designs" id="toc-step-4-paired-blocked-model-for-matched-designs" class="nav-link" data-scroll-target="#step-4-paired-blocked-model-for-matched-designs"><span class="header-section-number">21.8</span> Step 4: Paired / Blocked Model for Matched Designs</a>
+  <ul class="collapse">
+  <li><a href="#when-to-use-in-ms" id="toc-when-to-use-in-ms" class="nav-link" data-scroll-target="#when-to-use-in-ms"><span class="header-section-number">21.8.1</span> When to Use in MS</a></li>
+  <li><a href="#simulate-paired-ms-data" id="toc-simulate-paired-ms-data" class="nav-link" data-scroll-target="#simulate-paired-ms-data"><span class="header-section-number">21.8.2</span> Simulate Paired MS Data</a></li>
+  <li><a href="#paired-design-matrix" id="toc-paired-design-matrix" class="nav-link" data-scroll-target="#paired-design-matrix"><span class="header-section-number">21.8.3</span> Paired Design Matrix</a></li>
+  </ul></li>
+  <li><a href="#step-5-mixedeffects-models-for-repeated-measures-longitudinal-ms" id="toc-step-5-mixedeffects-models-for-repeated-measures-longitudinal-ms" class="nav-link" data-scroll-target="#step-5-mixedeffects-models-for-repeated-measures-longitudinal-ms"><span class="header-section-number">21.9</span> Step 5: Mixed‑Effects Models for Repeated Measures (Longitudinal MS)</a>
+  <ul class="collapse">
+  <li><a href="#when-to-use" id="toc-when-to-use" class="nav-link" data-scroll-target="#when-to-use"><span class="header-section-number">21.9.1</span> When to Use</a></li>
+  <li><a href="#simulate-longitudinal-ms-data" id="toc-simulate-longitudinal-ms-data" class="nav-link" data-scroll-target="#simulate-longitudinal-ms-data"><span class="header-section-number">21.9.2</span> Simulate Longitudinal MS Data</a></li>
+  <li><a href="#fit-mixed-model-for-one-metabolite" id="toc-fit-mixed-model-for-one-metabolite" class="nav-link" data-scroll-target="#fit-mixed-model-for-one-metabolite"><span class="header-section-number">21.9.3</span> Fit Mixed Model for One Metabolite</a></li>
+  <li><a href="#scaling-to-many-metabolites" id="toc-scaling-to-many-metabolites" class="nav-link" data-scroll-target="#scaling-to-many-metabolites"><span class="header-section-number">21.9.4</span> Scaling to Many Metabolites</a></li>
+  </ul></li>
+  <li><a href="#step-6-variance-partitioning-which-factors-drive-ms-variation" id="toc-step-6-variance-partitioning-which-factors-drive-ms-variation" class="nav-link" data-scroll-target="#step-6-variance-partitioning-which-factors-drive-ms-variation"><span class="header-section-number">21.10</span> Step 6: Variance Partitioning – Which Factors Drive MS Variation?</a>
+  <ul class="collapse">
+  <li><a href="#why-do-this-for-ms-data" id="toc-why-do-this-for-ms-data" class="nav-link" data-scroll-target="#why-do-this-for-ms-data"><span class="header-section-number">21.10.1</span> Why Do This for MS Data?</a></li>
+  </ul></li>
+  <li><a href="#step-7-interaction-models-factorial-designs-for-ms" id="toc-step-7-interaction-models-factorial-designs-for-ms" class="nav-link" data-scroll-target="#step-7-interaction-models-factorial-designs-for-ms"><span class="header-section-number">21.11</span> Step 7: Interaction Models (Factorial Designs) for MS</a>
+  <ul class="collapse">
+  <li><a href="#when-to-test-interactions" id="toc-when-to-test-interactions" class="nav-link" data-scroll-target="#when-to-test-interactions"><span class="header-section-number">21.11.1</span> When to Test Interactions</a></li>
+  <li><a href="#simulate-interaction-data-22-design" id="toc-simulate-interaction-data-22-design" class="nav-link" data-scroll-target="#simulate-interaction-data-22-design"><span class="header-section-number">21.11.2</span> Simulate Interaction Data (2×2 design)</a></li>
+  <li><a href="#fit-interaction-model" id="toc-fit-interaction-model" class="nav-link" data-scroll-target="#fit-interaction-model"><span class="header-section-number">21.11.3</span> Fit Interaction Model</a></li>
+  <li><a href="#visualise-the-top-interaction" id="toc-visualise-the-top-interaction" class="nav-link" data-scroll-target="#visualise-the-top-interaction"><span class="header-section-number">21.11.4</span> Visualise the Top Interaction</a></li>
+  </ul></li>
+  <li><a href="#step-8-model-selection-decision-flowchart-for-ms-experiments" id="toc-step-8-model-selection-decision-flowchart-for-ms-experiments" class="nav-link" data-scroll-target="#step-8-model-selection-decision-flowchart-for-ms-experiments"><span class="header-section-number">21.12</span> Step 8: Model Selection Decision Flowchart for MS Experiments</a></li>
+  <li><a href="#step-9-complete-workflow-real-ms-data-ready" id="toc-step-9-complete-workflow-real-ms-data-ready" class="nav-link" data-scroll-target="#step-9-complete-workflow-real-ms-data-ready"><span class="header-section-number">21.13</span> Step 9: Complete Workflow (Real MS Data Ready)</a></li>
+  <li><a href="#common-pitfalls-in-ms-data-modeling" id="toc-common-pitfalls-in-ms-data-modeling" class="nav-link" data-scroll-target="#common-pitfalls-in-ms-data-modeling"><span class="header-section-number">21.14</span> Common Pitfalls in MS Data Modeling</a></li>
+  <li><a href="#exercises-apply-to-your-own-ms-data" id="toc-exercises-apply-to-your-own-ms-data" class="nav-link" data-scroll-target="#exercises-apply-to-your-own-ms-data"><span class="header-section-number">21.15</span> Exercises (Apply to Your Own MS Data)</a>
+  <ul class="collapse">
+  <li><a href="#exercise-1-add-a-continuous-covariate" id="toc-exercise-1-add-a-continuous-covariate" class="nav-link" data-scroll-target="#exercise-1-add-a-continuous-covariate"><span class="header-section-number">21.15.1</span> Exercise 1: Add a Continuous Covariate</a></li>
+  <li><a href="#exercise-2-compare-paired-vs-unpaired-on-realworld-ms-data" id="toc-exercise-2-compare-paired-vs-unpaired-on-realworld-ms-data" class="nav-link" data-scroll-target="#exercise-2-compare-paired-vs-unpaired-on-realworld-ms-data"><span class="header-section-number">21.15.2</span> Exercise 2: Compare Paired vs Unpaired on Real‑World MS Data</a></li>
+  <li><a href="#exercise-3-variance-partition-on-a-clinical-ms-dataset" id="toc-exercise-3-variance-partition-on-a-clinical-ms-dataset" class="nav-link" data-scroll-target="#exercise-3-variance-partition-on-a-clinical-ms-dataset"><span class="header-section-number">21.15.3</span> Exercise 3: Variance Partition on a Clinical MS Dataset</a></li>
+  <li><a href="#exercise-4-discover-interactions-in-a-timecourse-ms-experiment" id="toc-exercise-4-discover-interactions-in-a-timecourse-ms-experiment" class="nav-link" data-scroll-target="#exercise-4-discover-interactions-in-a-timecourse-ms-experiment"><span class="header-section-number">21.15.4</span> Exercise 4: Discover Interactions in a Time‑Course MS Experiment</a></li>
+  </ul></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">21.16</span> Summary</a>
+  <ul class="collapse">
+  <li><a href="#key-outputs-from-this-chapter-for-ms-data" id="toc-key-outputs-from-this-chapter-for-ms-data" class="nav-link" data-scroll-target="#key-outputs-from-this-chapter-for-ms-data"><span class="header-section-number">21.16.1</span> Key Outputs from This Chapter (for MS Data)</a></li>
+  <li><a href="#model-selection-quick-reference-for-ms-experiments" id="toc-model-selection-quick-reference-for-ms-experiments" class="nav-link" data-scroll-target="#model-selection-quick-reference-for-ms-experiments"><span class="header-section-number">21.16.2</span> Model Selection Quick Reference for MS Experiments</a></li>
+  <li><a href="#resources-specific-to-ms-data" id="toc-resources-specific-to-ms-data" class="nav-link" data-scroll-target="#resources-specific-to-ms-data"><span class="header-section-number">21.16.3</span> Resources Specific to MS Data</a></li>
+  </ul></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">21.17</span> Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/22-covariates-repeated.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./20-experimental-design.html">Part V — Statistical Modeling and Machine Learning</a></li><li class="breadcrumb-item"><a href="./22-covariates-repeated.html"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“A two‑group t‑test is rarely enough. Real MS experiments have batches, paired samples, and repeated measurements. Ignoring these structures inflates false positives.”</em></p>
+</blockquote>
+<p>Real studies are messy: the same patient sampled before and after treatment, cell lines processed in batches, age and sex riding along with the condition you actually care about. Treat these correlated, structured measurements as if they were independent and you inflate your confidence and manufacture false positives. This chapter models the structure instead of ignoring it — often the difference between a result that replicates and one that does not.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Treating repeated measures as independent samples. Paired or longitudinal data analyzed as if independent inflates your effective <em>n</em> and your false-positive rate. Block on the subject.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="21.1">
+<h2 data-number="21.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">21.1</span> Learning Objectives</h2>
+<p>By the end of this chapter, you will be able to:</p>
+<ul>
+<li>Add covariates (batch, sex, age) to a <code>limma</code> design matrix for MS feature tables<br>
+</li>
+<li>Fit <strong>paired</strong> and <strong>blocked</strong> models for matched designs (e.g., before/after treatment)<br>
+</li>
+<li>Use <code>lme4</code> for repeated‑measures data with random subject effects (time courses)<br>
+</li>
+<li>Decompose variance sources with <code>variancePartition</code> to identify dominant factors<br>
+</li>
+<li>Interpret interaction terms in factorial designs (e.g., treatment × time)<br>
+</li>
+<li>Export adjusted differential abundance tables ready for biological interpretation</li>
+</ul>
+</section>
+<section id="why-modeling-structure-matters-for-ms-data" class="level2" data-number="21.2">
+<h2 data-number="21.2" class="anchored" data-anchor-id="why-modeling-structure-matters-for-ms-data"><span class="header-section-number">21.2</span> Why Modeling Structure Matters for MS Data</h2>
+<p>MS‑based omics experiments rarely have a simple two‑group design. Real data often include:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 31%">
+<col style="width: 43%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Structure</th>
+<th>Example in MS</th>
+<th>Ignoring It Causes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Batch effects</strong></td>
+<td>Samples run on different days or columns</td>
+<td>False positives (batch confounded with treatment)</td>
+</tr>
+<tr class="even">
+<td><strong>Paired design</strong></td>
+<td>Same patient before/after drug</td>
+<td>Reduced power (between‑subject variance not removed)</td>
+</tr>
+<tr class="odd">
+<td><strong>Repeated measures</strong></td>
+<td>Time course from same subjects</td>
+<td>Inflated significance (pseudoreplication)</td>
+</tr>
+<tr class="even">
+<td><strong>Confounders</strong></td>
+<td>Age, sex, BMI in clinical cohorts</td>
+<td>Biased estimates of treatment effect</td>
+</tr>
+<tr class="odd">
+<td><strong>Factorial design</strong></td>
+<td>Treatment × time interaction</td>
+<td>Missed interaction effects (e.g., treatment only works at late time)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The principle:</strong> Your statistical model must match your experimental design. For MS data, the typical workflow after preprocessing (e.g., with <code>xcms</code> or <code>DEP</code>) results in a <strong>feature table</strong> (rows = metabolites/peptides, columns = samples). This chapter assumes you already have such a table.</p>
+<section id="the-icc-why-you-cannot-ignore-correlation" class="level3" data-number="21.2.1">
+<h3 data-number="21.2.1" class="anchored" data-anchor-id="the-icc-why-you-cannot-ignore-correlation"><span class="header-section-number">21.2.1</span> The ICC: Why You Cannot Ignore Correlation</h3>
+<p>When the same subject is measured multiple times, observations are <strong>correlated</strong>. The intraclass correlation coefficient (ICC) quantifies this:</p>
+<p><span class="math display">\rho = \frac{\sigma^2_b}{\sigma^2_b + \sigma^2_e}</span></p>
+<p>where <span class="math inline">\sigma^2_b</span> is the between-subject variance and <span class="math inline">\sigma^2_e</span> is the within-subject (residual) variance. The effective sample size for a study with <span class="math inline">T</span> repeated measures per subject is:</p>
+<p><span class="math display">n_{\text{eff}} = \frac{nT}{1 + (T-1)\rho}</span></p>
+<p>At <span class="math inline">\rho = 0.5</span> and <span class="math inline">T = 4</span>, only <strong>57 %</strong> of your nominal sample contributes to inference. This is not a small correction — it means that ignoring repeated measures can inflate your effective sample size by nearly a factor of 2, producing falsely significant results.</p>
+</section>
+<section id="mixed-models-vs.-gee-two-frameworks-for-correlated-ms-data" class="level3" data-number="21.2.2">
+<h3 data-number="21.2.2" class="anchored" data-anchor-id="mixed-models-vs.-gee-two-frameworks-for-correlated-ms-data"><span class="header-section-number">21.2.2</span> Mixed Models vs.&nbsp;GEE: Two Frameworks for Correlated MS Data</h3>
+<p>These are the two dominant approaches for correlated data, and they answer fundamentally different questions:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 47%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Aspect</th>
+<th>Mixed Models (lme4)</th>
+<th>GEE (geepack)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Question answered</strong></td>
+<td>“What is the trajectory for a typical individual?”</td>
+<td>“What is the average effect across the population?”</td>
+</tr>
+<tr class="even">
+<td><strong>Effect type</strong></td>
+<td>Subject-specific</td>
+<td>Population-average</td>
+</tr>
+<tr class="odd">
+<td><strong>Missing data</strong></td>
+<td>Valid under MAR (uses all available data)</td>
+<td>Requires MCAR (or WGEE for MAR)</td>
+</tr>
+<tr class="even">
+<td><strong>Interpretation</strong></td>
+<td>Conditional on random effects</td>
+<td>Marginal — averaged over all subjects</td>
+</tr>
+<tr class="odd">
+<td><strong>For linear models</strong></td>
+<td>Same estimates as GEE</td>
+<td>Same estimates as mixed models</td>
+</tr>
+<tr class="even">
+<td><strong>For binary outcomes</strong></td>
+<td><span class="math inline">\beta_{\text{SS}} &gt; \beta_{\text{PA}}</span></td>
+<td>Odds ratios are population-averaged</td>
+</tr>
+</tbody>
+</table>
+<p>For MS time-course experiments, mixed models are generally preferred because: 1. They handle unbalanced data (different numbers of time points per subject) naturally 2. They are valid under MAR missing data without explicit imputation 3. The subject-specific interpretation matches the biological question: “How does this metabolite change within an individual over time?”</p>
+</section>
+<section id="choosing-the-covariance-structure" class="level3" data-number="21.2.3">
+<h3 data-number="21.2.3" class="anchored" data-anchor-id="choosing-the-covariance-structure"><span class="header-section-number">21.2.3</span> Choosing the Covariance Structure</h3>
+<p>The covariance structure models <em>how</em> observations are correlated. The choice affects standard errors but not (for linear models) the fixed-effect estimates:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 27%">
+<col style="width: 39%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Structure</th>
+<th>Formula</th>
+<th>When to Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Compound symmetry</strong></td>
+<td>All pairs equally correlated</td>
+<td>Short time series, balanced designs</td>
+</tr>
+<tr class="even">
+<td><strong>Random intercept + slope</strong></td>
+<td>Correlation varies with time distance</td>
+<td>Growth trajectories (default choice)</td>
+</tr>
+<tr class="odd">
+<td><strong>AR(1)</strong></td>
+<td>Correlation decays exponentially with time separation</td>
+<td>Equally spaced time points</td>
+</tr>
+<tr class="even">
+<td><strong>Unstructured</strong></td>
+<td>Each pair has its own correlation</td>
+<td>Small T, no prior structure assumed</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When in doubt, use random intercept + slope.</strong> It captures the most important correlation pattern — that subjects differ in both baseline level and rate of change — with only 2 extra parameters.</p>
+<hr>
+</section>
+</section>
+<section id="datasets-for-this-chapter" class="level2" data-number="21.3">
+<h2 data-number="21.3" class="anchored" data-anchor-id="datasets-for-this-chapter"><span class="header-section-number">21.3</span> Datasets for This Chapter</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 30%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Dataset</th>
+<th>Source</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>msdata::metabolomics()</code></td>
+<td><code>msdata</code></td>
+<td>Real LC‑MS metabolomics (8 samples)</td>
+</tr>
+<tr class="even">
+<td>Simulated (included)</td>
+<td>this chapter</td>
+<td>Learning concepts with known truth</td>
+</tr>
+<tr class="odd">
+<td><code>sacurine</code></td>
+<td><code>ropls</code></td>
+<td>Covariate adjustment (sex, age)</td>
+</tr>
+</tbody>
+</table>
+<p>We will start with a <strong>simulated feature table</strong> so you can see exactly how each model recovers true biological signals.</p>
+<hr>
+</section>
+<section id="setup-and-package-installation" class="level2" data-number="21.4">
+<h2 data-number="21.4" class="anchored" data-anchor-id="setup-and-package-installation"><span class="header-section-number">21.4</span> Setup and Package Installation</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"limma"</span>,               <span class="co"># Linear models for MS data</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"lme4"</span>,                <span class="co"># Mixed‑effects models</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"variancePartition"</span>,   <span class="co"># Variance decomposition</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"broom.mixed"</span>,         <span class="co"># Tidy mixed model summaries</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"msdata"</span>,              <span class="co"># Example MS data</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"ggplot2"</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"dplyr"</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>))</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load libraries</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(variancePartition)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom.mixed)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)   <span class="co"># for real MS files</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Set seed for reproducibility</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span></code></pre></div>
+<hr>
+</section>
+<section id="step-1-model-formula-reference-table" class="level2" data-number="21.5">
+<h2 data-number="21.5" class="anchored" data-anchor-id="step-1-model-formula-reference-table"><span class="header-section-number">21.5</span> Step 1: Model Formula Reference Table</h2>
+<p>Before fitting, identify your experimental structure and choose the corresponding formula.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>model_reference <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Design =</span> <span class="fu">c</span>(</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Two‑group (simple)"</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Covariate‑adjusted"</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Paired / Blocked"</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Two‑way factorial"</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Time course (fixed effects)"</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Repeated measures (mixed)"</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">Formula =</span> <span class="fu">c</span>(</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition"</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition + batch + sex"</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition + subject_id"</span>,</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition * time"</span>,</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition + time"</span>,</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"~ condition + (1 | subject)"</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">Function =</span> <span class="fu">c</span>(</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmFit() + eBayes()"</span>,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmFit() + eBayes()"</span>,</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmFit() + eBayes()"</span>,</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmFit() + eBayes()"</span>,</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmFit() + eBayes()"</span>,</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>    <span class="st">"lmer()"</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(model_reference, <span class="at">caption =</span> <span class="st">"Model formulas for common MS experimental designs"</span>)</span></code></pre></div>
+<p><strong>Usage:</strong> Match your design to a row, adapt the formula to your column names.</p>
+<hr>
+</section>
+<section id="step-2-simulate-a-realistic-ms-feature-table" class="level2" data-number="21.6">
+<h2 data-number="21.6" class="anchored" data-anchor-id="step-2-simulate-a-realistic-ms-feature-table"><span class="header-section-number">21.6</span> Step 2: Simulate a Realistic MS Feature Table</h2>
+<p>We’ll create a feature table with <strong>200 metabolites</strong> and <strong>18 samples</strong>.<br>
+True effects: treatment upregulates first 30 metabolites; batch 2 has a systematic shift; sex has a small effect.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>n_metabolites <span class="ot">&lt;-</span> <span class="dv">200</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="dv">18</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Experimental factors</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>condition <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Treatment"</span>), <span class="at">each =</span> <span class="dv">9</span>))</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>batch <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"B1"</span>, <span class="st">"B2"</span>, <span class="st">"B3"</span>), <span class="at">times =</span> <span class="dv">6</span>))</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>sex <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">sample</span>(<span class="fu">c</span>(<span class="st">"M"</span>, <span class="st">"F"</span>), n_samples, <span class="at">replace =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Feature table: rows = metabolites, columns = samples</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>intensity_mat <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">rnorm</span>(n_metabolites <span class="sc">*</span> n_samples, <span class="at">mean =</span> <span class="dv">10</span>, <span class="at">sd =</span> <span class="dv">1</span>),</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>                        <span class="at">nrow =</span> n_metabolites, <span class="at">ncol =</span> n_samples)</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Add batch effect (batch 2 is +1.5)</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>intensity_mat[, batch <span class="sc">==</span> <span class="st">"B2"</span>] <span class="ot">&lt;-</span> intensity_mat[, batch <span class="sc">==</span> <span class="st">"B2"</span>] <span class="sc">+</span> <span class="fl">1.5</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Add sex effect (males +0.2)</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>intensity_mat[, sex <span class="sc">==</span> <span class="st">"M"</span>] <span class="ot">&lt;-</span> intensity_mat[, sex <span class="sc">==</span> <span class="st">"M"</span>] <span class="sc">+</span> <span class="fl">0.2</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Add treatment effect for first 30 metabolites</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>intensity_mat[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>, condition <span class="sc">==</span> <span class="st">"Treatment"</span>] <span class="ot">&lt;-</span> </span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  intensity_mat[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>, condition <span class="sc">==</span> <span class="st">"Treatment"</span>] <span class="sc">+</span> <span class="dv">2</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(intensity_mat) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"Metab_"</span>, <span class="dv">1</span><span class="sc">:</span>n_metabolites)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(intensity_mat) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"Sample_"</span>, <span class="dv">1</span><span class="sc">:</span>n_samples)</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Metadata (samples as rows)</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>metadata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample =</span> <span class="fu">colnames</span>(intensity_mat),</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> condition,</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">batch =</span> batch,</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  <span class="at">sex =</span> sex</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Simulated MS feature table: %d metabolites × %d samples</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>            n_metabolites, n_samples))</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(metadata)</span></code></pre></div>
+<blockquote class="blockquote">
+<p><strong>Note:</strong> In real MS data, you would replace <code>intensity_mat</code> with the output from <code>featureValues()</code> from <code>xcms</code> or a normalized expression matrix from <code>DEP</code>.</p>
+</blockquote>
+<hr>
+</section>
+<section id="step-3-covariateadjusted-model-with-limma-batch-sex-etc." class="level2" data-number="21.7">
+<h2 data-number="21.7" class="anchored" data-anchor-id="step-3-covariateadjusted-model-with-limma-batch-sex-etc."><span class="header-section-number">21.7</span> Step 3: Covariate‑Adjusted Model with <code>limma</code> (Batch, Sex, etc.)</h2>
+<section id="the-problem" class="level3" data-number="21.7.1">
+<h3 data-number="21.7.1" class="anchored" data-anchor-id="the-problem"><span class="header-section-number">21.7.1</span> The Problem</h3>
+<p>If batch differs between control and treatment groups, an unadjusted model will find <strong>batch differences</strong> masquerading as <strong>treatment effects</strong>.</p>
+</section>
+<section id="build-design-matrix" class="level3" data-number="21.7.2">
+<h3 data-number="21.7.2" class="anchored" data-anchor-id="build-design-matrix"><span class="header-section-number">21.7.2</span> Build Design Matrix</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>design_adj <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition <span class="sc">+</span> batch <span class="sc">+</span> sex, <span class="at">data =</span> metadata)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(design_adj)</span></code></pre></div>
+</section>
+<section id="fit-the-model-for-all-metabolites" class="level3" data-number="21.7.3">
+<h3 data-number="21.7.3" class="anchored" data-anchor-id="fit-the-model-for-all-metabolites"><span class="header-section-number">21.7.3</span> Fit the Model for All Metabolites</h3>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>fit_adj <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(intensity_mat, design_adj)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>fit_adj <span class="ot">&lt;-</span> <span class="fu">eBayes</span>(fit_adj)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract treatment effect (coefficient "conditionTreatment")</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>results_adj <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit_adj, <span class="at">coef =</span> <span class="st">"conditionTreatment"</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">number =</span> <span class="cn">Inf</span>, <span class="at">sort.by =</span> <span class="st">"P"</span>)</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(results_adj[, <span class="fu">c</span>(<span class="st">"logFC"</span>, <span class="st">"AveExpr"</span>, <span class="st">"P.Value"</span>, <span class="st">"adj.P.Val"</span>)])</span></code></pre></div>
+</section>
+<section id="compare-adjusted-vs-unadjusted-ignoring-batchsex" class="level3" data-number="21.7.4">
+<h3 data-number="21.7.4" class="anchored" data-anchor-id="compare-adjusted-vs-unadjusted-ignoring-batchsex"><span class="header-section-number">21.7.4</span> Compare Adjusted vs Unadjusted (Ignoring Batch/Sex)</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>design_unadj <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition, <span class="at">data =</span> metadata)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fit_unadj <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(intensity_mat, design_unadj) <span class="sc">|&gt;</span> <span class="fu">eBayes</span>()</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>results_unadj <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit_unadj, <span class="at">coef =</span> <span class="st">"conditionTreatment"</span>, <span class="at">number =</span> <span class="cn">Inf</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">Metabolite =</span> <span class="fu">rownames</span>(results_adj)[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>],</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">Adjusted_P =</span> results_adj<span class="sc">$</span>P.Value[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>],</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">Unadjusted_P =</span> results_unadj<span class="sc">$</span>P.Value[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>]</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="sc">|&gt;</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ratio =</span> Unadjusted_P <span class="sc">/</span> Adjusted_P) <span class="sc">|&gt;</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">4</span>)</span></code></pre></div>
+<p><strong>Expected finding:</strong> Adjusted P‑values are often lower (more significant) because batch variance is removed. In MS data, failing to adjust for batch can completely reverse conclusions.</p>
+<hr>
+</section>
+</section>
+<section id="step-4-paired-blocked-model-for-matched-designs" class="level2" data-number="21.8">
+<h2 data-number="21.8" class="anchored" data-anchor-id="step-4-paired-blocked-model-for-matched-designs"><span class="header-section-number">21.8</span> Step 4: Paired / Blocked Model for Matched Designs</h2>
+<section id="when-to-use-in-ms" class="level3" data-number="21.8.1">
+<h3 data-number="21.8.1" class="anchored" data-anchor-id="when-to-use-in-ms"><span class="header-section-number">21.8.1</span> When to Use in MS</h3>
+<ul>
+<li><strong>Before/after</strong> treatment in same patients (paired samples)<br>
+</li>
+<li><strong>Technical replicates</strong> from the same biological sample (blocked)<br>
+</li>
+<li><strong>Matched case‑control</strong> (age/sex matched pairs)</li>
+</ul>
+</section>
+<section id="simulate-paired-ms-data" class="level3" data-number="21.8.2">
+<h3 data-number="21.8.2" class="anchored" data-anchor-id="simulate-paired-ms-data"><span class="header-section-number">21.8.2</span> Simulate Paired MS Data</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>n_patients <span class="ot">&lt;-</span> <span class="dv">9</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>patient_id <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">paste0</span>(<span class="st">"Patient_"</span>, <span class="dv">1</span><span class="sc">:</span>n_patients), <span class="at">times =</span> <span class="dv">2</span>))</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>condition_paired <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Before"</span>, <span class="st">"After"</span>), <span class="at">each =</span> n_patients))</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Feature table: each patient contributes two samples</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>mat_paired <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="at">nrow =</span> n_metabolites, <span class="at">ncol =</span> <span class="dv">18</span>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>n_metabolites) {</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  baseline <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n_patients, <span class="at">mean =</span> <span class="dv">10</span>, <span class="at">sd =</span> <span class="dv">1</span>)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  effect <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(i <span class="sc">&lt;=</span> <span class="dv">30</span>, <span class="dv">1</span>, <span class="dv">0</span>)   <span class="co"># true after effect for first 30</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  mat_paired[i, ] <span class="ot">&lt;-</span> <span class="fu">c</span>(baseline, baseline <span class="sc">+</span> effect <span class="sc">+</span> <span class="fu">rnorm</span>(n_patients, <span class="dv">0</span>, <span class="fl">0.5</span>))</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(mat_paired) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(patient_id, <span class="st">"_"</span>, condition_paired)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="fu">rownames</span>(mat_paired) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"Metab_"</span>, <span class="dv">1</span><span class="sc">:</span>n_metabolites)</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>paired_metadata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample =</span> <span class="fu">colnames</span>(mat_paired),</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">patient =</span> patient_id,</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> condition_paired</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</section>
+<section id="paired-design-matrix" class="level3" data-number="21.8.3">
+<h3 data-number="21.8.3" class="anchored" data-anchor-id="paired-design-matrix"><span class="header-section-number">21.8.3</span> Paired Design Matrix</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Include patient ID to absorb subject‑to‑subject variation</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>design_paired <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition <span class="sc">+</span> patient, <span class="at">data =</span> paired_metadata)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>fit_paired <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(mat_paired, design_paired) <span class="sc">|&gt;</span> <span class="fu">eBayes</span>()</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>results_paired <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit_paired, <span class="at">coef =</span> <span class="st">"conditionAfter"</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>                           <span class="at">number =</span> <span class="cn">Inf</span>, <span class="at">sort.by =</span> <span class="st">"P"</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Significant metabolites (adj.P.Val &lt; 0.05):"</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">sum</span>(results_paired<span class="sc">$</span>adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"True positives detected:"</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">sum</span>(results_paired<span class="sc">$</span>adj.P.Val[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>] <span class="sc">&lt;</span> <span class="fl">0.05</span>), <span class="st">"/ 30</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+<p><strong>Key insight:</strong> Including <code>patient</code> as a fixed effect removes between‑patient variability, increasing power to detect the treatment effect. This is the linear model equivalent of a paired t‑test.</p>
+<hr>
+</section>
+</section>
+<section id="step-5-mixedeffects-models-for-repeated-measures-longitudinal-ms" class="level2" data-number="21.9">
+<h2 data-number="21.9" class="anchored" data-anchor-id="step-5-mixedeffects-models-for-repeated-measures-longitudinal-ms"><span class="header-section-number">21.9</span> Step 5: Mixed‑Effects Models for Repeated Measures (Longitudinal MS)</h2>
+<section id="when-to-use" class="level3" data-number="21.9.1">
+<h3 data-number="21.9.1" class="anchored" data-anchor-id="when-to-use"><span class="header-section-number">21.9.1</span> When to Use</h3>
+<ul>
+<li><strong>Time course</strong> – same subjects measured at 3+ time points<br>
+</li>
+<li><strong>Multi‑level designs</strong> – measurements nested within subjects (e.g., cells within patients)</li>
+</ul>
+</section>
+<section id="simulate-longitudinal-ms-data" class="level3" data-number="21.9.2">
+<h3 data-number="21.9.2" class="anchored" data-anchor-id="simulate-longitudinal-ms-data"><span class="header-section-number">21.9.2</span> Simulate Longitudinal MS Data</h3>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>n_subjects <span class="ot">&lt;-</span> <span class="dv">20</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>n_timepoints <span class="ot">&lt;-</span> <span class="dv">4</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>long_df <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">subject =</span> <span class="fu">paste0</span>(<span class="st">"S"</span>, <span class="dv">1</span><span class="sc">:</span>n_subjects),</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">time =</span> <span class="dv">1</span><span class="sc">:</span>n_timepoints,</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Treatment"</span>)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">subject_effect =</span> <span class="fu">rep</span>(<span class="fu">rnorm</span>(n_subjects, <span class="dv">0</span>, <span class="fl">0.5</span>), <span class="at">each =</span> n_timepoints <span class="sc">*</span> <span class="dv">2</span>),</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">treatment_effect =</span> <span class="fu">ifelse</span>(condition <span class="sc">==</span> <span class="st">"Treatment"</span>, <span class="fl">0.3</span> <span class="sc">*</span> time, <span class="dv">0</span>),</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">abundance =</span> <span class="dv">10</span> <span class="sc">+</span> subject_effect <span class="sc">+</span> treatment_effect <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="fl">0.3</span>)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(long_df)</span></code></pre></div>
+</section>
+<section id="fit-mixed-model-for-one-metabolite" class="level3" data-number="21.9.3">
+<h3 data-number="21.9.3" class="anchored" data-anchor-id="fit-mixed-model-for-one-metabolite"><span class="header-section-number">21.9.3</span> Fit Mixed Model for One Metabolite</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>fit_lmer <span class="ot">&lt;-</span> <span class="fu">lmer</span>(abundance <span class="sc">~</span> condition <span class="sc">*</span> time <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> subject),</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> long_df)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(fit_lmer, <span class="at">effects =</span> <span class="st">"fixed"</span>) <span class="sc">|&gt;</span> knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">3</span>)</span></code></pre></div>
+<p><strong>Coefficient interpretation for MS time courses:</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 58%">
+<col style="width: 41%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Coefficient</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>(Intercept)</td>
+<td>Baseline abundance for Control at time 0</td>
+</tr>
+<tr class="even">
+<td>conditionTreatment</td>
+<td>Difference between Treatment and Control at time 0</td>
+</tr>
+<tr class="odd">
+<td>time</td>
+<td>Change over time in Control group (slope)</td>
+</tr>
+<tr class="even">
+<td>conditionTreatment:time</td>
+<td><strong>Interaction</strong> – does treatment change the slope over time?</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="scaling-to-many-metabolites" class="level3" data-number="21.9.4">
+<h3 data-number="21.9.4" class="anchored" data-anchor-id="scaling-to-many-metabolites"><span class="header-section-number">21.9.4</span> Scaling to Many Metabolites</h3>
+<p>For real MS data, you can loop over metabolites:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Function to extract interaction p‑value</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>get_interaction_p <span class="ot">&lt;-</span> <span class="cf">function</span>(metabolite_data) {</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># metabolite_data must have columns: abundance, condition, time, subject</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lmer</span>(abundance <span class="sc">~</span> condition <span class="sc">*</span> time <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> subject),</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> metabolite_data)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tidy</span>(fit, <span class="at">effects =</span> <span class="st">"fixed"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(term <span class="sc">==</span> <span class="st">"conditionTreatment:time"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pull</span>(p.value)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Example for one metabolite</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>p_val <span class="ot">&lt;-</span> <span class="fu">get_interaction_p</span>(long_df)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Interaction p‑value:"</span>, p_val, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+<blockquote class="blockquote">
+<p><strong>Note:</strong> For many metabolites, consider using <code>limma</code> with <code>duplicateCorrelation</code> (faster). Mixed models are more flexible but computationally heavier.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="step-6-variance-partitioning-which-factors-drive-ms-variation" class="level2" data-number="21.10">
+<h2 data-number="21.10" class="anchored" data-anchor-id="step-6-variance-partitioning-which-factors-drive-ms-variation"><span class="header-section-number">21.10</span> Step 6: Variance Partitioning – Which Factors Drive MS Variation?</h2>
+<section id="why-do-this-for-ms-data" class="level3" data-number="21.10.1">
+<h3 data-number="21.10.1" class="anchored" data-anchor-id="why-do-this-for-ms-data"><span class="header-section-number">21.10.1</span> Why Do This for MS Data?</h3>
+<p>Understanding variance sources helps you decide whether to include factors in your model and whether your experiment is well‑designed.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare data: samples as rows, metabolites as columns</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>intensity_t <span class="ot">&lt;-</span> <span class="fu">t</span>(intensity_mat)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(intensity_t) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"Metab_"</span>, <span class="dv">1</span><span class="sc">:</span>n_metabolites)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Formula for variance components</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>vp_form <span class="ot">&lt;-</span> <span class="er">~</span> condition <span class="sc">+</span> batch <span class="sc">+</span> sex</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit variance partition</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>vp <span class="ot">&lt;-</span> <span class="fu">fitExtractVarPartModel</span>(intensity_t, vp_form, metadata)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot across all metabolites</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="fu">plotVarPart</span>(vp, <span class="at">main =</span> <span class="st">"Variance decomposition in MS feature table"</span>)</span></code></pre></div>
+<p><strong>Interpreting the plot for MS data:</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 27%">
+<col style="width: 39%">
+<col style="width: 32%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>If high (&gt;30%)</th>
+<th>Implication</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>condition</strong></td>
+<td>Good – biological signal is strong</td>
+<td>Your model will detect differences</td>
+</tr>
+<tr class="even">
+<td><strong>batch</strong></td>
+<td>Problematic – technical artifact dominates</td>
+<td>Need batch correction (including batch in model)</td>
+</tr>
+<tr class="odd">
+<td><strong>sex</strong></td>
+<td>Interesting – sex‑specific effects exist</td>
+<td>Include sex as covariate or stratify</td>
+</tr>
+<tr class="even">
+<td><strong>Residual</strong></td>
+<td>&gt;50% – high unexplained noise</td>
+<td>Need more replicates or better MS measurement</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+</section>
+<section id="step-7-interaction-models-factorial-designs-for-ms" class="level2" data-number="21.11">
+<h2 data-number="21.11" class="anchored" data-anchor-id="step-7-interaction-models-factorial-designs-for-ms"><span class="header-section-number">21.11</span> Step 7: Interaction Models (Factorial Designs) for MS</h2>
+<section id="when-to-test-interactions" class="level3" data-number="21.11.1">
+<h3 data-number="21.11.1" class="anchored" data-anchor-id="when-to-test-interactions"><span class="header-section-number">21.11.1</span> When to Test Interactions</h3>
+<p>Interaction answers: <em>Does the effect of treatment depend on time (or another factor)?</em><br>
+Example: A drug reduces metabolite abundance only after 24 hours.</p>
+</section>
+<section id="simulate-interaction-data-22-design" class="level3" data-number="21.11.2">
+<h3 data-number="21.11.2" class="anchored" data-anchor-id="simulate-interaction-data-22-design"><span class="header-section-number">21.11.2</span> Simulate Interaction Data (2×2 design)</h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>time2 <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"T0"</span>, <span class="st">"T24"</span>), <span class="at">each =</span> n_samples <span class="sc">/</span> <span class="dv">2</span>))</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>condition2 <span class="ot">&lt;-</span> condition</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Add interaction effect for first 30 metabolites</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>mat_interact <span class="ot">&lt;-</span> intensity_mat</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>mat_interact[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>, condition2 <span class="sc">==</span> <span class="st">"Treatment"</span> <span class="sc">&amp;</span> time2 <span class="sc">==</span> <span class="st">"T24"</span>] <span class="ot">&lt;-</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  mat_interact[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>, condition2 <span class="sc">==</span> <span class="st">"Treatment"</span> <span class="sc">&amp;</span> time2 <span class="sc">==</span> <span class="st">"T24"</span>] <span class="sc">+</span> <span class="fl">1.5</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>interact_metadata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample =</span> <span class="fu">colnames</span>(mat_interact),</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> condition2,</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">time =</span> time2</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</section>
+<section id="fit-interaction-model" class="level3" data-number="21.11.3">
+<h3 data-number="21.11.3" class="anchored" data-anchor-id="fit-interaction-model"><span class="header-section-number">21.11.3</span> Fit Interaction Model</h3>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>design_interact <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition <span class="sc">*</span> time, <span class="at">data =</span> interact_metadata)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>fit_interact <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(mat_interact, design_interact) <span class="sc">|&gt;</span> <span class="fu">eBayes</span>()</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Interaction coefficient (conditionTreatment:timeT24)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>results_interact <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit_interact, <span class="at">coef =</span> <span class="st">"conditionTreatment:timeT24"</span>,</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>                              <span class="at">number =</span> <span class="cn">Inf</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(results_interact[, <span class="fu">c</span>(<span class="st">"logFC"</span>, <span class="st">"P.Value"</span>, <span class="st">"adj.P.Val"</span>)])</span></code></pre></div>
+</section>
+<section id="visualise-the-top-interaction" class="level3" data-number="21.11.4">
+<h3 data-number="21.11.4" class="anchored" data-anchor-id="visualise-the-top-interaction"><span class="header-section-number">21.11.4</span> Visualise the Top Interaction</h3>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>top_metab <span class="ot">&lt;-</span> <span class="fu">rownames</span>(results_interact)[<span class="dv">1</span>]</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>plot_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">intensity =</span> mat_interact[top_metab, ],</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> condition2,</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">time =</span> time2</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(plot_df, <span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> intensity, <span class="at">color =</span> condition, <span class="at">group =</span> condition)) <span class="sc">+</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">"line"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">"point"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun.data =</span> mean_se, <span class="at">geom =</span> <span class="st">"errorbar"</span>, <span class="at">width =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="fu">paste</span>(<span class="st">"Interaction plot for"</span>, top_metab),</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Non‑parallel lines indicate a significant interaction"</span>,</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Time point"</span>, <span class="at">y =</span> <span class="st">"log2 intensity"</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p><strong>Interpretation for MS data:</strong> If the lines cross or diverge, the treatment effect changes over time – that’s the interaction you are testing.</p>
+<hr>
+</section>
+</section>
+<section id="step-8-model-selection-decision-flowchart-for-ms-experiments" class="level2" data-number="21.12">
+<h2 data-number="21.12" class="anchored" data-anchor-id="step-8-model-selection-decision-flowchart-for-ms-experiments"><span class="header-section-number">21.12</span> Step 8: Model Selection Decision Flowchart for MS Experiments</h2>
+<pre class="mermaid"><code>flowchart TD
+    A[Start: Your MS feature table &amp; metadata] --&gt; B{Repeated measures on&lt;br&gt;same subjects?}
+    
+    B --&gt;|Yes – same subject measured multiple times| C{How many time points?}
+    C --&gt;|2 time points| D[limma paired model&lt;br&gt;~ condition + subject]
+    C --&gt;|3+ time points| E[lmer mixed model&lt;br&gt;~ condition * time + (1|subject)]
+    
+    B --&gt;|No – independent samples| F{Any known confounders&lt;br&gt;batch, sex, age?}
+    F --&gt;|Yes| G[limma covariate‑adjusted&lt;br&gt;~ condition + batch + sex]
+    F --&gt;|No| H{More than one factor?}
+    
+    H --&gt;|Yes – factorial| I[limma interaction model&lt;br&gt;~ factor1 * factor2]
+    H --&gt;|No – simple| J[limma two‑group&lt;br&gt;~ condition]
+    
+    D --&gt; K[Extract coefficient of interest]
+    E --&gt; K
+    G --&gt; K
+    I --&gt; K
+    J --&gt; K
+    
+    K --&gt; L[Apply eBayes shrinkage]
+    L --&gt; M[FDR correction (BH)]
+    M --&gt; N[Export results table]</code></pre>
+<hr>
+</section>
+<section id="step-9-complete-workflow-real-ms-data-ready" class="level2" data-number="21.13">
+<h2 data-number="21.13" class="anchored" data-anchor-id="step-9-complete-workflow-real-ms-data-ready"><span class="header-section-number">21.13</span> Step 9: Complete Workflow (Real MS Data Ready)</h2>
+<p>Replace <code>your_intensity_matrix</code> with your actual feature table (samples as columns).</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Complete covariate modeling pipeline for MS data</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Prepare metadata (must match column order of intensity matrix)</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>metadata <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition =</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"Ctrl"</span>,<span class="st">"Treat"</span>), <span class="at">each =</span> <span class="dv">9</span>)),</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">batch     =</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">"B1"</span>,<span class="st">"B2"</span>,<span class="st">"B3"</span>), <span class="at">times =</span> <span class="dv">6</span>)),</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">sex       =</span> <span class="fu">factor</span>(<span class="fu">sample</span>(<span class="fu">c</span>(<span class="st">"M"</span>,<span class="st">"F"</span>), <span class="dv">18</span>, <span class="at">replace =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Build design matrix (include all known confounders)</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> condition <span class="sc">+</span> batch <span class="sc">+</span> sex, <span class="at">data =</span> metadata)</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Fit model</span></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">lmFit</span>(your_intensity_matrix, design) <span class="sc">|&gt;</span> <span class="fu">eBayes</span>()</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Extract results for condition effect</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">topTable</span>(fit, <span class="at">coef =</span> <span class="st">"conditionTreatment"</span>,</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>                    <span class="at">number =</span> <span class="cn">Inf</span>, <span class="at">sort.by =</span> <span class="st">"P"</span>)</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Filter significant features (FDR &lt; 0.05)</span></span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>sig_results <span class="ot">&lt;-</span> results <span class="sc">|&gt;</span> <span class="fu">filter</span>(adj.P.Val <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Export</span></span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(sig_results, <span class="st">"MS_differential_results_covariate_adjusted.csv"</span>)</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a><span class="co"># 7. Quick variance partition diagnostic (samples as rows)</span></span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(variancePartition)</span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>vp <span class="ot">&lt;-</span> <span class="fu">fitExtractVarPartModel</span>(<span class="fu">t</span>(your_intensity_matrix),</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>                              <span class="sc">~</span> condition <span class="sc">+</span> batch <span class="sc">+</span> sex,</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>                              metadata)</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a><span class="fu">plotVarPart</span>(vp)</span></code></pre></div>
+<hr>
+</section>
+<section id="common-pitfalls-in-ms-data-modeling" class="level2" data-number="21.14">
+<h2 data-number="21.14" class="anchored" data-anchor-id="common-pitfalls-in-ms-data-modeling"><span class="header-section-number">21.14</span> Common Pitfalls in MS Data Modeling</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 48%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pitfall</th>
+<th>Why It’s a Problem</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Adding too many covariates</strong></td>
+<td>Overfitting, reduced degrees of freedom</td>
+<td>Include only known confounders (batch, sex, age) – not all possible variables</td>
+</tr>
+<tr class="even">
+<td><strong>Ignoring batch when it’s confounded</strong></td>
+<td>Batch effect masquerades as treatment effect</td>
+<td>Always check batch association with condition (e.g., χ² test)</td>
+</tr>
+<tr class="odd">
+<td><strong>Using mixed models for &lt;5 subjects</strong></td>
+<td>Random effects poorly estimated</td>
+<td>Use paired design with fixed subject effect instead</td>
+</tr>
+<tr class="even">
+<td><strong>Forgetting interactions</strong></td>
+<td>Main effect may not tell full story (e.g., treatment only works at late time)</td>
+<td>Plot data; test interaction if biologically plausible</td>
+</tr>
+<tr class="odd">
+<td><strong>Treating time as categorical with many levels</strong></td>
+<td>Loss of power, multiple testing burden</td>
+<td>Consider continuous time with polynomial or spline terms</td>
+</tr>
+<tr class="even">
+<td><strong>Not checking model assumptions</strong></td>
+<td>Residuals may not be normal, heteroscedasticity</td>
+<td>Use <code>plot(fit)</code> for limma; <code>plot(fit_lmer)</code> for mixed models</td>
+</tr>
+<tr class="odd">
+<td><strong>Matrix orientation confusion</strong></td>
+<td><code>lmFit</code> expects rows = features, columns = samples</td>
+<td>Verify <code>dim(your_intensity_matrix)</code> – transpose if needed</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="exercises-apply-to-your-own-ms-data" class="level2" data-number="21.15">
+<h2 data-number="21.15" class="anchored" data-anchor-id="exercises-apply-to-your-own-ms-data"><span class="header-section-number">21.15</span> Exercises (Apply to Your Own MS Data)</h2>
+<section id="exercise-1-add-a-continuous-covariate" class="level3" data-number="21.15.1">
+<h3 data-number="21.15.1" class="anchored" data-anchor-id="exercise-1-add-a-continuous-covariate"><span class="header-section-number">21.15.1</span> Exercise 1: Add a Continuous Covariate</h3>
+<p>Using the simulated data from Step 2, add <code>age</code> as a continuous covariate (simulate random ages 20‑80). Fit a model with <code>~ condition + batch + sex + age</code>. How do the logFC and p‑values for the treatment effect change compared to the model without age?</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-2-compare-paired-vs-unpaired-on-realworld-ms-data" class="level3" data-number="21.15.2">
+<h3 data-number="21.15.2" class="anchored" data-anchor-id="exercise-2-compare-paired-vs-unpaired-on-realworld-ms-data"><span class="header-section-number">21.15.2</span> Exercise 2: Compare Paired vs Unpaired on Real‑World MS Data</h3>
+<p>Load the <code>msdata::metabolomics()</code> files, process them with <code>xcms</code> (Chapter 7), and extract a feature table. If your experiment had paired samples (e.g., same subject before/after), run both a paired and an unpaired <code>limma</code> model. How many features are significant only in the paired model?</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-3-variance-partition-on-a-clinical-ms-dataset" class="level3" data-number="21.15.3">
+<h3 data-number="21.15.3" class="anchored" data-anchor-id="exercise-3-variance-partition-on-a-clinical-ms-dataset"><span class="header-section-number">21.15.3</span> Exercise 3: Variance Partition on a Clinical MS Dataset</h3>
+<p>Load the <code>sacurine</code> dataset from <code>ropls</code>. Use <code>variancePartition</code> to quantify variance explained by <code>sample_type</code> (urine), <code>age</code>, and <code>gender</code>. Which factor dominates?</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+</section>
+<section id="exercise-4-discover-interactions-in-a-timecourse-ms-experiment" class="level3" data-number="21.15.4">
+<h3 data-number="21.15.4" class="anchored" data-anchor-id="exercise-4-discover-interactions-in-a-timecourse-ms-experiment"><span class="header-section-number">21.15.4</span> Exercise 4: Discover Interactions in a Time‑Course MS Experiment</h3>
+<p>Using the interaction‑simulated data, test all metabolites for <code>condition × time</code> interaction. Report: - How many true positives (first 30 metabolites) are significant at FDR &lt; 0.05? - How many false positives (metabolites 31‑200) are significant?</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Your code here</span></span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="summary" class="level2" data-number="21.16">
+<h2 data-number="21.16" class="anchored" data-anchor-id="summary"><span class="header-section-number">21.16</span> Summary</h2>
+<section id="key-outputs-from-this-chapter-for-ms-data" class="level3" data-number="21.16.1">
+<h3 data-number="21.16.1" class="anchored" data-anchor-id="key-outputs-from-this-chapter-for-ms-data"><span class="header-section-number">21.16.1</span> Key Outputs from This Chapter (for MS Data)</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Covariate‑adjusted results</td>
+<td>Differential abundance controlling for batch, sex, age</td>
+</tr>
+<tr class="even">
+<td>Paired model results</td>
+<td>Increased power for matched designs (before/after)</td>
+</tr>
+<tr class="odd">
+<td>Mixed model summary</td>
+<td>Fixed (treatment, time) and random (subject) effects</td>
+</tr>
+<tr class="even">
+<td>Variance partition plot</td>
+<td>Which factors (condition, batch, sex) drive MS variation?</td>
+</tr>
+<tr class="odd">
+<td>Interaction plot</td>
+<td>Visualise condition × time effects</td>
+</tr>
+<tr class="even">
+<td>Model decision table</td>
+<td>Choose the right formula for your MS experiment design</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="model-selection-quick-reference-for-ms-experiments" class="level3" data-number="21.16.2">
+<h3 data-number="21.16.2" class="anchored" data-anchor-id="model-selection-quick-reference-for-ms-experiments"><span class="header-section-number">21.16.2</span> Model Selection Quick Reference for MS Experiments</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Your MS Design</th>
+<th>Use This Formula</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>2 groups, no confounders</td>
+<td><code>~ condition</code></td>
+</tr>
+<tr class="even">
+<td>2 groups + batch/sex/age</td>
+<td><code>~ condition + covariate</code></td>
+</tr>
+<tr class="odd">
+<td>Matched pairs (before/after)</td>
+<td><code>~ condition + subject_id</code></td>
+</tr>
+<tr class="even">
+<td>Time course, 2 time points</td>
+<td><code>~ condition * time</code> (interaction)</td>
+</tr>
+<tr class="odd">
+<td>Time course, 3+ time points</td>
+<td><code>lmer(value ~ condition * time + (1\|subject))</code></td>
+</tr>
+<tr class="even">
+<td>Multiple variance sources unknown</td>
+<td><code>variancePartition</code> first, then model</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="resources-specific-to-ms-data" class="level3" data-number="21.16.3">
+<h3 data-number="21.16.3" class="anchored" data-anchor-id="resources-specific-to-ms-data"><span class="header-section-number">21.16.3</span> Resources Specific to MS Data</h3>
+<ul>
+<li><a href="https://www.bioconductor.org/packages/release/bioc/vignettes/limma/inst/doc/limmaUsersGuide.pdf">limma for proteomics</a> (Chapter 20)</li>
+<li><a href="https://www.bioconductor.org/packages/release/bioc/html/MSstats.html">MSstats mixed models</a> – designed for MS repeated measures</li>
+<li><a href="https://doi.org/10.1186/s12859-016-1323-7">variancePartition paper with MS example</a></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="session-information" class="level2" data-number="21.17">
+<h2 data-number="21.17" class="anchored" data-anchor-id="session-information"><span class="header-section-number">21.17</span> Session Information</h2>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./21-differential-abundance.html" class="pagination-link" aria-label="Differential Abundance Analysis with Design Matrices">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./23-machine-learning.html" class="pagination-link" aria-label="Machine Learning for MS Data">
+        <span class="nav-page-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/22-covariates-repeated.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

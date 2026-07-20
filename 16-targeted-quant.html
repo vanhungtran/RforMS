@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>15&nbsp; Targeted MS Quantification and Calibration – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./17-metabolomics-pipelines.html" rel="next">
+<link href="./15-tmt-labeling.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./13-quant-proteomics.html">Part III — Quantification Workflows</a></li><li class="breadcrumb-item"><a href="./16-targeted-quant.html"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">15.1</span> Learning Objectives</a></li>
+  <li><a href="#targeted-versus-untargeted-metabolomics" id="toc-targeted-versus-untargeted-metabolomics" class="nav-link" data-scroll-target="#targeted-versus-untargeted-metabolomics"><span class="header-section-number">15.2</span> Targeted Versus Untargeted Metabolomics</a></li>
+  <li><a href="#srm-mrm-and-prm-data" id="toc-srm-mrm-and-prm-data" class="nav-link" data-scroll-target="#srm-mrm-and-prm-data"><span class="header-section-number">15.3</span> SRM, MRM, and PRM Data</a>
+  <ul class="collapse">
+  <li><a href="#basic-concepts" id="toc-basic-concepts" class="nav-link" data-scroll-target="#basic-concepts"><span class="header-section-number">15.3.1</span> Basic Concepts</a></li>
+  <li><a href="#transition-selection" id="toc-transition-selection" class="nav-link" data-scroll-target="#transition-selection"><span class="header-section-number">15.3.2</span> Transition Selection</a></li>
+  <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure"><span class="header-section-number">15.3.3</span> Data Structure</a></li>
+  </ul></li>
+  <li><a href="#calibration-curves" id="toc-calibration-curves" class="nav-link" data-scroll-target="#calibration-curves"><span class="header-section-number">15.4</span> Calibration Curves</a>
+  <ul class="collapse">
+  <li><a href="#principle" id="toc-principle" class="nav-link" data-scroll-target="#principle"><span class="header-section-number">15.4.1</span> Principle</a></li>
+  <li><a href="#types-of-calibration-models" id="toc-types-of-calibration-models" class="nav-link" data-scroll-target="#types-of-calibration-models"><span class="header-section-number">15.4.2</span> Types of Calibration Models</a></li>
+  <li><a href="#building-a-calibration-curve-in-r" id="toc-building-a-calibration-curve-in-r" class="nav-link" data-scroll-target="#building-a-calibration-curve-in-r"><span class="header-section-number">15.4.3</span> Building a Calibration Curve in R</a></li>
+  <li><a href="#important-metrics" id="toc-important-metrics" class="nav-link" data-scroll-target="#important-metrics"><span class="header-section-number">15.4.4</span> Important Metrics</a></li>
+  </ul></li>
+  <li><a href="#internal-standards-is" id="toc-internal-standards-is" class="nav-link" data-scroll-target="#internal-standards-is"><span class="header-section-number">15.5</span> Internal Standards (IS)</a>
+  <ul class="collapse">
+  <li><a href="#why-use-internal-standards" id="toc-why-use-internal-standards" class="nav-link" data-scroll-target="#why-use-internal-standards"><span class="header-section-number">15.5.1</span> Why Use Internal Standards?</a></li>
+  <li><a href="#properties-of-a-good-internal-standard" id="toc-properties-of-a-good-internal-standard" class="nav-link" data-scroll-target="#properties-of-a-good-internal-standard"><span class="header-section-number">15.5.2</span> Properties of a Good Internal Standard</a></li>
+  <li><a href="#using-is-in-calibration" id="toc-using-is-in-calibration" class="nav-link" data-scroll-target="#using-is-in-calibration"><span class="header-section-number">15.5.3</span> Using IS in Calibration</a></li>
+  </ul></li>
+  <li><a href="#limit-of-detection-and-limit-of-quantification" id="toc-limit-of-detection-and-limit-of-quantification" class="nav-link" data-scroll-target="#limit-of-detection-and-limit-of-quantification"><span class="header-section-number">15.6</span> Limit of Detection and Limit of Quantification</a>
+  <ul class="collapse">
+  <li><a href="#definitions" id="toc-definitions" class="nav-link" data-scroll-target="#definitions"><span class="header-section-number">15.6.1</span> Definitions</a></li>
+  <li><a href="#empirical-calculation-from-calibration-data" id="toc-empirical-calculation-from-calibration-data" class="nav-link" data-scroll-target="#empirical-calculation-from-calibration-data"><span class="header-section-number">15.6.2</span> Empirical Calculation from Calibration Data</a></li>
+  <li><a href="#reporting-rules" id="toc-reporting-rules" class="nav-link" data-scroll-target="#reporting-rules"><span class="header-section-number">15.6.3</span> Reporting Rules</a></li>
+  </ul></li>
+  <li><a href="#peak-integration-and-manual-inspection" id="toc-peak-integration-and-manual-inspection" class="nav-link" data-scroll-target="#peak-integration-and-manual-inspection"><span class="header-section-number">15.7</span> Peak Integration and Manual Inspection</a>
+  <ul class="collapse">
+  <li><a href="#automated-integration" id="toc-automated-integration" class="nav-link" data-scroll-target="#automated-integration"><span class="header-section-number">15.7.1</span> Automated Integration</a></li>
+  <li><a href="#common-integration-errors" id="toc-common-integration-errors" class="nav-link" data-scroll-target="#common-integration-errors"><span class="header-section-number">15.7.2</span> Common Integration Errors</a></li>
+  <li><a href="#manual-validation-workflow" id="toc-manual-validation-workflow" class="nav-link" data-scroll-target="#manual-validation-workflow"><span class="header-section-number">15.7.3</span> Manual Validation Workflow</a></li>
+  </ul></li>
+  <li><a href="#absolute-versus-relative-quantification" id="toc-absolute-versus-relative-quantification" class="nav-link" data-scroll-target="#absolute-versus-relative-quantification"><span class="header-section-number">15.8</span> Absolute Versus Relative Quantification</a>
+  <ul class="collapse">
+  <li><a href="#semi-quantitative-workflow-no-standards" id="toc-semi-quantitative-workflow-no-standards" class="nav-link" data-scroll-target="#semi-quantitative-workflow-no-standards"><span class="header-section-number">15.8.1</span> Semi-Quantitative Workflow (No Standards)</a></li>
+  </ul></li>
+  <li><a href="#practical-example-targeted-metabolite-quantification-in-r" id="toc-practical-example-targeted-metabolite-quantification-in-r" class="nav-link" data-scroll-target="#practical-example-targeted-metabolite-quantification-in-r"><span class="header-section-number">15.9</span> Practical Example: Targeted Metabolite Quantification in R</a>
+  <ul class="collapse">
+  <li><a href="#step-1-load-and-explore-data" id="toc-step-1-load-and-explore-data" class="nav-link" data-scroll-target="#step-1-load-and-explore-data"><span class="header-section-number">15.9.1</span> Step 1 – Load and explore data</a></li>
+  <li><a href="#step-2-build-calibration-curve" id="toc-step-2-build-calibration-curve" class="nav-link" data-scroll-target="#step-2-build-calibration-curve"><span class="header-section-number">15.9.2</span> Step 2 – Build calibration curve</a></li>
+  <li><a href="#step-3-determine-lod-and-loq-using-blank" id="toc-step-3-determine-lod-and-loq-using-blank" class="nav-link" data-scroll-target="#step-3-determine-lod-and-loq-using-blank"><span class="header-section-number">15.9.3</span> Step 3 – Determine LOD and LOQ using blank</a></li>
+  <li><a href="#step-4-quantify-unknowns-and-flag-below-lodloq" id="toc-step-4-quantify-unknowns-and-flag-below-lodloq" class="nav-link" data-scroll-target="#step-4-quantify-unknowns-and-flag-below-lodloq"><span class="header-section-number">15.9.4</span> Step 4 – Quantify unknowns and flag below LOD/LOQ</a></li>
+  <li><a href="#step-5-quality-control-and-reporting" id="toc-step-5-quality-control-and-reporting" class="nav-link" data-scroll-target="#step-5-quality-control-and-reporting"><span class="header-section-number">15.9.5</span> Step 5 – Quality control and reporting</a></li>
+  </ul></li>
+  <li><a href="#example-4-targeted-ms-calibration-and-quantitative-assay-report" id="toc-example-4-targeted-ms-calibration-and-quantitative-assay-report" class="nav-link" data-scroll-target="#example-4-targeted-ms-calibration-and-quantitative-assay-report"><span class="header-section-number">15.10</span> Example 4: Targeted MS Calibration and Quantitative Assay Report</a>
+  <ul class="collapse">
+  <li><a href="#project-question" id="toc-project-question" class="nav-link" data-scroll-target="#project-question"><span class="header-section-number">15.10.1</span> Project Question</a></li>
+  <li><a href="#dataset-and-scope" id="toc-dataset-and-scope" class="nav-link" data-scroll-target="#dataset-and-scope"><span class="header-section-number">15.10.2</span> Dataset and Scope</a></li>
+  <li><a href="#workflow-map" id="toc-workflow-map" class="nav-link" data-scroll-target="#workflow-map"><span class="header-section-number">15.10.3</span> Workflow Map</a></li>
+  <li><a href="#simulate-a-transition-level-assay-table" id="toc-simulate-a-transition-level-assay-table" class="nav-link" data-scroll-target="#simulate-a-transition-level-assay-table"><span class="header-section-number">15.10.4</span> Simulate a Transition-Level Assay Table</a></li>
+  <li><a href="#transition-level-qc" id="toc-transition-level-qc" class="nav-link" data-scroll-target="#transition-level-qc"><span class="header-section-number">15.10.5</span> Transition-Level QC</a></li>
+  <li><a href="#calibration-models-lod-and-loq" id="toc-calibration-models-lod-and-loq" class="nav-link" data-scroll-target="#calibration-models-lod-and-loq"><span class="header-section-number">15.10.6</span> Calibration Models, LOD, and LOQ</a></li>
+  <li><a href="#quantify-qc-and-unknown-samples" id="toc-quantify-qc-and-unknown-samples" class="nav-link" data-scroll-target="#quantify-qc-and-unknown-samples"><span class="header-section-number">15.10.7</span> Quantify QC and Unknown Samples</a></li>
+  <li><a href="#group-comparison-for-targeted-analytes" id="toc-group-comparison-for-targeted-analytes" class="nav-link" data-scroll-target="#group-comparison-for-targeted-analytes"><span class="header-section-number">15.10.8</span> Group Comparison for Targeted Analytes</a></li>
+  <li><a href="#assay-report-tables" id="toc-assay-report-tables" class="nav-link" data-scroll-target="#assay-report-tables"><span class="header-section-number">15.10.9</span> Assay Report Tables</a></li>
+  <li><a href="#main-outputs" id="toc-main-outputs" class="nav-link" data-scroll-target="#main-outputs"><span class="header-section-number">15.10.10</span> Main Outputs</a></li>
+  </ul></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references"><span class="header-section-number">15.11</span> References</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/16-targeted-quant.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./13-quant-proteomics.html">Part III — Quantification Workflows</a></li><li class="breadcrumb-item"><a href="./16-targeted-quant.html"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>In targeted metabolomics, the question is not only whether a molecule is present, but how much is there and how confident you are.</em></p>
+</blockquote>
+<p>Targeted mass spectrometry (MS) quantifies pre-selected metabolites with high sensitivity, specificity, and linear dynamic range. This chapter covers the principles of targeted quantification – from assay design to absolute concentration determination – and provides a practical R workflow for building calibration curves, calculating limits, and reporting results.</p>
+<hr>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Reporting concentrations outside the calibration range. A value above your highest standard or below the LOQ is a guess dressed as a measurement. Report only within the validated linear range.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="15.1">
+<h2 data-number="15.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">15.1</span> Learning Objectives</h2>
+<p>By the end of this chapter, you will be able to:</p>
+<ul>
+<li>Distinguish targeted (<strong>SRM/MRM/PRM</strong>) from untargeted MS workflows<br>
+</li>
+<li>Construct and evaluate a <strong>calibration curve</strong> for a metabolite<br>
+</li>
+<li>Use <strong>internal standards</strong> to correct for matrix effects and instrument drift<br>
+</li>
+<li>Compute <strong>limit of detection (LOD)</strong> and <strong>limit of quantification (LOQ)</strong><br>
+</li>
+<li>Perform <strong>peak integration</strong> and manual QC<br>
+</li>
+<li>Implement a complete targeted quantification pipeline in R</li>
+</ul>
+<hr>
+</section>
+<section id="targeted-versus-untargeted-metabolomics" class="level2" data-number="15.2">
+<h2 data-number="15.2" class="anchored" data-anchor-id="targeted-versus-untargeted-metabolomics"><span class="header-section-number">15.2</span> Targeted Versus Untargeted Metabolomics</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 36%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Feature</th>
+<th>Untargeted</th>
+<th>Targeted</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Goal</strong></td>
+<td>Discovery of unknown/known features</td>
+<td>Precise quantification of known metabolites</td>
+</tr>
+<tr class="even">
+<td><strong>Coverage</strong></td>
+<td>Hundreds to thousands</td>
+<td>Tens to hundreds (pre-selected)</td>
+</tr>
+<tr class="odd">
+<td><strong>Data type</strong></td>
+<td>Full scan MS1 + data-dependent MS2</td>
+<td>Selected reaction monitoring (SRM/MRM) or parallel reaction monitoring (PRM)</td>
+</tr>
+<tr class="even">
+<td><strong>Sensitivity</strong></td>
+<td>Moderate (ÂµM range)</td>
+<td>High (nM to pM range)</td>
+</tr>
+<tr class="odd">
+<td><strong>Dynamic range</strong></td>
+<td>2–3 orders of magnitude</td>
+<td>4–6 orders of magnitude</td>
+</tr>
+<tr class="even">
+<td><strong>Quantification</strong></td>
+<td>Semi-quantitative (relative)</td>
+<td>Absolute (with standards)</td>
+</tr>
+<tr class="odd">
+<td><strong>Throughput</strong></td>
+<td>Low to medium</td>
+<td>High (triple quadrupoles)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When to use targeted:</strong> Hypothesis-driven studies, clinical biomarker validation, pathway analysis where absolute concentrations matter, or when measuring low-abundance metabolites in complex matrices.</p>
+<hr>
+</section>
+<section id="srm-mrm-and-prm-data" class="level2" data-number="15.3">
+<h2 data-number="15.3" class="anchored" data-anchor-id="srm-mrm-and-prm-data"><span class="header-section-number">15.3</span> SRM, MRM, and PRM Data</h2>
+<section id="basic-concepts" class="level3" data-number="15.3.1">
+<h3 data-number="15.3.1" class="anchored" data-anchor-id="basic-concepts"><span class="header-section-number">15.3.1</span> Basic Concepts</h3>
+<ul>
+<li><strong>SRM (Selected Reaction Monitoring):</strong> Single precursor ion → single product ion. Used on triple quadrupoles.</li>
+<li><strong>MRM (Multiple Reaction Monitoring):</strong> Monitor multiple SRM transitions in one run (the common term).</li>
+<li><strong>PRM (Parallel Reaction Monitoring):</strong> High-resolution MS2 (Q-Orbitrap) – all product ions from a precursor are monitored simultaneously.</li>
+</ul>
+</section>
+<section id="transition-selection" class="level3" data-number="15.3.2">
+<h3 data-number="15.3.2" class="anchored" data-anchor-id="transition-selection"><span class="header-section-number">15.3.2</span> Transition Selection</h3>
+<p>For each metabolite, you need: - <strong>Precursor m/z</strong> (usually [M+H]⁺ or [M-H]⁻) - <strong>Product ion m/z</strong> (most intense, specific fragment) - <strong>Collision energy</strong> (optimised for the transition)</p>
+<p>Example: <strong>Glucose</strong> (negative mode)<br>
+Precursor: ( m/z ) 179.056 ([M-H]⁻) → Product: ( m/z ) 89.024 (fragment)</p>
+</section>
+<section id="data-structure" class="level3" data-number="15.3.3">
+<h3 data-number="15.3.3" class="anchored" data-anchor-id="data-structure"><span class="header-section-number">15.3.3</span> Data Structure</h3>
+<p>Targeted data is usually a table with columns: - <code>transition_id</code> (e.g., “glucose_179&gt;89”) - <code>sample_id</code> - <code>peak_area</code> (integrated intensity) - <code>retention_time</code> - <code>peak_width</code>, <code>signal_to_noise</code>, etc.</p>
+<hr>
+</section>
+</section>
+<section id="calibration-curves" class="level2" data-number="15.4">
+<h2 data-number="15.4" class="anchored" data-anchor-id="calibration-curves"><span class="header-section-number">15.4</span> Calibration Curves</h2>
+<section id="principle" class="level3" data-number="15.4.1">
+<h3 data-number="15.4.1" class="anchored" data-anchor-id="principle"><span class="header-section-number">15.4.1</span> Principle</h3>
+<p>A calibration curve relates <strong>known concentrations</strong> of authentic standards to <strong>measured peak areas</strong> (or area ratios). It allows quantification of unknown samples by interpolation.</p>
+</section>
+<section id="types-of-calibration-models" class="level3" data-number="15.4.2">
+<h3 data-number="15.4.2" class="anchored" data-anchor-id="types-of-calibration-models"><span class="header-section-number">15.4.2</span> Types of Calibration Models</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 22%">
+<col style="width: 32%">
+<col style="width: 45%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>Equation</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Linear (unweighted)</td>
+<td>( A = a C + b )</td>
+<td>Low concentration range, constant variance</td>
+</tr>
+<tr class="even">
+<td>Linear (weighted)</td>
+<td>( A = a C + b ) with ( 1/x ) or ( 1/x^2 ) weights</td>
+<td>Heteroscedastic data (common in MS)</td>
+</tr>
+<tr class="odd">
+<td>Quadratic</td>
+<td>( A = a C^2 + b C + c )</td>
+<td>When linearity fails at high end</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="building-a-calibration-curve-in-r" class="level3" data-number="15.4.3">
+<h3 data-number="15.4.3" class="anchored" data-anchor-id="building-a-calibration-curve-in-r"><span class="header-section-number">15.4.3</span> Building a Calibration Curve in R</h3>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example data: glucose standard curve</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>calib_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">conc_umol_L =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">25</span>, <span class="dv">50</span>, <span class="dv">100</span>),</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">area =</span> <span class="fu">c</span>(<span class="dv">1250</span>, <span class="dv">6200</span>, <span class="dv">12100</span>, <span class="dv">59000</span>, <span class="dv">115000</span>, <span class="dv">270000</span>, <span class="dv">480000</span>, <span class="dv">850000</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Add error (5% CV for simulation)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>calib_data<span class="sc">$</span>area <span class="ot">&lt;-</span> calib_data<span class="sc">$</span>area <span class="sc">*</span> (<span class="dv">1</span> <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">nrow</span>(calib_data), <span class="dv">0</span>, <span class="fl">0.05</span>))</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Linear model (ordinary least squares)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>lm_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(area <span class="sc">~</span> conc_umol_L, <span class="at">data =</span> calib_data)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lm_fit)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Weighted linear model (1/x weighting)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Weight = 1 / (predicted variance) ~ 1/conc</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>lm_weighted <span class="ot">&lt;-</span> <span class="fu">lm</span>(area <span class="sc">~</span> conc_umol_L, <span class="at">data =</span> calib_data, <span class="at">weights =</span> <span class="dv">1</span><span class="sc">/</span>conc_umol_L)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare fits</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(calib_data, <span class="fu">aes</span>(<span class="at">x =</span> conc_umol_L, <span class="at">y =</span> area)) <span class="sc">+</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="fu">aes</span>(<span class="at">color =</span> <span class="st">"OLS"</span>)) <span class="sc">+</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="fu">aes</span>(<span class="at">weight =</span> <span class="dv">1</span><span class="sc">/</span>conc_umol_L, <span class="at">color =</span> <span class="st">"Weighted"</span>)) <span class="sc">+</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Concentration (Âµmol/L)"</span>, <span class="at">y =</span> <span class="st">"Peak area"</span>) <span class="sc">+</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</section>
+<section id="important-metrics" class="level3" data-number="15.4.4">
+<h3 data-number="15.4.4" class="anchored" data-anchor-id="important-metrics"><span class="header-section-number">15.4.4</span> Important Metrics</h3>
+<ul>
+<li><strong>R²:</strong> Goodness of fit (&gt;0.99 for quantification)</li>
+<li><strong>Residuals:</strong> Should be random and homoscedastic (check plot)</li>
+<li><strong>Back-calculated concentrations:</strong> Should be within ±20% (or ±15% for bioanalysis)</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Back-calculate standards</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>calib_data<span class="sc">$</span>conc_back <span class="ot">&lt;-</span> (calib_data<span class="sc">$</span>area <span class="sc">-</span> <span class="fu">coef</span>(lm_fit)[<span class="dv">1</span>]) <span class="sc">/</span> <span class="fu">coef</span>(lm_fit)[<span class="dv">2</span>]</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>calib_data<span class="sc">$</span>accuracy <span class="ot">&lt;-</span> (calib_data<span class="sc">$</span>conc_back <span class="sc">/</span> calib_data<span class="sc">$</span>conc_umol_L) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(calib_data[, <span class="fu">c</span>(<span class="st">"conc_umol_L"</span>, <span class="st">"conc_back"</span>, <span class="st">"accuracy"</span>)])</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="internal-standards-is" class="level2" data-number="15.5">
+<h2 data-number="15.5" class="anchored" data-anchor-id="internal-standards-is"><span class="header-section-number">15.5</span> Internal Standards (IS)</h2>
+<section id="why-use-internal-standards" class="level3" data-number="15.5.1">
+<h3 data-number="15.5.1" class="anchored" data-anchor-id="why-use-internal-standards"><span class="header-section-number">15.5.1</span> Why Use Internal Standards?</h3>
+<ul>
+<li>Compensate for <strong>matrix effects</strong> (ion suppression/enhancement)</li>
+<li>Correct for <strong>sample preparation losses</strong> (extraction, derivatisation)</li>
+<li>Adjust for <strong>instrument drift</strong> (over long batches)</li>
+</ul>
+</section>
+<section id="properties-of-a-good-internal-standard" class="level3" data-number="15.5.2">
+<h3 data-number="15.5.2" class="anchored" data-anchor-id="properties-of-a-good-internal-standard"><span class="header-section-number">15.5.2</span> Properties of a Good Internal Standard</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 58%">
+<col style="width: 41%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Property</th>
+<th>Ideal</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Chemical similarity</td>
+<td>Same class, similar structure</td>
+</tr>
+<tr class="even">
+<td>Not naturally present</td>
+<td>Stable isotope labelled (SIL) or unnatural analogue</td>
+</tr>
+<tr class="odd">
+<td>Same extraction and LC behaviour</td>
+<td>Closely matching retention time</td>
+</tr>
+<tr class="even">
+<td>Different mass</td>
+<td>&gt;3 Da from analyte (to avoid cross-talk)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Stable isotope labelled (SIL) standards</strong> are gold standard: e.g., glucose-¹³C₆, tryptophan-d₅.</p>
+</section>
+<section id="using-is-in-calibration" class="level3" data-number="15.5.3">
+<h3 data-number="15.5.3" class="anchored" data-anchor-id="using-is-in-calibration"><span class="header-section-number">15.5.3</span> Using IS in Calibration</h3>
+<p>Instead of plotting <strong>area</strong> vs concentration, plot <strong>area ratio</strong> (analyte area / IS area) vs concentration. This normalises for IS recovery.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example with IS</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>calib_is <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">conc =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">25</span>, <span class="dv">50</span>, <span class="dv">100</span>),</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">area_ratio =</span> <span class="fu">c</span>(<span class="fl">0.012</span>, <span class="fl">0.060</span>, <span class="fl">0.118</span>, <span class="fl">0.585</span>, <span class="fl">1.125</span>, <span class="fl">2.68</span>, <span class="fl">5.10</span>, <span class="fl">9.20</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>lm_ratio <span class="ot">&lt;-</span> <span class="fu">lm</span>(area_ratio <span class="sc">~</span> conc, <span class="at">data =</span> calib_is)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lm_ratio)  <span class="co"># Should have near-zero intercept if IS works well</span></span></code></pre></div>
+<p><strong>Check for IS consistency:</strong> IS peak area should be constant across all samples (CV &lt; 20%). Large variation indicates injection or extraction problems.</p>
+<hr>
+</section>
+</section>
+<section id="limit-of-detection-and-limit-of-quantification" class="level2" data-number="15.6">
+<h2 data-number="15.6" class="anchored" data-anchor-id="limit-of-detection-and-limit-of-quantification"><span class="header-section-number">15.6</span> Limit of Detection and Limit of Quantification</h2>
+<section id="definitions" class="level3" data-number="15.6.1">
+<h3 data-number="15.6.1" class="anchored" data-anchor-id="definitions"><span class="header-section-number">15.6.1</span> Definitions</h3>
+<ul>
+<li><strong>LOD</strong> – lowest concentration that can be reliably detected (signal &gt; noise, typically S/N ≥ 3)</li>
+<li><strong>LOQ</strong> – lowest concentration that can be quantified with acceptable precision and accuracy (S/N ≥ 10, CV &lt; 20%)</li>
+</ul>
+</section>
+<section id="empirical-calculation-from-calibration-data" class="level3" data-number="15.6.2">
+<h3 data-number="15.6.2" class="anchored" data-anchor-id="empirical-calculation-from-calibration-data"><span class="header-section-number">15.6.2</span> Empirical Calculation from Calibration Data</h3>
+<p><strong>Method 1 – Using blank replicates:</strong></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Measure 10 blanks, compute mean and SD of peak area</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>blanks <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">125</span>, <span class="dv">98</span>, <span class="dv">145</span>, <span class="dv">110</span>, <span class="dv">135</span>, <span class="dv">118</span>, <span class="dv">140</span>, <span class="dv">122</span>, <span class="dv">108</span>, <span class="dv">130</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>blank_mean <span class="ot">&lt;-</span> <span class="fu">mean</span>(blanks)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>blank_sd <span class="ot">&lt;-</span> <span class="fu">sd</span>(blanks)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>lod_area <span class="ot">&lt;-</span> blank_mean <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> blank_sd</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>loq_area <span class="ot">&lt;-</span> blank_mean <span class="sc">+</span> <span class="dv">10</span> <span class="sc">*</span> blank_sd</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to concentration using calibration curve</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Assumes calibration near zero is linear</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>slope <span class="ot">&lt;-</span> <span class="fu">coef</span>(lm_fit)[<span class="dv">2</span>]</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>lod_conc <span class="ot">&lt;-</span> (lod_area <span class="sc">-</span> <span class="fu">coef</span>(lm_fit)[<span class="dv">1</span>]) <span class="sc">/</span> slope</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>loq_conc <span class="ot">&lt;-</span> (loq_area <span class="sc">-</span> <span class="fu">coef</span>(lm_fit)[<span class="dv">1</span>]) <span class="sc">/</span> slope</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"LOD ="</span>, lod_conc, <span class="st">"Âµmol/L</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"LOQ ="</span>, loq_conc, <span class="st">"Âµmol/L</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+<p><strong>Method 2 – Signal-to-noise ratio:</strong></p>
+<p>If your software reports S/N, you can compute:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For a low concentration standard that gives S/N ~ 3</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># LOD = conc_std * (3 / S_N_std)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>s_n_std <span class="ot">&lt;-</span> <span class="dv">12</span>   <span class="co"># measured S/N at 0.5 Âµmol/L</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>conc_std <span class="ot">&lt;-</span> <span class="fl">0.5</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>lod <span class="ot">&lt;-</span> conc_std <span class="sc">*</span> (<span class="dv">3</span> <span class="sc">/</span> s_n_std)    <span class="co"># 0.125 Âµmol/L</span></span></code></pre></div>
+</section>
+<section id="reporting-rules" class="level3" data-number="15.6.3">
+<h3 data-number="15.6.3" class="anchored" data-anchor-id="reporting-rules"><span class="header-section-number">15.6.3</span> Reporting Rules</h3>
+<ul>
+<li>Concentrations &lt; LOD → report as <code>&lt; LOD</code> (or <code>0</code>)</li>
+<li>LOD ≤ concentration &lt; LOQ → report with note: “estimated, below LOQ”</li>
+<li>Concentration ≥ LOQ → report numerical value</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="peak-integration-and-manual-inspection" class="level2" data-number="15.7">
+<h2 data-number="15.7" class="anchored" data-anchor-id="peak-integration-and-manual-inspection"><span class="header-section-number">15.7</span> Peak Integration and Manual Inspection</h2>
+<section id="automated-integration" class="level3" data-number="15.7.1">
+<h3 data-number="15.7.1" class="anchored" data-anchor-id="automated-integration"><span class="header-section-number">15.7.1</span> Automated Integration</h3>
+<p>Most software (Xcalibur, Analyst, Skyline) integrates peaks automatically using algorithms:</p>
+<ul>
+<li><strong>Gaussian fit</strong> – assumes symmetrical peak shape</li>
+<li><strong>Centroid</strong> – uses apex only (less accurate for quantification)</li>
+<li><strong>Sum of raw intensities</strong> – over a manually defined time window</li>
+</ul>
+</section>
+<section id="common-integration-errors" class="level3" data-number="15.7.2">
+<h3 data-number="15.7.2" class="anchored" data-anchor-id="common-integration-errors"><span class="header-section-number">15.7.2</span> Common Integration Errors</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 42%">
+<col style="width: 23%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Error</th>
+<th>Example</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline drift</td>
+<td>Rising baseline under peak</td>
+<td>Manual baseline adjustment</td>
+</tr>
+<tr class="even">
+<td>Shoulder / split peak</td>
+<td>Co-eluting isomer</td>
+<td>Adjust integration boundaries or use deconvolution</td>
+</tr>
+<tr class="odd">
+<td>Noise as peak</td>
+<td>Small spike near LOD</td>
+<td>Set S/N threshold or review manually</td>
+</tr>
+<tr class="even">
+<td>Wrong peak assignment</td>
+<td>Wrong transition or retention time shift</td>
+<td>Re-align RT (dynamic RT window)</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="manual-validation-workflow" class="level3" data-number="15.7.3">
+<h3 data-number="15.7.3" class="anchored" data-anchor-id="manual-validation-workflow"><span class="header-section-number">15.7.3</span> Manual Validation Workflow</h3>
+<p>For <strong>targeted quantification</strong>, always review each integration visually. Use a script that flags suspicious peaks:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated peak data</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>peak_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">transition =</span> <span class="st">"glucose_179&gt;89"</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample =</span> <span class="fu">c</span>(<span class="st">"Std_1"</span>, <span class="st">"Std_2"</span>, <span class="st">"Unknown_1"</span>, <span class="st">"QC_1"</span>),</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">area =</span> <span class="fu">c</span>(<span class="dv">12000</span>, <span class="dv">11800</span>, <span class="dv">999999</span>, <span class="dv">11500</span>),   <span class="co"># outlier in unknown</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">rt =</span> <span class="fu">c</span>(<span class="fl">2.35</span>, <span class="fl">2.36</span>, <span class="fl">2.37</span>, <span class="fl">2.34</span>),</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">sn_ratio =</span> <span class="fu">c</span>(<span class="dv">35</span>, <span class="dv">33</span>, <span class="dv">5</span>, <span class="dv">31</span>)               <span class="co"># low S/N for unknown</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Flag problematic peaks</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>peak_data <span class="ot">&lt;-</span> peak_data <span class="sc">%&gt;%</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">flag =</span> <span class="fu">case_when</span>(</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>      area <span class="sc">&gt;</span> <span class="dv">5</span> <span class="sc">*</span> <span class="fu">median</span>(area) <span class="sc">~</span> <span class="st">"Outlier area"</span>,</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>      sn_ratio <span class="sc">&lt;</span> <span class="dv">10</span> <span class="sc">~</span> <span class="st">"Low S/N (&lt;10)"</span>,</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>      rt <span class="sc">&lt;</span> <span class="fl">2.3</span> <span class="sc">|</span> rt <span class="sc">&gt;</span> <span class="fl">2.4</span> <span class="sc">~</span> <span class="st">"RT shift"</span>,</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"OK"</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(peak_data, flag <span class="sc">!=</span> <span class="st">"OK"</span>)</span></code></pre></div>
+<p><strong>Best practice:</strong> For publication-quality data, manually inspect <strong>all flagged peaks</strong> and at least 10% of random peaks.</p>
+<hr>
+</section>
+</section>
+<section id="absolute-versus-relative-quantification" class="level2" data-number="15.8">
+<h2 data-number="15.8" class="anchored" data-anchor-id="absolute-versus-relative-quantification"><span class="header-section-number">15.8</span> Absolute Versus Relative Quantification</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 5%">
+<col style="width: 46%">
+<col style="width: 48%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Absolute Quantification</th>
+<th>Relative Quantification</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Requires</strong></td>
+<td>Authentic calibration curve, internal standard</td>
+<td>None (or pooled QC)</td>
+</tr>
+<tr class="even">
+<td><strong>Output</strong></td>
+<td>Concentration (e.g., 15.3 nmol/L)</td>
+<td>Fold change, ratio</td>
+</tr>
+<tr class="odd">
+<td><strong>Used for</strong></td>
+<td>Biomarker cut-offs, flux analysis, excretion studies</td>
+<td>Discovery, comparing treatments</td>
+</tr>
+<tr class="even">
+<td><strong>Inter-batch</strong></td>
+<td>Can compare across batches (with IS)</td>
+<td>Requires batch correction (e.g., QC normalisation)</td>
+</tr>
+</tbody>
+</table>
+<section id="semi-quantitative-workflow-no-standards" class="level3" data-number="15.8.1">
+<h3 data-number="15.8.1" class="anchored" data-anchor-id="semi-quantitative-workflow-no-standards"><span class="header-section-number">15.8.1</span> Semi-Quantitative Workflow (No Standards)</h3>
+<p>Use <strong>pooled quality control (QC)</strong> samples injected throughout the run:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Relative quantification: divide each sample by median of QCs for that feature</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Assume long_format data: sample_id, metabolite, area</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>rel_quant <span class="ot">&lt;-</span> long_data <span class="sc">%&gt;%</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(metabolite) <span class="sc">%&gt;%</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">qc_median =</span> <span class="fu">median</span>(area[sample_type <span class="sc">==</span> <span class="st">"QC"</span>], <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">relative_area =</span> area <span class="sc">/</span> qc_median</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="practical-example-targeted-metabolite-quantification-in-r" class="level2" data-number="15.9">
+<h2 data-number="15.9" class="anchored" data-anchor-id="practical-example-targeted-metabolite-quantification-in-r"><span class="header-section-number">15.9</span> Practical Example: Targeted Metabolite Quantification in R</h2>
+<p>We will run a complete targeted quantification pipeline using simulated data:</p>
+<ol type="1">
+<li><strong>Read calibration standards and internal standard data</strong></li>
+<li><strong>Build calibration curve with weighting</strong></li>
+<li><strong>Calculate LOD/LOQ</strong></li>
+<li><strong>Apply to unknown samples</strong></li>
+<li><strong>Report final concentrations</strong></li>
+</ol>
+<section id="step-1-load-and-explore-data" class="level3" data-number="15.9.1">
+<h3 data-number="15.9.1" class="anchored" data-anchor-id="step-1-load-and-explore-data"><span class="header-section-number">15.9.1</span> Step 1 – Load and explore data</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulate dataset</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Standards (5 concentration levels, triplicates)</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>calib <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">conc_umol =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>, <span class="fl">5.0</span>, <span class="fl">10.0</span>, <span class="fl">25.0</span>, <span class="fl">50.0</span>, <span class="fl">100.0</span>),</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">rep =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">3</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>calib<span class="sc">$</span>area_analyte <span class="ot">&lt;-</span> <span class="fu">with</span>(calib, <span class="dv">10000</span> <span class="sc">*</span> conc_umol <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="dv">500</span>))</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>calib<span class="sc">$</span>area_IS <span class="ot">&lt;-</span> <span class="dv">500000</span> <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="dv">15000</span>)</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>calib<span class="sc">$</span>area_ratio <span class="ot">&lt;-</span> calib<span class="sc">$</span>area_analyte <span class="sc">/</span> calib<span class="sc">$</span>area_IS</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Unknown samples (n = 20)</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>unknowns <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_id =</span> <span class="fu">paste0</span>(<span class="st">"S"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>),</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">area_analyte =</span> <span class="fu">runif</span>(<span class="dv">20</span>, <span class="dv">5000</span>, <span class="dv">800000</span>),</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">area_IS =</span> <span class="dv">500000</span> <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="dv">0</span>, <span class="dv">20000</span>)</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>unknowns<span class="sc">$</span>area_ratio <span class="ot">&lt;-</span> unknowns<span class="sc">$</span>area_analyte <span class="sc">/</span> unknowns<span class="sc">$</span>area_IS</span></code></pre></div>
+</section>
+<section id="step-2-build-calibration-curve" class="level3" data-number="15.9.2">
+<h3 data-number="15.9.2" class="anchored" data-anchor-id="step-2-build-calibration-curve"><span class="header-section-number">15.9.2</span> Step 2 – Build calibration curve</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Weighted linear regression (1/x^2)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>weights <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">/</span> (calib<span class="sc">$</span>conc_umol<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>calib_model <span class="ot">&lt;-</span> <span class="fu">lm</span>(area_ratio <span class="sc">~</span> conc_umol, <span class="at">data =</span> calib, <span class="at">weights =</span> weights)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(calib_model)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(calib<span class="sc">$</span>conc_umol, calib<span class="sc">$</span>area_ratio, <span class="at">log =</span> <span class="st">"xy"</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Concentration (Âµmol/L)"</span>, <span class="at">ylab =</span> <span class="st">"Area ratio"</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">abline</span>(calib_model, <span class="at">col =</span> <span class="st">"red"</span>, <span class="at">lwd =</span> <span class="dv">2</span>)</span></code></pre></div>
+</section>
+<section id="step-3-determine-lod-and-loq-using-blank" class="level3" data-number="15.9.3">
+<h3 data-number="15.9.3" class="anchored" data-anchor-id="step-3-determine-lod-and-loq-using-blank"><span class="header-section-number">15.9.3</span> Step 3 – Determine LOD and LOQ using blank</h3>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulate 10 blanks</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>blanks <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">area_ratio =</span> <span class="fu">rnorm</span>(<span class="dv">10</span>, <span class="fl">0.001</span>, <span class="fl">0.0003</span>))</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>blank_sd <span class="ot">&lt;-</span> <span class="fu">sd</span>(blanks<span class="sc">$</span>area_ratio)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>lod_ratio <span class="ot">&lt;-</span> <span class="fu">mean</span>(blanks<span class="sc">$</span>area_ratio) <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> blank_sd</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>loq_ratio <span class="ot">&lt;-</span> <span class="fu">mean</span>(blanks<span class="sc">$</span>area_ratio) <span class="sc">+</span> <span class="dv">10</span> <span class="sc">*</span> blank_sd</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to concentration (using the calibration model)</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>lod_conc <span class="ot">&lt;-</span> (lod_ratio <span class="sc">-</span> <span class="fu">coef</span>(calib_model)[<span class="dv">1</span>]) <span class="sc">/</span> <span class="fu">coef</span>(calib_model)[<span class="dv">2</span>]</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>loq_conc <span class="ot">&lt;-</span> (loq_ratio <span class="sc">-</span> <span class="fu">coef</span>(calib_model)[<span class="dv">1</span>]) <span class="sc">/</span> <span class="fu">coef</span>(calib_model)[<span class="dv">2</span>]</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"LOD ="</span>, <span class="fu">round</span>(lod_conc, <span class="dv">3</span>), <span class="st">"Âµmol/L</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"LOQ ="</span>, <span class="fu">round</span>(loq_conc, <span class="dv">3</span>), <span class="st">"Âµmol/L</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div>
+</section>
+<section id="step-4-quantify-unknowns-and-flag-below-lodloq" class="level3" data-number="15.9.4">
+<h3 data-number="15.9.4" class="anchored" data-anchor-id="step-4-quantify-unknowns-and-flag-below-lodloq"><span class="header-section-number">15.9.4</span> Step 4 – Quantify unknowns and flag below LOD/LOQ</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>unknowns<span class="sc">$</span>conc_umol <span class="ot">&lt;-</span> (unknowns<span class="sc">$</span>area_ratio <span class="sc">-</span> <span class="fu">coef</span>(calib_model)[<span class="dv">1</span>]) <span class="sc">/</span> <span class="fu">coef</span>(calib_model)[<span class="dv">2</span>]</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>unknowns<span class="sc">$</span>quant_status <span class="ot">&lt;-</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  unknowns<span class="sc">$</span>conc_umol <span class="sc">&lt;</span> lod_conc <span class="sc">~</span> <span class="st">"&lt; LOD"</span>,</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  unknowns<span class="sc">$</span>conc_umol <span class="sc">&lt;</span> loq_conc <span class="sc">~</span> <span class="st">"&lt; LOQ"</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"OK"</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Replace values below LOD with NA or 0</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>unknowns<span class="sc">$</span>conc_umol_final <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(unknowns<span class="sc">$</span>conc_umol <span class="sc">&lt;</span> loq_conc, <span class="cn">NA</span>, unknowns<span class="sc">$</span>conc_umol)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(unknowns)</span></code></pre></div>
+</section>
+<section id="step-5-quality-control-and-reporting" class="level3" data-number="15.9.5">
+<h3 data-number="15.9.5" class="anchored" data-anchor-id="step-5-quality-control-and-reporting"><span class="header-section-number">15.9.5</span> Step 5 – Quality control and reporting</h3>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CV of IS across all samples</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>IS_cv <span class="ot">&lt;-</span> <span class="fu">sd</span>(unknowns<span class="sc">$</span>area_IS) <span class="sc">/</span> <span class="fu">mean</span>(unknowns<span class="sc">$</span>area_IS) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"IS CV ="</span>, <span class="fu">round</span>(IS_cv, <span class="dv">1</span>), <span class="st">"%"</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary table of quantified concentrations</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>summary_table <span class="ot">&lt;-</span> unknowns <span class="sc">%&gt;%</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(quant_status) <span class="sc">%&gt;%</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(), <span class="at">mean_conc =</span> <span class="fu">mean</span>(conc_umol_final, <span class="at">na.rm =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(summary_table)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Export results</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(unknowns, <span class="st">"targeted_quant_results.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="example-4-targeted-ms-calibration-and-quantitative-assay-report" class="level2" data-number="15.10">
+<h2 data-number="15.10" class="anchored" data-anchor-id="example-4-targeted-ms-calibration-and-quantitative-assay-report"><span class="header-section-number">15.10</span> Example 4: Targeted MS Calibration and Quantitative Assay Report</h2>
+<section id="project-question" class="level3" data-number="15.10.1">
+<h3 data-number="15.10.1" class="anchored" data-anchor-id="project-question"><span class="header-section-number">15.10.1</span> Project Question</h3>
+<p>Can we quantify predefined peptides or metabolites reliably using targeted MS?</p>
+<p>This example teaches assay-style reporting. The goal is not discovery but defensible quantification of predefined analytes, supported by transition-level evidence, calibration performance, precision, LOD, LOQ, and clear result flags.</p>
+</section>
+<section id="dataset-and-scope" class="level3" data-number="15.10.2">
+<h3 data-number="15.10.2" class="anchored" data-anchor-id="dataset-and-scope"><span class="header-section-number">15.10.2</span> Dataset and Scope</h3>
+<p>Use an MSstats-compatible targeted table, a Skyline/Panorama export, Panorama Public subset, or the simulated calibration dataset below. <code>MSstats</code> supports statistical relative quantification for targeted data (see Chapter 12 for the full MSstats ecosystem overview); the calibration components here are written in plain R so they can also be used for small-molecule targeted assays.</p>
+</section>
+<section id="workflow-map" class="level3" data-number="15.10.3">
+<h3 data-number="15.10.3" class="anchored" data-anchor-id="workflow-map"><span class="header-section-number">15.10.3</span> Workflow Map</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Metadata and contrasts</td>
+<td>Define calibrators, QC samples, unknown samples, conditions, analytes, and transitions</td>
+</tr>
+<tr class="even">
+<td>Import</td>
+<td>Read a Skyline, Panorama, or MSstats-compatible transition-level table</td>
+</tr>
+<tr class="odd">
+<td>Raw/run-level QC</td>
+<td>Inspect transition peak areas, retention-time consistency, and replicate precision</td>
+</tr>
+<tr class="even">
+<td>Transition audit</td>
+<td>Remove unreliable transitions with low S/N, RT drift, poor precision, or missing peaks</td>
+</tr>
+<tr class="odd">
+<td>Abundance matrix</td>
+<td>Summarize transitions to peptide, protein, or metabolite abundance</td>
+</tr>
+<tr class="even">
+<td>Low-quality filtering</td>
+<td>Remove blank-contaminated analytes and high-CV QC analytes</td>
+</tr>
+<tr class="odd">
+<td>Normalization</td>
+<td>Apply internal-standard correction and log2 transformation when appropriate</td>
+</tr>
+<tr class="even">
+<td>Missingness diagnosis</td>
+<td>Check failed injections and missing transitions</td>
+</tr>
+<tr class="odd">
+<td>Statistical modeling</td>
+<td>Fit calibration curves and, when needed, group comparison models</td>
+</tr>
+<tr class="even">
+<td>Multiple testing</td>
+<td>Apply FDR if many analytes are tested</td>
+</tr>
+<tr class="odd">
+<td>Visualization</td>
+<td>Calibration curve, residual plot, precision plot, group comparison plot</td>
+</tr>
+<tr class="even">
+<td>Biological interpretation</td>
+<td>Interpret targeted analytes in the intended pathway or assay context</td>
+</tr>
+<tr class="odd">
+<td>Reproducible export</td>
+<td>Save assay report with calibration, LOD/LOQ, precision, flags, and results</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="simulate-a-transition-level-assay-table" class="level3" data-number="15.10.4">
+<h3 data-number="15.10.4" class="anchored" data-anchor-id="simulate-a-transition-level-assay-table"><span class="header-section-number">15.10.4</span> Simulate a Transition-Level Assay Table</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(purrr)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gt)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sessioninfo)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">4</span>)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"results"</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"figures"</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"objects"</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>analytes <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">analyte =</span> <span class="fu">c</span>(<span class="st">"Tryptophan"</span>, <span class="st">"Kynurenine"</span>, <span class="st">"Phenylalanine"</span>),</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">internal_standard =</span> <span class="fu">c</span>(<span class="st">"Tryptophan_d5"</span>, <span class="st">"Kynurenine_d4"</span>, <span class="st">"Phenylalanine_d5"</span>),</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">slope =</span> <span class="fu">c</span>(<span class="fl">0.018</span>, <span class="fl">0.026</span>, <span class="fl">0.014</span>),</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">intercept =</span> <span class="fu">c</span>(<span class="fl">0.001</span>, <span class="fl">0.0015</span>, <span class="fl">0.0008</span>)</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>calibrators <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">analyte =</span> analytes<span class="sc">$</span>analyte,</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">concentration_nM =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">25</span>, <span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">250</span>, <span class="dv">500</span>),</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">replicate =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>,</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">transition =</span> <span class="fu">c</span>(<span class="st">"quantifier"</span>, <span class="st">"qualifier"</span>)</span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(analytes, <span class="at">by =</span> <span class="st">"analyte"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">sample_type =</span> <span class="fu">if_else</span>(concentration_nM <span class="sc">==</span> <span class="dv">0</span>, <span class="st">"blank"</span>, <span class="st">"calibrator"</span>),</span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">sample_id =</span> <span class="fu">paste</span>(sample_type, analyte, concentration_nM, replicate, <span class="at">sep =</span> <span class="st">"_"</span>),</span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_is =</span> <span class="fu">rlnorm</span>(<span class="fu">n</span>(), <span class="fu">log</span>(<span class="fl">5e5</span>), <span class="fl">0.08</span>),</span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">transition_factor =</span> <span class="fu">if_else</span>(transition <span class="sc">==</span> <span class="st">"quantifier"</span>, <span class="dv">1</span>, <span class="fl">0.55</span>),</span>
+<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_ratio =</span> <span class="fu">pmax</span>(intercept <span class="sc">+</span> slope <span class="sc">*</span> concentration_nM, <span class="dv">0</span>) <span class="sc">*</span> transition_factor <span class="sc">*</span></span>
+<span id="cb13-36"><a href="#cb13-36" aria-hidden="true" tabindex="-1"></a><span class="sc">+</span>      <span class="fu">rlnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="fl">0.08</span>),</span>
+<span id="cb13-37"><a href="#cb13-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_analyte =</span> area_ratio <span class="sc">*</span> area_is,</span>
+<span id="cb13-38"><a href="#cb13-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">retention_time =</span> <span class="fu">case_when</span>(</span>
+<span id="cb13-39"><a href="#cb13-39" aria-hidden="true" tabindex="-1"></a>      analyte <span class="sc">==</span> <span class="st">"Tryptophan"</span> <span class="sc">~</span> <span class="fl">4.2</span>,</span>
+<span id="cb13-40"><a href="#cb13-40" aria-hidden="true" tabindex="-1"></a>      analyte <span class="sc">==</span> <span class="st">"Kynurenine"</span> <span class="sc">~</span> <span class="fl">3.1</span>,</span>
+<span id="cb13-41"><a href="#cb13-41" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="fl">5.4</span></span>
+<span id="cb13-42"><a href="#cb13-42" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="fl">0.025</span>),</span>
+<span id="cb13-43"><a href="#cb13-43" aria-hidden="true" tabindex="-1"></a>    <span class="at">signal_to_noise =</span> <span class="fu">if_else</span>(concentration_nM <span class="sc">==</span> <span class="dv">0</span>, <span class="fu">runif</span>(<span class="fu">n</span>(), <span class="dv">1</span>, <span class="dv">3</span>), <span class="fu">runif</span>(<span class="fu">n</span>(), <span class="dv">20</span>, <span class="dv">200</span>))</span>
+<span id="cb13-44"><a href="#cb13-44" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb13-45"><a href="#cb13-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-46"><a href="#cb13-46" aria-hidden="true" tabindex="-1"></a>qc_unknowns <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(</span>
+<span id="cb13-47"><a href="#cb13-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">analyte =</span> analytes<span class="sc">$</span>analyte,</span>
+<span id="cb13-48"><a href="#cb13-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_id =</span> <span class="fu">c</span>(<span class="fu">paste0</span>(<span class="st">"QC_"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>), <span class="fu">paste0</span>(<span class="st">"Sample_"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">18</span>)),</span>
+<span id="cb13-49"><a href="#cb13-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">transition =</span> <span class="fu">c</span>(<span class="st">"quantifier"</span>, <span class="st">"qualifier"</span>)</span>
+<span id="cb13-50"><a href="#cb13-50" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb13-51"><a href="#cb13-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(analytes, <span class="at">by =</span> <span class="st">"analyte"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb13-52"><a href="#cb13-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb13-53"><a href="#cb13-53" aria-hidden="true" tabindex="-1"></a>    <span class="at">sample_type =</span> <span class="fu">if_else</span>(<span class="fu">grepl</span>(<span class="st">"^QC"</span>, sample_id), <span class="st">"QC"</span>, <span class="st">"unknown"</span>),</span>
+<span id="cb13-54"><a href="#cb13-54" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition =</span> <span class="fu">if_else</span>(<span class="fu">as.integer</span>(<span class="fu">gsub</span>(<span class="st">"Sample_"</span>, <span class="st">""</span>, sample_id)) <span class="sc">&lt;=</span> <span class="dv">9</span>, <span class="st">"Control"</span>, <span class="st">"Treatment"</span>),</span>
+<span id="cb13-55"><a href="#cb13-55" aria-hidden="true" tabindex="-1"></a>    <span class="at">true_concentration_nM =</span> <span class="fu">case_when</span>(</span>
+<span id="cb13-56"><a href="#cb13-56" aria-hidden="true" tabindex="-1"></a>      sample_type <span class="sc">==</span> <span class="st">"QC"</span> <span class="sc">~</span> <span class="dv">50</span>,</span>
+<span id="cb13-57"><a href="#cb13-57" aria-hidden="true" tabindex="-1"></a>      analyte <span class="sc">==</span> <span class="st">"Kynurenine"</span> <span class="sc">&amp;</span> condition <span class="sc">==</span> <span class="st">"Treatment"</span> <span class="sc">~</span> <span class="dv">85</span>,</span>
+<span id="cb13-58"><a href="#cb13-58" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="fu">runif</span>(<span class="fu">n</span>(), <span class="dv">20</span>, <span class="dv">80</span>)</span>
+<span id="cb13-59"><a href="#cb13-59" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb13-60"><a href="#cb13-60" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_is =</span> <span class="fu">rlnorm</span>(<span class="fu">n</span>(), <span class="fu">log</span>(<span class="fl">5e5</span>), <span class="fl">0.10</span>),</span>
+<span id="cb13-61"><a href="#cb13-61" aria-hidden="true" tabindex="-1"></a>    <span class="at">transition_factor =</span> <span class="fu">if_else</span>(transition <span class="sc">==</span> <span class="st">"quantifier"</span>, <span class="dv">1</span>, <span class="fl">0.55</span>),</span>
+<span id="cb13-62"><a href="#cb13-62" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_ratio =</span> (intercept <span class="sc">+</span> slope <span class="sc">*</span> true_concentration_nM) <span class="sc">*</span> transition_factor <span class="sc">*</span></span>
+<span id="cb13-63"><a href="#cb13-63" aria-hidden="true" tabindex="-1"></a><span class="sc">+</span>      <span class="fu">rlnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="fl">0.10</span>),</span>
+<span id="cb13-64"><a href="#cb13-64" aria-hidden="true" tabindex="-1"></a>    <span class="at">area_analyte =</span> area_ratio <span class="sc">*</span> area_is,</span>
+<span id="cb13-65"><a href="#cb13-65" aria-hidden="true" tabindex="-1"></a>    <span class="at">retention_time =</span> <span class="fu">case_when</span>(</span>
+<span id="cb13-66"><a href="#cb13-66" aria-hidden="true" tabindex="-1"></a>      analyte <span class="sc">==</span> <span class="st">"Tryptophan"</span> <span class="sc">~</span> <span class="fl">4.2</span>,</span>
+<span id="cb13-67"><a href="#cb13-67" aria-hidden="true" tabindex="-1"></a>      analyte <span class="sc">==</span> <span class="st">"Kynurenine"</span> <span class="sc">~</span> <span class="fl">3.1</span>,</span>
+<span id="cb13-68"><a href="#cb13-68" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="fl">5.4</span></span>
+<span id="cb13-69"><a href="#cb13-69" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">n</span>(), <span class="dv">0</span>, <span class="fl">0.035</span>),</span>
+<span id="cb13-70"><a href="#cb13-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">signal_to_noise =</span> <span class="fu">runif</span>(<span class="fu">n</span>(), <span class="dv">15</span>, <span class="dv">150</span>),</span>
+<span id="cb13-71"><a href="#cb13-71" aria-hidden="true" tabindex="-1"></a>    <span class="at">concentration_nM =</span> <span class="cn">NA_real_</span>,</span>
+<span id="cb13-72"><a href="#cb13-72" aria-hidden="true" tabindex="-1"></a>    <span class="at">replicate =</span> <span class="cn">NA_integer_</span></span>
+<span id="cb13-73"><a href="#cb13-73" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb13-74"><a href="#cb13-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-75"><a href="#cb13-75" aria-hidden="true" tabindex="-1"></a>targeted_long <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(calibrators, qc_unknowns) <span class="sc">|&gt;</span></span>
+<span id="cb13-76"><a href="#cb13-76" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(sample_id, sample_type, condition, analyte, transition,</span>
+<span id="cb13-77"><a href="#cb13-77" aria-hidden="true" tabindex="-1"></a>         concentration_nM, replicate, area_analyte, area_is, area_ratio,</span>
+<span id="cb13-78"><a href="#cb13-78" aria-hidden="true" tabindex="-1"></a>         retention_time, signal_to_noise)</span>
+<span id="cb13-79"><a href="#cb13-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-80"><a href="#cb13-80" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(targeted_long, <span class="st">"results/targeted_01_transition_level_table.csv"</span>)</span></code></pre></div>
+</section>
+<section id="transition-level-qc" class="level3" data-number="15.10.5">
+<h3 data-number="15.10.5" class="anchored" data-anchor-id="transition-level-qc"><span class="header-section-number">15.10.5</span> Transition-Level QC</h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>transition_qc <span class="ot">&lt;-</span> targeted_long <span class="sc">|&gt;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(analyte, transition, sample_type) <span class="sc">|&gt;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">pct_missing =</span> <span class="fu">mean</span>(<span class="fu">is.na</span>(area_analyte) <span class="sc">|</span> area_analyte <span class="sc">&lt;=</span> <span class="dv">0</span>) <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_rt =</span> <span class="fu">median</span>(retention_time, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">rt_sd =</span> <span class="fu">sd</span>(retention_time, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_sn =</span> <span class="fu">median</span>(signal_to_noise, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">cv_area_ratio =</span> <span class="fu">sd</span>(area_ratio, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">mean</span>(area_ratio, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">qc_flag =</span> <span class="fu">case_when</span>(</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>      pct_missing <span class="sc">&gt;</span> <span class="dv">20</span> <span class="sc">~</span> <span class="st">"high missingness"</span>,</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>      rt_sd <span class="sc">&gt;</span> <span class="fl">0.10</span> <span class="sc">~</span> <span class="st">"RT instability"</span>,</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>      median_sn <span class="sc">&lt;</span> <span class="dv">10</span> <span class="sc">~</span> <span class="st">"low signal-to-noise"</span>,</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>      sample_type <span class="sc">==</span> <span class="st">"QC"</span> <span class="sc">&amp;</span> cv_area_ratio <span class="sc">&gt;</span> <span class="dv">20</span> <span class="sc">~</span> <span class="st">"high QC CV"</span>,</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"OK"</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(transition_qc, <span class="st">"results/targeted_02_transition_qc.csv"</span>)</span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>p_precision <span class="ot">&lt;-</span> transition_qc <span class="sc">|&gt;</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">==</span> <span class="st">"QC"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(analyte, cv_area_ratio, <span class="at">fill =</span> transition)) <span class="sc">+</span></span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">"dodge"</span>) <span class="sc">+</span></span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">20</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"QC precision by analyte and transition"</span>, <span class="at">y =</span> <span class="st">"CV (%)"</span>, <span class="at">x =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"figures/targeted_01_precision_cv.png"</span>, p_precision, <span class="at">width =</span> <span class="dv">7</span>, <span class="at">height =</span> <span class="dv">5</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span></code></pre></div>
+</section>
+<section id="calibration-models-lod-and-loq" class="level3" data-number="15.10.6">
+<h3 data-number="15.10.6" class="anchored" data-anchor-id="calibration-models-lod-and-loq"><span class="header-section-number">15.10.6</span> Calibration Models, LOD, and LOQ</h3>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>calibration_input <span class="ot">&lt;-</span> targeted_long <span class="sc">|&gt;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"blank"</span>, <span class="st">"calibrator"</span>), transition <span class="sc">==</span> <span class="st">"quantifier"</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>fit_calibration <span class="ot">&lt;-</span> <span class="cf">function</span>(df) {</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(area_ratio <span class="sc">~</span> concentration_nM, <span class="at">data =</span> df, <span class="at">weights =</span> <span class="dv">1</span> <span class="sc">/</span> <span class="fu">pmax</span>(concentration_nM, <span class="dv">1</span>)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  blanks <span class="ot">&lt;-</span> df <span class="sc">|&gt;</span> <span class="fu">filter</span>(concentration_nM <span class="sc">==</span> <span class="dv">0</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  blank_sd <span class="ot">&lt;-</span> <span class="fu">sd</span>(blanks<span class="sc">$</span>area_ratio, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  intercept <span class="ot">&lt;-</span> <span class="fu">coef</span>(fit)[<span class="dv">1</span>]</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  slope <span class="ot">&lt;-</span> <span class="fu">coef</span>(fit)[<span class="dv">2</span>]</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">intercept =</span> intercept,</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">slope =</span> slope,</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">r_squared =</span> <span class="fu">summary</span>(fit)<span class="sc">$</span>r.squared,</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">lod_nM =</span> ((<span class="fu">mean</span>(blanks<span class="sc">$</span>area_ratio, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> blank_sd) <span class="sc">-</span> intercept) <span class="sc">/</span> slope,</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">loq_nM =</span> ((<span class="fu">mean</span>(blanks<span class="sc">$</span>area_ratio, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span> <span class="dv">10</span> <span class="sc">*</span> blank_sd) <span class="sc">-</span> intercept) <span class="sc">/</span> slope,</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="fu">list</span>(fit),</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">augmented =</span> <span class="fu">list</span>(broom<span class="sc">::</span><span class="fu">augment</span>(fit, <span class="at">data =</span> df))</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>calibration_models <span class="ot">&lt;-</span> calibration_input <span class="sc">|&gt;</span></span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(analyte) <span class="sc">|&gt;</span></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nest</span>() <span class="sc">|&gt;</span></span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">model_info =</span> <span class="fu">map</span>(data, fit_calibration)) <span class="sc">|&gt;</span></span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analyte, model_info) <span class="sc">|&gt;</span></span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(model_info)</span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a>calibration_report <span class="ot">&lt;-</span> calibration_models <span class="sc">|&gt;</span></span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analyte, intercept, slope, r_squared, lod_nM, loq_nM)</span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(calibration_report, <span class="st">"results/targeted_03_calibration_lod_loq.csv"</span>)</span>
+<span id="cb15-34"><a href="#cb15-34" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(calibration_models, <span class="st">"objects/targeted_01_calibration_models.rds"</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>calibration_plot_data <span class="ot">&lt;-</span> calibration_models <span class="sc">|&gt;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analyte, augmented) <span class="sc">|&gt;</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(augmented)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>p_calibration <span class="ot">&lt;-</span> calibration_plot_data <span class="sc">|&gt;</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(concentration_nM, area_ratio)) <span class="sc">+</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> .fitted), <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> analyte, <span class="at">scales =</span> <span class="st">"free"</span>) <span class="sc">+</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Weighted calibration curves"</span>, <span class="at">x =</span> <span class="st">"Concentration (nM)"</span>, <span class="at">y =</span> <span class="st">"Area ratio"</span>) <span class="sc">+</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>p_residual <span class="ot">&lt;-</span> calibration_plot_data <span class="sc">|&gt;</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(.fitted, .resid)) <span class="sc">+</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>() <span class="sc">+</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> analyte, <span class="at">scales =</span> <span class="st">"free"</span>) <span class="sc">+</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Calibration residuals"</span>, <span class="at">x =</span> <span class="st">"Fitted area ratio"</span>, <span class="at">y =</span> <span class="st">"Residual"</span>) <span class="sc">+</span></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"figures/targeted_02_calibration_curves.png"</span>, p_calibration, <span class="at">width =</span> <span class="dv">9</span>, <span class="at">height =</span> <span class="dv">6</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"figures/targeted_03_calibration_residuals.png"</span>, p_residual, <span class="at">width =</span> <span class="dv">9</span>, <span class="at">height =</span> <span class="dv">6</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span></code></pre></div>
+</section>
+<section id="quantify-qc-and-unknown-samples" class="level3" data-number="15.10.7">
+<h3 data-number="15.10.7" class="anchored" data-anchor-id="quantify-qc-and-unknown-samples"><span class="header-section-number">15.10.7</span> Quantify QC and Unknown Samples</h3>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>quant_input <span class="ot">&lt;-</span> targeted_long <span class="sc">|&gt;</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"QC"</span>, <span class="st">"unknown"</span>), transition <span class="sc">==</span> <span class="st">"quantifier"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(calibration_report, <span class="at">by =</span> <span class="st">"analyte"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">concentration_estimate_nM =</span> (area_ratio <span class="sc">-</span> intercept) <span class="sc">/</span> slope,</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">quant_status =</span> <span class="fu">case_when</span>(</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>      concentration_estimate_nM <span class="sc">&lt;</span> lod_nM <span class="sc">~</span> <span class="st">"&lt; LOD"</span>,</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>      concentration_estimate_nM <span class="sc">&lt;</span> loq_nM <span class="sc">~</span> <span class="st">"&lt; LOQ"</span>,</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"quantified"</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">concentration_reported_nM =</span> <span class="fu">if_else</span>(quant_status <span class="sc">==</span> <span class="st">"&lt; LOD"</span>, <span class="cn">NA_real_</span>, concentration_estimate_nM)</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(quant_input, <span class="st">"results/targeted_04_analyte_abundance_table.csv"</span>)</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>qc_precision <span class="ot">&lt;-</span> quant_input <span class="sc">|&gt;</span></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">==</span> <span class="st">"QC"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(analyte) <span class="sc">|&gt;</span></span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_nM =</span> <span class="fu">mean</span>(concentration_estimate_nM, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_nM =</span> <span class="fu">sd</span>(concentration_estimate_nM, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">cv_percent =</span> sd_nM <span class="sc">/</span> mean_nM <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(qc_precision, <span class="st">"results/targeted_05_precision_cv_summary.csv"</span>)</span></code></pre></div>
+</section>
+<section id="group-comparison-for-targeted-analytes" class="level3" data-number="15.10.8">
+<h3 data-number="15.10.8" class="anchored" data-anchor-id="group-comparison-for-targeted-analytes"><span class="header-section-number">15.10.8</span> Group Comparison for Targeted Analytes</h3>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>group_results <span class="ot">&lt;-</span> quant_input <span class="sc">|&gt;</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">==</span> <span class="st">"unknown"</span>, quant_status <span class="sc">==</span> <span class="st">"quantified"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(analyte) <span class="sc">|&gt;</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">model =</span> <span class="fu">list</span>(<span class="fu">lm</span>(<span class="fu">log2</span>(concentration_reported_nM) <span class="sc">~</span> condition, <span class="at">data =</span> <span class="fu">cur_data</span>())),</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">tidy =</span> <span class="fu">map</span>(model, broom<span class="sc">::</span>tidy)) <span class="sc">|&gt;</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analyte, tidy) <span class="sc">|&gt;</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(tidy) <span class="sc">|&gt;</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(term <span class="sc">==</span> <span class="st">"conditionTreatment"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">adj_p_value =</span> <span class="fu">p.adjust</span>(p.value, <span class="at">method =</span> <span class="st">"BH"</span>))</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(group_results, <span class="st">"results/targeted_06_group_comparison_results.csv"</span>)</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>p_group <span class="ot">&lt;-</span> quant_input <span class="sc">|&gt;</span></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(sample_type <span class="sc">==</span> <span class="st">"unknown"</span>, quant_status <span class="sc">==</span> <span class="st">"quantified"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(condition, concentration_reported_nM, <span class="at">color =</span> condition)) <span class="sc">+</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">outlier.shape =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> <span class="fl">0.15</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> analyte, <span class="at">scales =</span> <span class="st">"free_y"</span>) <span class="sc">+</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Targeted analyte concentrations by condition"</span>, <span class="at">y =</span> <span class="st">"Concentration (nM)"</span>) <span class="sc">+</span></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"figures/targeted_04_group_comparison.png"</span>, p_group, <span class="at">width =</span> <span class="dv">9</span>, <span class="at">height =</span> <span class="dv">6</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span></code></pre></div>
+</section>
+<section id="assay-report-tables" class="level3" data-number="15.10.9">
+<h3 data-number="15.10.9" class="anchored" data-anchor-id="assay-report-tables"><span class="header-section-number">15.10.9</span> Assay Report Tables</h3>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>assay_summary <span class="ot">&lt;-</span> calibration_report <span class="sc">|&gt;</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(qc_precision, <span class="at">by =</span> <span class="st">"analyte"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(analyte, r_squared, lod_nM, loq_nM, cv_percent) <span class="sc">|&gt;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">pass_calibration =</span> r_squared <span class="sc">&gt;=</span> <span class="fl">0.99</span>,</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">pass_precision =</span> cv_percent <span class="sc">&lt;=</span> <span class="dv">20</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(assay_summary, <span class="st">"results/targeted_07_assay_summary.csv"</span>)</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>assay_summary <span class="sc">|&gt;</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">gt</span>() <span class="sc">|&gt;</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">fmt_number</span>(<span class="at">columns =</span> <span class="fu">c</span>(r_squared, lod_nM, loq_nM, cv_percent), <span class="at">decimals =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">tab_header</span>(<span class="at">title =</span> <span class="st">"Targeted MS Assay Performance Summary"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">gtsave</span>(<span class="st">"results/targeted_08_assay_summary.html"</span>)</span></code></pre></div>
+</section>
+<section id="main-outputs" class="level3" data-number="15.10.10">
+<h3 data-number="15.10.10" class="anchored" data-anchor-id="main-outputs"><span class="header-section-number">15.10.10</span> Main Outputs</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Transition-level QC table</td>
+<td><code>results/targeted_02_transition_qc.csv</code></td>
+</tr>
+<tr class="even">
+<td>Analyte-level abundance table</td>
+<td><code>results/targeted_04_analyte_abundance_table.csv</code></td>
+</tr>
+<tr class="odd">
+<td>Calibration curves</td>
+<td><code>figures/targeted_02_calibration_curves.png</code></td>
+</tr>
+<tr class="even">
+<td>LOD/LOQ estimates</td>
+<td><code>results/targeted_03_calibration_lod_loq.csv</code></td>
+</tr>
+<tr class="odd">
+<td>Precision/CV summary</td>
+<td><code>results/targeted_05_precision_cv_summary.csv</code></td>
+</tr>
+<tr class="even">
+<td>Group comparison results</td>
+<td><code>results/targeted_06_group_comparison_results.csv</code></td>
+</tr>
+<tr class="odd">
+<td>Targeted assay report</td>
+<td><code>results/targeted_08_assay_summary.html</code></td>
+</tr>
+<tr class="even">
+<td>Session information</td>
+<td><code>results/targeted_09_session_info.txt</code></td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>sessioninfo<span class="sc">::</span><span class="fu">session_info</span>() <span class="sc">|&gt;</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">capture.output</span>() <span class="sc">|&gt;</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">writeLines</span>(<span class="st">"results/targeted_09_session_info.txt"</span>)</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="st">````</span>r<span class="st">`</span><span class="at">n</span><span class="st">`</span>r<span class="st">`</span><span class="at">n***</span><span class="st">`</span>r<span class="st">`</span><span class="at">n</span><span class="st">`</span>r<span class="st">`</span><span class="at">n## Best Practices Checklist</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Use **stable isotope labelled (SIL) IS** whenever possible  </span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Include **at least 6 calibration levels** in duplicate or triplicate  </span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Apply **weighted regression** (1/x or 1/x²) to correct for heteroscedasticity  </span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Verify **back-calculated accuracy** of standards (±20%)  </span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] **Blank samples** (extraction blank, solvent blank) to check contamination  </span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] **QC samples** (pooled matrix) to monitor batch drift  </span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Report **LOD and LOQ** with method (e.g., “based on 10 blank replicates”)  </span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Manually **inspect peaks** for outliers (low S/N, integration errors)  </span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a><span class="at">- [ ] Document **acceptance criteria**: R² &gt; 0.99, IS CV &lt; 20%, accuracy within ±20%  </span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a><span class="at">---</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a><span class="at">## Common Pitfalls and Solutions</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a><span class="at">| Pitfall | Consequence | Solution |</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a><span class="at">|---------|------------|----------|</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="at">| No internal standard | High CV, batch effects | Add IS before extraction |</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a><span class="at">| Using unweighted regression | Poor accuracy at low concentrations | Use 1/x or 1/x² weighting |</span></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a><span class="at">| Extrapolation beyond calibration range | Unreliable concentrations | Dilute sample or extend curve |</span></span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a><span class="at">| Ignoring matrix effects | Bias (e.g., signal suppression) | Use matrix-matched standards |</span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a><span class="at">| IS not matched to analyte | Incomplete correction | Choose IS with similar RT and chemical properties |</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a><span class="at">---</span></span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a><span class="at">## Summary</span></span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a><span class="at">Targeted MS quantification turns peak areas into biologically meaningful concentrations. Key steps:</span></span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a><span class="at">- **Assay design** – select transitions, IS, calibration range</span></span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a><span class="at">- **Data acquisition** – SRM/MRM or PRM with QC samples</span></span>
+<span id="cb20-36"><a href="#cb20-36" aria-hidden="true" tabindex="-1"></a><span class="at">- **Calibration** – weighted linear regression using area ratios</span></span>
+<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a><span class="at">- **LOD/LOQ** – define from blanks or low-level standards</span></span>
+<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a><span class="at">- **Manual inspection** – flag and review poor integrations</span></span>
+<span id="cb20-39"><a href="#cb20-39" aria-hidden="true" tabindex="-1"></a><span class="at">- **Reporting** - absolute concentrations with confidence flags</span></span>
+<span id="cb20-40"><a href="#cb20-40" aria-hidden="true" tabindex="-1"></a><span class="at">- **Example 4** - complete assay report including transition QC, calibration, LOD/LOQ, precision, and group results</span></span>
+<span id="cb20-41"><a href="#cb20-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-42"><a href="#cb20-42" aria-hidden="true" tabindex="-1"></a><span class="at">The R workflow provided can be adapted to any targeted LC-MS data, enabling reproducible and transparent quantification.</span></span>
+<span id="cb20-43"><a href="#cb20-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-44"><a href="#cb20-44" aria-hidden="true" tabindex="-1"></a><span class="at">---</span></span>
+<span id="cb20-45"><a href="#cb20-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-46"><a href="#cb20-46" aria-hidden="true" tabindex="-1"></a><span class="at">## Exercises</span></span>
+<span id="cb20-47"><a href="#cb20-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-48"><a href="#cb20-48" aria-hidden="true" tabindex="-1"></a><span class="at">1. **Calibration modelling:** Given the standard curve data below, fit a linear model (unweighted) and a 1/x weighted model. Compare the back-calculated accuracy of the lowest standard.</span></span>
+<span id="cb20-49"><a href="#cb20-49" aria-hidden="true" tabindex="-1"></a><span class="at">   - conc (nM): 1, 5, 10, 25, 50, 100, 250, 500</span></span>
+<span id="cb20-50"><a href="#cb20-50" aria-hidden="true" tabindex="-1"></a><span class="at">   - area ratio: 0.011, 0.058, 0.121, 0.31, 0.62, 1.25, 3.11, 6.08</span></span>
+<span id="cb20-51"><a href="#cb20-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-52"><a href="#cb20-52" aria-hidden="true" tabindex="-1"></a><span class="at">2. **LOD calculation:** You measure 10 blanks and obtain area ratios: 0.0008, 0.0010, 0.0009, 0.0012, 0.0011, 0.0007, 0.0010, 0.0009, 0.0013, 0.0008. Calibration slope = 0.0123, intercept = 0.0001. Compute LOD and LOQ (in concentration units).</span></span>
+<span id="cb20-53"><a href="#cb20-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-54"><a href="#cb20-54" aria-hidden="true" tabindex="-1"></a><span class="at">3. **Internal standard evaluation:** Your IS shows peak areas that vary twofold across the batch (CV = 35%). What could be wrong? Suggest three corrective actions.</span></span>
+<span id="cb20-55"><a href="#cb20-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-56"><a href="#cb20-56" aria-hidden="true" tabindex="-1"></a><span class="at">4. **Simulated data analysis:** Using the R script from the practical example, add 10% random error to the IS area and observe how the final concentration CV changes. Repeat with a 30% error.</span></span>
+<span id="cb20-57"><a href="#cb20-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-58"><a href="#cb20-58" aria-hidden="true" tabindex="-1"></a><span class="at">5. **Writing a report:** Write a short paragraph (for a paper’s methods section) describing the quantification procedure for a targeted assay of tryptophan using tryptophan-d₅ as IS.</span></span>
+<span id="cb20-59"><a href="#cb20-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-60"><a href="#cb20-60" aria-hidden="true" tabindex="-1"></a><span class="at">---</span></span>
+<span id="cb20-61"><a href="#cb20-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-62"><a href="#cb20-62" aria-hidden="true" tabindex="-1"></a><span class="at">## Session Information</span></span>
+<span id="cb20-63"><a href="#cb20-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-64"><a href="#cb20-64" aria-hidden="true" tabindex="-1"></a><span class="st">```</span>r</span>
+<span id="cb20-65"><a href="#cb20-65" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+<hr>
+</section>
+</section>
+<section id="references" class="level2" data-number="15.11">
+<h2 data-number="15.11" class="anchored" data-anchor-id="references"><span class="header-section-number">15.11</span> References</h2>
+<ul>
+<li>Want, E. J. et al.&nbsp;(2013). LC-MS/MS targeted metabolomics. <em>Nat Protoc</em>, 8(1), 17–32.</li>
+<li>Sumner, L. W. et al.&nbsp;(2007). MSI reporting standards. <em>Metabolomics</em>, 3(3), 211–221.</li>
+<li>US FDA (2018). Bioanalytical Method Validation Guidance for Industry.</li>
+<li>Skyline documentation: <a href="https://skyline.ms">https://skyline.ms</a></li>
+<li>R package <code>TargetedMSQC</code> (Bioconductor) for QC metrics.</li>
+</ul>
+
+
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./15-tmt-labeling.html" class="pagination-link" aria-label="Learning Objectives">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./17-metabolomics-pipelines.html" class="pagination-link" aria-label="Metabolomics Quantification Pipelines">
+        <span class="nav-page-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/16-targeted-quant.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

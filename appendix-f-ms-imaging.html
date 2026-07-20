@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Mass Spectrometry Imaging with Cardinal – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./appendix-e-single-cell-proteomics.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-91f42bffb796bfb60c56b8f7c4ed711e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./appendix-a-packages.html">Appendices</a></li><li class="breadcrumb-item"><a href="./appendix-f-ms-imaging.html">Mass Spectrometry Imaging with Cardinal</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling and Machine Learning</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Biological Interpretation and Reproducible Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Capstone: End-to-End Case Studies</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-e-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Single-Cell Proteomics Analysis with <code>scp</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-f-ms-imaging.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Mass Spectrometry Imaging with Cardinal</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives">Learning Objectives</a></li>
+  <li><a href="#the-imaging-ms-data-model-spectra-plus-spatial-coordinates" id="toc-the-imaging-ms-data-model-spectra-plus-spatial-coordinates" class="nav-link" data-scroll-target="#the-imaging-ms-data-model-spectra-plus-spatial-coordinates">The Imaging-MS Data Model: Spectra Plus Spatial Coordinates</a></li>
+  <li><a href="#relationship-between-.imzml-and-.ibd" id="toc-relationship-between-.imzml-and-.ibd" class="nav-link" data-scroll-target="#relationship-between-.imzml-and-.ibd">Relationship Between .imzML and .ibd</a></li>
+  <li><a href="#import-with-cardinalio-and-inspection-as-an-msimagingexperiment" id="toc-import-with-cardinalio-and-inspection-as-an-msimagingexperiment" class="nav-link" data-scroll-target="#import-with-cardinalio-and-inspection-as-an-msimagingexperiment">Import with CardinalIO and Inspection as an MSImagingExperiment</a>
+  <ul class="collapse">
+  <li><a href="#installation" id="toc-installation" class="nav-link" data-scroll-target="#installation">Installation</a></li>
+  <li><a href="#import-from-.imzml-files" id="toc-import-from-.imzml-files" class="nav-link" data-scroll-target="#import-from-.imzml-files">Import from .imzML files</a></li>
+  <li><a href="#load-the-example-dataset" id="toc-load-the-example-dataset" class="nav-link" data-scroll-target="#load-the-example-dataset">Load the example dataset</a></li>
+  <li><a href="#inspect-the-msimagingexperiment" id="toc-inspect-the-msimagingexperiment" class="nav-link" data-scroll-target="#inspect-the-msimagingexperiment">Inspect the MSImagingExperiment</a></li>
+  </ul></li>
+  <li><a href="#ion-image-visualization" id="toc-ion-image-visualization" class="nav-link" data-scroll-target="#ion-image-visualization">Ion-Image Visualization</a></li>
+  <li><a href="#compact-preprocessing-workflow" id="toc-compact-preprocessing-workflow" class="nav-link" data-scroll-target="#compact-preprocessing-workflow">Compact Preprocessing Workflow</a>
+  <ul class="collapse">
+  <li><a href="#step-1-tic-normalization" id="toc-step-1-tic-normalization" class="nav-link" data-scroll-target="#step-1-tic-normalization">Step 1: TIC Normalization</a></li>
+  <li><a href="#step-2-baseline-reduction" id="toc-step-2-baseline-reduction" class="nav-link" data-scroll-target="#step-2-baseline-reduction">Step 2: Baseline Reduction</a></li>
+  <li><a href="#step-3-peak-picking" id="toc-step-3-peak-picking" class="nav-link" data-scroll-target="#step-3-peak-picking">Step 3: Peak Picking</a></li>
+  <li><a href="#complete-pipeline" id="toc-complete-pipeline" class="nav-link" data-scroll-target="#complete-pipeline">Complete Pipeline</a></li>
+  </ul></li>
+  <li><a href="#spatial-exploratory-analysis" id="toc-spatial-exploratory-analysis" class="nav-link" data-scroll-target="#spatial-exploratory-analysis">Spatial Exploratory Analysis</a>
+  <ul class="collapse">
+  <li><a href="#principal-component-analysis" id="toc-principal-component-analysis" class="nav-link" data-scroll-target="#principal-component-analysis">Principal Component Analysis</a></li>
+  <li><a href="#spatial-segmentation-clustering" id="toc-spatial-segmentation-clustering" class="nav-link" data-scroll-target="#spatial-segmentation-clustering">Spatial Segmentation (Clustering)</a></li>
+  </ul></li>
+  <li><a href="#statistical-testing-and-classification-a-warning-about-spatial-dependence" id="toc-statistical-testing-and-classification-a-warning-about-spatial-dependence" class="nav-link" data-scroll-target="#statistical-testing-and-classification-a-warning-about-spatial-dependence">Statistical Testing and Classification: A Warning About Spatial Dependence</a>
+  <ul class="collapse">
+  <li><a href="#valid-alternatives-for-msi-inference" id="toc-valid-alternatives-for-msi-inference" class="nav-link" data-scroll-target="#valid-alternatives-for-msi-inference">Valid alternatives for MSI inference</a></li>
+  </ul></li>
+  <li><a href="#export-and-provenance-considerations" id="toc-export-and-provenance-considerations" class="nav-link" data-scroll-target="#export-and-provenance-considerations">Export and Provenance Considerations</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises">Exercises</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information">Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/appendix-f-ms-imaging.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./appendix-a-packages.html">Appendices</a></li><li class="breadcrumb-item"><a href="./appendix-f-ms-imaging.html">Mass Spectrometry Imaging with Cardinal</a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-appendix-ms-imaging" class="quarto-section-identifier">Mass Spectrometry Imaging with Cardinal</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“An image is worth a thousand spectra — if you know how to read the coordinates.”</em></p>
+</blockquote>
+<p>Mass spectrometry imaging (MSI) adds a spatial dimension to the mass spectrometric measurement: instead of a single averaged spectrum per sample, MSI records a full mass spectrum at every pixel across a tissue section or sample surface. This appendix introduces the data model, file formats, and computational workflow for MSI using the <strong>Cardinal</strong> ecosystem <span class="citation" data-cites="bemis2015cardinal bemis2023cardinal">(<a href="references.html#ref-bemis2015cardinal" role="doc-biblioref">Bemis et al. 2015</a>, <a href="references.html#ref-bemis2023cardinal" role="doc-biblioref">2023</a>)</span>, Bioconductor’s primary toolkit for statistical analysis of MSI experiments.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Dataset and package choices.</strong> This appendix uses <code>CardinalWorkflows::exampleMSIData("pig206")</code>, a 206-pixel DESI–MS imaging dataset of a sagittal pig fetus section at approximately 200 µm spatial resolution <span class="citation" data-cites="bemis2015cardinal">(<a href="references.html#ref-bemis2015cardinal" role="doc-biblioref">Bemis et al. 2015</a>)</span>. Among the documented examples in <code>CardinalWorkflows</code>, <code>pig206</code> is the smallest that preserves meaningful biological structure (two distinguishable tissue regions: brain and torso). A smaller synthetic dataset would demonstrate import alone without offering a realistic spatial analysis, while the larger datasets (several thousand pixels) would slow routine rendering. <code>pig206</code> balances pedagogical value with rendering practicality at under a few seconds for the full workflow.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2">
+<h2 class="anchored" data-anchor-id="learning-objectives">Learning Objectives</h2>
+<p>By the end of this appendix you will be able to:</p>
+<ul>
+<li>Describe the three-dimensional structure of an imaging mass spectrometry dataset (x, y, m/z)</li>
+<li>Distinguish the roles of the <code>.imzML</code> and <code>.ibd</code> file pair</li>
+<li>Import MSI data with <code>CardinalIO</code> and inspect the resulting <code>MSImagingExperiment</code> object</li>
+<li>Visualise the spatial distribution of selected ions with <code>image()</code></li>
+<li>Apply a compact preprocessing workflow (normalization, baseline reduction, peak picking)</li>
+<li>Perform spatial exploratory analysis (PCA, segmentation)</li>
+<li>Recognise why ordinary pixel-wise statistical tests are invalid for imaging data</li>
+<li>Understand export and provenance considerations for MSI data</li>
+</ul>
+</section>
+<section id="the-imaging-ms-data-model-spectra-plus-spatial-coordinates" class="level2">
+<h2 class="anchored" data-anchor-id="the-imaging-ms-data-model-spectra-plus-spatial-coordinates">The Imaging-MS Data Model: Spectra Plus Spatial Coordinates</h2>
+<p>A conventional LC–MS experiment produces a <em>list</em> of spectra ordered by retention time. An MSI experiment produces a <em>grid</em> of spectra ordered by spatial position. Each pixel in the grid contains a complete mass spectrum; the dataset is therefore a <strong>three-dimensional data cube</strong> with dimensions:</p>
+<ul>
+<li><strong>x</strong> (columns across the sample)</li>
+<li><strong>y</strong> (rows across the sample)</li>
+<li><strong>m/z</strong> (the mass-to-charge axis)</li>
+</ul>
+<p>If the instrument acquires MS/MS or ion-mobility data, additional dimensions (precursor m/z, drift time) are added, but the core abstraction remains: a spectrum at every spatial coordinate.</p>
+<p>This structure differs fundamentally from LC–MS data in two ways that affect every subsequent analysis decision:</p>
+<ol type="1">
+<li><p><strong>Spatial correlation</strong>: Neighbouring pixels share similar spectra because they sample the same tissue region. This positive spatial autocorrelation violates the independence assumption of most classical statistical tests.</p></li>
+<li><p><strong>Massive pixel count</strong>: A single tissue section imaged at 50 µm can produce 50,000–500,000 spectra. The data is wide (many pixels), not tall (many time points as in LC–MS), which shifts the computational bottleneck from file I/O to memory-efficient matrix operations.</p></li>
+</ol>
+<p>The Cardinal package represents this structure as an <code>MSImagingExperiment</code> object, which stores spectral data, spatial coordinates, and pixel-level metadata in a single coordinated container.</p>
+</section>
+<section id="relationship-between-.imzml-and-.ibd" class="level2">
+<h2 class="anchored" data-anchor-id="relationship-between-.imzml-and-.ibd">Relationship Between .imzML and .ibd</h2>
+<p>The standard format for MSI data interoperability is <strong>imzML</strong>, developed by the HUPO Proteomics Standards Initiative (PSI) specifically for imaging mass spectrometry (see Appendix B for the full format reference). Like many MS formats, imzML splits metadata from binary data into two linked files:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 28%">
+<col style="width: 42%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Content</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>.imzML</code></td>
+<td>XML metadata: instrument settings, pixel coordinates, processing history, and <em>byte offsets</em> into the binary file</td>
+<td>The readable index that describes the experiment</td>
+</tr>
+<tr class="even">
+<td><code>.ibd</code></td>
+<td>Raw binary arrays of m/z and intensity data, concatenated pixel by pixel</td>
+<td>The bulk spectral data, never edited directly</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>.imzML</code> file is valid mzML XML extended with spatial coordinate tags (<code>MS:1001983</code> for x, <code>MS:1001984</code> for y). Critically, the <code>&lt;binaryDataArray&gt;</code> elements inside each <code>&lt;spectrum&gt;</code> tag are <em>empty</em> in the XML — they contain only a <code>cvParam</code> specifying where that pixel’s data begins and ends in the <code>.ibd</code> file. This design lets software load the small XML index into memory and seek directly to any pixel’s data in the large binary file without loading the whole dataset.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Always keep the <code>.imzML</code> and <code>.ibd</code> files together as a pair. Renaming or moving one without the other breaks the byte-offset links, and the data becomes unreadable. The same caution applies as for multi-file vendor formats (SCIEX <code>.wiff</code>/<code>.wiff.scan</code>, Agilent <code>.d</code> directories) discussed in Chapter 4.</p>
+</div>
+</div>
+</section>
+<section id="import-with-cardinalio-and-inspection-as-an-msimagingexperiment" class="level2">
+<h2 class="anchored" data-anchor-id="import-with-cardinalio-and-inspection-as-an-msimagingexperiment">Import with CardinalIO and Inspection as an MSImagingExperiment</h2>
+<section id="installation" class="level3">
+<h3 class="anchored" data-anchor-id="installation">Installation</h3>
+<p>Install the Cardinal ecosystem from Bioconductor:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">"BiocManager"</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">install.packages</span>(<span class="st">"BiocManager"</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>BiocManager<span class="sc">::</span><span class="fu">install</span>(<span class="fu">c</span>(<span class="st">"Cardinal"</span>, <span class="st">"CardinalIO"</span>, <span class="st">"CardinalWorkflows"</span>))</span></code></pre></div>
+</section>
+<section id="import-from-.imzml-files" class="level3">
+<h3 class="anchored" data-anchor-id="import-from-.imzml-files">Import from .imzML files</h3>
+<p>For real data acquired from an instrument, use <code>readImzML()</code> from the <code>CardinalIO</code> package (re-exported by <code>Cardinal</code>):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Cardinal)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">readImzML</span>(<span class="st">"path/to/your_data.imzML"</span>)</span></code></pre></div>
+</section>
+<section id="load-the-example-dataset" class="level3">
+<h3 class="anchored" data-anchor-id="load-the-example-dataset">Load the example dataset</h3>
+<p>For this appendix we use the bundled example:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Cardinal)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(CardinalWorkflows)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> CardinalWorkflows<span class="sc">::</span><span class="fu">exampleMSIData</span>(<span class="st">"pig206"</span>)</span></code></pre></div>
+</section>
+<section id="inspect-the-msimagingexperiment" class="level3">
+<h3 class="anchored" data-anchor-id="inspect-the-msimagingexperiment">Inspect the MSImagingExperiment</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic object summary</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>data</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(data)</span></code></pre></div>
+<p>The output reports the number of spectra (pixels), the number of mass channels, the m/z range, and the spatial grid dimensions.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Dimensions: spectra (pixels) × mass channels</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(data)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of pixels</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">length</span>(data)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co"># m/z range</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">range</span>(<span class="fu">mz</span>(data))</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of m/z channels</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">ncol</span>(data)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Spatial coordinates</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>coord <span class="ot">&lt;-</span> <span class="fu">coord</span>(data)</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(coord)</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(coord)</span></code></pre></div>
+<p>The <code>coord()</code> function returns a data frame with x and y columns, one row per pixel, giving the spatial position of each spectrum on the sample.</p>
+</section>
+</section>
+<section id="ion-image-visualization" class="level2">
+<h2 class="anchored" data-anchor-id="ion-image-visualization">Ion-Image Visualization</h2>
+<p>The <code>image()</code> method for <code>MSImagingExperiment</code> renders the spatial distribution of ion intensity for a specified m/z value. Each pixel is coloured by the measured intensity at that m/z, producing an ion image.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Ion images for selected m/z values</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Choose values that show distinct spatial patterns</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>))</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(data, <span class="at">mz =</span> <span class="fl">103.4</span>, <span class="at">main =</span> <span class="st">"m/z 103.4"</span>, <span class="at">col.regions =</span> viridis<span class="sc">::</span><span class="fu">viridis</span>(<span class="dv">100</span>))</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(data, <span class="at">mz =</span> <span class="fl">156.3</span>, <span class="at">main =</span> <span class="st">"m/z 156.3"</span>, <span class="at">col.regions =</span> viridis<span class="sc">::</span><span class="fu">viridis</span>(<span class="dv">100</span>))</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(data, <span class="at">mz =</span> <span class="fl">203.8</span>, <span class="at">main =</span> <span class="st">"m/z 203.8"</span>, <span class="at">col.regions =</span> viridis<span class="sc">::</span><span class="fu">viridis</span>(<span class="dv">100</span>))</span></code></pre></div>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Experiment with different m/z values. Ions localised to specific anatomical regions (e.g., brain, torso margin) are immediately visible as distinct spatial patterns, while ubiquitous ions (e.g., background or matrix peaks) appear uniformly across the tissue.</p>
+</div>
+</div>
+<p>For quantitative comparison across images, use a consistent intensity scale:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Consistent intensity range across panels</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(data, <span class="at">mz =</span> <span class="fu">c</span>(<span class="fl">103.4</span>, <span class="fl">156.3</span>, <span class="fl">203.8</span>),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>      <span class="at">contrast.enhance =</span> <span class="st">"histogram"</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>      <span class="at">layout =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>))</span></code></pre></div>
+<p>Ion images are the primary visual tool in MSI analysis — they reveal which molecular species are spatially co-localised and drive the biological interpretation of the experiment.</p>
+</section>
+<section id="compact-preprocessing-workflow" class="level2">
+<h2 class="anchored" data-anchor-id="compact-preprocessing-workflow">Compact Preprocessing Workflow</h2>
+<p>MSI data requires the same preprocessing steps as LC–MS data, but applied with spatial awareness. The following compact workflow covers the essential steps.</p>
+<section id="step-1-tic-normalization" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-tic-normalization">Step 1: TIC Normalization</h3>
+<p>Variation in total ion current across pixels mostly reflects differences in tissue thickness, ionisation efficiency, and desorption efficacy rather than biology. TIC normalisation scales each pixel’s spectrum so that the sum of intensities is the same across all pixels.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>data_norm <span class="ot">&lt;-</span> <span class="fu">normalize</span>(data, <span class="at">method =</span> <span class="st">"tic"</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(data_norm)</span></code></pre></div>
+</section>
+<section id="step-2-baseline-reduction" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-baseline-reduction">Step 2: Baseline Reduction</h3>
+<p>Ambient signal (electronic noise, chemical background) creates a baseline offset that varies across the m/z range. Reducing this baseline improves the accuracy of downstream peak picking and quantification.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>data_bc <span class="ot">&lt;-</span> <span class="fu">reduceBaseline</span>(data_norm, <span class="at">method =</span> <span class="st">"locmin"</span>)</span></code></pre></div>
+<p>The <code>"locmin"</code> method estimates the baseline as a local minimum within a sliding window and subtracts it. This is generally effective for DESI and MALDI data where the background is slowly varying.</p>
+</section>
+<section id="step-3-peak-picking" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-peak-picking">Step 3: Peak Picking</h3>
+<p>Peak picking identifies the m/z values where genuine ion signals exist, discarding the vast majority of mass channels that contain only noise. This step dramatically reduces the data dimensionality.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simple threshold-based peak picking</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>data_peaks <span class="ot">&lt;-</span> <span class="fu">peakPick</span>(data_bc, <span class="at">method =</span> <span class="st">"simple"</span>, <span class="at">SNR =</span> <span class="dv">3</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Number of peaks detected per pixel</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">rowSums</span>(<span class="fu">spectraData</span>(data_peaks) <span class="sc">&gt;</span> <span class="dv">0</span>))</span></code></pre></div>
+<p>An alternative to peak picking is mass binning, which aggregates intensities into fixed-width m/z bins:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Bin to 0.5 Da resolution (useful for lower-resolution mass analysers)</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>data_binned <span class="ot">&lt;-</span> <span class="fu">bin</span>(data_bc, <span class="at">resolution =</span> <span class="fl">0.5</span>)</span></code></pre></div>
+</section>
+<section id="complete-pipeline" class="level3">
+<h3 class="anchored" data-anchor-id="complete-pipeline">Complete Pipeline</h3>
+<p>Chained together:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>pipeline <span class="ot">&lt;-</span> data <span class="sc">|&gt;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">normalize</span>(<span class="at">method =</span> <span class="st">"tic"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">reduceBaseline</span>(<span class="at">method =</span> <span class="st">"locmin"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">peakPick</span>(<span class="at">method =</span> <span class="st">"simple"</span>, <span class="at">SNR =</span> <span class="dv">3</span>)</span></code></pre></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The parameters above (SNR threshold, bin width, baseline window) are starting points. Optimise them against your specific instrument and tissue type by examining whether known biological features are preserved. Chapter 3 covers parameter provenance with <code>targets</code>, which applies equally to MSI pipelines.</p>
+</div>
+</div>
+</section>
+</section>
+<section id="spatial-exploratory-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="spatial-exploratory-analysis">Spatial Exploratory Analysis</h2>
+<p>Once the data is preprocessed, the goal shifts to discovering interpretable spatial structure: which regions have similar molecular profiles, and which ions drive the differences?</p>
+<section id="principal-component-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="principal-component-analysis">Principal Component Analysis</h3>
+<p>PCA on the pixel-by-m/z matrix identifies the dominant axes of spectral variation. The first few principal components often correspond to anatomical tissue regions.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PCA on the normalised, baseline-corrected data</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pca_result <span class="ot">&lt;-</span> <span class="fu">PCA</span>(data_bc, <span class="at">ncomp =</span> <span class="dv">5</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Spatial maps of the first three components</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>))</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(pca_result, <span class="at">component =</span> <span class="dv">1</span>, <span class="at">main =</span> <span class="st">"PC1"</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(pca_result, <span class="at">component =</span> <span class="dv">2</span>, <span class="at">main =</span> <span class="st">"PC2"</span>)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(pca_result, <span class="at">component =</span> <span class="dv">3</span>, <span class="at">main =</span> <span class="st">"PC3"</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Variance explained</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pca_result)</span></code></pre></div>
+<p>The spatial PCA maps highlight regions of similar molecular composition. If PC1 separates brain from torso, for instance, the loadings tell you which m/z values drive that separation.</p>
+</section>
+<section id="spatial-segmentation-clustering" class="level3">
+<h3 class="anchored" data-anchor-id="spatial-segmentation-clustering">Spatial Segmentation (Clustering)</h3>
+<p>Spatially-aware clustering incorporates both spectral similarity <em>and</em> spatial adjacency, producing contiguous regions that correspond to histological features. Cardinal implements <strong>spatial shrunken centroids</strong> (<span class="citation" data-cites="bemis2015cardinal">Bemis et al. (<a href="references.html#ref-bemis2015cardinal" role="doc-biblioref">2015</a>)</span>), a regularised classifier that pools information across neighbouring pixels.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Spatial shrunken centroids segmentation</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># r = spatial radius (pixels), k = number of clusters</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>seg <span class="ot">&lt;-</span> <span class="fu">spatialShrunkenCentroids</span>(data_bc, <span class="at">r =</span> <span class="dv">2</span>, <span class="at">k =</span> <span class="dv">3</span><span class="sc">:</span><span class="dv">6</span>)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="co"># View the segmentation result</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(seg)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Spatial map of the best segmentation (selected by cross-validation)</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="fu">image</span>(seg)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Centroids (average spectra) for each segment</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>seg_centroids <span class="ot">&lt;-</span> <span class="fu">centroids</span>(seg)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="fu">matplot</span>(<span class="fu">mz</span>(data_bc), <span class="fu">t</span>(seg_centroids), <span class="at">type =</span> <span class="st">"l"</span>,</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">xlab =</span> <span class="st">"m/z"</span>, <span class="at">ylab =</span> <span class="st">"Mean intensity"</span>,</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>        <span class="at">col =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>, <span class="at">lty =</span> <span class="dv">1</span>)</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">"topright"</span>, <span class="at">legend =</span> <span class="fu">paste</span>(<span class="st">"Segment"</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>),</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>       <span class="at">col =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>, <span class="at">lty =</span> <span class="dv">1</span>)</span></code></pre></div>
+<p><strong>Figure F1</strong> (the <code>image(seg)</code> output) shows the spatial segmentation — an interpretable spatial result that identifies coherent molecular regions without pixel-level multiple testing. This is the kind of outcome that adds spatial insight beyond what LC–MS can provide.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The <code>r</code> parameter controls spatial regularisation: larger values produce smoother, more contiguous segments. Use cross-validation scores in the <code>summary()</code> output to select <code>r</code> and <code>k</code> objectively rather than manually tuning to match expectations.</p>
+</div>
+</div>
+</section>
+</section>
+<section id="statistical-testing-and-classification-a-warning-about-spatial-dependence" class="level2">
+<h2 class="anchored" data-anchor-id="statistical-testing-and-classification-a-warning-about-spatial-dependence">Statistical Testing and Classification: A Warning About Spatial Dependence</h2>
+<p>A natural instinct when analysing MSI data is to compare two regions (e.g., tumour vs.&nbsp;healthy) by running a t-test per m/z value across all pixels in each region. <strong>This is almost always invalid</strong> for three reasons:</p>
+<ol type="1">
+<li><p><strong>Spatial autocorrelation violates independence.</strong> Two pixels taken from the same tissue region are more similar than two pixels from opposite ends of the section. Standard t-tests and fold-change estimates assume independent observations; with spatially correlated pixels, the effective sample size is far smaller than the pixel count, producing p-values that are dramatically over-optimistic (anti-conservative).</p></li>
+<li><p><strong>Massive multiple testing.</strong> A typical MSI dataset tests tens of thousands of m/z values. At a nominal <span class="math inline">\alpha = 0.05</span>, thousands of false positives are expected. Standard FDR correction (Benjamini–Hochberg) helps but does not address the spatial dependence issue.</p></li>
+<li><p><strong>Positional confounding.</strong> If the tumour region is on one side of the section and healthy tissue on the other, any ion with a spatial gradient — including instrumental drift or batch effects — will appear “significant.”</p></li>
+</ol>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Do not perform independent pixel-wise tests and report the p-values as if each pixel were an independent biological replicate.</strong> The spatial autocorrelation in MSI data means that the effective sample size is the number of <em>biological units</em> (e.g., tissue sections, animals), not the number of pixels. Pixel-level t-tests will systematically overstate significance. The segmentation and spatial PCA shown above are safer exploratory tools that avoid this pitfall.</p>
+</div>
+</div>
+<section id="valid-alternatives-for-msi-inference" class="level3">
+<h3 class="anchored" data-anchor-id="valid-alternatives-for-msi-inference">Valid alternatives for MSI inference</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 32%">
+<col style="width: 48%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Approach</th>
+<th>Why it is valid</th>
+<th>Cardinal implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Spatial segmentation</strong></td>
+<td>Tests whether regions have distinct molecular profiles at the <em>region</em> level, not the pixel level</td>
+<td><code>spatialShrunkenCentroids()</code></td>
+</tr>
+<tr class="even">
+<td><strong>ROI-based summarisation with subject-level replication</strong></td>
+<td>Average spectra across a region of interest per subject, then test at the subject level (n = subjects, not pixels)</td>
+<td>Manual aggregation + <code>limma</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Spatial FDR</strong></td>
+<td>Adjusts for spatial correlation in the multiple-testing correction</td>
+<td>External packages</td>
+</tr>
+<tr class="even">
+<td><strong>Linear mixed model with spatial random effects</strong></td>
+<td>Explicitly models the spatial correlation structure</td>
+<td>External packages (<code>mgcv</code>, <code>INLA</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The key message: when pixels are your unit of observation but tissue sections (or animals) are your unit of replication, the analysis must operate at the <strong>replicate level</strong>, not the pixel level.</p>
+</section>
+</section>
+<section id="export-and-provenance-considerations" class="level2">
+<h2 class="anchored" data-anchor-id="export-and-provenance-considerations">Export and Provenance Considerations</h2>
+<p>MSI data analysis generates several classes of output that should be tracked:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Output</th>
+<th>Format</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Preprocessed spectral data</td>
+<td>imzML + ibd</td>
+<td>Write with <code>CardinalIO::writeImzML()</code></td>
+</tr>
+<tr class="even">
+<td>Segmentation maps</td>
+<td>TIFF or GeoTIFF</td>
+<td>Preserve spatial resolution</td>
+</tr>
+<tr class="odd">
+<td>Ion images</td>
+<td>TIFF or PNG</td>
+<td>One file per m/z or multi-panel</td>
+</tr>
+<tr class="even">
+<td>Feature table</td>
+<td>CSV or HDF5</td>
+<td>m/z values × (mean intensity per segment)</td>
+</tr>
+<tr class="odd">
+<td>Provenance log</td>
+<td>YAML or plain text</td>
+<td>Record software versions, parameters</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Write processed data back to imzML/ibd</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>CardinalIO<span class="sc">::</span><span class="fu">writeImzML</span>(data_bc, <span class="st">"processed_data.imzML"</span>)</span></code></pre></div>
+<p>Provenance information to record in every MSI project:</p>
+<ul>
+<li>Cardinal, CardinalIO, and CardinalWorkflows versions</li>
+<li>Preprocessing parameters (normalisation method, baseline algorithm, SNR threshold)</li>
+<li>Segmentation parameters (r, k, cross-validation scores)</li>
+<li>Software versions of any downstream statistical software</li>
+</ul>
+<p>The exact set of parameters and their values should be tracked in a version-controlled pipeline (Chapter 3 covers <code>targets</code> for parameter provenance). This is especially important for MSI because the spatial resolution, pixel size, and preprocessing choices directly affect which biological structures are resolvable.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<p>Mass spectrometry imaging adds the spatial dimension to MS analysis, creating rich three-dimensional datasets where each pixel carries a full mass spectrum. The Cardinal ecosystem provides a coherent framework for importing, visualising, preprocessing, and exploring these data.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 45%">
+<col style="width: 55%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Key point</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Data model</td>
+<td>(x, y, m/z) cube — each pixel is a spectrum</td>
+</tr>
+<tr class="even">
+<td>File format</td>
+<td><code>.imzML</code> (XML metadata) + <code>.ibd</code> (binary data)</td>
+</tr>
+<tr class="odd">
+<td>Import</td>
+<td><code>readImzML()</code> from <code>CardinalIO</code> → <code>MSImagingExperiment</code></td>
+</tr>
+<tr class="even">
+<td>Visualisation</td>
+<td><code>image()</code> renders ion-intensity spatial maps</td>
+</tr>
+<tr class="odd">
+<td>Preprocessing</td>
+<td>Normalise → baseline-correct → pick peaks or bin</td>
+</tr>
+<tr class="even">
+<td>Exploration</td>
+<td>PCA for variance structure; segmentation for molecular regions</td>
+</tr>
+<tr class="odd">
+<td>Statistical testing</td>
+<td>Pixel-wise tests are invalid due to spatial autocorrelation</td>
+</tr>
+<tr class="even">
+<td>Export</td>
+<td><code>writeImzML()</code> for portability; track every parameter</td>
+</tr>
+</tbody>
+</table>
+<p>The spatial dimension is both the power and the pitfall of MSI: it reveals molecular anatomy that LC–MS cannot see, but it demands spatially aware statistical reasoning.</p>
+</section>
+<section id="exercises" class="level2">
+<h2 class="anchored" data-anchor-id="exercises">Exercises</h2>
+<ol type="1">
+<li><p><strong>Data cube dimensions</strong>: Explain in your own words why an MSI dataset is described as a “three-dimensional data cube.” What are the three dimensions, and how does this differ from an LC–MS dataset?</p></li>
+<li><p><strong>File format roles</strong>: A collaborator emails you a <code>.imzML</code> file but the <code>.ibd</code> file is missing. Can you still read the data? What information is available from the <code>.imzML</code> alone?</p></li>
+<li><p><strong>Ion image interpretation</strong>: Using the <code>pig206</code> dataset, find three m/z values that show clearly different spatial patterns (one enriched in brain, one in torso, one relatively uniform). Write the R code to produce a three-panel ion image. What biological or technical explanations could account for a uniformly distributed ion?</p></li>
+<li><p><strong>Segmentation parameter sensitivity</strong>: Rerun <code>spatialShrunkenCentroids()</code> with <code>r = 0</code> (no spatial regularisation) and <code>r = 3</code>. How do the resulting segments differ? What does this imply about the trade-off between spatial smoothness and the ability to detect fine anatomical features?</p></li>
+<li><p><strong>The pixel-trap</strong>: You have analysed three tissue sections from three mice per group (control, treated). A reviewer asks for a pixel-level t-test comparing the two groups. Write a short paragraph explaining why this is invalid and what you would do instead.</p></li>
+</ol>
+</section>
+<section id="session-information" class="level2">
+<h2 class="anchored" data-anchor-id="session-information">Session Information</h2>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-bemis2015cardinal" class="csl-entry" role="listitem">
+Bemis, Kylie D., April Harry, Livia S. Eberlin, et al. 2015. <span>“Cardinal: An r Package for Statistical Analysis of Mass Spectrometry-Based Imaging Experiments.”</span> <em>Bioinformatics</em> 31 (11): 1818–20. <a href="https://doi.org/10.1093/bioinformatics/btv003">https://doi.org/10.1093/bioinformatics/btv003</a>.
+</div>
+<div id="ref-bemis2023cardinal" class="csl-entry" role="listitem">
+Bemis, Kylie D., April Harry, and Olga Vitek. 2023. <span>“Cardinal 3.0: An r Package for the Analysis of Mass Spectrometry Imaging Data.”</span> <em>Journal of Proteome Research</em> 22 (10): 3399–405. <a href="https://doi.org/10.1021/acs.jproteome.3c00343">https://doi.org/10.1021/acs.jproteome.3c00343</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./appendix-e-single-cell-proteomics.html" class="pagination-link" aria-label="Single-Cell Proteomics Analysis with `scp`">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Single-Cell Proteomics Analysis with <code>scp</code></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/appendix-f-ms-imaging.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

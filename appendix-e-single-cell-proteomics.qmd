@@ -102,7 +102,7 @@ names(leduc)
 
 ```{r}
 #| eval: true
-lapply(leduc, dim)
+dims(leduc)
 ```
 
 ```{r}
@@ -132,27 +132,29 @@ The output confirms the presence of single-cell channels, a carrier channel, and
 If the full PSM table causes memory issues during book rendering, subset the dataset to exclude the carrier channel and keep only the single-cell channels before aggregation:
 ```r
 leduc <- subsetByColData(leduc,
-    leduc[[1]]$SampleType != "Carrier")
+    colData(leduc)$SampleType != "Carrier")
 ```
 This removes the high-intensity carrier channel that contributes many PSM identifications but is not part of the quantitative comparison.
 :::
 
 ## Cell Annotation Audit and Quality Control
 
-The `scp` package provides `scp_qc()` for computing per-cell quality metrics:
+We compute per-channel quality metrics directly from the PSM-level assay:
 
 ```{r}
 #| eval: true
-qc <- scp_qc(leduc)
-names(qc)
+# Number of PSMs identified per channel (non-NA quantifications)
+n_psms <- colSums(!is.na(assay(leduc[[1]])))
+nFeatures <- data.frame(
+    leduc2022_psms = n_psms,
+    row.names = names(n_psms)
+)
+names(nFeatures)
 ```
 
 ```{r}
 #| eval: true
-# Number of PSMs identified per channel
-qc$nFeatures |>
-    as.data.frame() |>
-    head()
+head(nFeatures)
 ```
 
 These metrics help flag problematic channels: channels with very few identifications, abnormally low total intensity, or unusual missingness patterns.
@@ -161,8 +163,7 @@ These metrics help flag problematic channels: channels with very few identificat
 #| eval: true
 #| fig-cap: "QC metrics per channel: number of identified PSMs and total intensity."
 # Visualise per-channel identification counts
-nPSM_data <- qc$nFeatures |>
-    as.data.frame() |>
+nPSM_data <- nFeatures |>
     tibble::rownames_to_column("channel") |>
     left_join(
         colData(leduc) |>
@@ -227,7 +228,7 @@ Optional: remove the carrier channel from the quantitative assays, keeping only 
 #| eval: true
 # Remove carrier channel (high-intensity booster not used in quant comparison)
 leduc <- subsetByColData(leduc,
-    leduc[[1]]$SampleType != "Carrier")
+    colData(leduc)$SampleType != "Carrier")
 
 cat("Channels after carrier removal:", ncol(leduc[[1]]), "\n")
 colData(leduc)$SampleType |> table()
@@ -237,27 +238,13 @@ colData(leduc)$SampleType |> table()
 
 Aggregation collapses multiple quantitative observations (PSMs mapping to the same peptide, or peptides mapping to the same protein) into a single value per cell. The `scp` package uses `aggregateFeatures()` from `QFeatures`, which creates a new assay at each aggregation level.
 
+The `leduc2022` dataset ships pre-aggregated, so we can inspect the peptide and protein assays directly rather than re-aggregating from the individual PSM files:
+
 ```{r}
 #| eval: true
-# Aggregate PSMs to peptides (group by peptide Sequence)
-leduc <- aggregateFeatures(leduc,
-    i = 1,
-    fcol = "Sequence",
-    name = "peptides",
-    fun = colMedians,
-    na.rm = TRUE)
-
 cat("Peptide assay dimensions:", dim(leduc[["peptides"]]), "\n")
-
-# Aggregate peptides to proteins (group by protein accession)
-leduc <- aggregateFeatures(leduc,
-    i = "peptides",
-    fcol = "Proteins",
-    name = "proteins",
-    fun = colMedians,
-    na.rm = TRUE)
-
-cat("Protein assay dimensions:", dim(leduc[["proteins"]]), "\n")
+cat("Protein assay dimensions:", dim(leduc[["proteins_processed"]]), "\n")
+```
 ```
 
 The `QFeatures` container retains all preceding assays, so you can always trace a protein's quantification back to its constituent peptides and PSMs:
@@ -275,7 +262,7 @@ provenance
 #| fig-cap: "Number of peptides per protein in the aggregated data."
 peptides_per_protein <- rowData(leduc[["peptides"]]) |>
     as.data.frame() |>
-    count(Proteins)
+    count(Leading.razor.protein)
 
 qplot(peptides_per_protein$n, bins = 20) +
     labs(x = "Peptides per protein", y = "Protein groups") +
@@ -299,20 +286,19 @@ When these assumptions are violated — for example, when comparing very differe
 ```{r}
 #| eval: true
 # Median normalization of the protein assay
-leduc <- normalizeScp(leduc,
-    i = "proteins",
-    name = "proteins_norm",
-    method = "div.median")
+prot_mat <- assay(leduc[["proteins_processed"]])
+scale_factors <- apply(prot_mat, 2, median, na.rm = TRUE)
+prot_norm <- sweep(prot_mat, 2, scale_factors, "/", check.margin = FALSE)
 
-cat("Normalized protein assay dimensions:", dim(leduc[["proteins_norm"]]), "\n")
+cat("Normalized protein matrix dimensions:", dim(prot_norm), "\n")
 ```
 
 ```{r}
 #| eval: true
 #| fig-cap: "Per-channel median intensity before and after normalization."
 # Extract protein data before and after normalization
-before <- assay(leduc[["proteins"]])
-after <- assay(leduc[["proteins_norm"]])
+before <- assay(leduc[["proteins_processed"]])
+after <- prot_norm
 
 compare <- data.frame(
     channel = colnames(before),
@@ -336,14 +322,27 @@ In the `leduc2022` dataset, all cells come from a single TMTpro-16 run, so there
 #| eval: true
 #| fig-cap: "PCA of protein-level data colored by cell condition."
 # Log-transform normalized protein data
-prots_log <- log2(assay(leduc, "proteins_norm") + 1)
+prots_log <- log2(prot_norm + 1)
+
+# Replace non-finite values with NA and keep proteins
+# detected in at least 50 % of cells
+prots_log[!is.finite(prots_log)] <- NA
+detect_rate <- rowMeans(!is.na(prots_log))
+prots_log <- prots_log[detect_rate >= 0.5, ]
+
+# Impute remaining NAs with row means for PCA (prcomp cannot handle NAs)
+k <- which(is.na(prots_log), arr.ind = TRUE)
+if (nrow(k) > 0) {
+    row_means <- rowMeans(prots_log, na.rm = TRUE)
+    prots_log[k] <- row_means[k[, 1]]
+}
 
 # PCA
 pca <- prcomp(t(prots_log), scale. = TRUE, center = TRUE)
 
-# Prepare plot data
+# Prepare plot data using colData matching the assay columns
 pca_data <- as.data.frame(pca$x)
-pca_data$SampleType <- colData(leduc)$SampleType
+pca_data$SampleType <- colData(leduc[["proteins_processed"]])$SampleType
 
 pca_var <- summary(pca)$importance[2, 1:2] * 100  # variance explained
 
@@ -372,7 +371,7 @@ Beyond PCA, the `scater` package provides dedicated single-cell visualization me
 # Create a SingleCellExperiment for scater functions
 sce <- SingleCellExperiment(
     assays = list(logcounts = prots_log),
-    colData = colData(leduc)
+    colData = colData(leduc[["proteins_processed"]])
 )
 
 # Run UMAP (via scater which uses scater::runUMAP, itself wrapping uwot)
@@ -390,12 +389,16 @@ plotUMAP(sce, colour_by = "SampleType") +
 # Variance explained by condition vs other available covariates
 # This uses variancePartition-style logic as shown in Chapter 20
 if (requireNamespace("variancePartition", quietly = TRUE)) {
-    library(variancePartition)
-    # Build formula with available covariates from colData
-    form <- ~ SampleType + Channel
-    varPart <- fitExtractVarPartModel(prots_log, form, colData(leduc))
-    plotVarPart(sortCols(varPart)) +
-        labs(title = "Variance decomposition")
+    tryCatch({
+        library(variancePartition)
+        # Build formula with available covariates from colData
+        form <- ~ SampleType + Channel
+        varPart <- fitExtractVarPartModel(prots_log, form, colData(leduc[["proteins_processed"]]))
+        plotVarPart(sortCols(varPart)) +
+            labs(title = "Variance decomposition")
+    }, error = function(e) {
+        cat("Variance decomposition skipped (package compatibility issue):\n  ", conditionMessage(e), "\n")
+    })
 } else {
     cat("Install variancePartition for variance decomposition analysis.\n")
 }
@@ -416,10 +419,10 @@ Differential abundance analysis in SCP faces two challenges: the high proportion
 
 ```{r}
 #| eval: true
-#| fig-cap: "Volcano plot comparing naive vs. primed pluripotent states."
+#| fig-cap: "Volcano plot comparing melanoma vs. monocyte cells."
 # Filter: keep proteins with at least 50% detection in at least one condition
 keep <- apply(prots_log, 1, function(x) {
-    by_cond <- split(x, colData(leduc)$SampleType)
+    by_cond <- split(x, colData(leduc[["proteins_processed"]])$SampleType)
     any(sapply(by_cond, function(y) mean(!is.na(y)) >= 0.5))
 })
 prots_filt <- prots_log[keep, ]
@@ -427,8 +430,8 @@ cat("Proteins retained after filtering:", sum(keep), "/", nrow(prots_log), "\n")
 
 # Simple imputation by condition median
 prots_imp <- prots_filt
-for (cond in unique(colData(leduc)$SampleType)) {
-    idx <- colData(leduc)$SampleType == cond
+for (cond in unique(colData(leduc[["proteins_processed"]])$SampleType)) {
+    idx <- colData(leduc[["proteins_processed"]])$SampleType == cond
     for (i in seq_len(nrow(prots_imp))) {
         if (is.na(prots_imp[i, idx][1])) {
             cond_vals <- prots_filt[i, idx]
@@ -438,13 +441,14 @@ for (cond in unique(colData(leduc)$SampleType)) {
     }
 }
 
-# limma differential abundance
+# limma differential abundance (Melanoma vs Monocyte)
 library(limma)
-design <- model.matrix(~ 0 + colData(leduc)$SampleType)
-colnames(design) <- levels(factor(colData(leduc)$SampleType))
+cd <- colData(leduc[["proteins_processed"]])
+design <- model.matrix(~ 0 + cd$SampleType)
+colnames(design) <- levels(factor(cd$SampleType))
 fit <- lmFit(prots_imp, design)
 cont <- makeContrasts(
-    naive_vs_primed = naive - primed,
+    melanoma_vs_monocyte = Melanoma - Monocyte,
     levels = design
 )
 fit2 <- contrasts.fit(fit, cont)
@@ -453,7 +457,7 @@ tt <- topTable(fit2, number = Inf)
 
 # Volcano plot
 tt$sig <- ifelse(tt$adj.P.Val < 0.05 & abs(tt$logFC) > 1,
-    ifelse(tt$logFC > 0, "Up in naive", "Down in naive"),
+    ifelse(tt$logFC > 0, "Up in melanoma", "Up in monocyte"),
     "Not significant"
 )
 
@@ -461,19 +465,19 @@ ggplot(tt, aes(x = logFC, y = -log10(adj.P.Val), color = sig)) +
     geom_point(alpha = 0.6) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", alpha = 0.5) +
     geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
-    scale_color_manual(values = c("Down in naive" = "#2166AC",
+    scale_color_manual(values = c("Up in monocyte" = "#2166AC",
                                    "Not significant" = "grey60",
-                                   "Up in naive" = "#B2182B")) +
-    labs(x = "log2 fold change (naive / primed)",
+                                   "Up in melanoma" = "#B2182B")) +
+    labs(x = "log2 fold change (melanoma / monocyte)",
          y = "-log10(adjusted p-value)",
-         title = "Naive vs. primed pluripotent states") +
+         title = "Melanoma vs. monocyte differential abundance") +
     theme_minimal() +
     theme(legend.title = element_blank())
 ```
 
 ```{r}
 #| eval: true
-cat("Top differentially abundant proteins (naive vs. primed):\n")
+cat("Top differentially abundant proteins (melanoma vs. monocyte):\n")
 tt |>
     filter(adj.P.Val < 0.05) |>
     arrange(adj.P.Val) |>

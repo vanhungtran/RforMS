@@ -42,7 +42,8 @@ Bioconductor releases are tied to R releases (twice yearly), ensuring all packag
 
 ### Installing Packages: The Right Way
 
-```r
+```{r}
+#| eval: false
 # CRAN packages
 install.packages(c("tidyverse", "ggplot2", "lme4"))
 
@@ -67,7 +68,8 @@ Before diving into data structures and functions, internalise three principles t
 
 The single most important insight about R: it is optimised for vectorised operations. Write `x^2`, not `for (i in 1:n) x[i]^2`. Vectorised code is approximately 100× faster and far more readable.
 
-```r
+```{r}
+#| eval: false
 # Vectorised (fast, idiomatic)
 log_intensities <- log2(intensities + 1)
 
@@ -84,7 +86,8 @@ This principle extends to the `apply` family and `purrr::map()` — these are R'
 
 R uses a consistent formula syntax `y ~ x1 + x2` across virtually all modeling functions. Learn it once, apply it everywhere:
 
-```r
+```{r}
+#| eval: false
 # Linear model
 lm(intensity ~ condition, data = metadata)
 
@@ -129,7 +132,8 @@ R's data structures form a coherent hierarchy. Understanding where each type fit
 
 **Critical distinction:** `[` returns a subset of the same type; `[[` extracts a single element (for lists and data frames). Confusing these is one of the most common R bugs:
 
-```r
+```{r}
+#| eval: false
 ms_list[[1]]    # extracts the first Spectra object
 ms_list[1]      # returns a list of length 1 containing that object
 metadata$batch  # equivalent to metadata[["batch"]]
@@ -137,7 +141,8 @@ metadata$batch  # equivalent to metadata[["batch"]]
 
 ### Vectors and Data Types
 
-```r
+```{r}
+#| eval: false
 # Numeric vector (e.g., m/z values)
 mz_vals <- c(100.1, 200.3, 300.5)
 
@@ -155,7 +160,8 @@ charge_states <- c(2L, 3L, 2L, 1L)
 
 Factors are vectors with predefined levels. Always specify `levels` explicitly to control ordering — the default alphabetical order is rarely what you want:
 
-```r
+```{r}
+#| eval: false
 condition <- factor(
   c("Treatment", "Control", "Treatment"),
   levels = c("Control", "Treatment")  # Control = reference level
@@ -166,7 +172,8 @@ In MS analysis, factors appear in every design matrix. A factor's first level be
 
 ### Data Frames — The Workhorse for Metadata and Results
 
-```r
+```{r}
+#| eval: false
 # Create a data frame manually
 metadata <- data.frame(
   sample_id       = c("S01", "S02", "S03"),
@@ -190,7 +197,8 @@ filtered <- metadata |> filter(batch == 1) |> select(sample_id, condition)
 
 ### Lists — For Heterogeneous Collections
 
-```r
+```{r}
+#| eval: false
 # A list can hold different types (e.g., MS2 spectra per file)
 ms_data_list <- list(
   file1      = Spectra("sample1.mzML"),
@@ -206,7 +214,8 @@ ms_data_list$file1
 
 R treats functions as first-class objects — they can be passed as arguments, returned from other functions, and stored in lists. This functional programming style appears throughout Bioconductor.
 
-```r
+```{r}
+#| eval: false
 # A simple function to compute CV (coefficient of variation)
 cv <- function(x, na.rm = TRUE) {
   sd(x, na.rm = na.rm) / mean(x, na.rm = na.rm) * 100
@@ -225,7 +234,8 @@ cv(intensities)
 
 Instead of writing loops, use functional programming. For MS data, you constantly apply the same operation to many files or features:
 
-```r
+```{r}
+#| eval: false
 file_list <- list.files("data/raw", pattern = "\\.mzML$", full.names = TRUE)
 
 # Base R
@@ -241,7 +251,8 @@ file_sizes <- vapply(file_list, file.size, numeric(1))
 
 ### Conditionals and Error Handling
 
-```r
+```{r}
+#| eval: false
 if (any(is.na(intensities))) {
   warning("Missing values detected!")
 }
@@ -280,7 +291,8 @@ The tidyverse is a collection of R packages that share a common design philosoph
 
 `dplyr` provides five verbs that cover the vast majority of data manipulation tasks. Master these and you will rarely need to write a loop for metadata wrangling:
 
-```r
+```{r}
+#| eval: false
 library(dplyr)
 
 # 1. filter() — keep rows matching a condition
@@ -312,7 +324,8 @@ psm_table |> arrange(desc(xcorr))  # best-scoring PSMs first
 
 The native pipe `|>` (R 4.1+) chains operations left to right. Instead of nesting functions or creating intermediate variables, you build a pipeline that reads like a recipe:
 
-```r
+```{r}
+#| eval: false
 # Without pipe — hard to read, many intermediate variables
 tmp1 <- filter(psm_table, msLevel == 2)
 tmp2 <- mutate(tmp1, log_xcorr = log10(xcorr))
@@ -333,7 +346,8 @@ Every chapter in this book uses the pipe. You will see it applied to `Spectra` o
 
 MS feature tables are naturally wide (features × samples), but ggplot2 and many modeling functions expect long (tidy) format. `tidyr::pivot_longer()` and `pivot_wider()` convert between them:
 
-```r
+```{r}
+#| eval: false
 library(tidyr)
 
 # Wide → Long (for plotting, modeling)
@@ -362,7 +376,8 @@ R's `ggplot2` package implements the **Grammar of Graphics**: every plot is buil
 
 ### The ggplot2 Building Blocks
 
-```r
+```{r}
+#| eval: false
 library(ggplot2)
 
 ggplot(data = psm_table, aes(x = retention_time, y = xcorr, colour = msLevel)) +
@@ -430,7 +445,7 @@ General-purpose statistical packages assume small, clean data frames. MS data br
 
 R has two object-oriented systems. S3 (used by base R and the tidyverse) is lightweight — any object can be given a `class` attribute and dispatched via `UseMethod()`. S4 (used by Bioconductor) is formal — classes have explicitly defined slots with type checking.
 
-```r
+```{r}
 # S3: lightweight, no type enforcement
 obj <- list(mz = c(100, 200), intensity = c(1000, 2000))
 class(obj) <- "spectrum"  # no guarantee mz is numeric
@@ -447,7 +462,8 @@ setClass("MassSpectrum",
 
 Bioconductor chose S4 for two reasons: **interoperability** (packages from different authors can rely on consistent class definitions) and **safety** (type-checking prevents subtle bugs when one package passes data to another). You don't need to write S4 classes — you need to recognise them and know that Bioconductor objects are accessed with `@` (slots) or dedicated accessor functions (preferred):
 
-```r
+```{r}
+#| eval: false
 sp <- Spectra(mzml_file)
 sp@backend           # S4 slot access (works, but avoid in production code)
 rtime(sp)            # accessor function (preferred — stable across package versions)
@@ -474,7 +490,8 @@ Backend (pluggable storage):
 
 Switching backends requires changing one line of code. The rest of your analysis is unchanged:
 
-```r
+```{r}
+#| eval: false
 # In-memory: fast for < 1000 spectra
 sp <- Spectra(mzml_files, backend = MsBackendDataFrame())
 
@@ -547,7 +564,8 @@ This book uses `tidymodels` for machine learning and biomarker modeling (Chapter
 
 ### A Minimal tidymodels Pipeline for MS Data
 
-```r
+```{r}
+#| eval: false
 library(tidymodels)
 
 # 1. Split BEFORE any preprocessing (critical — see Chapter 22)
@@ -607,7 +625,8 @@ Layer 5: Literate documents → Quarto (code + narrative together)
 
 R packages change. A function that works today may behave differently (or disappear) after an update. `renv` creates a project-local library and records exact package versions in `renv.lock`:
 
-```r
+```{r}
+#| eval: false
 # Initialise a new project
 renv::init()
 
@@ -624,7 +643,8 @@ A collaborator — or your future self on a new machine — runs `renv::restore(
 
 MS data processing is expensive. Rerunning CentWave peak detection on 100 files because you changed a plot label is wasteful. The `targets` package tracks which steps depend on which inputs and only reruns what has changed:
 
-```r
+```{r}
+#| eval: false
 # _targets.R
 library(targets)
 tar_option_set(packages = c("Spectra", "xcms", "limma"))
@@ -679,7 +699,7 @@ The guarantee of literate programming is that your report never lies about your 
 
 Below is a minimal end-to-end example using real `msdata` files, combining several Bioconductor packages. This walkthrough previews the full pipeline covered in detail across subsequent chapters.
 
-```r
+```{r}
 #| eval: false
 library(msdata)
 library(Spectra)
@@ -777,7 +797,7 @@ The next chapter covers the infrastructure for managing a real MS project: direc
 
 ## Session Information
 
-```r
+```{r}
 sessionInfo()
 ```
 

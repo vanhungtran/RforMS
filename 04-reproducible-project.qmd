@@ -50,7 +50,8 @@ my_ms_project/
 
 To avoid fragile absolute paths, use the `here` package or base R's `file.path()`. The `here` package dynamically locates your project root across different machines.
 
-```r
+```{r}
+#| eval: false
 library(here)
 raw_file <- here("data", "raw", "sample_01.mzML")
 ```
@@ -128,7 +129,8 @@ R evolves constantly. The built-in `sessionInfo()` shows your current packages, 
 
 The `renv` package creates a project-local R library and records exact package versions (including Bioconductor and GitHub sources) in a `renv.lock` file.
 
-```r
+```{r}
+#| eval: false
 renv::init()
 BiocManager::install(c("Spectra", "xcms", "QFeatures"))
 renv::snapshot()   # writes renv.lock
@@ -167,7 +169,8 @@ MS data processing is computationally expensive. Rerunning peak picking on 50 sa
 
 ### Basic `_targets.R`
 
-```r
+```{r}
+#| eval: false
 library(targets)
 tar_option_set(packages = c("Spectra", "here"))
 
@@ -180,7 +183,8 @@ list(
 
 ### Dynamic branching for many files
 
-```r
+```{r}
+#| eval: false
 tar_target(
   raw_files,
   list.files(here("data/raw"), pattern = "\\.mzML$", full.names = TRUE),
@@ -205,7 +209,8 @@ Run `tar_make()` once; the second time, only new or changed files are processed.
 - Use `tar_meta()` to inspect what `targets` tracked.
 - Save analysis parameters as explicit targets so any change invalidates downstream results:
 
-```r
+```{r}
+#| eval: false
 tar_target(ppm_tolerance, 5)
 tar_target(peaks, findChromPeaks(xset, ppm = ppm_tolerance))
 ```
@@ -218,7 +223,8 @@ tar_target(peaks, findChromPeaks(xset, ppm = ppm_tolerance))
 
 If you write custom R functions (e.g., in `R/ms_functions.R`), a small change can break downstream steps. Write unit tests with `testthat`:
 
-```r
+```{r}
+#| eval: false
 test_that("peak intensities are non-negative", {
   expect_true(all(peaks$intensity >= 0))
 })
@@ -226,7 +232,8 @@ test_that("peak intensities are non-negative", {
 
 For runtime checks inside a `targets` pipeline:
 
-```r
+```{r}
+#| eval: false
 tar_target(peaks, findPeaks(ms_data))
 tar_assert_true(all(peaks$intensity >= 0), msg = "Negative intensities detected!")
 ```
@@ -237,7 +244,8 @@ tar_assert_true(all(peaks$intensity >= 0), msg = "Negative intensities detected!
 
 A `Spectra` or `MSnExp` object for a full LC-MS run can be several gigabytes. By default, `targets` serialises R objects with `saveRDS()`, which can be slow and memory-intensive. Use alternative serialisation formats:
 
-```r
+```{r}
+#| eval: false
 tar_target(large_object, compute_something(), format = "qs")   # requires qs package
 tar_target(data_frame,   compute_more(),      format = "fst")  # for data frames
 ```
@@ -250,7 +258,8 @@ Cap memory usage per target with `tar_option_set(resources = tar_resources(memor
 
 Use `tar_quarto()` from `tarchetypes` to make your HTML/PDF report a pipeline target:
 
-```r
+```{r}
+#| eval: false
 tarchetypes::tar_quarto(
   final_report,
   path  = "reports/my_analysis.qmd",
@@ -328,6 +337,7 @@ The next chapter covers MS data file formats and how to import them safely into 
 
 ## Session Information
 
-```r
+```{r}
+#| eval: false
 sessionInfo()
 ```

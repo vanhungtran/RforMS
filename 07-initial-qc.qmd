@@ -53,7 +53,7 @@ This chapter focuses on **initial** QC – before preprocessing, imputation, or 
 
 ## Required Packages
 
-``` r
+```{r}
 #| eval: false
 BiocManager::install(c(
   "MSnbase",          # MS data handling
@@ -67,12 +67,8 @@ BiocManager::install(c(
 ))
 ```
 
-``` r
+```{r}
 # Load libraries
-library(MSnbase)
-library(Spectra)
-library(mzR)
-library(MsExperiment)
 library(msdata)
 library(ggplot2)
 library(dplyr)
@@ -95,11 +91,12 @@ Metadata must be recorded before any analysis. Essential fields:
 
 ### Create Metadata Table
 
-The `msdata` package provides example metabolomics files. We'll build a metadata table matching these files.
+The `msdata` package provides example mzML files. We'll build a metadata table matching these files.
 
-``` r
+```{r}
 # Locate example mzML files
-mzml_files <- metabolomics(full.names = TRUE)
+mzml_files <- proteomics(full.names = TRUE)
+mzml_files <- mzml_files[1:4]  # use 4 files for clean pairs
 n_files <- length(mzml_files)
 
 # Create metadata
@@ -117,7 +114,7 @@ head(metadata)
 
 **Best practice:** Keep metadata in a CSV file separate from your analysis script, and read it in.
 
-``` r
+```{r}
 # write.csv(metadata, "sample_metadata.csv", row.names = FALSE)
 ```
 
@@ -138,7 +135,7 @@ head(metadata)
 
 For demonstration, we extend the `msdata` files with simulated QC samples (since real QC files are not included).
 
-``` r
+```{r}
 # Simulate intensities for 3 QC samples (pooled)
 n_features <- 100
 n_qc <- 3
@@ -171,22 +168,20 @@ Before any QC plot, ensure metadata matches the spectral data.
 
 ### Link to Raw Spectra (MsExperiment)
 
-``` r
-# Create MsExperiment linking raw files to metadata
-ms_exp <- readMsExperiment(
-  spectraFiles = mzml_files,
-  sampleData = metadata[metadata$type == "sample", ]
-)
+For this demonstration we use the metadata table directly. In practice you would
+connect real mzML files via `Spectra(mzml_files)` or `readMsExperiment()` (see Chapter 4).
 
-# Verify sampleData order matches spectraFiles
-sampleData(ms_exp)
+```{r}
+cat("Number of files:", nrow(metadata), "\n")
+cat("File names:\n")
+cat(paste("  ", metadata$file_name), sep = "\n")
 ```
 
 ### Link to Feature Table (After Preprocessing)
 
 After preprocessing (e.g., with `xcms`), you will have a feature matrix. Always check column order.
 
-``` r
+```{r}
 # Simulated feature matrix: rows = features, columns = samples
 feature_mat <- matrix(rnorm(100 * nrow(metadata), mean = 10, sd = 2),
                       nrow = 100, ncol = nrow(metadata))
@@ -212,20 +207,20 @@ Common metadata errors:
 
 ### Check for Duplicates
 
-``` r
+```{r}
 any(duplicated(metadata$sample_name))
 any(duplicated(metadata$file_name))
 ```
 
 ### Check File Existence
 
-``` r
+```{r}
 all(file.exists(mzml_files))
 ```
 
 ### Detect Batch–Group Confounding
 
-``` r
+```{r}
 table(metadata$batch, metadata$biological_group)
 ```
 
@@ -233,7 +228,7 @@ If a batch contains only one biological group, batch and group are **confounded*
 
 ### Check Injection Order Completeness
 
-``` r
+```{r}
 all(1:nrow(metadata) == sort(metadata$injection_order))  # assuming no gaps
 ```
 
@@ -245,60 +240,62 @@ Total Ion Current (TIC) and Base Peak Chromatogram (BPC) are the first QC plots 
 
 ### Extract TIC from Raw Files
 
-``` r
-# Using Spectra
-sps <- Spectra(mzml_files[1])
+We'll simulate a realistic TIC trace — two broad LC peaks on a gently falling baseline — to
+illustrate the QC pattern without requiring a running instrument backend.
+
+```{r}
+# Simulate a realistic TIC: two elution windows + baseline drift
+set.seed(42)
+rt <- seq(0, 30, length.out = 600)  # 30-minute gradient
+
+make_tic <- function(base_level = 5e7, noise_sd = 2e6, drift = -1e5) {
+  baseline <- base_level + drift * rt
+  peak1 <- 8e7 * dnorm(rt, mean = 8, sd = 1.5)
+  peak2 <- 6e7 * dnorm(rt, mean = 18, sd = 2.5)
+  baseline + peak1 + peak2 + rnorm(length(rt), 0, noise_sd)
+}
+
 tic_df <- data.frame(
-  retention_time = rtime(sps),
-  intensity = intensity(tic(sps))
+  retention_time = rt,
+  intensity = make_tic()
 )
 
-ggplot(tic_df, aes(x = retention_time / 60, y = intensity)) +
-  geom_line(color = "steelblue") +
-  labs(
-    title = paste("TIC -", basename(mzml_files[1])),
-    x = "Retention time (min)",
-    y = "Total Ion Current"
-  ) +
+ggplot(tic_df, aes(x = retention_time, y = intensity)) +
+  geom_line(color = "steelblue", linewidth = 0.5) +
+  labs(title = "TIC — simulated LC-MS run",
+       x = "Retention time (min)", y = "Total Ion Current") +
   theme_minimal()
 ```
 
 ### Compare TIC Across All Samples
 
-``` r
-# Function to compute TIC for one file
-get_tic <- function(file) {
-  sps <- Spectra(file)
-  tic_int <- intensity(tic(sps))
+```{r}
+# Generate TIC for 4 samples with small variations to mimic real runs
+set.seed(42)
+all_tic <- bind_rows(lapply(seq_len(nrow(metadata)), function(i) {
   data.frame(
-    file = basename(file),
-    retention_time = rtime(sps),
-    intensity = tic_int
+    file = metadata$file_name[i],
+    retention_time = rt,
+    intensity = make_tic(base_level = 5e7, noise_sd = 1.5e6,
+                         drift = -1e5 + rnorm(1, 0, 2e4))
   )
-}
+}))
 
-# Combine all TICs
-all_tic <- bind_rows(lapply(mzml_files, get_tic))
-
-# Plot with faceting or overlay
+# Overlay
 ggplot(all_tic, aes(x = retention_time / 60, y = intensity, color = file)) +
-  geom_line(alpha = 0.5) +
-  labs(
-    title = "TIC overlay - all samples",
-    x = "Retention time (min)",
-    y = "Total Ion Current"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "none")  # too many legends; use facet instead
+  geom_line(alpha = 0.5, linewidth = 0.4) +
+  labs(title = "TIC overlay — all samples",
+       x = "RT (min)", y = "Total Ion Current") +
+  theme_minimal() + theme(legend.position = "none")
 ```
 
 Better: use facets for the first 4 files:
 
-``` r
+```{r}
 all_tic |>
-  filter(file %in% basename(mzml_files)[1:4]) |>
+  filter(file %in% metadata$file_name[1:4]) |>
   ggplot(aes(x = retention_time / 60, y = intensity)) +
-  geom_line(color = "steelblue") +
+  geom_line(color = "steelblue", linewidth = 0.4) +
   facet_wrap(~file, scales = "free_y", ncol = 2) +
   labs(x = "RT (min)", y = "TIC") +
   theme_minimal()
@@ -314,31 +311,23 @@ Retention time drift across runs must be assessed before alignment. Use extracte
 
 ### Extract EIC for a Fixed m/z Window
 
-``` r
-mz_range <- c(300, 310)  # arbitrary window
-
-get_eic <- function(file, mz_range) {
-  sps <- Spectra(file)
-  filterMz(sps, mz = mz_range)
-  # Actually, need to use chromatogram method:
-  chr <- chromatogram(sps, mz = mz_range)
+```{r}
+# Simulate an extracted-ion chromatogram for a compound eluting around 12 min
+set.seed(42)
+eic_df <- bind_rows(lapply(seq_len(3), function(i) {
+  rt_shift <- (i - 2) * 0.15  # small RT drift between runs
   data.frame(
-    file = basename(file),
-    retention_time = rtime(chr),
-    intensity = intensity(chr)[1, ]
+    file = metadata$file_name[i],
+    retention_time = rt,
+    intensity = 2e8 * dnorm(rt, mean = 12 + rt_shift, sd = 0.25) +
+      rnorm(length(rt), 0, 2e6)
   )
-}
+}))
 
-# For first 3 files
-eic_list <- lapply(mzml_files[1:3], get_eic, mz_range = mz_range)
-eic_df <- bind_rows(eic_list)
-
-ggplot(eic_df, aes(x = retention_time / 60, y = intensity, color = file)) +
-  geom_line() +
-  labs(
-    title = "EIC (300-310 m/z) - retention time drift check",
-    x = "RT (min)", y = "Intensity"
-  ) +
+ggplot(eic_df, aes(x = retention_time, y = intensity, color = file)) +
+  geom_line(linewidth = 0.5) +
+  labs(title = "EIC (simulated) — retention time drift check",
+       x = "RT (min)", y = "Intensity") +
   theme_minimal()
 ```
 
@@ -352,7 +341,7 @@ ggplot(eic_df, aes(x = retention_time / 60, y = intensity, color = file)) +
 
 If you have a lock mass or internal standard, calculate mass error in ppm.
 
-``` r
+```{r}
 # Example: theoretical m/z of a known QC peak
 theoretical_mz <- 508.1234
 observed_mz <- 508.1250   # from your data
@@ -365,7 +354,7 @@ cat(sprintf("Mass error: %.2f ppm\n", mass_error_ppm))
 
 ### Intensity Distribution per Sample
 
-``` r
+```{r}
 # Using a preprocessed feature matrix (simulated)
 feature_df <- as.data.frame(feature_mat) |>
   pivot_longer(everything(), names_to = "sample", values_to = "intensity")
@@ -390,7 +379,7 @@ Blanks (solvent injections) should contain very few features. Any feature with h
 
 ### Simulate Blank Data
 
-``` r
+```{r}
 blank_mat <- matrix(rlnorm(100 * 2, meanlog = 5, sdlog = 1),
                     nrow = 100, ncol = 2)
 colnames(blank_mat) <- c("Blank_1", "Blank_2")
@@ -434,58 +423,34 @@ Internally, each metric function implements one term from the **HUPO-PSI mzQC co
 
 First, ensure MsQuality and its dependencies are installed.
 
-```r
+```{r}
 #| eval: false
 BiocManager::install("MsQuality")
 ```
 
-We will use the two Sciex TripleTOF 5600+ files provided by the `msdata` package --- the same example used in the MsQuality vignette. These are profile-mode LC-MS acquisitions of pooled human serum (HILIC separation), representing two different injection indices from the same batch.
+The `msdata` package includes two Sciex TripleTOF 5600+ files for this purpose, but here we
+demonstrate the key ideas with a realistic simulated QC table:
 
-```r
-#| eval: true
-library(MsQuality)
-library(Spectra)
-library(msdata)
+```{r}
+#| message: false
+library(ggplot2)
+library(tidyr)
+library(dplyr)
 
-# Locate the two Sciex example files in the msdata package
-fls <- dir(system.file("sciex", package = "msdata"), full.names = TRUE)
-fls
-```
-
-**Input:** two mzML files (injection index 1 and injection index 19).
-**Output:** a `Spectra` object containing data from both acquisitions, distinguished by `dataOrigin`.
-
-```r
-#| eval: true
-sps <- Spectra(fls, backend = MsBackendMzR())
-sps
-```
-
-`qualityMetrics()` lists all metrics that can be computed for this object:
-
-```r
-#| eval: true
-qualityMetrics(sps)
-```
-
-We now calculate a focused set of interpretable metrics. The `msLevel = 1L` argument restricts calculation to MS1 scans; `filterEmptySpectra = TRUE` removes zero-length and zero-intensity entries (recommended for compatibility with QuaMeter-based quality assessments [@naake2023msquality]).
-
-```r
-#| eval: true
-qc_df <- calculateMetrics(
-    object = sps,
-    metrics = c(
-        "chromatographyDuration",
-        "areaUnderTic",
-        "numberSpectra",
-        "msSignal10xChange",
-        "ticQuartileToQuartileLogRatio",
-        "rtOverMsQuarters",
-        "medianTicRtIqr"
-    ),
-    filterEmptySpectra = TRUE,
-    msLevel = 1L,
-    relativeTo = "Q1"
+# Simulate two acquisitions with typical QC metrics
+qc_df <- data.frame(
+    row.names = c("Injection_1", "Injection_19"),
+    chromatographyDuration = c(1802, 1815),    # seconds
+    areaUnderTic = c(4.21e10, 3.98e10),
+    numberSpectra = c(895, 912),
+    msSignal10xChange.jump = c(2L, 7L),        # 7 jumps = suspicious
+    msSignal10xChange.fall = c(1L, 5L),
+    ticQuartileToQuartileLogRatio = c(0.12, 0.41),
+    rtOverMsQuarters.Q1 = c(0.18, 0.16),
+    rtOverMsQuarters.Q2 = c(0.27, 0.24),
+    rtOverMsQuarters.Q3 = c(0.24, 0.26),
+    rtOverMsQuarters.Q4 = c(0.31, 0.34),
+    medianTicRtIqr = c(552, 578)
 )
 
 qc_df
@@ -513,7 +478,7 @@ qc_df
 
 To compare the two injections side by side, we create a bar chart of a subset of metrics. Values are scaled within each metric (z-score) so that metrics with different units appear on a common axis.
 
-```r
+```{r}
 #| eval: true
 #| message: false
 library(ggplot2)
@@ -550,10 +515,11 @@ ggplot(qc_plot, aes(x = metric, y = z_score, fill = sample)) +
 
 In a study with dozens of injections, a heatmap of z-scores across all samples and metrics makes outlier runs immediately visible:
 
-```r
+```{r}
 #| eval: true
 #| message: false
 library(pheatmap)
+library(tibble)
 
 # Build a matrix of z-scores for the selected metrics
 z_mat <- qc_plot |>
@@ -578,7 +544,8 @@ Any sample with consistently extreme z-scores (|z| > 2--3) across multiple metri
 ::: {.callout-tip title="Exporting to mzQC"}
 To make your QC data portable, use the `rmzqc` package to export `qc_df` to the HUPO-PSI mzQC JSON format:
 
-```r
+```{r}
+#| eval: false
 calculateMetrics(sps, format = "mzqc", path = "qc_metrics.mzQC")
 ```
 
@@ -597,7 +564,7 @@ This file can be archived alongside your raw data or submitted to public reposit
 
 This workflow combines all QC checks into a single report.
 
-``` r
+```{r}
 #| eval: false
 generate_qc_report <- function(mzml_files, metadata, output_dir = "QC_report") {
   
@@ -674,7 +641,7 @@ If any check fails, **do not proceed** – address the issue or document it as a
 
 Download a public metabolomics dataset (e.g., from MetaboLights). Create a metadata table with biological group, batch, injection order, and sample type.
 
-``` r
+```{r}
 # Your code here
 ```
 
@@ -682,7 +649,7 @@ Download a public metabolomics dataset (e.g., from MetaboLights). Create a metad
 
 Simulate a dataset where batch is perfectly confounded with treatment (e.g., batch 1 = control, batch 2 = treatment). Write a function that warns the user.
 
-``` r
+```{r}
 # Your code here
 ```
 
@@ -690,7 +657,7 @@ Simulate a dataset where batch is perfectly confounded with treatment (e.g., bat
 
 Using the `msdata::proteomics()` files, create TIC overlay plots for all files. Identify any sample with abnormally low TIC.
 
-``` r
+```{r}
 # Your code here
 ```
 
@@ -698,7 +665,7 @@ Using the `msdata::proteomics()` files, create TIC overlay plots for all files. 
 
 If you have blank injections, calculate the proportion of features in blanks that also appear in biological samples. Set a threshold to flag potential contaminants.
 
-``` r
+```{r}
 # Your code here
 ```
 
@@ -727,6 +694,6 @@ If you have blank injections, calculate the proportion of features in blanks tha
 
 ## Session Information
 
-``` r
+```{r}
 sessionInfo()
 ```

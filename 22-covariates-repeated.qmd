@@ -92,7 +92,7 @@ We will start with a **simulated feature table** so you can see exactly how each
 
 ## Setup and Package Installation
 
-``` r
+```{r}
 #| eval: false
 BiocManager::install(c(
   "limma",               # Linear models for MS data
@@ -105,7 +105,8 @@ BiocManager::install(c(
 ))
 ```
 
-``` r
+```{r}
+#| eval: false
 # Load libraries
 library(limma)
 library(lme4)
@@ -126,7 +127,8 @@ set.seed(42)
 
 Before fitting, identify your experimental structure and choose the corresponding formula.
 
-``` r
+```{r}
+#| eval: false
 model_reference <- data.frame(
   Design = c(
     "Two‑group (simple)",
@@ -166,7 +168,8 @@ knitr::kable(model_reference, caption = "Model formulas for common MS experiment
 We'll create a feature table with **200 metabolites** and **18 samples**.\
 True effects: treatment upregulates first 30 metabolites; batch 2 has a systematic shift; sex has a small effect.
 
-``` r
+```{r}
+#| eval: false
 n_metabolites <- 200
 n_samples <- 18
 
@@ -217,14 +220,16 @@ If batch differs between control and treatment groups, an unadjusted model will 
 
 ### Build Design Matrix
 
-``` r
+```{r}
+#| eval: false
 design_adj <- model.matrix(~ condition + batch + sex, data = metadata)
 colnames(design_adj)
 ```
 
 ### Fit the Model for All Metabolites
 
-``` r
+```{r}
+#| eval: false
 fit_adj <- lmFit(intensity_mat, design_adj)
 fit_adj <- eBayes(fit_adj)
 
@@ -236,7 +241,8 @@ head(results_adj[, c("logFC", "AveExpr", "P.Value", "adj.P.Val")])
 
 ### Compare Adjusted vs Unadjusted (Ignoring Batch/Sex)
 
-``` r
+```{r}
+#| eval: false
 design_unadj <- model.matrix(~ condition, data = metadata)
 fit_unadj <- lmFit(intensity_mat, design_unadj) |> eBayes()
 results_unadj <- topTable(fit_unadj, coef = "conditionTreatment", number = Inf)
@@ -266,7 +272,8 @@ comparison_df |>
 
 ### Simulate Paired MS Data
 
-``` r
+```{r}
+#| eval: false
 n_patients <- 9
 patient_id <- factor(rep(paste0("Patient_", 1:n_patients), times = 2))
 condition_paired <- factor(rep(c("Before", "After"), each = n_patients))
@@ -290,7 +297,8 @@ paired_metadata <- data.frame(
 
 ### Paired Design Matrix
 
-``` r
+```{r}
+#| eval: false
 # Include patient ID to absorb subject‑to‑subject variation
 design_paired <- model.matrix(~ condition + patient, data = paired_metadata)
 fit_paired <- lmFit(mat_paired, design_paired) |> eBayes()
@@ -316,7 +324,8 @@ cat("True positives detected:",
 
 ### Simulate Longitudinal MS Data
 
-``` r
+```{r}
+#| eval: false
 n_subjects <- 20
 n_timepoints <- 4
 
@@ -335,7 +344,8 @@ head(long_df)
 
 ### Fit Mixed Model for One Metabolite
 
-``` r
+```{r}
+#| eval: false
 fit_lmer <- lmer(abundance ~ condition * time + (1 | subject),
                  data = long_df)
 tidy(fit_lmer, effects = "fixed") |> knitr::kable(digits = 3)
@@ -354,7 +364,8 @@ tidy(fit_lmer, effects = "fixed") |> knitr::kable(digits = 3)
 
 For real MS data, you can loop over metabolites:
 
-``` r
+```{r}
+#| eval: false
 # Function to extract interaction p‑value
 get_interaction_p <- function(metabolite_data) {
   # metabolite_data must have columns: abundance, condition, time, subject
@@ -380,7 +391,8 @@ cat("Interaction p‑value:", p_val, "\n")
 
 Understanding variance sources helps you decide whether to include factors in your model and whether your experiment is well‑designed.
 
-``` r
+```{r}
+#| eval: false
 # Prepare data: samples as rows, metabolites as columns
 intensity_t <- t(intensity_mat)
 colnames(intensity_t) <- paste0("Metab_", 1:n_metabolites)
@@ -415,7 +427,8 @@ Example: A drug reduces metabolite abundance only after 24 hours.
 
 ### Simulate Interaction Data (2×2 design)
 
-``` r
+```{r}
+#| eval: false
 time2 <- factor(rep(c("T0", "T24"), each = n_samples / 2))
 condition2 <- condition
 
@@ -433,7 +446,8 @@ interact_metadata <- data.frame(
 
 ### Fit Interaction Model
 
-``` r
+```{r}
+#| eval: false
 design_interact <- model.matrix(~ condition * time, data = interact_metadata)
 fit_interact <- lmFit(mat_interact, design_interact) |> eBayes()
 
@@ -445,7 +459,8 @@ head(results_interact[, c("logFC", "P.Value", "adj.P.Val")])
 
 ### Visualise the Top Interaction
 
-``` r
+```{r}
+#| eval: false
 top_metab <- rownames(results_interact)[1]
 plot_df <- data.frame(
   intensity = mat_interact[top_metab, ],
@@ -503,7 +518,7 @@ flowchart TD
 
 Replace `your_intensity_matrix` with your actual feature table (samples as columns).
 
-``` r
+```{r}
 #| eval: false
 # Complete covariate modeling pipeline for MS data
 library(limma)
@@ -563,7 +578,8 @@ plotVarPart(vp)
 
 Using the simulated data from Step 2, add `age` as a continuous covariate (simulate random ages 20‑80). Fit a model with `~ condition + batch + sex + age`. How do the logFC and p‑values for the treatment effect change compared to the model without age?
 
-``` r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -571,7 +587,8 @@ Using the simulated data from Step 2, add `age` as a continuous covariate (simul
 
 Load the `msdata::metabolomics()` files, process them with `xcms` (Chapter 7), and extract a feature table. If your experiment had paired samples (e.g., same subject before/after), run both a paired and an unpaired `limma` model. How many features are significant only in the paired model?
 
-``` r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -579,7 +596,8 @@ Load the `msdata::metabolomics()` files, process them with `xcms` (Chapter 7), a
 
 Load the `sacurine` dataset from `ropls`. Use `variancePartition` to quantify variance explained by `sample_type` (urine), `age`, and `gender`. Which factor dominates?
 
-``` r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -587,7 +605,8 @@ Load the `sacurine` dataset from `ropls`. Use `variancePartition` to quantify va
 
 Using the interaction‑simulated data, test all metabolites for `condition × time` interaction. Report: - How many true positives (first 30 metabolites) are significant at FDR \< 0.05? - How many false positives (metabolites 31‑200) are significant?
 
-``` r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -627,6 +646,7 @@ Using the interaction‑simulated data, test all metabolites for `condition × t
 
 ## Session Information
 
-``` r
+```{r}
+#| eval: false
 sessionInfo()
 ```

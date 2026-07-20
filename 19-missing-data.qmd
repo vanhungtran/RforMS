@@ -64,7 +64,7 @@ For this demonstration, we reuse `UbiLength` from the `DEP` package. Chapter 13 
 
 ## Setup and Package Installation
 
-```r
+```{r}
 #| eval: true
 # Install required packages
 BiocManager::install(c(
@@ -78,7 +78,7 @@ BiocManager::install(c(
 ))
 ```
 
-```r
+```{r}
 # Load libraries
 library(DEP)
 library(naniar)
@@ -248,7 +248,7 @@ The workflow below applies all three and tests whether conclusions are robust to
 
 `UbiLength` is a label-free proteomics dataset with 12 samples across 4 conditions and 3 replicates per condition.
 
-```r
+```{r}
 data("UbiLength")
 
 # Locate LFQ intensity columns
@@ -268,7 +268,7 @@ cat("Samples:", ncol(mat_raw), "\n")
 
 ### Visualise Missingness Pattern
 
-```r
+```{r}
 # Convert to data frame for naniar
 df_raw <- as.data.frame(mat_raw)
 
@@ -281,7 +281,7 @@ gg_miss_upset(df_raw, nsets = 8, nintersects = 20) +
 
 ### Per-Sample Missingness
 
-```r
+```{r}
 # Proportion missing per sample
 missing_by_sample <- colMeans(is.na(mat_raw))
 
@@ -306,7 +306,7 @@ ggplot(missing_df, aes(x = reorder(sample, missing_pct), y = missing_pct)) +
 
 If missingness correlates with **low intensity**, the mechanism is likely **MNAR** (values missing because they were too low to detect). If missingness is random across the intensity range, **MAR** is more plausible.
 
-```r
+```{r}
 # Calculate per-protein mean intensity and missing fraction
 mean_intensity <- apply(mat_raw, 1, mean, na.rm = TRUE)
 miss_fraction <- apply(mat_raw, 1, function(x) mean(is.na(x)))
@@ -345,7 +345,7 @@ ggplot(diagnostic_df, aes(x = mean_intensity, y = miss_fraction)) +
 
 Replace each missing value with the minimum observed value in that sample. Fast, conservative, assumes missing = very low abundance.
 
-```r
+```{r}
 imp_min <- apply(mat_raw, 2, function(x) {
   x[is.na(x)] <- min(x, na.rm = TRUE)
   x
@@ -358,7 +358,8 @@ cat("Min value imputation completed\n")
 
 Uses similar proteins (by expression profile) to predict missing values. Assumes missingness is random.
 
-```r
+```{r}
+#| eval: false
 # k-NN imputation (k = 10 by default)
 imp_knn <- impute::impute.knn(mat_raw)$data
 
@@ -369,7 +370,8 @@ cat("k-NN imputation completed\n")
 
 This emulates the popular Perseus imputation: draw random values from a left-shifted normal distribution. Standard for MNAR proteomics data.
 
-```r
+```{r}
+#| eval: false
 set.seed(42)
 imp_leftcensored <- mat_raw
 na_idx <- which(is.na(imp_leftcensored), arr.ind = TRUE)
@@ -394,7 +396,8 @@ cat("Left-censored imputation completed\n")
 
 Proteins with <50% missing use k-NN (MAR). Proteins with ≥50% missing use minimum value (MNAR). This handles heterogeneous missingness.
 
-```r
+```{r}
+#| eval: false
 miss_frac_row <- apply(mat_raw, 1, function(x) mean(is.na(x)))
 
 imp_mixed <- mat_raw
@@ -412,7 +415,8 @@ cat(sprintf("Mixed imputation: %d proteins (%.1f%%) used k-NN, %d proteins (%.1f
 
 Plot the intensity distribution for one sample under each strategy. This reveals how each method shifts the data.
 
-```r
+```{r}
+#| eval: false
 # Extract first sample after each imputation
 sample_name <- colnames(mat_raw)[1]
 
@@ -459,7 +463,8 @@ We'll run differential analysis (limma) on each imputed matrix and compare which
 
 ### Prepare Sample Groups
 
-```r
+```{r}
+#| eval: false
 # Define groups (assuming first 4 = control, last 4 = treatment)
 group <- factor(c(rep("Control", 4), rep("Treatment", 4)))
 design <- model.matrix(~ group)
@@ -470,12 +475,11 @@ print(design)
 
 ### Differential Analysis Function
 
-```r
+```{r}
+#| eval: false
 run_limma <- function(mat, design, coef = 2) {
-  # mat: samples × features (transpose from our format)
-  mat_t <- t(mat)
-  
-  fit <- lmFit(mat_t, design)
+  # mat: features × samples (rows = proteins, cols = samples)
+  fit <- lmFit(mat, design)
   fit <- eBayes(fit)
   
   results <- topTable(fit, coef = coef, number = Inf) |>
@@ -488,7 +492,8 @@ run_limma <- function(mat, design, coef = 2) {
 
 ### Run for All Strategies
 
-```r
+```{r}
+#| eval: false
 # Apply differential analysis to each imputation
 results_raw <- run_limma(mat_raw, design)      # Will have NAs
 results_min <- run_limma(imp_min, design)
@@ -515,7 +520,8 @@ print(sig_summary)
 
 ### Find Stable Features (Significant Across ALL Strategies)
 
-```r
+```{r}
+#| eval: false
 # Features significant in every imputation
 stable_features <- Reduce(intersect, sig_lists)
 
@@ -534,7 +540,8 @@ if (length(stable_features) > 0) {
 
 UpSet plots are superior to Venn diagrams for >3 sets.
 
-```r
+```{r}
+#| eval: false
 # Prepare matrix for UpSet
 all_significant <- unique(unlist(sig_lists))
 
@@ -566,7 +573,8 @@ upset(
 
 ## Step 7: Robustness Summary Report
 
-```r
+```{r}
+#| eval: false
 # Calculate stability metrics
 robustness_summary <- data.frame(
   strategy = names(sig_lists),
@@ -604,8 +612,8 @@ if (length(stable_features) > 0) {
 
 ## Complete Workflow in One Block
 
-```r
-#| eval: true
+```{r}
+#| eval: false
 # Complete missing data handling pipeline
 library(DEP); library(impute); library(limma); library(ggplot2); library(dplyr)
 
@@ -640,7 +648,7 @@ imp_mixed[miss_row >= 0.5, ] <- imp_min[miss_row >= 0.5, ]
 group <- factor(c(rep("Ctrl",4), rep("Treat",4)))
 design <- model.matrix(~group)
 run_DE <- function(mat) {
-  fit <- lmFit(t(mat), design); fit <- eBayes(fit)
+  fit <- lmFit(mat, design); fit <- eBayes(fit)
   topTable(fit, coef=2, number=Inf) |> 
     rownames_to_column("prot") |> filter(adj.P.Val < 0.05) |> pull(prot)
 }
@@ -704,7 +712,8 @@ flowchart TD
 
 Load the `sacurine` dataset from `ropls`. Calculate missingness per feature and per sample. Is the pattern more consistent with MAR or MNAR?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -712,7 +721,8 @@ Load the `sacurine` dataset from `ropls`. Calculate missingness per feature and 
 
 Use `MsDataHub` to load a CPTAC peptide dataset. Apply min, k-NN, and left-censored imputation. Which produces the smallest change to the overall distribution?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -720,7 +730,8 @@ Use `MsDataHub` to load a CPTAC peptide dataset. Apply min, k-NN, and left-censo
 
 Run the full sensitivity workflow on your LFQ dataset. What percentage of significant features are stable across all imputation methods? Report as "Robustness score".
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -728,7 +739,8 @@ Run the full sensitivity workflow on your LFQ dataset. What percentage of signif
 
 Create a heatmap showing missingness per sample. Identify if any sample has >50% missing values – would you exclude it?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -770,6 +782,7 @@ Create a heatmap showing missingness per sample. Identify if any sample has >50%
 
 ## Session Information
 
-```r
+```{r}
+#| eval: false
 sessionInfo()
 ```

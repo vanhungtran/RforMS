@@ -84,7 +84,7 @@ A calibration curve relates **known concentrations** of authentic standards to *
 
 ### Building a Calibration Curve in R
 
-```r
+```{r}
 # Example data: glucose standard curve
 calib_data <- data.frame(
   conc_umol_L = c(0.1, 0.5, 1, 5, 10, 25, 50, 100),
@@ -119,7 +119,7 @@ ggplot(calib_data, aes(x = conc_umol_L, y = area)) +
 - **Residuals:** Should be random and homoscedastic (check plot)
 - **Back-calculated concentrations:** Should be within ±20% (or ±15% for bioanalysis)
 
-```r
+```{r}
 # Back-calculate standards
 calib_data$conc_back <- (calib_data$area - coef(lm_fit)[1]) / coef(lm_fit)[2]
 calib_data$accuracy <- (calib_data$conc_back / calib_data$conc_umol_L) * 100
@@ -151,7 +151,7 @@ print(calib_data[, c("conc_umol_L", "conc_back", "accuracy")])
 
 Instead of plotting **area** vs concentration, plot **area ratio** (analyte area / IS area) vs concentration. This normalises for IS recovery.
 
-```r
+```{r}
 # Example with IS
 calib_is <- data.frame(
   conc = c(0.1, 0.5, 1, 5, 10, 25, 50, 100),
@@ -177,7 +177,7 @@ summary(lm_ratio)  # Should have near-zero intercept if IS works well
 
 **Method 1 – Using blank replicates:**
 
-```r
+```{r}
 # Measure 10 blanks, compute mean and SD of peak area
 blanks <- c(125, 98, 145, 110, 135, 118, 140, 122, 108, 130)
 blank_mean <- mean(blanks)
@@ -200,7 +200,7 @@ cat("LOQ =", loq_conc, "Âµmol/L\n")
 
 If your software reports S/N, you can compute:
 
-```r
+```{r}
 # For a low concentration standard that gives S/N ~ 3
 # LOD = conc_std * (3 / S_N_std)
 s_n_std <- 12   # measured S/N at 0.5 Âµmol/L
@@ -239,7 +239,8 @@ Most software (Xcalibur, Analyst, Skyline) integrates peaks automatically using 
 
 For **targeted quantification**, always review each integration visually. Use a script that flags suspicious peaks:
 
-```r
+```{r}
+library(dplyr)
 # Simulated peak data
 peak_data <- data.frame(
   transition = "glucose_179>89",
@@ -279,7 +280,8 @@ filter(peak_data, flag != "OK")
 
 Use **pooled quality control (QC)** samples injected throughout the run:
 
-```r
+```{r}
+#| eval: false
 # Relative quantification: divide each sample by median of QCs for that feature
 # Assume long_format data: sample_id, metabolite, area
 rel_quant <- long_data %>%
@@ -305,7 +307,7 @@ We will run a complete targeted quantification pipeline using simulated data:
 
 ### Step 1 – Load and explore data
 
-```r
+```{r}
 # Simulate dataset
 set.seed(42)
 
@@ -314,8 +316,8 @@ calib <- expand.grid(
   conc_umol = c(0.1, 0.5, 1.0, 5.0, 10.0, 25.0, 50.0, 100.0),
   rep = 1:3
 )
-calib$area_analyte <- with(calib, 10000 * conc_umol + rnorm(n(), 0, 500))
-calib$area_IS <- 500000 + rnorm(n(), 0, 15000)
+calib$area_analyte <- with(calib, 10000 * conc_umol + rnorm(nrow(calib), 0, 500))
+calib$area_IS <- 500000 + rnorm(nrow(calib), 0, 15000)
 calib$area_ratio <- calib$area_analyte / calib$area_IS
 
 # Unknown samples (n = 20)
@@ -329,7 +331,7 @@ unknowns$area_ratio <- unknowns$area_analyte / unknowns$area_IS
 
 ### Step 2 – Build calibration curve
 
-```r
+```{r}
 # Weighted linear regression (1/x^2)
 weights <- 1 / (calib$conc_umol^2)
 calib_model <- lm(area_ratio ~ conc_umol, data = calib, weights = weights)
@@ -343,7 +345,7 @@ abline(calib_model, col = "red", lwd = 2)
 
 ### Step 3 – Determine LOD and LOQ using blank
 
-```r
+```{r}
 # Simulate 10 blanks
 blanks <- data.frame(area_ratio = rnorm(10, 0.001, 0.0003))
 blank_sd <- sd(blanks$area_ratio)
@@ -360,7 +362,7 @@ cat("LOQ =", round(loq_conc, 3), "Âµmol/L\n")
 
 ### Step 4 – Quantify unknowns and flag below LOD/LOQ
 
-```r
+```{r}
 unknowns$conc_umol <- (unknowns$area_ratio - coef(calib_model)[1]) / coef(calib_model)[2]
 unknowns$quant_status <- case_when(
   unknowns$conc_umol < lod_conc ~ "< LOD",
@@ -376,7 +378,7 @@ head(unknowns)
 
 ### Step 5 – Quality control and reporting
 
-```r
+```{r}
 # CV of IS across all samples
 IS_cv <- sd(unknowns$area_IS) / mean(unknowns$area_IS) * 100
 cat("IS CV =", round(IS_cv, 1), "%")
@@ -426,7 +428,7 @@ Use an MSstats-compatible targeted table, a Skyline/Panorama export, Panorama Pu
 
 ### Simulate a Transition-Level Assay Table
 
-```r
+```{r}
 #| eval: false
 library(dplyr)
 library(tidyr)
@@ -511,7 +513,7 @@ write_csv(targeted_long, "results/targeted_01_transition_level_table.csv")
 
 ### Transition-Level QC
 
-```r
+```{r}
 #| eval: false
 transition_qc <- targeted_long |>
   group_by(analyte, transition, sample_type) |>
@@ -550,7 +552,7 @@ ggsave("figures/targeted_01_precision_cv.png", p_precision, width = 7, height = 
 
 ### Calibration Models, LOD, and LOQ
 
-```r
+```{r}
 #| eval: false
 calibration_input <- targeted_long |>
   filter(sample_type %in% c("blank", "calibrator"), transition == "quantifier")
@@ -587,7 +589,7 @@ write_csv(calibration_report, "results/targeted_03_calibration_lod_loq.csv")
 saveRDS(calibration_models, "objects/targeted_01_calibration_models.rds")
 ```
 
-```r
+```{r}
 #| eval: false
 calibration_plot_data <- calibration_models |>
   select(analyte, augmented) |>
@@ -615,7 +617,7 @@ ggsave("figures/targeted_03_calibration_residuals.png", p_residual, width = 9, h
 
 ### Quantify QC and Unknown Samples
 
-```r
+```{r}
 #| eval: false
 quant_input <- targeted_long |>
   filter(sample_type %in% c("QC", "unknown"), transition == "quantifier") |>
@@ -647,7 +649,7 @@ write_csv(qc_precision, "results/targeted_05_precision_cv_summary.csv")
 
 ### Group Comparison for Targeted Analytes
 
-```r
+```{r}
 #| eval: false
 group_results <- quant_input |>
   filter(sample_type == "unknown", quant_status == "quantified") |>
@@ -678,7 +680,7 @@ ggsave("figures/targeted_04_group_comparison.png", p_group, width = 9, height = 
 
 ### Assay Report Tables
 
-```r
+```{r}
 #| eval: false
 assay_summary <- calibration_report |>
   left_join(qc_precision, by = "analyte") |>
@@ -710,7 +712,7 @@ assay_summary |>
 | Targeted assay report | `results/targeted_08_assay_summary.html` |
 | Session information | `results/targeted_09_session_info.txt` |
 
-```r
+```{r}
 #| eval: false
 sessioninfo::session_info() |>
   capture.output() |>
@@ -774,7 +776,7 @@ The R workflow provided can be adapted to any targeted LC-MS data, enabling repr
 
 ## Session Information
 
-```r
+```{r}
 sessionInfo()
 ```
 

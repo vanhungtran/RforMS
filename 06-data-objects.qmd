@@ -20,7 +20,7 @@ By the end of this chapter, you will be able to:
 
 Chapter 2 introduced the package ecosystem and Chapter 3 described project-level reproducibility. Here we assume the core packages are installed and focus on object construction rather than package setup.
 
-```r
+```{r}
 #| eval: false
 library(Spectra)
 library(MsExperiment)
@@ -54,7 +54,8 @@ Backends
 
 **Key concept**: The `Spectra` object separates **data manipulation logic** from **data storage**. Backends handle file I/O and memory management, allowing you to switch between in-memory, on-disk, or database storage without changing analysis code.
 
-```r
+```{r}
+library(tibble)
 # Available backends and their use cases
 backend_info <- tibble(
   Backend = c("MsBackendMzR", "MsBackendDataFrame", 
@@ -83,7 +84,8 @@ The backend you choose determines memory footprint, access speed, and scalabilit
 
 **General rule**: Use `MsBackendMzR` for initial exploration of a few files. Switch to `MsBackendHdf5Peaks` when your experiment grows beyond 10–20 runs or when loading times become noticeable. Reach for `MsBackendSql` when multiple people need to query the same data with different filters.
 
-```r
+```{r}
+#| eval: false
 # Converting between backends
 ms_data_hdf5 <- setBackend(ms_data, MsBackendHdf5Peaks())
 ```
@@ -106,7 +108,8 @@ The backend system addresses these by:
 
 Mass spectra are fundamentally collections of **(m/z, intensity)** pairs, which map naturally to R's vector and matrix structures.
 
-```r
+```{r}
+#| eval: false
 # Example: Creating a simple spectrum with 5 peaks
 mz_values <- c(104.10, 205.20, 306.30, 407.40, 508.50)
 intensity_values <- c(1200, 3500, 8900, 2100, 450)
@@ -133,7 +136,8 @@ spectrum_df <- data.frame(
 
 MS experiments contain heterogeneous data: spectral matrices, metadata, processing logs, and annotations.
 
-```r
+```{r}
+#| eval: false
 # Comprehensive MS run representation
 ms_run <- list(
   # Metadata
@@ -183,7 +187,8 @@ cat(sprintf("Total spectra: %d (MS1: %d, MS2: %d)\n",
 
 Tibbles (from `tidyverse`) are an improved version of data frames with better printing and behavior:
 
-```r
+```{r}
+#| eval: false
 # Create a tibble for multiple spectra metadata
 spectra_metadata <- tibble(
   spectrum_id = 1:5,
@@ -202,7 +207,8 @@ spectra_metadata
 
 This is the single most common pattern in MS data analysis: split data by a grouping variable, apply a computation to each group, and combine the results. In tidyverse, this is `group_by()` + `summarise()`:
 
-```r
+```{r}
+#| eval: false
 # Compute per-sample summary statistics from a feature matrix
 feature_df |>
   pivot_longer(-feature_id, names_to = "sample", values_to = "intensity") |>
@@ -222,7 +228,8 @@ This pattern appears in every chapter: QC metrics per sample, missingness rates 
 
 MS data analysis constantly merges tables: metadata ↔ feature matrices, identification results ↔ quantification tables, protein annotations ↔ DE results. Use the `*_join()` family — never base R `merge()`:
 
-```r
+```{r}
+#| eval: false
 # left_join: keep all rows from the left table
 de_results |>
   left_join(protein_annotations, by = "protein_id")
@@ -257,7 +264,8 @@ features_in_matrix_only <- anti_join(
 
 ### Reading MS Data with Spectra
 
-```r
+```{r}
+#| eval: false
 # Load example data from the msdata package
 library(msdata)
 
@@ -287,7 +295,8 @@ cat(sprintf("Polarity:        %s\n",
 
 ### Working with Spectral Data
 
-```r
+```{r}
+#| eval: false
 # Access specific spectra
 first_spectrum <- ms_data[1]
 cat(sprintf("Spectrum 1: MS level %d at RT = %.2f sec\n",
@@ -319,7 +328,7 @@ cat(sprintf("Spectra in first 10 min: %d\n", length(early_spectra)))
 
 ### Exporting Data
 
-```r
+```{r}
 #| eval: false
 #| echo: true
 # Export subsets to different formats
@@ -352,7 +361,8 @@ saveRDS(peak_lists, "peak_lists.rds")
 
 ### Memory Management
 
-```r
+```{r}
+#| eval: false
 # Check memory usage of Spectra object
 object.size(ms_data) / 1e6  # Size in MB
 
@@ -407,6 +417,7 @@ This chapter established the fundamental R skills and concepts essential for mas
 
 ## Session Information
 
-``` r
+```{r}
+#| eval: false
 sessionInfo()
 ```

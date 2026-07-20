@@ -60,7 +60,7 @@ Always keep the `.imzML` and `.ibd` files together as a pair. Renaming or moving
 
 Install the Cardinal ecosystem from Bioconductor:
 
-```r
+```{r}
 #| eval: false
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -71,7 +71,7 @@ BiocManager::install(c("Cardinal", "CardinalIO", "CardinalWorkflows"))
 
 For real data acquired from an instrument, use `readImzML()` from the `CardinalIO` package (re-exported by `Cardinal`):
 
-```r
+```{r}
 #| eval: false
 library(Cardinal)
 data <- readImzML("path/to/your_data.imzML")
@@ -81,7 +81,8 @@ data <- readImzML("path/to/your_data.imzML")
 
 For this appendix we use the bundled example:
 
-```r
+```{r}
+#| eval: false
 library(Cardinal)
 library(CardinalWorkflows)
 
@@ -90,7 +91,8 @@ data <- CardinalWorkflows::exampleMSIData("pig206")
 
 ### Inspect the MSImagingExperiment
 
-```r
+```{r}
+#| eval: false
 # Basic object summary
 data
 summary(data)
@@ -98,7 +100,8 @@ summary(data)
 
 The output reports the number of spectra (pixels), the number of mass channels, the m/z range, and the spatial grid dimensions.
 
-```r
+```{r}
+#| eval: false
 # Dimensions: spectra (pixels) × mass channels
 dim(data)
 
@@ -123,7 +126,8 @@ The `coord()` function returns a data frame with x and y columns, one row per pi
 
 The `image()` method for `MSImagingExperiment` renders the spatial distribution of ion intensity for a specified m/z value. Each pixel is coloured by the measured intensity at that m/z, producing an ion image.
 
-```r
+```{r}
+#| eval: false
 # Ion images for selected m/z values
 # Choose values that show distinct spatial patterns
 par(mfrow = c(1, 3))
@@ -138,7 +142,8 @@ Experiment with different m/z values. Ions localised to specific anatomical regi
 
 For quantitative comparison across images, use a consistent intensity scale:
 
-```r
+```{r}
+#| eval: false
 # Consistent intensity range across panels
 image(data, mz = c(103.4, 156.3, 203.8),
       contrast.enhance = "histogram",
@@ -155,7 +160,8 @@ MSI data requires the same preprocessing steps as LC--MS data, but applied with 
 
 Variation in total ion current across pixels mostly reflects differences in tissue thickness, ionisation efficiency, and desorption efficacy rather than biology. TIC normalisation scales each pixel's spectrum so that the sum of intensities is the same across all pixels.
 
-```r
+```{r}
+#| eval: false
 data_norm <- normalize(data, method = "tic")
 summary(data_norm)
 ```
@@ -164,7 +170,8 @@ summary(data_norm)
 
 Ambient signal (electronic noise, chemical background) creates a baseline offset that varies across the m/z range. Reducing this baseline improves the accuracy of downstream peak picking and quantification.
 
-```r
+```{r}
+#| eval: false
 data_bc <- reduceBaseline(data_norm, method = "locmin")
 ```
 
@@ -174,7 +181,8 @@ The `"locmin"` method estimates the baseline as a local minimum within a sliding
 
 Peak picking identifies the m/z values where genuine ion signals exist, discarding the vast majority of mass channels that contain only noise. This step dramatically reduces the data dimensionality.
 
-```r
+```{r}
+#| eval: false
 # Simple threshold-based peak picking
 data_peaks <- peakPick(data_bc, method = "simple", SNR = 3)
 
@@ -184,7 +192,8 @@ summary(rowSums(spectraData(data_peaks) > 0))
 
 An alternative to peak picking is mass binning, which aggregates intensities into fixed-width m/z bins:
 
-```r
+```{r}
+#| eval: false
 # Bin to 0.5 Da resolution (useful for lower-resolution mass analysers)
 data_binned <- bin(data_bc, resolution = 0.5)
 ```
@@ -193,7 +202,7 @@ data_binned <- bin(data_bc, resolution = 0.5)
 
 Chained together:
 
-```r
+```{r}
 #| eval: false
 pipeline <- data |>
     normalize(method = "tic") |>
@@ -213,7 +222,8 @@ Once the data is preprocessed, the goal shifts to discovering interpretable spat
 
 PCA on the pixel-by-m/z matrix identifies the dominant axes of spectral variation. The first few principal components often correspond to anatomical tissue regions.
 
-```r
+```{r}
+#| eval: false
 # PCA on the normalised, baseline-corrected data
 pca_result <- PCA(data_bc, ncomp = 5)
 
@@ -233,7 +243,8 @@ The spatial PCA maps highlight regions of similar molecular composition. If PC1 
 
 Spatially-aware clustering incorporates both spectral similarity *and* spatial adjacency, producing contiguous regions that correspond to histological features. Cardinal implements **spatial shrunken centroids** (@bemis2015cardinal), a regularised classifier that pools information across neighbouring pixels.
 
-```r
+```{r}
+#| eval: false
 # Spatial shrunken centroids segmentation
 # r = spatial radius (pixels), k = number of clusters
 seg <- spatialShrunkenCentroids(data_bc, r = 2, k = 3:6)
@@ -296,7 +307,7 @@ MSI data analysis generates several classes of output that should be tracked:
 | Feature table | CSV or HDF5 | m/z values × (mean intensity per segment) |
 | Provenance log | YAML or plain text | Record software versions, parameters |
 
-```r
+```{r}
 #| eval: false
 # Write processed data back to imzML/ibd
 CardinalIO::writeImzML(data_bc, "processed_data.imzML")
@@ -336,12 +347,13 @@ The spatial dimension is both the power and the pitfall of MSI: it reveals molec
 
 3.  **Ion image interpretation**: Using the `pig206` dataset, find three m/z values that show clearly different spatial patterns (one enriched in brain, one in torso, one relatively uniform). Write the R code to produce a three-panel ion image. What biological or technical explanations could account for a uniformly distributed ion?
 
-4.  **Segmentation parameter sensitivity**: Rerun `spatialShrunkenCentroids()` with `r = 0` (no spatial regularisation) and `r = 3`. How do the resulting segments differ? What does this imply about the trade-off between spatial smoothness and the ability to detect fine anatomical features?
+4.  **Segmentation parameter sensitivity**: Rerun `spatialShrunkenCentroids()` with `r​ = 0` (no spatial regularisation) and `r​ = 3`. How do the resulting segments differ? What does this imply about the trade-off between spatial smoothness and the ability to detect fine anatomical features?
 
 5.  **The pixel-trap**: You have analysed three tissue sections from three mice per group (control, treated). A reviewer asks for a pixel-level t-test comparing the two groups. Write a short paragraph explaining why this is invalid and what you would do instead.
 
 ## Session Information
 
-```r
+```{r}
+#| eval: false
 sessionInfo()
 ```

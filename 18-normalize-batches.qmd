@@ -62,7 +62,7 @@ This chapter assumes you already have a **feature table** (rows = features, colu
 
 ## Setup and Required Packages
 
-```r
+```{r}
 #| eval: false
 BiocManager::install(c(
   "limma",        # Normalization functions
@@ -75,7 +75,7 @@ BiocManager::install(c(
 ))
 ```
 
-```r
+```{r}
 library(limma)
 library(preprocessCore)
 library(impute)
@@ -95,7 +95,7 @@ set.seed(42)
 
 We simulate 150 metabolites and 24 samples (3 batches, 2 groups). True biological signal exists for the first 30 metabolites.
 
-```r
+```{r}
 n_metabolites <- 150
 n_samples <- 24
 n_batches <- 3
@@ -143,7 +143,7 @@ cat(sprintf("Overall missing rate: %.1f%%\n", 100 * mean(is.na(intensity_raw))))
 
 MS intensities are heteroscedastic – variance increases with mean. Log2 transformation stabilises variance and makes multiplicative effects additive.
 
-```r
+```{r}
 # Log2 transform (add 1 to avoid log(0) if zeros present)
 intensity_log <- log2(intensity_raw + 1)
 
@@ -170,7 +170,7 @@ After log transformation, we often center and scale to give each feature equal i
 - **Centering**: subtract mean → features have mean zero  
 - **Scaling**: divide by standard deviation → features have unit variance  
 
-```r
+```{r}
 # Center and scale (robust: use median and MAD)
 center_scale <- function(mat, robust = TRUE) {
   if (robust) {
@@ -212,7 +212,7 @@ Normalization adjusts for sample‑wide intensity differences. **Always normalis
 
 Assume most features do not change between samples – scale each sample to have the same median intensity.
 
-```r
+```{r}
 median_norm <- function(mat) {
   sample_medians <- apply(mat, 2, median, na.rm = TRUE)
   global_median <- median(sample_medians, na.rm = TRUE)
@@ -227,7 +227,7 @@ intensity_med_norm <- median_norm(intensity_log)
 
 Scale each sample by its total sum of intensities. Works on raw or log scale (but log then TIC is unusual). Best on raw scale.
 
-```r
+```{r}
 tic_norm <- function(mat) {
   # mat is raw intensities (not log)
   sample_sums <- colSums(mat, na.rm = TRUE)
@@ -248,7 +248,7 @@ intensity_tic_norm_log <- log2(intensity_tic_norm + 1)
 
 Forces all samples to have the same intensity distribution. Assumes that the overall distribution of features is identical across samples – often too strong for MS data, but can be useful for removing batch effects.
 
-```r
+```{r}
 # Requires complete data – impute first (simple column median)
 intensity_imp <- intensity_log
 for (j in 1:ncol(intensity_imp)) {
@@ -272,7 +272,7 @@ ggplot(plot_df, aes(x = original, y = quantile)) + geom_point(alpha = 0.5) +
 
 If intensity drifts systematically with injection order, LOESS smoothing can correct it.
 
-```r
+```{r}
 loess_norm <- function(mat, injection_order) {
   # mat: log‑transformed, rows = features, cols = samples
   norm_mat <- mat
@@ -294,7 +294,7 @@ intensity_loess_norm <- loess_norm(intensity_log, injection_order)
 
 ### Compare Normalization Methods
 
-```r
+```{r}
 # Function to compute median CV per sample (after log)
 calc_sample_cv <- function(mat) {
   apply(mat, 2, function(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE))
@@ -335,7 +335,7 @@ cv_df |>
 
 Using the simulated dataset, apply median, quantile, TIC, and LOESS normalization. Which gives the lowest variance within batches? Use boxplots of sample CV.
 
-```r
+```{r}
 # Your code here
 ```
 
@@ -343,7 +343,7 @@ Using the simulated dataset, apply median, quantile, TIC, and LOESS normalizatio
 
 Simulate a stronger batch effect (larger `batch_shift`). At what point does median normalization fail? Does ComBat still correct adequately? Use PCA before/after to compare.
 
-```r
+```{r}
 # Your code here
 ```
 
@@ -351,7 +351,7 @@ Simulate a stronger batch effect (larger `batch_shift`). At what point does medi
 
 Replace median normalization with `limma::normalizeCyclicLoess()`. Compare the sample-to-sample correlation matrices before and after normalization using `pheatmap`.
 
-```r
+```{r}
 # Your code here
 ```
 
@@ -359,7 +359,7 @@ Replace median normalization with `limma::normalizeCyclicLoess()`. Compare the s
 
 Write a function that takes a raw feature table and metadata and applies log transform → median normalization → ComBat batch correction. Return the corrected matrix and a PCA plot. Run it on the simulated data.
 
-```r
+```{r}
 # Your code here
 ```
 
@@ -396,6 +396,6 @@ Write a function that takes a raw feature table and metadata and applies log tra
 
 ## Session Information
 
-```r
+```{r}
 sessionInfo()
 ```

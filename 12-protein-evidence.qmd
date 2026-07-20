@@ -117,7 +117,7 @@ To demonstrate how this is handled in R, let's create a simulated dataset of Pep
 
 We will simulate 6 peptides mapped across 4 proteins, along with quantitative intensities from two different biological samples (`intensity_s1` and `intensity_s2`).
 
-```r
+```{r}
 # Load required data manipulation libraries
 library(dplyr)
 library(stringr)
@@ -142,7 +142,8 @@ Looking closely at this data, the sequence `ELGNDAYK` is listed twice because th
 
 The very first computational step is to explicitly flag which peptides are unique and which are shared. We use `dplyr::group_by` to analyze each peptide sequence independently, and `n_distinct()` to count how many unique proteins it maps to.
 
-```r
+```{r}
+#| eval: false
 # Categorize peptides
 peptide_mapping <- psm_data |>
   group_by(peptide_sequence) |>
@@ -175,7 +176,8 @@ To do this computationally, we treat the peptides and proteins as nodes in a gra
 
 We will use the excellent `igraph` package to build this network and identify "connected components"—isolated sub-networks of proteins that share evidence.
 
-```r
+```{r}
+#| eval: false
 library(igraph)
 
 # 1. Filter our data to look ONLY at shared peptides
@@ -209,7 +211,8 @@ plot(bg,
 
 By extracting the "connected components" of this graph, we can see exactly which proteins are inextricably linked by shared evidence.
 
-```r
+```{r}
+#| eval: false
 # Find the isolated sub-networks
 network_components <- components(bg)
 
@@ -240,7 +243,8 @@ Before quantifying, we face a dilemma regarding our shared peptides. If Peptide 
 
 The safest and most conservative approach is to **filter out shared peptides entirely before aggregation**. You lose some data depth, but you guarantee that Protein A's quantity isn't artificially inflated by Protein B.
 
-```r
+```{r}
+#| eval: false
 library(QFeatures)
 
 # Filter to retain ONLY unique peptides
@@ -254,7 +258,8 @@ cat("Remaining peptides for quantification:", nrow(unique_peptides), "\n")
 
 To use `QFeatures`, we must convert our tidy dataframe into a mathematical matrix, separating the quantitative data from the descriptive metadata.
 
-```r
+```{r}
+#| eval: false
 # Extract just the intensity columns as a numeric matrix
 quant_matrix <- unique_peptides |>
   select(intensity_s1, intensity_s2) |>
@@ -293,7 +298,8 @@ Now we execute the aggregation. We tell `QFeatures` to group rows by the `Protei
 
 We will use `MsCoreUtils::robustSummary`. This algorithm implements Tukey's **Median Polish**. It iteratively fits a robust linear model that accounts for both the "sample effect" (true biological abundance) and the "feature effect" (how well that specific peptide ionizes), making it highly resistant to outliers and missing values.
 
-```r
+```{r}
+#| eval: false
 library(MsCoreUtils)
 
 # Aggregate peptides to proteins
@@ -313,7 +319,8 @@ Notice that the `QFeatures` object now contains two assays: `"peptides"` and `"p
 
 To extract the final, protein-level quantitative matrix for statistical testing:
 
-```r
+```{r}
+#| eval: false
 protein_matrix <- assay(qf[["proteins"]])
 print(protein_matrix)
 ```
@@ -328,7 +335,8 @@ Many pipelines mandate a strict **Two-Peptide Rule**. Because we used `QFeatures
 
 We can easily filter our protein matrix using this metadata:
 
-```r
+```{r}
+#| eval: false
 # Extract the metadata for the newly created 'proteins' assay
 protein_metadata <- rowData(qf[["proteins"]])
 
@@ -368,6 +376,7 @@ This chapter addressed the protein inference problem — the fact that a single 
 
 ## Session Information
 
-``` r
+```{r}
+#| eval: false
 sessionInfo()
 ```

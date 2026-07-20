@@ -66,7 +66,8 @@ Outer loop (5-fold): Estimate generalization performance
 
 **Critical rule:** Feature selection must occur **inside** each outer fold. If you select the top 50 features using all samples and then run CV, you have leaked test-set information into the feature selection step. The result: an AUC of 0.95 that drops to 0.60 in an independent cohort.
 
-```r
+```{r}
+#| eval: false
 # Correct: feature selection inside CV
 # Incorrect: select_features(all_data) then cross-validate
 ```
@@ -77,7 +78,7 @@ Outer loop (5-fold): Estimate generalization performance
 
 We will work with a feature table typical of untargeted metabolomics or proteomics (rows = samples, columns = features). The `msdata` package provides real examples, but for controlled learning we simulate with known biology.
 
-```r
+```{r}
 #| eval: false
 # Load required packages
 library(tidyverse)
@@ -127,7 +128,7 @@ head(metadata[, 1:4])
 
 Split before any log transform, scaling, or imputation.
 
-```r
+```{r}
 #| eval: false
 set.seed(42)
 train_idx <- sample(seq_len(n_samples), size = round(0.75 * n_samples))
@@ -148,7 +149,7 @@ cat("Test set     :", nrow(test_x),  "samples\n")
 
 Fit all preprocessing – log2 transform, scaling, missing value imputation – on the **training set** and apply the learned parameters to the test set.
 
-```r
+```{r}
 #| eval: false
 # Log2 transform (add 1 to avoid log(0))
 train_log <- log2(train_x + 1)
@@ -175,7 +176,7 @@ cat("Preprocessing complete – all parameters from training set only.\n")
 
 The correct approach: outer loop (train/validation split) and inner loop (feature selection + model training). The test set is never used for feature selection.
 
-```r
+```{r}
 #| eval: false
 set.seed(42)
 k_folds   <- 5
@@ -233,7 +234,7 @@ Each validation fold is never seen during feature selection or model training fo
 
 After determining the number of features (e.g., 50) from the CV process, train one final model on the complete training set.
 
-```r
+```{r}
 #| eval: false
 # Feature selection on full training set
 p_vals_full <- apply(train_scaled, 2, function(col) {
@@ -264,7 +265,7 @@ cat("Final model trained on", nrow(train_final),
 
 The test set is used **exactly once** – at the very end.
 
-```r
+```{r}
 #| eval: false
 test_probs <- predict(final_model, test_final, type = "prob")[, "Disease"]
 test_preds <- predict(final_model, test_final)
@@ -300,7 +301,7 @@ abline(a = 0, b = 1, lty = 2, col = "gray")
 
 Identify which MS features drive the classification.
 
-```r
+```{r}
 #| eval: false
 imp_df <- importance(final_model) %>%
   as.data.frame() %>%
@@ -326,7 +327,7 @@ ggplot(imp_df, aes(x = reorder(feature, MeanDecreaseGini),
 
 For clinical biomarker studies, a high AUC is not enough. Show that the model score stratifies patient prognosis.
 
-```r
+```{r}
 #| eval: false
 test_y$model_score <- test_probs
 test_y$score_group <- factor(
@@ -389,7 +390,8 @@ Before submitting a manuscript:
 
 Modify the code to perform feature selection using t‑tests on the **full training+test** set before splitting. Compare the test AUC from this leaky workflow to the correct one. How much optimistic bias do you observe?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -397,7 +399,8 @@ Modify the code to perform feature selection using t‑tests on the **full train
 
 Replace the t‑test based feature selection with `limma` (for proteomics) or `randomForest` importance inside the CV loop. Does the CV AUC change?
 
-```r
+```{r}
+#| eval: false
 # Your code here (use limma::eBayes or varSelRF)
 ```
 
@@ -405,7 +408,8 @@ Replace the t‑test based feature selection with `limma` (for proteomics) or `r
 
 Simulate a batch effect that is correlated with the outcome. Run the nested CV workflow both including and ignoring batch as a covariate. How does the generalised AUC differ?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -413,7 +417,8 @@ Simulate a batch effect that is correlated with the outcome. Run the nested CV w
 
 Use a real MS feature table from `msdata::metabolomics()` preprocessed with `xcms`. Apply the complete workflow. Report the test set AUC and list the top 5 discriminatory metabolites (if identification is available).
 
-```r
+```{r}
+#| eval: false
 # Your code here (requires xcms to build feature table first)
 ```
 
@@ -442,6 +447,7 @@ Use a real MS feature table from `msdata::metabolomics()` preprocessed with `xcm
 
 ## Session Information
 
-```r
+```{r}
+#| eval: false
 sessionInfo()
 ```

@@ -73,7 +73,7 @@ Experimental Spectrum          Reference Spectrum (Library)
 
 ### Required Packages
 
-```r
+```{r}
 #| eval: false
 # Install core annotation packages from Bioconductor
 BiocManager::install(c(
@@ -91,7 +91,7 @@ install.packages(c("tidyverse", "RSQLite", "dbplyr"))
 
 ### Loading Libraries
 
-```r
+```{r}
 library(Spectra)
 library(MetaboAnnotation)
 library(CompoundDb)
@@ -99,8 +99,8 @@ library(MsCoreUtils)
 library(tidyverse)
 
 # Check versions
-cat("MetaboAnnotation version:", packageVersion("MetaboAnnotation"), "\n")
-cat("CompoundDb version:", packageVersion("CompoundDb"), "\n")
+cat("MetaboAnnotation version:", as.character(packageVersion("MetaboAnnotation")), "\n")
+cat("CompoundDb version:", as.character(packageVersion("CompoundDb")), "\n")
 ```
 
 ---
@@ -121,7 +121,7 @@ cat("CompoundDb version:", packageVersion("CompoundDb"), "\n")
 
 For reproducible workflows, create a local SQLite database from downloaded spectral libraries:
 
-```r
+```{r}
 #| eval: false
 library(CompoundDb)
 
@@ -170,8 +170,9 @@ listTables(cdb)  # Show all tables in the database
 
 ### Querying a CompoundDb Database
 
-```r
-# Load existing database
+```{r}
+#| eval: false
+# Load existing database (requires pre-built MoNA.sqlite, see earlier chunk)
 cdb <- CompDb("MoNA.sqlite")
 
 # Explore contents
@@ -203,7 +204,8 @@ cat(sprintf("Spectra for %s: %d\n",
 
 ### Loading Query Spectra
 
-```r
+```{r}
+#| eval: false
 # Load example metabolomics data
 library(msdata)
 
@@ -237,7 +239,8 @@ print(precursor_info)
 
 ### Quality Control of Query Spectra
 
-```r
+```{r}
+#| eval: false
 # Filter low-quality spectra before matching
 has_enough_peaks <- function(spectra, min_peaks = 5) {
   npeaks <- lengths(peaksData(spectra))
@@ -266,7 +269,7 @@ cat(sprintf("  After precursor present: %d\n", length(query_clean)))
 
 `MetaboAnnotation` provides a unified interface for matching query spectra against reference spectra.
 
-```r
+```{r}
 #| eval: false
 # Prepare reference spectra from CompoundDb
 ref_sps <- Spectra(cdb)
@@ -293,7 +296,8 @@ matches
 
 ### Understanding the Match Results
 
-```r
+```{r}
+#| eval: false
 # Extract match data as data frame
 match_df <- matchedData(matches)
 
@@ -320,7 +324,8 @@ cat(sprintf("  Average hits per query: %.1f\n",
 
 ### Best Hit Per Spectrum
 
-```r
+```{r}
+#| eval: false
 # Keep only the top-scoring match for each query spectrum
 best_hits <- match_df |>
   group_by(query_idx) |>
@@ -348,7 +353,8 @@ ggplot(best_hits, aes(x = score)) +
 
 ### Score-Based Classification
 
-```r
+```{r}
+#| eval: false
 # Assign MSI confidence levels based on score thresholds
 best_hits <- best_hits |>
   mutate(
@@ -376,7 +382,8 @@ best_hits |>
 
 For Level 1 confidence, you need retention time matching against authentic standards:
 
-```r
+```{r}
+#| eval: false
 # Example: If you have retention time data
 best_hits_with_rt <- best_hits |>
   mutate(
@@ -400,7 +407,7 @@ best_hits_with_rt <- best_hits |>
 
 Mirror plots compare query spectrum (top) against library spectrum (bottom):
 
-```r
+```{r}
 #| eval: false
 # Plot best match for first annotated spectrum
 first_match <- best_hits$query_idx[1]
@@ -419,7 +426,7 @@ plotSpectraMirror(
 
 ### Annotated Mirror Plot with Peak Labels
 
-```r
+```{r}
 #| eval: false
 # Enhanced mirror plot with peak annotations
 plotSpectraMirror(
@@ -442,7 +449,7 @@ plotSpectraMirror(
 
 Metabolites appear as multiple adduct forms ([M+H]+, [M+Na]+, [M-H]-). Unaware matching inflates false negatives.
 
-```r
+```{r}
 #| eval: false
 # Adduct-aware matching
 matches_adducts <- matchSpectra(
@@ -469,7 +476,7 @@ cat(sprintf("Increase: %.1f%%\n",
 
 ### Using Different Similarity Metrics
 
-```r
+```{r}
 #| eval: false
 # Compare different scoring methods
 metrics <- c("cosine", "pearson", "spearman", "jaccard")
@@ -508,7 +515,7 @@ ggplot(score_comparison, aes(x = metric, y = score, fill = metric)) +
 
 For quality control, you can also search library spectra against your queries:
 
-```r
+```{r}
 #| eval: false
 # Reverse search: find which library spectra match your queries
 reverse_matches <- matchSpectra(
@@ -530,7 +537,8 @@ reverse_matches <- matchSpectra(
 
 ### Creating an Annotation Table
 
-```r
+```{r}
+#| eval: false
 # Create comprehensive annotation report
 annotation_report <- best_hits |>
   select(
@@ -562,7 +570,8 @@ annotation_report |>
 
 ### Export to CSV
 
-```r
+```{r}
+#| eval: false
 # Save full annotation results
 write_csv(annotation_report, "ms_annotations.csv")
 
@@ -598,7 +607,8 @@ Download a small MSP file from MoNA (e.g., "MoNA-export-LipidBlast.msp") and imp
 - Number of compounds and spectra
 - The top 5 compound names in the database
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -606,7 +616,8 @@ Download a small MSP file from MoNA (e.g., "MoNA-export-LipidBlast.msp") and imp
 
 Load the example metabolomics file from `msdata::metabolomics()` and extract all MS2 spectra. Perform a library search against your database from Exercise 1 with cosine thresholds of 0.7 and 0.9. Compare the number of annotations.
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -614,7 +625,8 @@ Load the example metabolomics file from `msdata::metabolomics()` and extract all
 
 Run the same search with and without adduct handling (`[M+H]+`, `[M+Na]+`, `[M+K]+`). How many additional matches are found with adducts enabled?
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -622,7 +634,8 @@ Run the same search with and without adduct handling (`[M+H]+`, `[M+Na]+`, `[M+K
 
 Generate a mirror plot for the highest-scoring match from Exercise 2. Annotate at least 3 common fragment peaks.
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -630,7 +643,8 @@ Generate a mirror plot for the highest-scoring match from Exercise 2. Annotate a
 
 Create a summary table showing annotation statistics by MSI confidence level. Include counts and percentage of total annotated spectra.
 
-```r
+```{r}
+#| eval: false
 # Your code here
 ```
 
@@ -662,6 +676,7 @@ Create a summary table showing annotation statistics by MSI confidence level. In
 
 ## Session Information
 
-``` r
+```{r}
+#| eval: false
 sessionInfo()
 ```

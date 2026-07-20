@@ -359,19 +359,19 @@ cat("Min value imputation completed\n")
 Uses similar proteins (by expression profile) to predict missing values. Assumes missingness is random.
 
 ```{r}
-#| eval: false
 # k-NN imputation (k = 10 by default)
 imp_knn <- impute::impute.knn(mat_raw)$data
 
 cat("k-NN imputation completed\n")
 ```
 
+> **What this produced:** `imp_knn` is a matrix with the same dimensions as `mat_raw` (3006 proteins × 12 samples), but with all missing values filled by averaging the k nearest neighbours. Each missing cell is replaced by the mean of the 10 most similar proteins' observed values. This preserves the correlation structure between proteins — if two proteins co-vary, their imputed values will reflect that relationship.
+
 ### Strategy 3: Left-Censored Gaussian Draws (MNAR, Perseus-style)
 
 This emulates the popular Perseus imputation: draw random values from a left-shifted normal distribution. Standard for MNAR proteomics data.
 
 ```{r}
-#| eval: false
 set.seed(42)
 imp_leftcensored <- mat_raw
 na_idx <- which(is.na(imp_leftcensored), arr.ind = TRUE)
@@ -381,23 +381,24 @@ for (j in unique(na_idx[, 2])) {
   col_vals <- imp_leftcensored[, j]
   col_mean <- mean(col_vals, na.rm = TRUE)
   col_sd <- sd(col_vals, na.rm = TRUE)
-  
+
   # Draw from left tail: mean - 1.8 SD, width 0.3 SD
   n_missing <- sum(is.na(col_vals))
   fill_vals <- rnorm(n_missing, mean = col_mean - 1.8 * col_sd, sd = 0.3 * col_sd)
-  
+
   imp_leftcensored[is.na(col_vals), j] <- fill_vals
 }
 
 cat("Left-censored imputation completed\n")
 ```
 
+> **What this produced:** Each missing value is replaced by a random draw from a Gaussian distribution shifted 1.8 standard deviations below the observed mean for that column, with width 0.3 SD. This places imputed values in the low-intensity tail — mimicking the biological truth that undetected proteins are genuinely low-abundance. The random component (SD = 0.3) prevents all imputed values from landing at the same spot.
+
 ### Strategy 4: Mixed (MAR for low-missing, MNAR for high-missing)
 
 Proteins with <50% missing use k-NN (MAR). Proteins with ≥50% missing use minimum value (MNAR). This handles heterogeneous missingness.
 
 ```{r}
-#| eval: false
 miss_frac_row <- apply(mat_raw, 1, function(x) mean(is.na(x)))
 
 imp_mixed <- mat_raw
@@ -409,6 +410,8 @@ cat(sprintf("Mixed imputation: %d proteins (%.1f%%) used k-NN, %d proteins (%.1f
             sum(miss_frac_row >= 0.5), 100 * mean(miss_frac_row >= 0.5)))
 ```
 
+> **What this produced:** Each protein is imputed differently depending on its missingness rate. Proteins with fewer than 50% missing values are imputed by k-NN (preserving correlations). Proteins with 50% or more missing values are imputed by minimum value (treating absence as biological). This is the most realistic strategy for heterogeneous MS data where both MAR and MNAR mechanisms coexist.
+
 ---
 
 ## Step 4: Compare Imputation Distributions
@@ -416,20 +419,20 @@ cat(sprintf("Mixed imputation: %d proteins (%.1f%%) used k-NN, %d proteins (%.1f
 Plot the intensity distribution for one sample under each strategy. This reveals how each method shifts the data.
 
 ```{r}
-#| eval: false
+#| fig-cap: "Density of log2 intensities for one sample under each imputation strategy. The raw data (with NAs) shows the observed distribution. Min-value imputation adds a spike at the minimum. k-NN preserves the distribution shape. Left-censored draws fill the low-intensity tail. Mixed combines both approaches."
 # Extract first sample after each imputation
 sample_name <- colnames(mat_raw)[1]
 
 comparison_df <- data.frame(
-  intensity = c(mat_raw[, 1], imp_min[, 1], imp_knn[, 1], 
+  intensity = c(mat_raw[, 1], imp_min[, 1], imp_knn[, 1],
                 imp_leftcensored[, 1], imp_mixed[, 1]),
-  strategy = rep(c("Raw (with NA)", "Min value", "k-NN", 
-                   "Left-censored", "Mixed"), 
+  strategy = rep(c("Raw (with NA)", "Min value", "k-NN",
+                   "Left-censored", "Mixed"),
                  each = nrow(mat_raw))
 )
 
 # Remove NA for plotting (raw has NAs)
-comparison_df <- comparison_df[!is.na(comparison_df$intensity) | 
+comparison_df <- comparison_df[!is.na(comparison_df$intensity) |
                                 comparison_df$strategy != "Raw (with NA)", ]
 
 ggplot(comparison_df, aes(x = intensity, fill = strategy)) +

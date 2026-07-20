@@ -112,6 +112,8 @@ metadata <- data.frame(
 head(metadata)
 ```
 
+> **What this shows:** Each row is one mzML file from the `msdata::proteomics()` collection. `file_name` matches actual files on disk, `sample_name` provides short labels for plots, `biological_group` assigns each sample to Control or Treatment (evenly split), and `batch` groups the first two files vs. the last two. The `type` column is set to `"sample"` — real study samples. In a real experiment you would also have `"blank"` and `"qc_pool"` rows.
+
 **Best practice:** Keep metadata in a CSV file separate from your analysis script, and read it in.
 
 ```{r}
@@ -260,6 +262,7 @@ tic_df <- data.frame(
   intensity = make_tic()
 )
 
+#| fig-cap: "Simulated TIC (Total Ion Current) chromatogram showing two elution peaks on a gently sloping baseline — a typical LC-MS profile with ~6e7 counts at peak apex."
 ggplot(tic_df, aes(x = retention_time, y = intensity)) +
   geom_line(color = "steelblue", linewidth = 0.5) +
   labs(title = "TIC — simulated LC-MS run",
@@ -281,6 +284,7 @@ all_tic <- bind_rows(lapply(seq_len(nrow(metadata)), function(i) {
   )
 }))
 
+#| fig-cap: "All four TIC traces overlaid. Tight overlap of the traces indicates consistent chromatography. A sample that deviates substantially from the bundle would indicate a problem with that specific injection."
 # Overlay
 ggplot(all_tic, aes(x = retention_time / 60, y = intensity, color = file)) +
   geom_line(alpha = 0.5, linewidth = 0.4) +
@@ -294,6 +298,7 @@ Better: use facets for the first 4 files:
 ```{r}
 all_tic |>
   filter(file %in% metadata$file_name[1:4]) |>
+#| fig-cap: "TIC traces for four samples in a facet grid. Consistent peak shapes and intensities across files indicate good instrument performance. A sample with markedly lower TIC or missing peaks would signal injection failure."
   ggplot(aes(x = retention_time / 60, y = intensity)) +
   geom_line(color = "steelblue", linewidth = 0.4) +
   facet_wrap(~file, scales = "free_y", ncol = 2) +
@@ -324,6 +329,7 @@ eic_df <- bind_rows(lapply(seq_len(3), function(i) {
   )
 }))
 
+#| fig-cap: "Extracted Ion Chromatogram for a simulated compound across three runs. Note the subtle RT drift (~0.15 min between runs). If peaks shift by more than 30 seconds across a batch, retention-time alignment (Chapter 7) is required before feature grouping."
 ggplot(eic_df, aes(x = retention_time, y = intensity, color = file)) +
   geom_line(linewidth = 0.5) +
   labs(title = "EIC (simulated) — retention time drift check",
@@ -359,6 +365,7 @@ cat(sprintf("Mass error: %.2f ppm\n", mass_error_ppm))
 feature_df <- as.data.frame(feature_mat) |>
   pivot_longer(everything(), names_to = "sample", values_to = "intensity")
 
+#| fig-cap: "Boxplots of log10-transformed feature intensities per sample. Medians should be similar across samples. A sample with consistently lower median intensity suggests under-loading or poor processing. A sample with wider spread may indicate ion suppression."
 ggplot(feature_df, aes(x = sample, y = log10(intensity + 1))) +
   geom_boxplot(fill = "lightblue") +
   labs(
@@ -481,6 +488,7 @@ To compare the two injections side by side, we create a bar chart of a subset of
 ```{r}
 #| eval: true
 #| message: false
+#| fig-cap: "Z-scored QC metrics comparing two injections. Bars near zero indicate normal performance. Bars exceeding |2| suggest a problematic run."
 library(ggplot2)
 library(tidyr)
 library(dplyr)
@@ -518,6 +526,7 @@ In a study with dozens of injections, a heatmap of z-scores across all samples a
 ```{r}
 #| eval: true
 #| message: false
+#| fig-cap: "Heatmap of z-scored QC metrics. Blue = below batch average, white = at average, red = above average. A column with consistent extreme colour (all deep red or deep blue) flags a globally aberrant sample."
 library(pheatmap)
 library(tibble)
 

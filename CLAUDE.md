@@ -8,7 +8,9 @@
 **Published at:** https://vanhungtran.github.io/RforMS/
 **Repo:** https://github.com/vanhungtran/RforMS
 
-Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the project root; rendered HTML goes to `docs/`. All source files (`.qmd`, `.R`, `.bib`, `.csv`, `_quarto.yml`, `CLAUDE.md`) are tracked in git; generated artifacts (`docs/`, `*_cache/`, `*_files/`, `r_libs/`, `.quarto/`) are git-ignored.
+Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the project root; rendered HTML goes to `docs/`.
+
+**Git tracking policy:** Book source (`*.qmd`, `*.Rmd`, `custom.scss`) stays local-only and is git-ignored — it is never pushed to GitHub. `docs/` (the rendered output) is tracked and is what gets published to GitHub Pages. `_quarto.yml`, `.bib`, `.R`, and `CLAUDE.md` are tracked as before. GitHub Actions (`.github/workflows/render-and-deploy.yml`) no longer runs `quarto render` in CI — it only publishes the already-rendered `docs/` you commit. Workflow: edit locally → `quarto render` → `git add docs/` → commit → push. Do not add a `Co-Authored-By: Claude` trailer to commits in this repo.
 
 ---
 

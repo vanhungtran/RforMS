@@ -1,73 +1,43 @@
-name: Render Quarto site and deploy to GitHub Pages
+name: Deploy rendered book to GitHub Pages
+
+# Book source (.qmd/.Rmd/custom.scss) is no longer pushed to GitHub, so this
+# workflow does NOT run `quarto render` — there is no source in the checkout
+# to render. Instead it publishes the already-rendered docs/ folder that you
+# commit locally after running `quarto render` on your machine.
+#
+# One-time setup: in the repo Settings -> Pages, set Source to "GitHub Actions".
 
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'docs/**'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  render:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Upload docs/ as Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          persist-credentials: true
+          path: docs
 
-      - name: Setup Quarto
-        uses: quarto-dev/quarto-action@v2
-
-      - name: Render site
-        run: |
-          quarto render
-
-      - name: Copy HTML files from docs/ to root
-        run: |
-          # Copy all HTML files
-          cp docs/*.html . || true
-          
-          # Copy additional necessary files
-          cp docs/robots.txt . 2>/dev/null || true
-          cp docs/sitemap.xml . 2>/dev/null || true
-          cp docs/search.json . 2>/dev/null || true
-          cp docs/.nojekyll . 2>/dev/null || true
-          
-          # Copy site_libs directory
-          if [ -d "docs/site_libs" ]; then
-            rm -rf site_libs || true
-            cp -r docs/site_libs .
-          fi
-          
-          echo "✓ HTML files copied from docs/ to root"
-
-      - name: Commit and push to GitHub Pages
-        run: |
-          git config user.name "vanhungtran"
-          git config user.email "tranhungydhcm@gmail.com"
-          
-          # Stage HTML files
-          git add *.html
-          
-          # Stage necessary deployment files (but not CSS/SCSS)
-          git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null || true
-          
-          # Add site_libs (including CSS files)
-          git add site_libs/ 2>/dev/null || true
-          
-          # Add zoom-controls.html if present
-          git add zoom-controls.html 2>/dev/null || true
-          
-          # Add custom.scss and all CSS/SCSS files
-          git add custom.scss 2>/dev/null || true
-          git add *.css *.scss 2>/dev/null || true
-          
-          # Add _quarto.yml if modified
-          git add _quarto.yml 2>/dev/null || true
-          
-          # Commit and push
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Deploy book: Update HTML files from docs/ to root [skip ci]" || echo "no changes to commit"
-            git push origin HEAD:master || echo "push failed"
-          fi
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

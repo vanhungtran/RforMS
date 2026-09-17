@@ -42,17 +42,19 @@ Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the proje
 | **Part IV — Normalization, Batch Correction & Missing Data (Ch 17–18)** |||
 | 17 | `18-normalize-batches.qmd` | Normalize Across Samples and Batches |
 | 18 | `19-missing-data.qmd` | Handle Missing Data |
-| **Part V — Statistical Modeling & Machine Learning (Ch 19–23)** |||
-| 19 | `20-experimental-design.qmd` | Experimental Design, Replication, and Power *(new)* |
+| **Part V — Statistical Modeling, Machine Learning & Biological Interpretation (Ch 19–24)** |||
+| 19 | `20-experimental-design.qmd` | Experimental Design, Replication, and Power |
 | 20 | `21-differential-abundance.qmd` | Differential Abundance Analysis |
 | 21 | `22-covariates-repeated.qmd` | Covariates and Repeated Measures |
-| 22 | `23-machine-learning.qmd` | Machine Learning for MS Data *(new)* |
+| 22 | `23-machine-learning.qmd` | Machine Learning for MS Data |
 | 23 | `24-biomarker-modeling.qmd` | Biomarker Modeling |
-| **Part VI — Interpretation & Reporting (Ch 24–25)** |||
 | 24 | `25-pathway-network.qmd` | Pathway and Network Analysis |
-| 25 | `26-reproducible-reports.qmd` | Build Reproducible MS Reports |
-| **Part VII — Capstone (Ch 26)** |||
-| 26 | `27-capstone-case-studies.qmd` | Capstone: Two End-to-End Case Studies *(new)* |
+| **Part VI — Specialized and Emerging Applications (Ch 25–26)** — *promoted from appendices, 2026-09-17* |||
+| 25 | `26-single-cell-proteomics.qmd` | Single-Cell Proteomics with `scp` |
+| 26 | `27-ms-imaging.qmd` | Mass Spectrometry Imaging with `Cardinal` |
+| **Part VII — Reproducible Reporting and Capstone (Ch 27–28)** |||
+| 27 | `28-reproducible-reports.qmd` | Build Reproducible MS Reports |
+| 28 | `29-capstone-case-studies.qmd` | Capstone: Two End-to-End Case Studies |
 | — | `summary.qmd` | Summary and Future Directions |
 | — | `references.qmd` | References |
 | **Appendices** |||
@@ -62,6 +64,7 @@ Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the proje
 | D | `appendix-d-statistics.qmd` | Statistics Reference |
 
 > **Note:** `MS_basic.qmd` was archived to `MS_basic.qmd.archived` (orphaned infographic, not in the book).
+> **Note:** Appendices E and F (Single-Cell Proteomics, MS Imaging) were promoted to numbered Chapters 25–26 on 2026-09-17 — both already had full chapter-shaped content (Learning Objectives, Summary, Exercises, Session Information) and were structurally larger than several numbered chapters, so appendix status was undercutting them. Files renamed `appendix-e-single-cell-proteomics.qmd` → `26-single-cell-proteomics.qmd`, `appendix-f-ms-imaging.qmd` → `27-ms-imaging.qmd`; the former `26-reproducible-reports.qmd`/`27-capstone-case-studies.qmd` were renumbered to `28-`/`29-` to keep the file-prefix = rendered-number + 1 convention intact. Part VI (old: "Biological Interpretation and Reproducible Reporting") was split — Pathway & Network Analysis moved into Part V (it's an analysis chapter, not a reporting one) — and Part VII was renamed from "Capstone" alone to "Reproducible Reporting and Capstone" to absorb the reporting chapter.
 
 ---
 
@@ -139,8 +142,17 @@ Three forms of leakage (preprocessing, feature selection, hyperparameter tuning)
 **Ch 24 — Pathway and Network Analysis**
 Multi-omics integration in `MultiAssayExperiment`, cross-omics correlation matrices, DIABLO multi-block PLS-DA (`mixOmics`), KEGG pathway enrichment (`clusterProfiler`), circos and correlation network visualisation.
 
-**Ch 25 — Build Reproducible MS Reports**
+**Ch 25 — Single-Cell Proteomics with `scp`**
+The `scp` data model built on `QFeatures`/`SingleCellExperiment`, carrier and reference channels in TMT-based SCP, cell-level QC and annotation audit, PSM-to-protein aggregation, normalization, and differential abundance with cell-level vs. biological replication caveats. Uses the `leduc2022` dataset from `scpdata`.
+
+**Ch 26 — Mass Spectrometry Imaging with `Cardinal`**
+The imaging-MS data model (x, y, m/z data cube), the `.imzML`/`.ibd` file pair, import and inspection with `CardinalIO`, ion-image visualisation, a compact preprocessing workflow (TIC normalization, baseline reduction, peak picking), spatial PCA and spatial shrunken centroids segmentation, and why ordinary pixel-wise statistical tests are invalid under spatial autocorrelation. Uses the `pig206` DESI-MS dataset from `CardinalWorkflows`.
+
+**Ch 27 — Build Reproducible MS Reports**
 Parameterized Quarto reports, linking reports to `targets` pipelines, publication-ready figure export, depositing to PRIDE (proteomics) and MetaboLights (metabolomics).
+
+**Ch 28 — Capstone: Two End-to-End Case Studies**
+Two complete, reproducible analyses carried from raw data to interpreted, deposit-ready results with the same shared toolchain: a real label-free proteomics study (`DEP::UbiLength`) and a real untargeted metabolomics study (`faahKO`), demonstrating that the two fields share one computational grammar in R.
 
 ---
 

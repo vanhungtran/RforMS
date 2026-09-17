@@ -21,7 +21,7 @@ pathway analysis, and reproducible reporting. Built with [Quarto](https://quarto
 
 ## Book Structure
 
-26 chapters in seven parts, plus summary, references, and six appendices.
+28 chapters in seven parts, plus summary, references, and four appendices.
 
 Chapter 1 introduces what a mass spectrometer measures. The remaining chapters are
 grouped into seven parts:
@@ -63,7 +63,7 @@ grouped into seven parts:
 | 17  | `18-normalize-batches.qmd`          | Normalize Across Samples and Batches                  |
 | 18  | `19-missing-data.qmd`               | Handle Missing Data                                   |
 
-### Part V — Statistical Modeling and Machine Learning (Chapters 19–23)
+### Part V — Statistical Modeling, Machine Learning, and Biological Interpretation (Chapters 19–24)
 
 | Ch  | Source                              | Title                                                 |
 |:---:|:------------------------------------|:------------------------------------------------------|
@@ -72,19 +72,21 @@ grouped into seven parts:
 | 21  | `22-covariates-repeated.qmd`        | Covariates and Repeated Measures                      |
 | 22  | `23-machine-learning.qmd`           | Machine Learning for MS Data                          |
 | 23  | `24-biomarker-modeling.qmd`         | Biomarker Modeling                                    |
-
-### Part VI — Biological Interpretation and Reproducible Reporting (Chapters 24–25)
-
-| Ch  | Source                              | Title                                                 |
-|:---:|:------------------------------------|:------------------------------------------------------|
 | 24  | `25-pathway-network.qmd`            | Pathway and Network Analysis                          |
-| 25  | `26-reproducible-reports.qmd`       | Build Reproducible MS Reports                         |
 
-### Part VII — Capstone (Chapter 26)
+### Part VI — Specialized and Emerging Applications (Chapters 25–26)
 
 | Ch  | Source                              | Title                                                 |
 |:---:|:------------------------------------|:------------------------------------------------------|
-| 26  | `27-capstone-case-studies.qmd`      | Capstone: Two End-to-End Case Studies                 |
+| 25  | `26-single-cell-proteomics.qmd`     | Single-Cell Proteomics with `scp`                     |
+| 26  | `27-ms-imaging.qmd`                 | Mass Spectrometry Imaging with `Cardinal`              |
+
+### Part VII — Reproducible Reporting and Capstone (Chapters 27–28)
+
+| Ch  | Source                              | Title                                                 |
+|:---:|:------------------------------------|:------------------------------------------------------|
+| 27  | `28-reproducible-reports.qmd`       | Build Reproducible MS Reports                         |
+| 28  | `29-capstone-case-studies.qmd`      | Capstone: Two End-to-End Case Studies                 |
 
 ### Back Matter
 
@@ -102,8 +104,6 @@ grouped into seven parts:
 | `appendix-b-formats.qmd`                            | MS File Formats                      |
 | `appendix-c-adducts.qmd`                            | Adduct Tables                        |
 | `appendix-d-statistics.qmd`                         | Statistics Reference                 |
-| `appendix-e-single-cell-proteomics.qmd`             | Single-Cell Proteomics               |
-| `appendix-f-ms-imaging.qmd`                         | Mass Spectrometry Imaging            |
 
 ## Quick Start
 
@@ -146,6 +146,8 @@ include stable accession numbers and retrieval instructions.
 - **PSMatch** — Peptide-spectrum matching
 - **limma** — Differential abundance analysis
 - **DEP** — Label-free proteomics workflows
+- **scp** — Single-cell proteomics on top of `QFeatures`
+- **Cardinal** — Mass spectrometry imaging
 
 ## Contributing
 

@@ -21,7 +21,7 @@ pathway analysis, and reproducible reporting. Built with [Quarto](https://quarto
 
 ## Book Structure
 
-28 chapters in seven parts, plus summary, references, and four appendices.
+30 chapters in seven parts, plus summary, references, and four appendices.
 
 Chapter 1 introduces what a mass spectrometer measures. The remaining chapters are
 grouped into seven parts:
@@ -74,19 +74,21 @@ grouped into seven parts:
 | 23  | `24-biomarker-modeling.qmd`         | Biomarker Modeling                                    |
 | 24  | `25-pathway-network.qmd`            | Pathway and Network Analysis                          |
 
-### Part VI — Specialized and Emerging Applications (Chapters 25–26)
+### Part VI — Specialized and Emerging Applications (Chapters 25–28)
 
 | Ch  | Source                              | Title                                                 |
 |:---:|:------------------------------------|:------------------------------------------------------|
 | 25  | `26-single-cell-proteomics.qmd`     | Single-Cell Proteomics with `scp`                     |
 | 26  | `27-ms-imaging.qmd`                 | Mass Spectrometry Imaging with `Cardinal`              |
+| 27  | `28-biomarker-external-validation.qmd` | External Validation and Confounder-Robust Biomarker Panels |
+| 28  | `29-isotope-tracing-networking.qmd` | Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking |
 
-### Part VII — Reproducible Reporting and Capstone (Chapters 27–28)
+### Part VII — Reproducible Reporting and Capstone (Chapters 29–30)
 
 | Ch  | Source                              | Title                                                 |
 |:---:|:------------------------------------|:------------------------------------------------------|
-| 27  | `28-reproducible-reports.qmd`       | Build Reproducible MS Reports                         |
-| 28  | `29-capstone-case-studies.qmd`      | Capstone: Two End-to-End Case Studies                 |
+| 29  | `30-reproducible-reports.qmd`       | Build Reproducible MS Reports                         |
+| 30  | `31-capstone-case-studies.qmd`      | Capstone: Two End-to-End Case Studies                 |
 
 ### Back Matter
 

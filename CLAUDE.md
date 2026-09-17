@@ -49,12 +49,14 @@ Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the proje
 | 22 | `23-machine-learning.qmd` | Machine Learning for MS Data |
 | 23 | `24-biomarker-modeling.qmd` | Biomarker Modeling |
 | 24 | `25-pathway-network.qmd` | Pathway and Network Analysis |
-| **Part VI — Specialized and Emerging Applications (Ch 25–26)** — *promoted from appendices, 2026-09-17* |||
+| **Part VI — Specialized and Emerging Applications (Ch 25–28)** — *25-26 promoted from appendices 2026-09-17; 27-28 added 2026-09-17, reproducing real published papers (see note below)* |||
 | 25 | `26-single-cell-proteomics.qmd` | Single-Cell Proteomics with `scp` |
 | 26 | `27-ms-imaging.qmd` | Mass Spectrometry Imaging with `Cardinal` |
-| **Part VII — Reproducible Reporting and Capstone (Ch 27–28)** |||
-| 27 | `28-reproducible-reports.qmd` | Build Reproducible MS Reports |
-| 28 | `29-capstone-case-studies.qmd` | Capstone: Two End-to-End Case Studies |
+| 27 | `28-biomarker-external-validation.qmd` | External Validation and Confounder-Robust Biomarker Panels |
+| 28 | `29-isotope-tracing-networking.qmd` | Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking |
+| **Part VII — Reproducible Reporting and Capstone (Ch 29–30)** |||
+| 29 | `30-reproducible-reports.qmd` | Build Reproducible MS Reports |
+| 30 | `31-capstone-case-studies.qmd` | Capstone: Two End-to-End Case Studies |
 | — | `summary.qmd` | Summary and Future Directions |
 | — | `references.qmd` | References |
 | **Appendices** |||
@@ -65,6 +67,7 @@ Built with **Quarto book** (`_quarto.yml`). Source `.qmd` files are in the proje
 
 > **Note:** `MS_basic.qmd` was archived to `MS_basic.qmd.archived` (orphaned infographic, not in the book).
 > **Note:** Appendices E and F (Single-Cell Proteomics, MS Imaging) were promoted to numbered Chapters 25–26 on 2026-09-17 — both already had full chapter-shaped content (Learning Objectives, Summary, Exercises, Session Information) and were structurally larger than several numbered chapters, so appendix status was undercutting them. Files renamed `appendix-e-single-cell-proteomics.qmd` → `26-single-cell-proteomics.qmd`, `appendix-f-ms-imaging.qmd` → `27-ms-imaging.qmd`; the former `26-reproducible-reports.qmd`/`27-capstone-case-studies.qmd` were renumbered to `28-`/`29-` to keep the file-prefix = rendered-number + 1 convention intact. Part VI (old: "Biological Interpretation and Reproducible Reporting") was split — Pathway & Network Analysis moved into Part V (it's an analysis chapter, not a reporting one) — and Part VII was renamed from "Capstone" alone to "Reproducible Reporting and Capstone" to absorb the reporting chapter.
+> **Note:** Chapters 27–28 (added 2026-09-17) each reproduce one real, independently-verified published paper end to end: Ch 27 reproduces Jerke et al. 2026 (*Nature Communications* 17:6825, vasculitis remission biomarker panel — PRIDE PXD079232 / GitHub `Theda-sys/vasculitis-remission-proteomics`); Ch 28 reproduces Hsieh et al. 2026 (*mSystems*, *C. difficile* N-acyl amino acids — MetaboLights MTBLS13404). Both reproductions were done outside this repo (`OneDrive/Jerke2026`, `OneDrive/Hsieh2026`) with every reported number independently re-derived and cross-checked against the original authors' frozen outputs before being written into the book; the chapters cite the original papers and cross-reference rather than duplicate Ch 8/9 (annotation, spectral matching) and Ch 20/23 (differential abundance, biomarker modeling).
 
 ---
 
@@ -148,10 +151,16 @@ The `scp` data model built on `QFeatures`/`SingleCellExperiment`, carrier and re
 **Ch 26 — Mass Spectrometry Imaging with `Cardinal`**
 The imaging-MS data model (x, y, m/z data cube), the `.imzML`/`.ibd` file pair, import and inspection with `CardinalIO`, ion-image visualisation, a compact preprocessing workflow (TIC normalization, baseline reduction, peak picking), spatial PCA and spatial shrunken centroids segmentation, and why ordinary pixel-wise statistical tests are invalid under spatial autocorrelation. Uses the `pig206` DESI-MS dataset from `CardinalWorkflows`.
 
-**Ch 27 — Build Reproducible MS Reports**
+**Ch 27 — External Validation and Confounder-Robust Biomarker Panels**
+Why nested CV (Ch 23) and external cohort validation answer different questions; locking a model's coefficients and evaluating them, unrefit, on an independent cohort; DeLong's test for correlated ROC curves; calibration slope/intercept; confounder screening before feature selection. Reproduces Jerke et al. 2026 (7-protein vasculitis remission panel, Berlin discovery → Prague external validation).
+
+**Ch 28 — Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking**
+Computing isotope-labelled targets from molecular formulas; targeted EIC extraction and native/labelled co-elution as structural evidence; MS/MS fragment interpretation; molecular networking as an all-vs-all extension of Ch 9's pairwise cosine similarity; biological-replicate consistency checks. Reproduces Hsieh et al. 2026 (*C. difficile* N-acyl amino acids from raw MTBLS13404 data).
+
+**Ch 29 — Build Reproducible MS Reports**
 Parameterized Quarto reports, linking reports to `targets` pipelines, publication-ready figure export, depositing to PRIDE (proteomics) and MetaboLights (metabolomics).
 
-**Ch 28 — Capstone: Two End-to-End Case Studies**
+**Ch 30 — Capstone: Two End-to-End Case Studies**
 Two complete, reproducible analyses carried from raw data to interpreted, deposit-ready results with the same shared toolchain: a real label-free proteomics study (`DEP::UbiLength`) and a real untargeted metabolomics study (`faahKO`), demonstrating that the two fields share one computational grammar in R.
 
 ---

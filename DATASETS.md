@@ -18,6 +18,8 @@
 | **19** | **Missing Data** | PXD004886 + PXD010154 + `DEP::UbiLength` | PRIDE + Bioc | `data/pxd004886/` + `data/pxd010154/` |
 | **20** | **Differential Abundance** | PXD004886 (6 DE hits) + `DEP::UbiLength` | PRIDE + Bioc | `data/pxd004886/` |
 | **23** | **Pathway-Network** | PXD010154 (12 organs) + simulated | PRIDE | `data/pxd010154/` + `data/figures/` |
+| **28** | **Biomarker External Validation** | Jerke et al. 2026 vasculitis panel (Berlin discovery n=163, Prague external n=108) | PRIDE PXD079232 + GitHub `Theda-sys/vasculitis-remission-proteomics` | External repo (not bundled); numbers independently reproduced and cross-checked, see `docs/REPRODUCTION_REPORT.md` in that workspace |
+| **29** | **Isotope Tracing & Networking** | Hsieh et al. 2026 *C. difficile* N-acyl amino acids (HM-746, n=3 biological replicates) | MetaboLights MTBLS13404 | External repo (not bundled); `nacyl_summary.csv` (197 features) + molecular network node/edge tables independently reproduced, see `docs/REPRODUCTION_NOTES.md` in that workspace |
 
 † Large raw files — download separately with `code/download_geo_unified.R` or `code/download_mtbls.ps1`
 †† 71 mzML files = ~12 GB — download separately, analysis results in `data/mtbls38/`

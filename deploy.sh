@@ -66,6 +66,17 @@ if [ -d "docs/site_libs" ]; then
     powershell.exe -Command "New-Item -ItemType Directory -Path 'site_libs' -Force | Out-Null; Copy-Item -Path 'docs/site_libs/*' -Destination 'site_libs' -Recurse -Force"
     echo "  Copied: site_libs/"
 fi
+
+# Copy per-chapter figure/asset directories (docs/<chapter>_files/) to root
+# so root-served pages don't reference missing images.
+for dir in docs/*_files; do
+    if [ -d "$dir" ]; then
+        base=$(basename "$dir")
+        rm -rf "$base"
+        cp -r "$dir" .
+        echo "  Copied: $base/"
+    fi
+done
 echo "✓ Additional files copied"
 echo ""
 
@@ -80,6 +91,9 @@ git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null
 
 # Add site_libs (including CSS files)
 git add site_libs/ 2>/dev/null || true
+
+# Add per-chapter figure/asset directories
+git add ./*_files/ 2>/dev/null || true
 
 # Add zoom-controls.html
 if [ -f "zoom-controls.html" ]; then

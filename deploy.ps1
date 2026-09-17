@@ -57,6 +57,18 @@ if (Test-Path "docs\site_libs") {
     Write-Host "  Copied: site_libs/" -ForegroundColor Gray
 }
 
+# Copy per-chapter figure/asset directories (docs/<chapter>_files/) to root
+# so root-served pages don't reference missing images.
+$figureDirs = Get-ChildItem -Path "docs" -Filter "*_files" -Directory
+foreach ($dir in $figureDirs) {
+    $dest = $dir.Name
+    if (Test-Path $dest) {
+        Remove-Item -Path $dest -Recurse -Force
+    }
+    Copy-Item -Path $dir.FullName -Destination "." -Recurse -Force
+    Write-Host "  Copied: $dest/" -ForegroundColor Gray
+}
+
 Write-Host "✓ Additional files copied" -ForegroundColor Green
 Write-Host ""
 
@@ -74,6 +86,9 @@ git add .nojekyll
 
 # Add site_libs (including CSS files)
 git add site_libs/ --force
+
+# Add per-chapter figure/asset directories
+Get-ChildItem -Path "." -Filter "*_files" -Directory | ForEach-Object { git add $_.FullName }
 
 # Add zoom-controls.html
 if (Test-Path "zoom-controls.html") {

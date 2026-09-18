@@ -664,17 +664,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
+<p><code>msdata::proteomics()</code> bundles TMT and SRM proteomics files, not an untargeted LC-MS series suitable for CentWave — so, as in Chapter 16, this chapter uses <code>faahKO</code>: 12 CDF runs from <em>C. elegans</em> comparing fatty acid amide hydrolase knockout (<code>KO</code>) to wild-type (<code>WT</code>). We use four of the twelve files here to keep the demonstration quick.</p>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Four example metabolomics files: 2 control, 2 treatment</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> <span class="fu">proteomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>sample_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_name =</span> <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.mzML$"</span>, <span class="st">""</span>, <span class="fu">basename</span>(mzml_files)),</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition   =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Control"</span>, <span class="st">"Treatment"</span>, <span class="st">"Treatment"</span>),</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names   =</span> <span class="fu">basename</span>(mzml_files)</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(faahKO)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>cdf_files <span class="ot">&lt;-</span> <span class="fu">dir</span>(<span class="fu">system.file</span>(<span class="st">"cdf"</span>, <span class="at">package =</span> <span class="st">"faahKO"</span>),</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                  <span class="at">full.names =</span> <span class="cn">TRUE</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> cdf_files[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">7</span>, <span class="dv">8</span>)]  <span class="co"># 2 KO, 2 WT</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>sample_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_name =</span> <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.CDF$"</span>, <span class="st">""</span>, <span class="fu">basename</span>(mzml_files), <span class="at">ignore.case =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition   =</span> <span class="fu">c</span>(<span class="st">"KO"</span>, <span class="st">"KO"</span>, <span class="st">"WT"</span>, <span class="st">"WT"</span>),</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names   =</span> <span class="fu">basename</span>(mzml_files)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <p>Read the data in <strong>on-disk mode</strong>: spectral metadata are held in memory; raw intensity arrays are fetched from the file only when needed. This keeps memory usage low for large experiments.</p>
@@ -2165,487 +2168,491 @@ loaded via a namespace (and not attached):
 <span id="cb24-85"><a href="#cb24-85" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(msdata)</span>
 <span id="cb24-86"><a href="#cb24-86" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-87"><a href="#cb24-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-90"><a href="#cb24-90" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-91"><a href="#cb24-91" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-92"><a href="#cb24-92" aria-hidden="true" tabindex="-1"></a><span class="co"># Four example metabolomics files: 2 control, 2 treatment</span></span>
-<span id="cb24-93"><a href="#cb24-93" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> <span class="fu">proteomics</span>(<span class="at">full.names =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span>
-<span id="cb24-94"><a href="#cb24-94" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-95"><a href="#cb24-95" aria-hidden="true" tabindex="-1"></a>sample_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb24-96"><a href="#cb24-96" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_name =</span> <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.mzML$"</span>, <span class="st">""</span>, <span class="fu">basename</span>(mzml_files)),</span>
-<span id="cb24-97"><a href="#cb24-97" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition   =</span> <span class="fu">c</span>(<span class="st">"Control"</span>, <span class="st">"Control"</span>, <span class="st">"Treatment"</span>, <span class="st">"Treatment"</span>),</span>
-<span id="cb24-98"><a href="#cb24-98" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names   =</span> <span class="fu">basename</span>(mzml_files)</span>
-<span id="cb24-99"><a href="#cb24-99" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-100"><a href="#cb24-100" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-101"><a href="#cb24-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-102"><a href="#cb24-102" aria-hidden="true" tabindex="-1"></a>Read the data in **on-disk mode**: spectral metadata are held in memory; raw intensity arrays are fetched from the file only when needed. This keeps memory usage low for large experiments.</span>
-<span id="cb24-103"><a href="#cb24-103" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-106"><a href="#cb24-106" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-107"><a href="#cb24-107" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-108"><a href="#cb24-108" aria-hidden="true" tabindex="-1"></a>raw_data <span class="ot">&lt;-</span> <span class="fu">readMSData</span>(</span>
-<span id="cb24-109"><a href="#cb24-109" aria-hidden="true" tabindex="-1"></a>  mzml_files,</span>
-<span id="cb24-110"><a href="#cb24-110" aria-hidden="true" tabindex="-1"></a>  <span class="at">pdata =</span> <span class="fu">new</span>(<span class="st">"NAnnotatedDataFrame"</span>, sample_meta),</span>
-<span id="cb24-111"><a href="#cb24-111" aria-hidden="true" tabindex="-1"></a>  <span class="at">mode  =</span> <span class="st">"onDisk"</span></span>
-<span id="cb24-112"><a href="#cb24-112" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-113"><a href="#cb24-113" aria-hidden="true" tabindex="-1"></a>raw_data</span>
-<span id="cb24-114"><a href="#cb24-114" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-115"><a href="#cb24-115" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-116"><a href="#cb24-116" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-117"><a href="#cb24-117" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-118"><a href="#cb24-118" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 1 — Peak Detection with CentWave</span></span>
+<span id="cb24-88"><a href="#cb24-88" aria-hidden="true" tabindex="-1"></a><span class="in">`msdata::proteomics()`</span> bundles TMT and SRM proteomics files, not an untargeted LC-MS series suitable for CentWave — so, as in Chapter 16, this chapter uses <span class="in">`faahKO`</span>: 12 CDF runs from *C. elegans* comparing fatty acid amide hydrolase knockout (<span class="in">`KO`</span>) to wild-type (<span class="in">`WT`</span>). We use four of the twelve files here to keep the demonstration quick.</span>
+<span id="cb24-89"><a href="#cb24-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-92"><a href="#cb24-92" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-93"><a href="#cb24-93" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-94"><a href="#cb24-94" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(faahKO)</span>
+<span id="cb24-95"><a href="#cb24-95" aria-hidden="true" tabindex="-1"></a>cdf_files <span class="ot">&lt;-</span> <span class="fu">dir</span>(<span class="fu">system.file</span>(<span class="st">"cdf"</span>, <span class="at">package =</span> <span class="st">"faahKO"</span>),</span>
+<span id="cb24-96"><a href="#cb24-96" aria-hidden="true" tabindex="-1"></a>                  <span class="at">full.names =</span> <span class="cn">TRUE</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb24-97"><a href="#cb24-97" aria-hidden="true" tabindex="-1"></a>mzml_files <span class="ot">&lt;-</span> cdf_files[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">7</span>, <span class="dv">8</span>)]  <span class="co"># 2 KO, 2 WT</span></span>
+<span id="cb24-98"><a href="#cb24-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-99"><a href="#cb24-99" aria-hidden="true" tabindex="-1"></a>sample_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb24-100"><a href="#cb24-100" aria-hidden="true" tabindex="-1"></a>  <span class="at">sample_name =</span> <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.CDF$"</span>, <span class="st">""</span>, <span class="fu">basename</span>(mzml_files), <span class="at">ignore.case =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-101"><a href="#cb24-101" aria-hidden="true" tabindex="-1"></a>  <span class="at">condition   =</span> <span class="fu">c</span>(<span class="st">"KO"</span>, <span class="st">"KO"</span>, <span class="st">"WT"</span>, <span class="st">"WT"</span>),</span>
+<span id="cb24-102"><a href="#cb24-102" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names   =</span> <span class="fu">basename</span>(mzml_files)</span>
+<span id="cb24-103"><a href="#cb24-103" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-104"><a href="#cb24-104" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-105"><a href="#cb24-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-106"><a href="#cb24-106" aria-hidden="true" tabindex="-1"></a>Read the data in **on-disk mode**: spectral metadata are held in memory; raw intensity arrays are fetched from the file only when needed. This keeps memory usage low for large experiments.</span>
+<span id="cb24-107"><a href="#cb24-107" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-110"><a href="#cb24-110" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-111"><a href="#cb24-111" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-112"><a href="#cb24-112" aria-hidden="true" tabindex="-1"></a>raw_data <span class="ot">&lt;-</span> <span class="fu">readMSData</span>(</span>
+<span id="cb24-113"><a href="#cb24-113" aria-hidden="true" tabindex="-1"></a>  mzml_files,</span>
+<span id="cb24-114"><a href="#cb24-114" aria-hidden="true" tabindex="-1"></a>  <span class="at">pdata =</span> <span class="fu">new</span>(<span class="st">"NAnnotatedDataFrame"</span>, sample_meta),</span>
+<span id="cb24-115"><a href="#cb24-115" aria-hidden="true" tabindex="-1"></a>  <span class="at">mode  =</span> <span class="st">"onDisk"</span></span>
+<span id="cb24-116"><a href="#cb24-116" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-117"><a href="#cb24-117" aria-hidden="true" tabindex="-1"></a>raw_data</span>
+<span id="cb24-118"><a href="#cb24-118" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-119"><a href="#cb24-119" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-120"><a href="#cb24-120" aria-hidden="true" tabindex="-1"></a><span class="fu">### How CentWave works</span></span>
+<span id="cb24-120"><a href="#cb24-120" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-121"><a href="#cb24-121" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-122"><a href="#cb24-122" aria-hidden="true" tabindex="-1"></a><span class="in">`xcms`</span> provides several peak-detection algorithms; **CentWave** is the standard choice for high-resolution data (Orbitrap, Q-TOF). It works in two stages:</span>
+<span id="cb24-122"><a href="#cb24-122" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 1 — Peak Detection with CentWave</span></span>
 <span id="cb24-123"><a href="#cb24-123" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-124"><a href="#cb24-124" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**Mass-trace detection** — it scans for consecutive spectra where a narrow *m/z* window contains signal above a noise floor, forming a "trace" in the retention-time dimension.</span>
-<span id="cb24-125"><a href="#cb24-125" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Wavelet-based peak-shape analysis** — within each mass trace it applies a continuous wavelet transform (CWT) to locate peaks with a Gaussian-like shape, reporting the apex, boundaries, and integrated area.</span>
-<span id="cb24-126"><a href="#cb24-126" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-127"><a href="#cb24-127" aria-hidden="true" tabindex="-1"></a><span class="fu">### Key parameters</span></span>
-<span id="cb24-128"><a href="#cb24-128" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-129"><a href="#cb24-129" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Parameter <span class="pp">|</span> Meaning <span class="pp">|</span> Typical starting value <span class="pp">|</span></span>
-<span id="cb24-130"><a href="#cb24-130" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|----|</span></span>
-<span id="cb24-131"><a href="#cb24-131" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`ppm`</span> <span class="pp">|</span> Maximum *m/z* deviation for a mass trace (parts per million) <span class="pp">|</span> 5–15 ppm for Orbitrap; 15–25 ppm for Q-TOF <span class="pp">|</span></span>
-<span id="cb24-132"><a href="#cb24-132" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`peakwidth`</span> <span class="pp">|</span> Expected chromatographic peak width range in seconds <span class="pp">|</span> <span class="in">`c(5, 60)`</span> for a 30-min run <span class="pp">|</span></span>
-<span id="cb24-133"><a href="#cb24-133" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`snthresh`</span> <span class="pp">|</span> Signal-to-noise threshold for reporting a peak <span class="pp">|</span> 10 <span class="pp">|</span></span>
-<span id="cb24-134"><a href="#cb24-134" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`noise`</span> <span class="pp">|</span> Absolute intensity floor; signals below this are ignored <span class="pp">|</span> 1 000 <span class="pp">|</span></span>
-<span id="cb24-135"><a href="#cb24-135" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`prefilter`</span> <span class="pp">|</span> Minimum scan count and intensity required before evaluating a trace <span class="pp">|</span> <span class="in">`c(3, 100)`</span> <span class="pp">|</span></span>
-<span id="cb24-136"><a href="#cb24-136" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-137"><a href="#cb24-137" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Tuning tip**: Start with </span><span class="in">`snthresh = 10`</span><span class="at"> and inspect peak counts per sample. Far fewer peaks than expected suggests </span><span class="in">`ppm`</span><span class="at"> or </span><span class="in">`noise`</span><span class="at"> is too restrictive; far more suggests the thresholds are too permissive. Plot the XIC of a known internal standard and verify its peak is detected cleanly.</span></span>
-<span id="cb24-138"><a href="#cb24-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-141"><a href="#cb24-141" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-142"><a href="#cb24-142" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-143"><a href="#cb24-143" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
-<span id="cb24-144"><a href="#cb24-144" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm        =</span> <span class="dv">15</span>,</span>
-<span id="cb24-145"><a href="#cb24-145" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth  =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
-<span id="cb24-146"><a href="#cb24-146" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh   =</span> <span class="dv">10</span>,</span>
-<span id="cb24-147"><a href="#cb24-147" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise      =</span> <span class="dv">1000</span>,</span>
-<span id="cb24-148"><a href="#cb24-148" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter  =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
-<span id="cb24-149"><a href="#cb24-149" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-150"><a href="#cb24-150" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-151"><a href="#cb24-151" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(raw_data, <span class="at">param =</span> cwp)</span>
-<span id="cb24-152"><a href="#cb24-152" aria-hidden="true" tabindex="-1"></a>xset</span>
-<span id="cb24-153"><a href="#cb24-153" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-124"><a href="#cb24-124" aria-hidden="true" tabindex="-1"></a><span class="fu">### How CentWave works</span></span>
+<span id="cb24-125"><a href="#cb24-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-126"><a href="#cb24-126" aria-hidden="true" tabindex="-1"></a><span class="in">`xcms`</span> provides several peak-detection algorithms; **CentWave** is the standard choice for high-resolution data (Orbitrap, Q-TOF). It works in two stages:</span>
+<span id="cb24-127"><a href="#cb24-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-128"><a href="#cb24-128" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**Mass-trace detection** — it scans for consecutive spectra where a narrow *m/z* window contains signal above a noise floor, forming a "trace" in the retention-time dimension.</span>
+<span id="cb24-129"><a href="#cb24-129" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Wavelet-based peak-shape analysis** — within each mass trace it applies a continuous wavelet transform (CWT) to locate peaks with a Gaussian-like shape, reporting the apex, boundaries, and integrated area.</span>
+<span id="cb24-130"><a href="#cb24-130" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-131"><a href="#cb24-131" aria-hidden="true" tabindex="-1"></a><span class="fu">### Key parameters</span></span>
+<span id="cb24-132"><a href="#cb24-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-133"><a href="#cb24-133" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Parameter <span class="pp">|</span> Meaning <span class="pp">|</span> Typical starting value <span class="pp">|</span></span>
+<span id="cb24-134"><a href="#cb24-134" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|----|</span></span>
+<span id="cb24-135"><a href="#cb24-135" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`ppm`</span> <span class="pp">|</span> Maximum *m/z* deviation for a mass trace (parts per million) <span class="pp">|</span> 5–15 ppm for Orbitrap; 15–25 ppm for Q-TOF <span class="pp">|</span></span>
+<span id="cb24-136"><a href="#cb24-136" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`peakwidth`</span> <span class="pp">|</span> Expected chromatographic peak width range in seconds <span class="pp">|</span> <span class="in">`c(5, 60)`</span> for a 30-min run <span class="pp">|</span></span>
+<span id="cb24-137"><a href="#cb24-137" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`snthresh`</span> <span class="pp">|</span> Signal-to-noise threshold for reporting a peak <span class="pp">|</span> 10 <span class="pp">|</span></span>
+<span id="cb24-138"><a href="#cb24-138" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`noise`</span> <span class="pp">|</span> Absolute intensity floor; signals below this are ignored <span class="pp">|</span> 1 000 <span class="pp">|</span></span>
+<span id="cb24-139"><a href="#cb24-139" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`prefilter`</span> <span class="pp">|</span> Minimum scan count and intensity required before evaluating a trace <span class="pp">|</span> <span class="in">`c(3, 100)`</span> <span class="pp">|</span></span>
+<span id="cb24-140"><a href="#cb24-140" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-141"><a href="#cb24-141" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Tuning tip**: Start with </span><span class="in">`snthresh = 10`</span><span class="at"> and inspect peak counts per sample. Far fewer peaks than expected suggests </span><span class="in">`ppm`</span><span class="at"> or </span><span class="in">`noise`</span><span class="at"> is too restrictive; far more suggests the thresholds are too permissive. Plot the XIC of a known internal standard and verify its peak is detected cleanly.</span></span>
+<span id="cb24-142"><a href="#cb24-142" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-145"><a href="#cb24-145" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-146"><a href="#cb24-146" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-147"><a href="#cb24-147" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
+<span id="cb24-148"><a href="#cb24-148" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm        =</span> <span class="dv">15</span>,</span>
+<span id="cb24-149"><a href="#cb24-149" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth  =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb24-150"><a href="#cb24-150" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh   =</span> <span class="dv">10</span>,</span>
+<span id="cb24-151"><a href="#cb24-151" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise      =</span> <span class="dv">1000</span>,</span>
+<span id="cb24-152"><a href="#cb24-152" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter  =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
+<span id="cb24-153"><a href="#cb24-153" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb24-154"><a href="#cb24-154" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-155"><a href="#cb24-155" aria-hidden="true" tabindex="-1"></a><span class="fu">### Inspecting detected peaks</span></span>
-<span id="cb24-156"><a href="#cb24-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-157"><a href="#cb24-157" aria-hidden="true" tabindex="-1"></a>Each detected peak is one row in <span class="in">`chromPeaks()`</span>:</span>
+<span id="cb24-155"><a href="#cb24-155" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(raw_data, <span class="at">param =</span> cwp)</span>
+<span id="cb24-156"><a href="#cb24-156" aria-hidden="true" tabindex="-1"></a>xset</span>
+<span id="cb24-157"><a href="#cb24-157" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-158"><a href="#cb24-158" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-161"><a href="#cb24-161" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-162"><a href="#cb24-162" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-163"><a href="#cb24-163" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(xset)</span>
-<span id="cb24-164"><a href="#cb24-164" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(peaks)</span>
-<span id="cb24-165"><a href="#cb24-165" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-166"><a href="#cb24-166" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-167"><a href="#cb24-167" aria-hidden="true" tabindex="-1"></a>Key columns:</span>
-<span id="cb24-168"><a href="#cb24-168" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-169"><a href="#cb24-169" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Column <span class="pp">|</span> Meaning <span class="pp">|</span></span>
-<span id="cb24-170"><a href="#cb24-170" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|</span></span>
-<span id="cb24-171"><a href="#cb24-171" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`mz`</span>, <span class="in">`mzmin`</span>, <span class="in">`mzmax`</span> <span class="pp">|</span> *m/z* centroid and boundaries <span class="pp">|</span></span>
-<span id="cb24-172"><a href="#cb24-172" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`rt`</span>, <span class="in">`rtmin`</span>, <span class="in">`rtmax`</span> <span class="pp">|</span> Retention time at apex and peak boundaries (seconds) <span class="pp">|</span></span>
-<span id="cb24-173"><a href="#cb24-173" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`into`</span> <span class="pp">|</span> Integrated peak area — the primary quantification value <span class="pp">|</span></span>
-<span id="cb24-174"><a href="#cb24-174" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`sn`</span> <span class="pp">|</span> Signal-to-noise ratio <span class="pp">|</span></span>
-<span id="cb24-175"><a href="#cb24-175" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`sample`</span> <span class="pp">|</span> Sample index <span class="pp">|</span></span>
-<span id="cb24-176"><a href="#cb24-176" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-179"><a href="#cb24-179" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-180"><a href="#cb24-180" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-181"><a href="#cb24-181" aria-hidden="true" tabindex="-1"></a><span class="co"># Peaks per sample — a large imbalance signals instrument instability</span></span>
-<span id="cb24-182"><a href="#cb24-182" aria-hidden="true" tabindex="-1"></a><span class="co"># or sub-optimal parameters</span></span>
-<span id="cb24-183"><a href="#cb24-183" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="fu">chromPeaks</span>(xset)[, <span class="st">"sample"</span>])</span>
-<span id="cb24-184"><a href="#cb24-184" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-185"><a href="#cb24-185" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-186"><a href="#cb24-186" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualising a detected peak</span></span>
-<span id="cb24-187"><a href="#cb24-187" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-190"><a href="#cb24-190" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-191"><a href="#cb24-191" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-192"><a href="#cb24-192" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and plot the XIC for the most intense peak in sample 1</span></span>
-<span id="cb24-193"><a href="#cb24-193" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> peaks[peaks[, <span class="st">"sample"</span>] <span class="sc">==</span> <span class="dv">1</span>L, ]</span>
-<span id="cb24-194"><a href="#cb24-194" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> top_peak[<span class="fu">which.max</span>(top_peak[, <span class="st">"maxo"</span>]), ]</span>
-<span id="cb24-195"><a href="#cb24-195" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-196"><a href="#cb24-196" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(</span>
-<span id="cb24-197"><a href="#cb24-197" aria-hidden="true" tabindex="-1"></a>  xset,</span>
-<span id="cb24-198"><a href="#cb24-198" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> <span class="fu">c</span>(top_peak[<span class="st">"mzmin"</span>], top_peak[<span class="st">"mzmax"</span>]),</span>
-<span id="cb24-199"><a href="#cb24-199" aria-hidden="true" tabindex="-1"></a>  <span class="at">rt =</span> <span class="fu">c</span>(top_peak[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">10</span>, top_peak[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">10</span>)</span>
-<span id="cb24-200"><a href="#cb24-200" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-201"><a href="#cb24-201" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(chr, <span class="at">main =</span> <span class="fu">paste0</span>(<span class="st">"m/z "</span>, <span class="fu">round</span>(top_peak[<span class="st">"mz"</span>], <span class="dv">4</span>)))</span>
-<span id="cb24-202"><a href="#cb24-202" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-203"><a href="#cb24-203" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-204"><a href="#cb24-204" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-205"><a href="#cb24-205" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-206"><a href="#cb24-206" aria-hidden="true" tabindex="-1"></a><span class="fu">## Validating Peak Detection with Known Standards {.real-data}</span></span>
+<span id="cb24-159"><a href="#cb24-159" aria-hidden="true" tabindex="-1"></a><span class="fu">### Inspecting detected peaks</span></span>
+<span id="cb24-160"><a href="#cb24-160" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-161"><a href="#cb24-161" aria-hidden="true" tabindex="-1"></a>Each detected peak is one row in <span class="in">`chromPeaks()`</span>:</span>
+<span id="cb24-162"><a href="#cb24-162" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-165"><a href="#cb24-165" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-166"><a href="#cb24-166" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-167"><a href="#cb24-167" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(xset)</span>
+<span id="cb24-168"><a href="#cb24-168" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(peaks)</span>
+<span id="cb24-169"><a href="#cb24-169" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-170"><a href="#cb24-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-171"><a href="#cb24-171" aria-hidden="true" tabindex="-1"></a>Key columns:</span>
+<span id="cb24-172"><a href="#cb24-172" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-173"><a href="#cb24-173" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Column <span class="pp">|</span> Meaning <span class="pp">|</span></span>
+<span id="cb24-174"><a href="#cb24-174" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|</span></span>
+<span id="cb24-175"><a href="#cb24-175" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`mz`</span>, <span class="in">`mzmin`</span>, <span class="in">`mzmax`</span> <span class="pp">|</span> *m/z* centroid and boundaries <span class="pp">|</span></span>
+<span id="cb24-176"><a href="#cb24-176" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`rt`</span>, <span class="in">`rtmin`</span>, <span class="in">`rtmax`</span> <span class="pp">|</span> Retention time at apex and peak boundaries (seconds) <span class="pp">|</span></span>
+<span id="cb24-177"><a href="#cb24-177" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`into`</span> <span class="pp">|</span> Integrated peak area — the primary quantification value <span class="pp">|</span></span>
+<span id="cb24-178"><a href="#cb24-178" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`sn`</span> <span class="pp">|</span> Signal-to-noise ratio <span class="pp">|</span></span>
+<span id="cb24-179"><a href="#cb24-179" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`sample`</span> <span class="pp">|</span> Sample index <span class="pp">|</span></span>
+<span id="cb24-180"><a href="#cb24-180" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-183"><a href="#cb24-183" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-184"><a href="#cb24-184" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-185"><a href="#cb24-185" aria-hidden="true" tabindex="-1"></a><span class="co"># Peaks per sample — a large imbalance signals instrument instability</span></span>
+<span id="cb24-186"><a href="#cb24-186" aria-hidden="true" tabindex="-1"></a><span class="co"># or sub-optimal parameters</span></span>
+<span id="cb24-187"><a href="#cb24-187" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(<span class="fu">chromPeaks</span>(xset)[, <span class="st">"sample"</span>])</span>
+<span id="cb24-188"><a href="#cb24-188" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-189"><a href="#cb24-189" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-190"><a href="#cb24-190" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualising a detected peak</span></span>
+<span id="cb24-191"><a href="#cb24-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-194"><a href="#cb24-194" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-195"><a href="#cb24-195" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-196"><a href="#cb24-196" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and plot the XIC for the most intense peak in sample 1</span></span>
+<span id="cb24-197"><a href="#cb24-197" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> peaks[peaks[, <span class="st">"sample"</span>] <span class="sc">==</span> <span class="dv">1</span>L, ]</span>
+<span id="cb24-198"><a href="#cb24-198" aria-hidden="true" tabindex="-1"></a>top_peak <span class="ot">&lt;-</span> top_peak[<span class="fu">which.max</span>(top_peak[, <span class="st">"maxo"</span>]), ]</span>
+<span id="cb24-199"><a href="#cb24-199" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-200"><a href="#cb24-200" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(</span>
+<span id="cb24-201"><a href="#cb24-201" aria-hidden="true" tabindex="-1"></a>  xset,</span>
+<span id="cb24-202"><a href="#cb24-202" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> <span class="fu">c</span>(top_peak[<span class="st">"mzmin"</span>], top_peak[<span class="st">"mzmax"</span>]),</span>
+<span id="cb24-203"><a href="#cb24-203" aria-hidden="true" tabindex="-1"></a>  <span class="at">rt =</span> <span class="fu">c</span>(top_peak[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">10</span>, top_peak[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">10</span>)</span>
+<span id="cb24-204"><a href="#cb24-204" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-205"><a href="#cb24-205" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(chr, <span class="at">main =</span> <span class="fu">paste0</span>(<span class="st">"m/z "</span>, <span class="fu">round</span>(top_peak[<span class="st">"mz"</span>], <span class="dv">4</span>)))</span>
+<span id="cb24-206"><a href="#cb24-206" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-207"><a href="#cb24-207" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-208"><a href="#cb24-208" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Real Data:** MTBLS38 — 71 pure metabolite standards measured on an LTQ Orbitrap Velos (Thermo Fisher) in both positive and negative ESI mode. Each mzML file contains one known compound at known monoisotopic mass. Full ChEBI annotations are available via </span><span class="co">[</span><span class="ot">MetaboLights</span><span class="co">](https://www.ebi.ac.uk/metabolights/MTBLS38)</span><span class="at">.</span></span>
+<span id="cb24-208"><a href="#cb24-208" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-209"><a href="#cb24-209" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-210"><a href="#cb24-210" aria-hidden="true" tabindex="-1"></a>Before applying CentWave to complex biological samples, it is essential to verify that the algorithm can correctly detect peaks of *known identity*. The MTBLS38 dataset provides pure standards whose exact monoisotopic masses are documented in ChEBI and PubChem, making it a gold-standard benchmark.</span>
+<span id="cb24-210"><a href="#cb24-210" aria-hidden="true" tabindex="-1"></a><span class="fu">## Validating Peak Detection with Known Standards {.real-data}</span></span>
 <span id="cb24-211"><a href="#cb24-211" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-212"><a href="#cb24-212" aria-hidden="true" tabindex="-1"></a><span class="fu">### Extract the Expected Ion Chromatogram</span></span>
+<span id="cb24-212"><a href="#cb24-212" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Real Data:** MTBLS38 — 71 pure metabolite standards measured on an LTQ Orbitrap Velos (Thermo Fisher) in both positive and negative ESI mode. Each mzML file contains one known compound at known monoisotopic mass. Full ChEBI annotations are available via </span><span class="co">[</span><span class="ot">MetaboLights</span><span class="co">](https://www.ebi.ac.uk/metabolights/MTBLS38)</span><span class="at">.</span></span>
 <span id="cb24-213"><a href="#cb24-213" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-214"><a href="#cb24-214" aria-hidden="true" tabindex="-1"></a>For a pure standard, we know the compound's exact mass. Rather than running CentWave on the entire MS1 space (which detects thousands of unrelated background peaks), we first extract the **extracted ion chromatogram (EIC)** in a narrow *m/z* window around the expected mass:</span>
+<span id="cb24-214"><a href="#cb24-214" aria-hidden="true" tabindex="-1"></a>Before applying CentWave to complex biological samples, it is essential to verify that the algorithm can correctly detect peaks of *known identity*. The MTBLS38 dataset provides pure standards whose exact monoisotopic masses are documented in ChEBI and PubChem, making it a gold-standard benchmark.</span>
 <span id="cb24-215"><a href="#cb24-215" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-218"><a href="#cb24-218" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-219"><a href="#cb24-219" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-220"><a href="#cb24-220" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
-<span id="cb24-221"><a href="#cb24-221" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-summary: "Load biotin standard and extract EIC"</span></span>
-<span id="cb24-222"><a href="#cb24-222" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MSnbase)</span>
-<span id="cb24-223"><a href="#cb24-223" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xcms)</span>
-<span id="cb24-224"><a href="#cb24-224" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
-<span id="cb24-225"><a href="#cb24-225" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-226"><a href="#cb24-226" aria-hidden="true" tabindex="-1"></a><span class="co"># This block requires the MTBLS38 dataset (~12 GB, 71 mzML files).</span></span>
-<span id="cb24-227"><a href="#cb24-227" aria-hidden="true" tabindex="-1"></a><span class="co"># Download: ./code/download_mtbls.ps1 -Datasets MTBLS38</span></span>
-<span id="cb24-228"><a href="#cb24-228" aria-hidden="true" tabindex="-1"></a><span class="co"># The pre-computed results are shown in the figures below.</span></span>
-<span id="cb24-229"><a href="#cb24-229" aria-hidden="true" tabindex="-1"></a>biotin_file <span class="ot">&lt;-</span> <span class="st">"raw/MTBLS38/biotin.mzML"</span></span>
-<span id="cb24-230"><a href="#cb24-230" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-231"><a href="#cb24-231" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract EIC within 25 ppm of expected mass</span></span>
-<span id="cb24-232"><a href="#cb24-232" aria-hidden="true" tabindex="-1"></a>mz_target <span class="ot">&lt;-</span> <span class="fl">245.0955</span></span>
-<span id="cb24-233"><a href="#cb24-233" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(raw,</span>
-<span id="cb24-234"><a href="#cb24-234" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> mz_target <span class="sc">*</span> <span class="fu">c</span>(<span class="dv">1</span> <span class="sc">-</span> <span class="fl">25e-6</span>, <span class="dv">1</span> <span class="sc">+</span> <span class="fl">25e-6</span>),</span>
-<span id="cb24-235"><a href="#cb24-235" aria-hidden="true" tabindex="-1"></a>  <span class="at">aggregationFun =</span> <span class="st">"max"</span>)</span>
-<span id="cb24-236"><a href="#cb24-236" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-237"><a href="#cb24-237" aria-hidden="true" tabindex="-1"></a>rtime_vals <span class="ot">&lt;-</span> <span class="fu">rtime</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
-<span id="cb24-238"><a href="#cb24-238" aria-hidden="true" tabindex="-1"></a>intens_vals <span class="ot">&lt;-</span> <span class="fu">intensity</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
-<span id="cb24-239"><a href="#cb24-239" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"EIC extracted: %d scans over %.1f–%.1f s</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb24-240"><a href="#cb24-240" aria-hidden="true" tabindex="-1"></a>  <span class="fu">length</span>(rtime_vals), <span class="fu">min</span>(rtime_vals), <span class="fu">max</span>(rtime_vals)))</span>
-<span id="cb24-241"><a href="#cb24-241" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-242"><a href="#cb24-242" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-243"><a href="#cb24-243" aria-hidden="true" tabindex="-1"></a><span class="fu">### Run CentWave on the Known Mass Trace</span></span>
-<span id="cb24-244"><a href="#cb24-244" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-245"><a href="#cb24-245" aria-hidden="true" tabindex="-1"></a>Now apply CentWave to the extracted EIC. Because we know the expected peak is real, we can use a moderately stringent signal-to-noise threshold (<span class="in">`snthresh = 10`</span>) and expect 1–5 peaks (the main compound peak plus possible minor isomers or adducts):</span>
+<span id="cb24-216"><a href="#cb24-216" aria-hidden="true" tabindex="-1"></a><span class="fu">### Extract the Expected Ion Chromatogram</span></span>
+<span id="cb24-217"><a href="#cb24-217" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-218"><a href="#cb24-218" aria-hidden="true" tabindex="-1"></a>For a pure standard, we know the compound's exact mass. Rather than running CentWave on the entire MS1 space (which detects thousands of unrelated background peaks), we first extract the **extracted ion chromatogram (EIC)** in a narrow *m/z* window around the expected mass:</span>
+<span id="cb24-219"><a href="#cb24-219" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-222"><a href="#cb24-222" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-223"><a href="#cb24-223" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-224"><a href="#cb24-224" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
+<span id="cb24-225"><a href="#cb24-225" aria-hidden="true" tabindex="-1"></a><span class="co">#| code-summary: "Load biotin standard and extract EIC"</span></span>
+<span id="cb24-226"><a href="#cb24-226" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MSnbase)</span>
+<span id="cb24-227"><a href="#cb24-227" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xcms)</span>
+<span id="cb24-228"><a href="#cb24-228" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb24-229"><a href="#cb24-229" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-230"><a href="#cb24-230" aria-hidden="true" tabindex="-1"></a><span class="co"># This block requires the MTBLS38 dataset (~12 GB, 71 mzML files).</span></span>
+<span id="cb24-231"><a href="#cb24-231" aria-hidden="true" tabindex="-1"></a><span class="co"># Download: ./code/download_mtbls.ps1 -Datasets MTBLS38</span></span>
+<span id="cb24-232"><a href="#cb24-232" aria-hidden="true" tabindex="-1"></a><span class="co"># The pre-computed results are shown in the figures below.</span></span>
+<span id="cb24-233"><a href="#cb24-233" aria-hidden="true" tabindex="-1"></a>biotin_file <span class="ot">&lt;-</span> <span class="st">"raw/MTBLS38/biotin.mzML"</span></span>
+<span id="cb24-234"><a href="#cb24-234" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-235"><a href="#cb24-235" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract EIC within 25 ppm of expected mass</span></span>
+<span id="cb24-236"><a href="#cb24-236" aria-hidden="true" tabindex="-1"></a>mz_target <span class="ot">&lt;-</span> <span class="fl">245.0955</span></span>
+<span id="cb24-237"><a href="#cb24-237" aria-hidden="true" tabindex="-1"></a>chr <span class="ot">&lt;-</span> <span class="fu">chromatogram</span>(raw,</span>
+<span id="cb24-238"><a href="#cb24-238" aria-hidden="true" tabindex="-1"></a>  <span class="at">mz =</span> mz_target <span class="sc">*</span> <span class="fu">c</span>(<span class="dv">1</span> <span class="sc">-</span> <span class="fl">25e-6</span>, <span class="dv">1</span> <span class="sc">+</span> <span class="fl">25e-6</span>),</span>
+<span id="cb24-239"><a href="#cb24-239" aria-hidden="true" tabindex="-1"></a>  <span class="at">aggregationFun =</span> <span class="st">"max"</span>)</span>
+<span id="cb24-240"><a href="#cb24-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-241"><a href="#cb24-241" aria-hidden="true" tabindex="-1"></a>rtime_vals <span class="ot">&lt;-</span> <span class="fu">rtime</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
+<span id="cb24-242"><a href="#cb24-242" aria-hidden="true" tabindex="-1"></a>intens_vals <span class="ot">&lt;-</span> <span class="fu">intensity</span>(chr[<span class="dv">1</span>, <span class="dv">1</span>])</span>
+<span id="cb24-243"><a href="#cb24-243" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"EIC extracted: %d scans over %.1f–%.1f s</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb24-244"><a href="#cb24-244" aria-hidden="true" tabindex="-1"></a>  <span class="fu">length</span>(rtime_vals), <span class="fu">min</span>(rtime_vals), <span class="fu">max</span>(rtime_vals)))</span>
+<span id="cb24-245"><a href="#cb24-245" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-246"><a href="#cb24-246" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-249"><a href="#cb24-249" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-250"><a href="#cb24-250" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-251"><a href="#cb24-251" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
-<span id="cb24-252"><a href="#cb24-252" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
-<span id="cb24-253"><a href="#cb24-253" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm       =</span> <span class="dv">25</span>,</span>
-<span id="cb24-254"><a href="#cb24-254" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
-<span id="cb24-255"><a href="#cb24-255" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh  =</span> <span class="dv">10</span>,</span>
-<span id="cb24-256"><a href="#cb24-256" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise     =</span> <span class="dv">1000</span>,</span>
-<span id="cb24-257"><a href="#cb24-257" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
-<span id="cb24-258"><a href="#cb24-258" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-259"><a href="#cb24-259" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-260"><a href="#cb24-260" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> cwp)</span>
-<span id="cb24-261"><a href="#cb24-261" aria-hidden="true" tabindex="-1"></a>peaks_found <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(peaks)</span>
-<span id="cb24-262"><a href="#cb24-262" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Peaks detected: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">nrow</span>(peaks_found)))</span>
+<span id="cb24-247"><a href="#cb24-247" aria-hidden="true" tabindex="-1"></a><span class="fu">### Run CentWave on the Known Mass Trace</span></span>
+<span id="cb24-248"><a href="#cb24-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-249"><a href="#cb24-249" aria-hidden="true" tabindex="-1"></a>Now apply CentWave to the extracted EIC. Because we know the expected peak is real, we can use a moderately stringent signal-to-noise threshold (<span class="in">`snthresh = 10`</span>) and expect 1–5 peaks (the main compound peak plus possible minor isomers or adducts):</span>
+<span id="cb24-250"><a href="#cb24-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-253"><a href="#cb24-253" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-254"><a href="#cb24-254" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-255"><a href="#cb24-255" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
+<span id="cb24-256"><a href="#cb24-256" aria-hidden="true" tabindex="-1"></a>cwp <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(</span>
+<span id="cb24-257"><a href="#cb24-257" aria-hidden="true" tabindex="-1"></a>  <span class="at">ppm       =</span> <span class="dv">25</span>,</span>
+<span id="cb24-258"><a href="#cb24-258" aria-hidden="true" tabindex="-1"></a>  <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb24-259"><a href="#cb24-259" aria-hidden="true" tabindex="-1"></a>  <span class="at">snthresh  =</span> <span class="dv">10</span>,</span>
+<span id="cb24-260"><a href="#cb24-260" aria-hidden="true" tabindex="-1"></a>  <span class="at">noise     =</span> <span class="dv">1000</span>,</span>
+<span id="cb24-261"><a href="#cb24-261" aria-hidden="true" tabindex="-1"></a>  <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>)</span>
+<span id="cb24-262"><a href="#cb24-262" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb24-263"><a href="#cb24-263" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-264"><a href="#cb24-264" aria-hidden="true" tabindex="-1"></a><span class="co"># Find the peak closest to the expected mass</span></span>
-<span id="cb24-265"><a href="#cb24-265" aria-hidden="true" tabindex="-1"></a>mass_errors <span class="ot">&lt;-</span> <span class="fu">abs</span>(peaks_found[, <span class="st">"mz"</span>] <span class="sc">-</span> mz_target) <span class="sc">/</span> mz_target <span class="sc">*</span> <span class="fl">1e6</span></span>
-<span id="cb24-266"><a href="#cb24-266" aria-hidden="true" tabindex="-1"></a>best_idx <span class="ot">&lt;-</span> <span class="fu">which.min</span>(mass_errors)</span>
+<span id="cb24-264"><a href="#cb24-264" aria-hidden="true" tabindex="-1"></a>peaks <span class="ot">&lt;-</span> <span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> cwp)</span>
+<span id="cb24-265"><a href="#cb24-265" aria-hidden="true" tabindex="-1"></a>peaks_found <span class="ot">&lt;-</span> <span class="fu">chromPeaks</span>(peaks)</span>
+<span id="cb24-266"><a href="#cb24-266" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Peaks detected: %d</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">nrow</span>(peaks_found)))</span>
 <span id="cb24-267"><a href="#cb24-267" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-268"><a href="#cb24-268" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Best match:</span><span class="sc">\n</span><span class="st">"</span>))</span>
-<span id="cb24-269"><a href="#cb24-269" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  m/z found:  %.5f (expected %.5f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb24-270"><a href="#cb24-270" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"mz"</span>], mz_target))</span>
-<span id="cb24-271"><a href="#cb24-271" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Mass error: %.2f ppm</span><span class="sc">\n</span><span class="st">"</span>, mass_errors[best_idx]))</span>
-<span id="cb24-272"><a href="#cb24-272" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  RT:         %.1f s</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"rt"</span>]))</span>
-<span id="cb24-273"><a href="#cb24-273" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Area:       %.0f</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"into"</span>]))</span>
-<span id="cb24-274"><a href="#cb24-274" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  SNR:        %.0f</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb24-275"><a href="#cb24-275" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"into"</span>] <span class="sc">/</span> peaks_found[best_idx, <span class="st">"intb"</span>]))</span>
-<span id="cb24-276"><a href="#cb24-276" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-277"><a href="#cb24-277" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-278"><a href="#cb24-278" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualising the Detected Peak</span></span>
-<span id="cb24-279"><a href="#cb24-279" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-280"><a href="#cb24-280" aria-hidden="true" tabindex="-1"></a>The <span class="in">`chromatogram()`</span> object contains the full EIC trace. We can overlay the CentWave-detected peak boundaries to visualise the peak anatomy:</span>
+<span id="cb24-268"><a href="#cb24-268" aria-hidden="true" tabindex="-1"></a><span class="co"># Find the peak closest to the expected mass</span></span>
+<span id="cb24-269"><a href="#cb24-269" aria-hidden="true" tabindex="-1"></a>mass_errors <span class="ot">&lt;-</span> <span class="fu">abs</span>(peaks_found[, <span class="st">"mz"</span>] <span class="sc">-</span> mz_target) <span class="sc">/</span> mz_target <span class="sc">*</span> <span class="fl">1e6</span></span>
+<span id="cb24-270"><a href="#cb24-270" aria-hidden="true" tabindex="-1"></a>best_idx <span class="ot">&lt;-</span> <span class="fu">which.min</span>(mass_errors)</span>
+<span id="cb24-271"><a href="#cb24-271" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-272"><a href="#cb24-272" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Best match:</span><span class="sc">\n</span><span class="st">"</span>))</span>
+<span id="cb24-273"><a href="#cb24-273" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  m/z found:  %.5f (expected %.5f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb24-274"><a href="#cb24-274" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"mz"</span>], mz_target))</span>
+<span id="cb24-275"><a href="#cb24-275" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Mass error: %.2f ppm</span><span class="sc">\n</span><span class="st">"</span>, mass_errors[best_idx]))</span>
+<span id="cb24-276"><a href="#cb24-276" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  RT:         %.1f s</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"rt"</span>]))</span>
+<span id="cb24-277"><a href="#cb24-277" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Area:       %.0f</span><span class="sc">\n</span><span class="st">"</span>, peaks_found[best_idx, <span class="st">"into"</span>]))</span>
+<span id="cb24-278"><a href="#cb24-278" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  SNR:        %.0f</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb24-279"><a href="#cb24-279" aria-hidden="true" tabindex="-1"></a>  peaks_found[best_idx, <span class="st">"into"</span>] <span class="sc">/</span> peaks_found[best_idx, <span class="st">"intb"</span>]))</span>
+<span id="cb24-280"><a href="#cb24-280" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-281"><a href="#cb24-281" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-284"><a href="#cb24-284" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-285"><a href="#cb24-285" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-286"><a href="#cb24-286" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
-<span id="cb24-287"><a href="#cb24-287" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 10</span></span>
-<span id="cb24-288"><a href="#cb24-288" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
-<span id="cb24-289"><a href="#cb24-289" aria-hidden="true" tabindex="-1"></a>bp <span class="ot">&lt;-</span> peaks_found[best_idx, ]</span>
-<span id="cb24-290"><a href="#cb24-290" aria-hidden="true" tabindex="-1"></a>eic_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">rt =</span> rtime_vals, <span class="at">intensity =</span> intens_vals)</span>
-<span id="cb24-291"><a href="#cb24-291" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-292"><a href="#cb24-292" aria-hidden="true" tabindex="-1"></a><span class="co"># Zoom to the peak region</span></span>
-<span id="cb24-293"><a href="#cb24-293" aria-hidden="true" tabindex="-1"></a>zoom_df <span class="ot">&lt;-</span> <span class="fu">subset</span>(eic_df, rt <span class="sc">&gt;=</span> bp[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">20</span> <span class="sc">&amp;</span> rt <span class="sc">&lt;=</span> bp[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">20</span>)</span>
-<span id="cb24-294"><a href="#cb24-294" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-295"><a href="#cb24-295" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(zoom_df, <span class="fu">aes</span>(<span class="at">x =</span> rt, <span class="at">y =</span> intensity)) <span class="sc">+</span></span>
-<span id="cb24-296"><a href="#cb24-296" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_area</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.15</span>) <span class="sc">+</span></span>
-<span id="cb24-297"><a href="#cb24-297" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
-<span id="cb24-298"><a href="#cb24-298" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>,</span>
-<span id="cb24-299"><a href="#cb24-299" aria-hidden="true" tabindex="-1"></a>    <span class="at">xmin =</span> bp[<span class="st">"rtmin"</span>], <span class="at">xmax =</span> bp[<span class="st">"rtmax"</span>],</span>
-<span id="cb24-300"><a href="#cb24-300" aria-hidden="true" tabindex="-1"></a>    <span class="at">ymin =</span> <span class="dv">0</span>, <span class="at">ymax =</span> <span class="fu">max</span>(zoom_df<span class="sc">$</span>intensity) <span class="sc">*</span> <span class="fl">1.05</span>,</span>
-<span id="cb24-301"><a href="#cb24-301" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
-<span id="cb24-302"><a href="#cb24-302" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>],</span>
-<span id="cb24-303"><a href="#cb24-303" aria-hidden="true" tabindex="-1"></a>           <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
-<span id="cb24-304"><a href="#cb24-304" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"label"</span>,</span>
-<span id="cb24-305"><a href="#cb24-305" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>] <span class="sc">*</span> <span class="fl">1.1</span>,</span>
-<span id="cb24-306"><a href="#cb24-306" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"m/z = %.4f</span><span class="sc">\n</span><span class="st">rt = %.1f s</span><span class="sc">\n</span><span class="st">SNR = %.0f"</span>,</span>
-<span id="cb24-307"><a href="#cb24-307" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"mz"</span>], bp[<span class="st">"rt"</span>],</span>
-<span id="cb24-308"><a href="#cb24-308" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"into"</span>] <span class="sc">/</span> bp[<span class="st">"intb"</span>]),</span>
-<span id="cb24-309"><a href="#cb24-309" aria-hidden="true" tabindex="-1"></a>    <span class="at">size =</span> <span class="fl">3.5</span>, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
-<span id="cb24-310"><a href="#cb24-310" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb24-311"><a href="#cb24-311" aria-hidden="true" tabindex="-1"></a>    <span class="at">title   =</span> <span class="st">"Peak Anatomy — Biotin Standard"</span>,</span>
-<span id="cb24-312"><a href="#cb24-312" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Dashed box = CentWave peak boundaries | Red dot = apex"</span>,</span>
-<span id="cb24-313"><a href="#cb24-313" aria-hidden="true" tabindex="-1"></a>    <span class="at">x       =</span> <span class="st">"Retention Time (s)"</span>,</span>
-<span id="cb24-314"><a href="#cb24-314" aria-hidden="true" tabindex="-1"></a>    <span class="at">y       =</span> <span class="st">"Intensity"</span>) <span class="sc">+</span></span>
-<span id="cb24-315"><a href="#cb24-315" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">13</span>)</span>
-<span id="cb24-316"><a href="#cb24-316" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-317"><a href="#cb24-317" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-318"><a href="#cb24-318" aria-hidden="true" tabindex="-1"></a><span class="al">![Peak anatomy of biotin standard (m/z 245.0955) detected by CentWave. Dashed box = peak boundaries (rtmin–rtmax). Red dot = apex. SNR = 10.](data/figures/02_peak_anatomy.png)</span>{#fig-peak-anatomy width=80%}</span>
-<span id="cb24-319"><a href="#cb24-319" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-320"><a href="#cb24-320" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip appearance="simple"}</span>
-<span id="cb24-321"><a href="#cb24-321" aria-hidden="true" tabindex="-1"></a><span class="fu">## Interpreting the Figure</span></span>
-<span id="cb24-322"><a href="#cb24-322" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-323"><a href="#cb24-323" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Red dashed lines** mark <span class="in">`rtmin`</span> and <span class="in">`rtmax`</span> — the boundaries CentWave assigned to this peak. A well-shaped peak has smooth Gaussian-like rise and fall within these bounds.</span>
-<span id="cb24-324"><a href="#cb24-324" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Red dot** marks the peak apex (<span class="in">`rt`</span>). CentWave identifies this as the point of maximum intensity after wavelet smoothing.</span>
-<span id="cb24-325"><a href="#cb24-325" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**SNR** = signal-to-noise ratio. The <span class="in">`into`</span> (integrated area) divided by <span class="in">`intb`</span> (baseline-corrected background). SNR &gt; 10 indicates a reliable detection.</span>
-<span id="cb24-326"><a href="#cb24-326" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>The **filled area** represents the integrated signal that becomes the quantitative value for this feature.</span>
-<span id="cb24-327"><a href="#cb24-327" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb24-328"><a href="#cb24-328" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-329"><a href="#cb24-329" aria-hidden="true" tabindex="-1"></a><span class="al">![Chromatogram gallery of 9 pure metabolite standards. Each panel shows the EIC within ±25 ppm of the known monoisotopic mass. All compounds were correctly identified with sub-ppm mass accuracy.](data/figures/01_standards_gallery.png)</span>{#fig-standards-gallery width=100%}</span>
-<span id="cb24-330"><a href="#cb24-330" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-331"><a href="#cb24-331" aria-hidden="true" tabindex="-1"></a><span class="fu">### Mass Accuracy Across 26 Standards</span></span>
+<span id="cb24-282"><a href="#cb24-282" aria-hidden="true" tabindex="-1"></a><span class="fu">### Visualising the Detected Peak</span></span>
+<span id="cb24-283"><a href="#cb24-283" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-284"><a href="#cb24-284" aria-hidden="true" tabindex="-1"></a>The <span class="in">`chromatogram()`</span> object contains the full EIC trace. We can overlay the CentWave-detected peak boundaries to visualise the peak anatomy:</span>
+<span id="cb24-285"><a href="#cb24-285" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-288"><a href="#cb24-288" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-289"><a href="#cb24-289" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-290"><a href="#cb24-290" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
+<span id="cb24-291"><a href="#cb24-291" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 10</span></span>
+<span id="cb24-292"><a href="#cb24-292" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
+<span id="cb24-293"><a href="#cb24-293" aria-hidden="true" tabindex="-1"></a>bp <span class="ot">&lt;-</span> peaks_found[best_idx, ]</span>
+<span id="cb24-294"><a href="#cb24-294" aria-hidden="true" tabindex="-1"></a>eic_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">rt =</span> rtime_vals, <span class="at">intensity =</span> intens_vals)</span>
+<span id="cb24-295"><a href="#cb24-295" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-296"><a href="#cb24-296" aria-hidden="true" tabindex="-1"></a><span class="co"># Zoom to the peak region</span></span>
+<span id="cb24-297"><a href="#cb24-297" aria-hidden="true" tabindex="-1"></a>zoom_df <span class="ot">&lt;-</span> <span class="fu">subset</span>(eic_df, rt <span class="sc">&gt;=</span> bp[<span class="st">"rtmin"</span>] <span class="sc">-</span> <span class="dv">20</span> <span class="sc">&amp;</span> rt <span class="sc">&lt;=</span> bp[<span class="st">"rtmax"</span>] <span class="sc">+</span> <span class="dv">20</span>)</span>
+<span id="cb24-298"><a href="#cb24-298" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-299"><a href="#cb24-299" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(zoom_df, <span class="fu">aes</span>(<span class="at">x =</span> rt, <span class="at">y =</span> intensity)) <span class="sc">+</span></span>
+<span id="cb24-300"><a href="#cb24-300" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_area</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.15</span>) <span class="sc">+</span></span>
+<span id="cb24-301"><a href="#cb24-301" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">linewidth =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb24-302"><a href="#cb24-302" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>,</span>
+<span id="cb24-303"><a href="#cb24-303" aria-hidden="true" tabindex="-1"></a>    <span class="at">xmin =</span> bp[<span class="st">"rtmin"</span>], <span class="at">xmax =</span> bp[<span class="st">"rtmax"</span>],</span>
+<span id="cb24-304"><a href="#cb24-304" aria-hidden="true" tabindex="-1"></a>    <span class="at">ymin =</span> <span class="dv">0</span>, <span class="at">ymax =</span> <span class="fu">max</span>(zoom_df<span class="sc">$</span>intensity) <span class="sc">*</span> <span class="fl">1.05</span>,</span>
+<span id="cb24-305"><a href="#cb24-305" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb24-306"><a href="#cb24-306" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"point"</span>, <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>],</span>
+<span id="cb24-307"><a href="#cb24-307" aria-hidden="true" tabindex="-1"></a>           <span class="at">color =</span> <span class="st">"#B2182B"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb24-308"><a href="#cb24-308" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"label"</span>,</span>
+<span id="cb24-309"><a href="#cb24-309" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> bp[<span class="st">"rt"</span>], <span class="at">y =</span> bp[<span class="st">"into"</span>] <span class="sc">*</span> <span class="fl">1.1</span>,</span>
+<span id="cb24-310"><a href="#cb24-310" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"m/z = %.4f</span><span class="sc">\n</span><span class="st">rt = %.1f s</span><span class="sc">\n</span><span class="st">SNR = %.0f"</span>,</span>
+<span id="cb24-311"><a href="#cb24-311" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"mz"</span>], bp[<span class="st">"rt"</span>],</span>
+<span id="cb24-312"><a href="#cb24-312" aria-hidden="true" tabindex="-1"></a>      bp[<span class="st">"into"</span>] <span class="sc">/</span> bp[<span class="st">"intb"</span>]),</span>
+<span id="cb24-313"><a href="#cb24-313" aria-hidden="true" tabindex="-1"></a>    <span class="at">size =</span> <span class="fl">3.5</span>, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb24-314"><a href="#cb24-314" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb24-315"><a href="#cb24-315" aria-hidden="true" tabindex="-1"></a>    <span class="at">title   =</span> <span class="st">"Peak Anatomy — Biotin Standard"</span>,</span>
+<span id="cb24-316"><a href="#cb24-316" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Dashed box = CentWave peak boundaries | Red dot = apex"</span>,</span>
+<span id="cb24-317"><a href="#cb24-317" aria-hidden="true" tabindex="-1"></a>    <span class="at">x       =</span> <span class="st">"Retention Time (s)"</span>,</span>
+<span id="cb24-318"><a href="#cb24-318" aria-hidden="true" tabindex="-1"></a>    <span class="at">y       =</span> <span class="st">"Intensity"</span>) <span class="sc">+</span></span>
+<span id="cb24-319"><a href="#cb24-319" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">13</span>)</span>
+<span id="cb24-320"><a href="#cb24-320" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-321"><a href="#cb24-321" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-322"><a href="#cb24-322" aria-hidden="true" tabindex="-1"></a><span class="al">![Peak anatomy of biotin standard (m/z 245.0955) detected by CentWave. Dashed box = peak boundaries (rtmin–rtmax). Red dot = apex. SNR = 10.](data/figures/02_peak_anatomy.png)</span>{#fig-peak-anatomy width=80%}</span>
+<span id="cb24-323"><a href="#cb24-323" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-324"><a href="#cb24-324" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip appearance="simple"}</span>
+<span id="cb24-325"><a href="#cb24-325" aria-hidden="true" tabindex="-1"></a><span class="fu">## Interpreting the Figure</span></span>
+<span id="cb24-326"><a href="#cb24-326" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-327"><a href="#cb24-327" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Red dashed lines** mark <span class="in">`rtmin`</span> and <span class="in">`rtmax`</span> — the boundaries CentWave assigned to this peak. A well-shaped peak has smooth Gaussian-like rise and fall within these bounds.</span>
+<span id="cb24-328"><a href="#cb24-328" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Red dot** marks the peak apex (<span class="in">`rt`</span>). CentWave identifies this as the point of maximum intensity after wavelet smoothing.</span>
+<span id="cb24-329"><a href="#cb24-329" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**SNR** = signal-to-noise ratio. The <span class="in">`into`</span> (integrated area) divided by <span class="in">`intb`</span> (baseline-corrected background). SNR &gt; 10 indicates a reliable detection.</span>
+<span id="cb24-330"><a href="#cb24-330" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>The **filled area** represents the integrated signal that becomes the quantitative value for this feature.</span>
+<span id="cb24-331"><a href="#cb24-331" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb24-332"><a href="#cb24-332" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-333"><a href="#cb24-333" aria-hidden="true" tabindex="-1"></a>We repeated this analysis on all 26 MTBLS38 standards with known monoisotopic masses. The results validate CentWave on an Orbitrap platform. The pre-computed figure below shows the mass accuracy distribution:</span>
+<span id="cb24-333"><a href="#cb24-333" aria-hidden="true" tabindex="-1"></a><span class="al">![Chromatogram gallery of 9 pure metabolite standards. Each panel shows the EIC within ±25 ppm of the known monoisotopic mass. All compounds were correctly identified with sub-ppm mass accuracy.](data/figures/01_standards_gallery.png)</span>{#fig-standards-gallery width=100%}</span>
 <span id="cb24-334"><a href="#cb24-334" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-337"><a href="#cb24-337" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-338"><a href="#cb24-338" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: true</span></span>
-<span id="cb24-339"><a href="#cb24-339" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
-<span id="cb24-340"><a href="#cb24-340" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 8</span></span>
-<span id="cb24-341"><a href="#cb24-341" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
-<span id="cb24-342"><a href="#cb24-342" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-mass-accuracy-code</span></span>
-<span id="cb24-343"><a href="#cb24-343" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "Mass accuracy of CentWave-detected peaks vs. known monoisotopic masses across 26 pure metabolite standards."</span></span>
-<span id="cb24-344"><a href="#cb24-344" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-345"><a href="#cb24-345" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the pre-computed validation table</span></span>
-<span id="cb24-346"><a href="#cb24-346" aria-hidden="true" tabindex="-1"></a>peak_val <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/mtbls38/peak_validation.csv"</span>)</span>
-<span id="cb24-347"><a href="#cb24-347" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-348"><a href="#cb24-348" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(peak_val, <span class="fu">aes</span>(<span class="at">x =</span> ppm_error)) <span class="sc">+</span></span>
-<span id="cb24-349"><a href="#cb24-349" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">15</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>,</span>
-<span id="cb24-350"><a href="#cb24-350" aria-hidden="true" tabindex="-1"></a>                 <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
-<span id="cb24-351"><a href="#cb24-351" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">25</span>, <span class="dv">25</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
-<span id="cb24-352"><a href="#cb24-352" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="sc">-</span><span class="dv">30</span>, <span class="at">y =</span> <span class="dv">3</span>,</span>
-<span id="cb24-353"><a href="#cb24-353" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"Median = %.2f ppm"</span>, <span class="fu">median</span>(peak_val<span class="sc">$</span>ppm_error)),</span>
-<span id="cb24-354"><a href="#cb24-354" aria-hidden="true" tabindex="-1"></a>    <span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
-<span id="cb24-355"><a href="#cb24-355" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb24-356"><a href="#cb24-356" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Mass Accuracy of CentWave Peak Detection"</span>,</span>
-<span id="cb24-357"><a href="#cb24-357" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">paste</span>(<span class="fu">nrow</span>(peak_val), <span class="st">"pure standards, Orbitrap LTQ Velos"</span>),</span>
-<span id="cb24-358"><a href="#cb24-358" aria-hidden="true" tabindex="-1"></a>    <span class="at">x        =</span> <span class="st">"Mass Error (ppm)"</span>,</span>
-<span id="cb24-359"><a href="#cb24-359" aria-hidden="true" tabindex="-1"></a>    <span class="at">y        =</span> <span class="st">"Number of Compounds"</span>) <span class="sc">+</span></span>
-<span id="cb24-360"><a href="#cb24-360" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
-<span id="cb24-361"><a href="#cb24-361" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-362"><a href="#cb24-362" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-363"><a href="#cb24-363" aria-hidden="true" tabindex="-1"></a><span class="al">![Mass accuracy of CentWave-detected peaks vs. known monoisotopic masses for 26 pure metabolite standards. All peaks fall within ±3 ppm (Orbitrap specification). Median error = 0.57 ppm.](data/figures/03_mass_accuracy.png)</span>{#fig-mass-accuracy width=70%}</span>
-<span id="cb24-364"><a href="#cb24-364" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-365"><a href="#cb24-365" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Metric <span class="pp">|</span> Value <span class="pp">|</span></span>
-<span id="cb24-366"><a href="#cb24-366" aria-hidden="true" tabindex="-1"></a><span class="pp">|--------|-------|</span></span>
-<span id="cb24-367"><a href="#cb24-367" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Standards tested <span class="pp">|</span> 26 <span class="pp">|</span></span>
-<span id="cb24-368"><a href="#cb24-368" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Detection rate <span class="pp">|</span> **100 %** (26 / 26) <span class="pp">|</span></span>
-<span id="cb24-369"><a href="#cb24-369" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Median mass error <span class="pp">|</span> **0.57 ppm** <span class="pp">|</span></span>
-<span id="cb24-370"><a href="#cb24-370" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Best accuracy <span class="pp">|</span> glycine betaine: 0.002 ppm <span class="pp">|</span></span>
-<span id="cb24-371"><a href="#cb24-371" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Range <span class="pp">|</span> 0.001–2.52 ppm — all within ±3 ppm <span class="pp">|</span></span>
-<span id="cb24-372"><a href="#cb24-372" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-373"><a href="#cb24-373" aria-hidden="true" tabindex="-1"></a>::: {.callout-important appearance="simple"}</span>
-<span id="cb24-374"><a href="#cb24-374" aria-hidden="true" tabindex="-1"></a><span class="fu">## Why This Matters</span></span>
-<span id="cb24-375"><a href="#cb24-375" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-376"><a href="#cb24-376" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**CentWave works.** All 26 known compounds were detected at the expected mass with sub-ppm accuracy. If CentWave cannot find your compound of interest in a biological sample, the issue is likely concentration or matrix suppression — not the peak detection algorithm.</span>
-<span id="cb24-377"><a href="#cb24-377" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-378"><a href="#cb24-378" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Mass accuracy is not the same as identification.** A 0.57 ppm match tells you the *elemental composition* is consistent, but it does not distinguish isomers (e.g., glucose vs. galactose, both C₆H₁₂O₆ at m/z 179.0556). Chapters 10–11 address how to combine retention time, MS/MS spectra, and isotopic patterns for confident identification.</span>
+<span id="cb24-335"><a href="#cb24-335" aria-hidden="true" tabindex="-1"></a><span class="fu">### Mass Accuracy Across 26 Standards</span></span>
+<span id="cb24-336"><a href="#cb24-336" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-337"><a href="#cb24-337" aria-hidden="true" tabindex="-1"></a>We repeated this analysis on all 26 MTBLS38 standards with known monoisotopic masses. The results validate CentWave on an Orbitrap platform. The pre-computed figure below shows the mass accuracy distribution:</span>
+<span id="cb24-338"><a href="#cb24-338" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-341"><a href="#cb24-341" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-342"><a href="#cb24-342" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: true</span></span>
+<span id="cb24-343"><a href="#cb24-343" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
+<span id="cb24-344"><a href="#cb24-344" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 8</span></span>
+<span id="cb24-345"><a href="#cb24-345" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
+<span id="cb24-346"><a href="#cb24-346" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-mass-accuracy-code</span></span>
+<span id="cb24-347"><a href="#cb24-347" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "Mass accuracy of CentWave-detected peaks vs. known monoisotopic masses across 26 pure metabolite standards."</span></span>
+<span id="cb24-348"><a href="#cb24-348" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-349"><a href="#cb24-349" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the pre-computed validation table</span></span>
+<span id="cb24-350"><a href="#cb24-350" aria-hidden="true" tabindex="-1"></a>peak_val <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/mtbls38/peak_validation.csv"</span>)</span>
+<span id="cb24-351"><a href="#cb24-351" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-352"><a href="#cb24-352" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(peak_val, <span class="fu">aes</span>(<span class="at">x =</span> ppm_error)) <span class="sc">+</span></span>
+<span id="cb24-353"><a href="#cb24-353" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">15</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>,</span>
+<span id="cb24-354"><a href="#cb24-354" aria-hidden="true" tabindex="-1"></a>                 <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb24-355"><a href="#cb24-355" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="dv">25</span>, <span class="dv">25</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
+<span id="cb24-356"><a href="#cb24-356" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="sc">-</span><span class="dv">30</span>, <span class="at">y =</span> <span class="dv">3</span>,</span>
+<span id="cb24-357"><a href="#cb24-357" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"Median = %.2f ppm"</span>, <span class="fu">median</span>(peak_val<span class="sc">$</span>ppm_error)),</span>
+<span id="cb24-358"><a href="#cb24-358" aria-hidden="true" tabindex="-1"></a>    <span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">colour =</span> <span class="st">"#B2182B"</span>) <span class="sc">+</span></span>
+<span id="cb24-359"><a href="#cb24-359" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb24-360"><a href="#cb24-360" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Mass Accuracy of CentWave Peak Detection"</span>,</span>
+<span id="cb24-361"><a href="#cb24-361" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">paste</span>(<span class="fu">nrow</span>(peak_val), <span class="st">"pure standards, Orbitrap LTQ Velos"</span>),</span>
+<span id="cb24-362"><a href="#cb24-362" aria-hidden="true" tabindex="-1"></a>    <span class="at">x        =</span> <span class="st">"Mass Error (ppm)"</span>,</span>
+<span id="cb24-363"><a href="#cb24-363" aria-hidden="true" tabindex="-1"></a>    <span class="at">y        =</span> <span class="st">"Number of Compounds"</span>) <span class="sc">+</span></span>
+<span id="cb24-364"><a href="#cb24-364" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
+<span id="cb24-365"><a href="#cb24-365" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-366"><a href="#cb24-366" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-367"><a href="#cb24-367" aria-hidden="true" tabindex="-1"></a><span class="al">![Mass accuracy of CentWave-detected peaks vs. known monoisotopic masses for 26 pure metabolite standards. All peaks fall within ±3 ppm (Orbitrap specification). Median error = 0.57 ppm.](data/figures/03_mass_accuracy.png)</span>{#fig-mass-accuracy width=70%}</span>
+<span id="cb24-368"><a href="#cb24-368" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-369"><a href="#cb24-369" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Metric <span class="pp">|</span> Value <span class="pp">|</span></span>
+<span id="cb24-370"><a href="#cb24-370" aria-hidden="true" tabindex="-1"></a><span class="pp">|--------|-------|</span></span>
+<span id="cb24-371"><a href="#cb24-371" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Standards tested <span class="pp">|</span> 26 <span class="pp">|</span></span>
+<span id="cb24-372"><a href="#cb24-372" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Detection rate <span class="pp">|</span> **100 %** (26 / 26) <span class="pp">|</span></span>
+<span id="cb24-373"><a href="#cb24-373" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Median mass error <span class="pp">|</span> **0.57 ppm** <span class="pp">|</span></span>
+<span id="cb24-374"><a href="#cb24-374" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Best accuracy <span class="pp">|</span> glycine betaine: 0.002 ppm <span class="pp">|</span></span>
+<span id="cb24-375"><a href="#cb24-375" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Range <span class="pp">|</span> 0.001–2.52 ppm — all within ±3 ppm <span class="pp">|</span></span>
+<span id="cb24-376"><a href="#cb24-376" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-377"><a href="#cb24-377" aria-hidden="true" tabindex="-1"></a>::: {.callout-important appearance="simple"}</span>
+<span id="cb24-378"><a href="#cb24-378" aria-hidden="true" tabindex="-1"></a><span class="fu">## Why This Matters</span></span>
 <span id="cb24-379"><a href="#cb24-379" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-380"><a href="#cb24-380" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>**Parameter tuning matters.** The 26 standards span a wide chromatographic range (RT 7–597 s) and a wide concentration range (intensity 1.3 × 10⁴–5.7 × 10⁷). A single <span class="in">`peakwidth`</span> and <span class="in">`noise`</span> setting correctly detected all of them, demonstrating that CentWave's default parameters are robust for Orbitrap data.</span>
-<span id="cb24-381"><a href="#cb24-381" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb24-382"><a href="#cb24-382" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-383"><a href="#cb24-383" aria-hidden="true" tabindex="-1"></a><span class="fu">### Effect of SNR Threshold</span></span>
-<span id="cb24-384"><a href="#cb24-384" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-385"><a href="#cb24-385" aria-hidden="true" tabindex="-1"></a>The <span class="in">`snthresh`</span> parameter is the most impactful tuning knob in CentWave. Setting it too low produces many false-positive peaks; setting it too high misses low-abundance compounds. Using the biotin standard, we tested SNR thresholds from 5 to 100:</span>
+<span id="cb24-380"><a href="#cb24-380" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**CentWave works.** All 26 known compounds were detected at the expected mass with sub-ppm accuracy. If CentWave cannot find your compound of interest in a biological sample, the issue is likely concentration or matrix suppression — not the peak detection algorithm.</span>
+<span id="cb24-381"><a href="#cb24-381" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-382"><a href="#cb24-382" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Mass accuracy is not the same as identification.** A 0.57 ppm match tells you the *elemental composition* is consistent, but it does not distinguish isomers (e.g., glucose vs. galactose, both C₆H₁₂O₆ at m/z 179.0556). Chapters 10–11 address how to combine retention time, MS/MS spectra, and isotopic patterns for confident identification.</span>
+<span id="cb24-383"><a href="#cb24-383" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-384"><a href="#cb24-384" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>**Parameter tuning matters.** The 26 standards span a wide chromatographic range (RT 7–597 s) and a wide concentration range (intensity 1.3 × 10⁴–5.7 × 10⁷). A single <span class="in">`peakwidth`</span> and <span class="in">`noise`</span> setting correctly detected all of them, demonstrating that CentWave's default parameters are robust for Orbitrap data.</span>
+<span id="cb24-385"><a href="#cb24-385" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb24-386"><a href="#cb24-386" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-389"><a href="#cb24-389" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-390"><a href="#cb24-390" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-391"><a href="#cb24-391" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
-<span id="cb24-392"><a href="#cb24-392" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 8</span></span>
-<span id="cb24-393"><a href="#cb24-393" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
-<span id="cb24-394"><a href="#cb24-394" aria-hidden="true" tabindex="-1"></a>snr_values <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>)</span>
-<span id="cb24-395"><a href="#cb24-395" aria-hidden="true" tabindex="-1"></a>snr_counts <span class="ot">&lt;-</span> <span class="fu">sapply</span>(snr_values, <span class="cf">function</span>(s) {</span>
-<span id="cb24-396"><a href="#cb24-396" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(<span class="at">ppm =</span> <span class="dv">25</span>, <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
-<span id="cb24-397"><a href="#cb24-397" aria-hidden="true" tabindex="-1"></a>                     <span class="at">snthresh =</span> s, <span class="at">noise =</span> <span class="dv">1000</span>, <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>))</span>
-<span id="cb24-398"><a href="#cb24-398" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>(<span class="fu">chromPeaks</span>(<span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> p)))</span>
-<span id="cb24-399"><a href="#cb24-399" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb24-400"><a href="#cb24-400" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-401"><a href="#cb24-401" aria-hidden="true" tabindex="-1"></a>snr_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">SNR =</span> <span class="fu">factor</span>(snr_values), <span class="at">Peaks =</span> snr_counts)</span>
-<span id="cb24-402"><a href="#cb24-402" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-403"><a href="#cb24-403" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(snr_df, <span class="fu">aes</span>(<span class="at">x =</span> SNR, <span class="at">y =</span> Peaks)) <span class="sc">+</span></span>
-<span id="cb24-404"><a href="#cb24-404" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
-<span id="cb24-405"><a href="#cb24-405" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> Peaks), <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">size =</span> <span class="fl">4.5</span>) <span class="sc">+</span></span>
-<span id="cb24-406"><a href="#cb24-406" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb24-407"><a href="#cb24-407" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Effect of SNR Threshold — Biotin Standard"</span>,</span>
-<span id="cb24-408"><a href="#cb24-408" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"snthresh = 10 is the sweet spot for Orbitrap data"</span>,</span>
-<span id="cb24-409"><a href="#cb24-409" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"snthresh"</span>,</span>
-<span id="cb24-410"><a href="#cb24-410" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Peaks Detected"</span>) <span class="sc">+</span></span>
-<span id="cb24-411"><a href="#cb24-411" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
-<span id="cb24-412"><a href="#cb24-412" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-413"><a href="#cb24-413" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-414"><a href="#cb24-414" aria-hidden="true" tabindex="-1"></a>At <span class="in">`snthresh = 5`</span>, CentWave reports 13 peaks (many noise-derived). At <span class="in">`snthresh = 10`</span>, it reports 13 peaks as well — but with a cleaner baseline. At <span class="in">`snthresh = 50`</span>, only 8 peaks remain, and at <span class="in">`snthresh = 100`</span>, only 4. **The recommended starting value for Orbitrap data is `snthresh = 10`**, accepting 1–20 peaks per compound and filtering further by mass accuracy and retention time consistency in downstream steps.</span>
-<span id="cb24-415"><a href="#cb24-415" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-416"><a href="#cb24-416" aria-hidden="true" tabindex="-1"></a>::: {.callout-note appearance="simple"}</span>
-<span id="cb24-417"><a href="#cb24-417" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercise: Validate With Your Own Data</span></span>
-<span id="cb24-418"><a href="#cb24-418" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-419"><a href="#cb24-419" aria-hidden="true" tabindex="-1"></a>If you have access to internal standards or a standard mixture, run the workflow above on your own mzML files:</span>
-<span id="cb24-420"><a href="#cb24-420" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-421"><a href="#cb24-421" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>Look up the exact monoisotopic mass of your standard from <span class="co">[</span><span class="ot">PubChem</span><span class="co">](https://pubchem.ncbi.nlm.nih.gov/)</span> or <span class="co">[</span><span class="ot">ChEBI</span><span class="co">](https://www.ebi.ac.uk/chebi/)</span>.</span>
-<span id="cb24-422"><a href="#cb24-422" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>Extract the EIC within ±25 ppm using <span class="in">`chromatogram(raw, mz = ...)`</span>.</span>
-<span id="cb24-423"><a href="#cb24-423" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>Run <span class="in">`findChromPeaks()`</span> with <span class="in">`CentWaveParam`</span> and compare the detected <span class="in">`mz`</span> to the known mass.</span>
-<span id="cb24-424"><a href="#cb24-424" aria-hidden="true" tabindex="-1"></a><span class="ss">4.  </span>Compute the mass error in ppm: <span class="in">`abs(mz_found - mz_expected) / mz_expected * 1e6`</span>.</span>
-<span id="cb24-425"><a href="#cb24-425" aria-hidden="true" tabindex="-1"></a><span class="ss">5.  </span>If the error exceeds 5 ppm, check your instrument's mass calibration.</span>
-<span id="cb24-426"><a href="#cb24-426" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-427"><a href="#cb24-427" aria-hidden="true" tabindex="-1"></a>This single test can diagnose instrument performance, parameter settings, and software bugs before you invest hours in processing a full batch.</span>
-<span id="cb24-428"><a href="#cb24-428" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb24-429"><a href="#cb24-429" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-430"><a href="#cb24-430" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-431"><a href="#cb24-431" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-432"><a href="#cb24-432" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 2 — Retention Time Alignment</span></span>
+<span id="cb24-387"><a href="#cb24-387" aria-hidden="true" tabindex="-1"></a><span class="fu">### Effect of SNR Threshold</span></span>
+<span id="cb24-388"><a href="#cb24-388" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-389"><a href="#cb24-389" aria-hidden="true" tabindex="-1"></a>The <span class="in">`snthresh`</span> parameter is the most impactful tuning knob in CentWave. Setting it too low produces many false-positive peaks; setting it too high misses low-abundance compounds. Using the biotin standard, we tested SNR thresholds from 5 to 100:</span>
+<span id="cb24-390"><a href="#cb24-390" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-393"><a href="#cb24-393" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-394"><a href="#cb24-394" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-395"><a href="#cb24-395" aria-hidden="true" tabindex="-1"></a><span class="co">#| echo: true</span></span>
+<span id="cb24-396"><a href="#cb24-396" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-width: 8</span></span>
+<span id="cb24-397"><a href="#cb24-397" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 5</span></span>
+<span id="cb24-398"><a href="#cb24-398" aria-hidden="true" tabindex="-1"></a>snr_values <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>)</span>
+<span id="cb24-399"><a href="#cb24-399" aria-hidden="true" tabindex="-1"></a>snr_counts <span class="ot">&lt;-</span> <span class="fu">sapply</span>(snr_values, <span class="cf">function</span>(s) {</span>
+<span id="cb24-400"><a href="#cb24-400" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">CentWaveParam</span>(<span class="at">ppm =</span> <span class="dv">25</span>, <span class="at">peakwidth =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">60</span>),</span>
+<span id="cb24-401"><a href="#cb24-401" aria-hidden="true" tabindex="-1"></a>                     <span class="at">snthresh =</span> s, <span class="at">noise =</span> <span class="dv">1000</span>, <span class="at">prefilter =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">100</span>))</span>
+<span id="cb24-402"><a href="#cb24-402" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>(<span class="fu">chromPeaks</span>(<span class="fu">findChromPeaks</span>(chr, <span class="at">param =</span> p)))</span>
+<span id="cb24-403"><a href="#cb24-403" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb24-404"><a href="#cb24-404" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-405"><a href="#cb24-405" aria-hidden="true" tabindex="-1"></a>snr_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">SNR =</span> <span class="fu">factor</span>(snr_values), <span class="at">Peaks =</span> snr_counts)</span>
+<span id="cb24-406"><a href="#cb24-406" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-407"><a href="#cb24-407" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(snr_df, <span class="fu">aes</span>(<span class="at">x =</span> SNR, <span class="at">y =</span> Peaks)) <span class="sc">+</span></span>
+<span id="cb24-408"><a href="#cb24-408" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb24-409"><a href="#cb24-409" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> Peaks), <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">size =</span> <span class="fl">4.5</span>) <span class="sc">+</span></span>
+<span id="cb24-410"><a href="#cb24-410" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb24-411"><a href="#cb24-411" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Effect of SNR Threshold — Biotin Standard"</span>,</span>
+<span id="cb24-412"><a href="#cb24-412" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"snthresh = 10 is the sweet spot for Orbitrap data"</span>,</span>
+<span id="cb24-413"><a href="#cb24-413" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"snthresh"</span>,</span>
+<span id="cb24-414"><a href="#cb24-414" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Peaks Detected"</span>) <span class="sc">+</span></span>
+<span id="cb24-415"><a href="#cb24-415" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span>
+<span id="cb24-416"><a href="#cb24-416" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-417"><a href="#cb24-417" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-418"><a href="#cb24-418" aria-hidden="true" tabindex="-1"></a>At <span class="in">`snthresh = 5`</span>, CentWave reports 13 peaks (many noise-derived). At <span class="in">`snthresh = 10`</span>, it reports 13 peaks as well — but with a cleaner baseline. At <span class="in">`snthresh = 50`</span>, only 8 peaks remain, and at <span class="in">`snthresh = 100`</span>, only 4. **The recommended starting value for Orbitrap data is `snthresh = 10`**, accepting 1–20 peaks per compound and filtering further by mass accuracy and retention time consistency in downstream steps.</span>
+<span id="cb24-419"><a href="#cb24-419" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-420"><a href="#cb24-420" aria-hidden="true" tabindex="-1"></a>::: {.callout-note appearance="simple"}</span>
+<span id="cb24-421"><a href="#cb24-421" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercise: Validate With Your Own Data</span></span>
+<span id="cb24-422"><a href="#cb24-422" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-423"><a href="#cb24-423" aria-hidden="true" tabindex="-1"></a>If you have access to internal standards or a standard mixture, run the workflow above on your own mzML files:</span>
+<span id="cb24-424"><a href="#cb24-424" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-425"><a href="#cb24-425" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>Look up the exact monoisotopic mass of your standard from <span class="co">[</span><span class="ot">PubChem</span><span class="co">](https://pubchem.ncbi.nlm.nih.gov/)</span> or <span class="co">[</span><span class="ot">ChEBI</span><span class="co">](https://www.ebi.ac.uk/chebi/)</span>.</span>
+<span id="cb24-426"><a href="#cb24-426" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>Extract the EIC within ±25 ppm using <span class="in">`chromatogram(raw, mz = ...)`</span>.</span>
+<span id="cb24-427"><a href="#cb24-427" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>Run <span class="in">`findChromPeaks()`</span> with <span class="in">`CentWaveParam`</span> and compare the detected <span class="in">`mz`</span> to the known mass.</span>
+<span id="cb24-428"><a href="#cb24-428" aria-hidden="true" tabindex="-1"></a><span class="ss">4.  </span>Compute the mass error in ppm: <span class="in">`abs(mz_found - mz_expected) / mz_expected * 1e6`</span>.</span>
+<span id="cb24-429"><a href="#cb24-429" aria-hidden="true" tabindex="-1"></a><span class="ss">5.  </span>If the error exceeds 5 ppm, check your instrument's mass calibration.</span>
+<span id="cb24-430"><a href="#cb24-430" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-431"><a href="#cb24-431" aria-hidden="true" tabindex="-1"></a>This single test can diagnose instrument performance, parameter settings, and software bugs before you invest hours in processing a full batch.</span>
+<span id="cb24-432"><a href="#cb24-432" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb24-433"><a href="#cb24-433" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-434"><a href="#cb24-434" aria-hidden="true" tabindex="-1"></a>Even identical instrument settings produce small RT drifts between injections due to column aging, temperature fluctuations, and solvent equilibration. Alignment corrects these systematic shifts before peaks are grouped across samples.</span>
+<span id="cb24-434"><a href="#cb24-434" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-435"><a href="#cb24-435" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-436"><a href="#cb24-436" aria-hidden="true" tabindex="-1"></a><span class="in">`xcms`</span> provides two alignment algorithms:</span>
+<span id="cb24-436"><a href="#cb24-436" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 2 — Retention Time Alignment</span></span>
 <span id="cb24-437"><a href="#cb24-437" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-438"><a href="#cb24-438" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Method <span class="pp">|</span> Use case <span class="pp">|</span></span>
-<span id="cb24-439"><a href="#cb24-439" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|</span></span>
-<span id="cb24-440"><a href="#cb24-440" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`ObiwarpParam`</span> <span class="pp">|</span> Global warping; robust when drift is large or samples differ broadly <span class="pp">|</span></span>
-<span id="cb24-441"><a href="#cb24-441" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`PeakGroupsParam`</span> <span class="pp">|</span> Loess-based correction using shared landmark peaks; fast and interpretable when runs are already close <span class="pp">|</span></span>
-<span id="cb24-442"><a href="#cb24-442" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-445"><a href="#cb24-445" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-446"><a href="#cb24-446" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-447"><a href="#cb24-447" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">adjustRtime</span>(xset, <span class="at">param =</span> <span class="fu">ObiwarpParam</span>(<span class="at">binSize =</span> <span class="fl">0.6</span>))</span>
-<span id="cb24-448"><a href="#cb24-448" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-449"><a href="#cb24-449" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-450"><a href="#cb24-450" aria-hidden="true" tabindex="-1"></a><span class="fu">### Checking alignment quality</span></span>
-<span id="cb24-451"><a href="#cb24-451" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-454"><a href="#cb24-454" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-455"><a href="#cb24-455" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-456"><a href="#cb24-456" aria-hidden="true" tabindex="-1"></a><span class="co"># Overlay adjusted vs. raw retention times; tight curves indicate good alignment</span></span>
-<span id="cb24-457"><a href="#cb24-457" aria-hidden="true" tabindex="-1"></a><span class="fu">plotAdjustedRtime</span>(xset)</span>
-<span id="cb24-458"><a href="#cb24-458" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-459"><a href="#cb24-459" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-460"><a href="#cb24-460" aria-hidden="true" tabindex="-1"></a>If adjustment produces sharp, noisy deviations, reduce <span class="in">`binSize`</span>. If large drift remains, increase it or switch to Obiwarp with a smaller <span class="in">`gapInit`</span> penalty.</span>
-<span id="cb24-461"><a href="#cb24-461" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-462"><a href="#cb24-462" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-438"><a href="#cb24-438" aria-hidden="true" tabindex="-1"></a>Even identical instrument settings produce small RT drifts between injections due to column aging, temperature fluctuations, and solvent equilibration. Alignment corrects these systematic shifts before peaks are grouped across samples.</span>
+<span id="cb24-439"><a href="#cb24-439" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-440"><a href="#cb24-440" aria-hidden="true" tabindex="-1"></a><span class="in">`xcms`</span> provides two alignment algorithms:</span>
+<span id="cb24-441"><a href="#cb24-441" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-442"><a href="#cb24-442" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Method <span class="pp">|</span> Use case <span class="pp">|</span></span>
+<span id="cb24-443"><a href="#cb24-443" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|</span></span>
+<span id="cb24-444"><a href="#cb24-444" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`ObiwarpParam`</span> <span class="pp">|</span> Global warping; robust when drift is large or samples differ broadly <span class="pp">|</span></span>
+<span id="cb24-445"><a href="#cb24-445" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> <span class="in">`PeakGroupsParam`</span> <span class="pp">|</span> Loess-based correction using shared landmark peaks; fast and interpretable when runs are already close <span class="pp">|</span></span>
+<span id="cb24-446"><a href="#cb24-446" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-449"><a href="#cb24-449" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-450"><a href="#cb24-450" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-451"><a href="#cb24-451" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">adjustRtime</span>(xset, <span class="at">param =</span> <span class="fu">ObiwarpParam</span>(<span class="at">binSize =</span> <span class="fl">0.6</span>))</span>
+<span id="cb24-452"><a href="#cb24-452" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-453"><a href="#cb24-453" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-454"><a href="#cb24-454" aria-hidden="true" tabindex="-1"></a><span class="fu">### Checking alignment quality</span></span>
+<span id="cb24-455"><a href="#cb24-455" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-458"><a href="#cb24-458" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-459"><a href="#cb24-459" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-460"><a href="#cb24-460" aria-hidden="true" tabindex="-1"></a><span class="co"># Overlay adjusted vs. raw retention times; tight curves indicate good alignment</span></span>
+<span id="cb24-461"><a href="#cb24-461" aria-hidden="true" tabindex="-1"></a><span class="fu">plotAdjustedRtime</span>(xset)</span>
+<span id="cb24-462"><a href="#cb24-462" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-463"><a href="#cb24-463" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-464"><a href="#cb24-464" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — Feature Correspondence</span></span>
+<span id="cb24-464"><a href="#cb24-464" aria-hidden="true" tabindex="-1"></a>If adjustment produces sharp, noisy deviations, reduce <span class="in">`binSize`</span>. If large drift remains, increase it or switch to Obiwarp with a smaller <span class="in">`gapInit`</span> penalty.</span>
 <span id="cb24-465"><a href="#cb24-465" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-466"><a href="#cb24-466" aria-hidden="true" tabindex="-1"></a>Peak grouping answers the question: *which peaks in different samples correspond to the same compound?* `groupChromPeaks()` with `PeakDensityParam` groups peaks that fall within a shared *m/z* and RT window across samples, assigning each group a **feature ID**.</span>
+<span id="cb24-466"><a href="#cb24-466" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-467"><a href="#cb24-467" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-470"><a href="#cb24-470" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-471"><a href="#cb24-471" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-472"><a href="#cb24-472" aria-hidden="true" tabindex="-1"></a>pdp <span class="ot">&lt;-</span> <span class="fu">PeakDensityParam</span>(</span>
-<span id="cb24-473"><a href="#cb24-473" aria-hidden="true" tabindex="-1"></a>  <span class="at">sampleGroups =</span> sample_meta<span class="sc">$</span>condition,</span>
-<span id="cb24-474"><a href="#cb24-474" aria-hidden="true" tabindex="-1"></a>  <span class="at">bw           =</span> <span class="dv">30</span>,      <span class="co"># RT bandwidth for density estimation (seconds)</span></span>
-<span id="cb24-475"><a href="#cb24-475" aria-hidden="true" tabindex="-1"></a>  <span class="at">minFraction  =</span> <span class="fl">0.5</span>,     <span class="co"># Feature must appear in ≥50 % of samples in at least one group</span></span>
-<span id="cb24-476"><a href="#cb24-476" aria-hidden="true" tabindex="-1"></a>  <span class="at">minSamples   =</span> <span class="dv">1</span>,</span>
-<span id="cb24-477"><a href="#cb24-477" aria-hidden="true" tabindex="-1"></a>  <span class="at">binSize      =</span> <span class="fl">0.025</span>    <span class="co"># m/z bin size (Daltons)</span></span>
-<span id="cb24-478"><a href="#cb24-478" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-479"><a href="#cb24-479" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-480"><a href="#cb24-480" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">groupChromPeaks</span>(xset, <span class="at">param =</span> pdp)</span>
-<span id="cb24-481"><a href="#cb24-481" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-482"><a href="#cb24-482" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-483"><a href="#cb24-483" aria-hidden="true" tabindex="-1"></a><span class="in">`minFraction`</span> is the most important tuning parameter here: too low and noise peaks form spurious features; too high and genuine low-abundance compounds are discarded.</span>
-<span id="cb24-484"><a href="#cb24-484" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-487"><a href="#cb24-487" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-488"><a href="#cb24-488" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-489"><a href="#cb24-489" aria-hidden="true" tabindex="-1"></a><span class="co"># Feature summary</span></span>
-<span id="cb24-490"><a href="#cb24-490" aria-hidden="true" tabindex="-1"></a>feat_def <span class="ot">&lt;-</span> <span class="fu">featureDefinitions</span>(xset)</span>
-<span id="cb24-491"><a href="#cb24-491" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(feat_def)</span>
-<span id="cb24-492"><a href="#cb24-492" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(feat_def[, <span class="fu">c</span>(<span class="st">"mzmed"</span>, <span class="st">"rtmed"</span>, <span class="st">"npeaks"</span>)])</span>
-<span id="cb24-493"><a href="#cb24-493" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-494"><a href="#cb24-494" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-495"><a href="#cb24-495" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-496"><a href="#cb24-496" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-497"><a href="#cb24-497" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — Fill Missing Peak Areas</span></span>
+<span id="cb24-468"><a href="#cb24-468" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — Feature Correspondence</span></span>
+<span id="cb24-469"><a href="#cb24-469" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-470"><a href="#cb24-470" aria-hidden="true" tabindex="-1"></a>Peak grouping answers the question: *which peaks in different samples correspond to the same compound?* `groupChromPeaks()` with `PeakDensityParam` groups peaks that fall within a shared *m/z* and RT window across samples, assigning each group a **feature ID**.</span>
+<span id="cb24-471"><a href="#cb24-471" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-474"><a href="#cb24-474" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-475"><a href="#cb24-475" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-476"><a href="#cb24-476" aria-hidden="true" tabindex="-1"></a>pdp <span class="ot">&lt;-</span> <span class="fu">PeakDensityParam</span>(</span>
+<span id="cb24-477"><a href="#cb24-477" aria-hidden="true" tabindex="-1"></a>  <span class="at">sampleGroups =</span> sample_meta<span class="sc">$</span>condition,</span>
+<span id="cb24-478"><a href="#cb24-478" aria-hidden="true" tabindex="-1"></a>  <span class="at">bw           =</span> <span class="dv">30</span>,      <span class="co"># RT bandwidth for density estimation (seconds)</span></span>
+<span id="cb24-479"><a href="#cb24-479" aria-hidden="true" tabindex="-1"></a>  <span class="at">minFraction  =</span> <span class="fl">0.5</span>,     <span class="co"># Feature must appear in ≥50 % of samples in at least one group</span></span>
+<span id="cb24-480"><a href="#cb24-480" aria-hidden="true" tabindex="-1"></a>  <span class="at">minSamples   =</span> <span class="dv">1</span>,</span>
+<span id="cb24-481"><a href="#cb24-481" aria-hidden="true" tabindex="-1"></a>  <span class="at">binSize      =</span> <span class="fl">0.025</span>    <span class="co"># m/z bin size (Daltons)</span></span>
+<span id="cb24-482"><a href="#cb24-482" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-483"><a href="#cb24-483" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-484"><a href="#cb24-484" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">groupChromPeaks</span>(xset, <span class="at">param =</span> pdp)</span>
+<span id="cb24-485"><a href="#cb24-485" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-486"><a href="#cb24-486" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-487"><a href="#cb24-487" aria-hidden="true" tabindex="-1"></a><span class="in">`minFraction`</span> is the most important tuning parameter here: too low and noise peaks form spurious features; too high and genuine low-abundance compounds are discarded.</span>
+<span id="cb24-488"><a href="#cb24-488" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-491"><a href="#cb24-491" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-492"><a href="#cb24-492" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-493"><a href="#cb24-493" aria-hidden="true" tabindex="-1"></a><span class="co"># Feature summary</span></span>
+<span id="cb24-494"><a href="#cb24-494" aria-hidden="true" tabindex="-1"></a>feat_def <span class="ot">&lt;-</span> <span class="fu">featureDefinitions</span>(xset)</span>
+<span id="cb24-495"><a href="#cb24-495" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(feat_def)</span>
+<span id="cb24-496"><a href="#cb24-496" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(feat_def[, <span class="fu">c</span>(<span class="st">"mzmed"</span>, <span class="st">"rtmed"</span>, <span class="st">"npeaks"</span>)])</span>
+<span id="cb24-497"><a href="#cb24-497" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-498"><a href="#cb24-498" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-499"><a href="#cb24-499" aria-hidden="true" tabindex="-1"></a>After grouping, many features have <span class="in">`NA`</span> in samples where CentWave did not detect a peak. Some are genuine absences; others are real signals that fell just below the detection threshold. <span class="in">`fillChromPeaks()`</span> re-integrates the signal in the expected *m/z*–RT window for every such sample.</span>
+<span id="cb24-499"><a href="#cb24-499" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-500"><a href="#cb24-500" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-503"><a href="#cb24-503" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-504"><a href="#cb24-504" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-505"><a href="#cb24-505" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">fillChromPeaks</span>(xset, <span class="at">param =</span> <span class="fu">ChromPeakAreaParam</span>())</span>
-<span id="cb24-506"><a href="#cb24-506" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-507"><a href="#cb24-507" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-508"><a href="#cb24-508" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Caution**: </span><span class="in">`fillChromPeaks()`</span><span class="at"> will integrate noise if the compound is truly absent. Features where the majority of samples required filling warrant lower confidence in downstream analyses and should be flagged accordingly.</span></span>
-<span id="cb24-509"><a href="#cb24-509" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-510"><a href="#cb24-510" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-501"><a href="#cb24-501" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — Fill Missing Peak Areas</span></span>
+<span id="cb24-502"><a href="#cb24-502" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-503"><a href="#cb24-503" aria-hidden="true" tabindex="-1"></a>After grouping, many features have <span class="in">`NA`</span> in samples where CentWave did not detect a peak. Some are genuine absences; others are real signals that fell just below the detection threshold. <span class="in">`fillChromPeaks()`</span> re-integrates the signal in the expected *m/z*–RT window for every such sample.</span>
+<span id="cb24-504"><a href="#cb24-504" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-507"><a href="#cb24-507" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-508"><a href="#cb24-508" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-509"><a href="#cb24-509" aria-hidden="true" tabindex="-1"></a>xset <span class="ot">&lt;-</span> <span class="fu">fillChromPeaks</span>(xset, <span class="at">param =</span> <span class="fu">ChromPeakAreaParam</span>())</span>
+<span id="cb24-510"><a href="#cb24-510" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-511"><a href="#cb24-511" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-512"><a href="#cb24-512" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — Extract the Feature Matrix</span></span>
+<span id="cb24-512"><a href="#cb24-512" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; **Caution**: </span><span class="in">`fillChromPeaks()`</span><span class="at"> will integrate noise if the compound is truly absent. Features where the majority of samples required filling warrant lower confidence in downstream analyses and should be flagged accordingly.</span></span>
 <span id="cb24-513"><a href="#cb24-513" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-516"><a href="#cb24-516" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-517"><a href="#cb24-517" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-518"><a href="#cb24-518" aria-hidden="true" tabindex="-1"></a>feat_mat <span class="ot">&lt;-</span> <span class="fu">featureValues</span>(xset, <span class="at">value =</span> <span class="st">"into"</span>, <span class="at">method =</span> <span class="st">"sum"</span>)</span>
-<span id="cb24-519"><a href="#cb24-519" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(feat_mat)   <span class="co"># features × samples</span></span>
-<span id="cb24-520"><a href="#cb24-520" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-521"><a href="#cb24-521" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrap in a SummarizedExperiment for downstream analysis</span></span>
-<span id="cb24-522"><a href="#cb24-522" aria-hidden="true" tabindex="-1"></a>se <span class="ot">&lt;-</span> <span class="fu">SummarizedExperiment</span>(</span>
-<span id="cb24-523"><a href="#cb24-523" aria-hidden="true" tabindex="-1"></a>  <span class="at">assays  =</span> <span class="fu">list</span>(<span class="at">intensity =</span> feat_mat),</span>
-<span id="cb24-524"><a href="#cb24-524" aria-hidden="true" tabindex="-1"></a>  <span class="at">colData =</span> sample_meta</span>
-<span id="cb24-525"><a href="#cb24-525" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-526"><a href="#cb24-526" aria-hidden="true" tabindex="-1"></a>se</span>
-<span id="cb24-527"><a href="#cb24-527" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-528"><a href="#cb24-528" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-529"><a href="#cb24-529" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-530"><a href="#cb24-530" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-531"><a href="#cb24-531" aria-hidden="true" tabindex="-1"></a><span class="fu">## Quality Metrics</span></span>
+<span id="cb24-514"><a href="#cb24-514" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-515"><a href="#cb24-515" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-516"><a href="#cb24-516" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — Extract the Feature Matrix</span></span>
+<span id="cb24-517"><a href="#cb24-517" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-520"><a href="#cb24-520" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-521"><a href="#cb24-521" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-522"><a href="#cb24-522" aria-hidden="true" tabindex="-1"></a>feat_mat <span class="ot">&lt;-</span> <span class="fu">featureValues</span>(xset, <span class="at">value =</span> <span class="st">"into"</span>, <span class="at">method =</span> <span class="st">"sum"</span>)</span>
+<span id="cb24-523"><a href="#cb24-523" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(feat_mat)   <span class="co"># features × samples</span></span>
+<span id="cb24-524"><a href="#cb24-524" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-525"><a href="#cb24-525" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrap in a SummarizedExperiment for downstream analysis</span></span>
+<span id="cb24-526"><a href="#cb24-526" aria-hidden="true" tabindex="-1"></a>se <span class="ot">&lt;-</span> <span class="fu">SummarizedExperiment</span>(</span>
+<span id="cb24-527"><a href="#cb24-527" aria-hidden="true" tabindex="-1"></a>  <span class="at">assays  =</span> <span class="fu">list</span>(<span class="at">intensity =</span> feat_mat),</span>
+<span id="cb24-528"><a href="#cb24-528" aria-hidden="true" tabindex="-1"></a>  <span class="at">colData =</span> sample_meta</span>
+<span id="cb24-529"><a href="#cb24-529" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-530"><a href="#cb24-530" aria-hidden="true" tabindex="-1"></a>se</span>
+<span id="cb24-531"><a href="#cb24-531" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-532"><a href="#cb24-532" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-533"><a href="#cb24-533" aria-hidden="true" tabindex="-1"></a><span class="fu">### Detection rate per feature</span></span>
+<span id="cb24-533"><a href="#cb24-533" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
 <span id="cb24-534"><a href="#cb24-534" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-535"><a href="#cb24-535" aria-hidden="true" tabindex="-1"></a>Features detected in fewer than half the samples are often noise-derived. Inspect the distribution before carrying them into statistical models:</span>
+<span id="cb24-535"><a href="#cb24-535" aria-hidden="true" tabindex="-1"></a><span class="fu">## Quality Metrics</span></span>
 <span id="cb24-536"><a href="#cb24-536" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-539"><a href="#cb24-539" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-540"><a href="#cb24-540" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-541"><a href="#cb24-541" aria-hidden="true" tabindex="-1"></a>detection_rate <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="sc">!</span><span class="fu">is.na</span>(feat_mat))</span>
-<span id="cb24-542"><a href="#cb24-542" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-543"><a href="#cb24-543" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(detection_rate) <span class="sc">|&gt;</span></span>
-<span id="cb24-544"><a href="#cb24-544" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(detection_rate)) <span class="sc">+</span></span>
-<span id="cb24-545"><a href="#cb24-545" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">fill =</span> <span class="st">"#4472C4"</span>, <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
-<span id="cb24-546"><a href="#cb24-546" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fraction of samples with detected signal"</span>,</span>
-<span id="cb24-547"><a href="#cb24-547" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Number of features"</span>,</span>
-<span id="cb24-548"><a href="#cb24-548" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Feature detection rate"</span>) <span class="sc">+</span></span>
-<span id="cb24-549"><a href="#cb24-549" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb24-550"><a href="#cb24-550" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-551"><a href="#cb24-551" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-552"><a href="#cb24-552" aria-hidden="true" tabindex="-1"></a><span class="fu">### Coefficient of variation in QC pools</span></span>
-<span id="cb24-553"><a href="#cb24-553" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-554"><a href="#cb24-554" aria-hidden="true" tabindex="-1"></a>If pooled QC samples were injected, compute the per-feature CV to assess technical reproducibility:</span>
+<span id="cb24-537"><a href="#cb24-537" aria-hidden="true" tabindex="-1"></a><span class="fu">### Detection rate per feature</span></span>
+<span id="cb24-538"><a href="#cb24-538" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-539"><a href="#cb24-539" aria-hidden="true" tabindex="-1"></a>Features detected in fewer than half the samples are often noise-derived. Inspect the distribution before carrying them into statistical models:</span>
+<span id="cb24-540"><a href="#cb24-540" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-543"><a href="#cb24-543" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-544"><a href="#cb24-544" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-545"><a href="#cb24-545" aria-hidden="true" tabindex="-1"></a>detection_rate <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="sc">!</span><span class="fu">is.na</span>(feat_mat))</span>
+<span id="cb24-546"><a href="#cb24-546" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-547"><a href="#cb24-547" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(detection_rate) <span class="sc">|&gt;</span></span>
+<span id="cb24-548"><a href="#cb24-548" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(detection_rate)) <span class="sc">+</span></span>
+<span id="cb24-549"><a href="#cb24-549" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">20</span>, <span class="at">fill =</span> <span class="st">"#4472C4"</span>, <span class="at">colour =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb24-550"><a href="#cb24-550" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Fraction of samples with detected signal"</span>,</span>
+<span id="cb24-551"><a href="#cb24-551" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Number of features"</span>,</span>
+<span id="cb24-552"><a href="#cb24-552" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"Feature detection rate"</span>) <span class="sc">+</span></span>
+<span id="cb24-553"><a href="#cb24-553" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb24-554"><a href="#cb24-554" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-555"><a href="#cb24-555" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-558"><a href="#cb24-558" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-559"><a href="#cb24-559" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb24-560"><a href="#cb24-560" aria-hidden="true" tabindex="-1"></a>qc_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="fu">colData</span>(se)<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">"QC"</span>)</span>
-<span id="cb24-561"><a href="#cb24-561" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(qc_idx) <span class="sc">&gt;=</span> <span class="dv">2</span>) {</span>
-<span id="cb24-562"><a href="#cb24-562" aria-hidden="true" tabindex="-1"></a>  cv_qc <span class="ot">&lt;-</span> <span class="fu">apply</span>(</span>
-<span id="cb24-563"><a href="#cb24-563" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assay</span>(se)[, qc_idx], <span class="dv">1</span>,</span>
-<span id="cb24-564"><a href="#cb24-564" aria-hidden="true" tabindex="-1"></a>    <span class="cf">function</span>(x) <span class="fu">sd</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">mean</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span></span>
-<span id="cb24-565"><a href="#cb24-565" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb24-566"><a href="#cb24-566" aria-hidden="true" tabindex="-1"></a>  <span class="fu">message</span>(<span class="st">"Median CV in QC samples: "</span>, <span class="fu">round</span>(<span class="fu">median</span>(cv_qc, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="dv">1</span>), <span class="st">" %"</span>)</span>
-<span id="cb24-567"><a href="#cb24-567" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb24-568"><a href="#cb24-568" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb24-569"><a href="#cb24-569" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-570"><a href="#cb24-570" aria-hidden="true" tabindex="-1"></a>A median CV below 30 % indicates acceptable technical reproducibility for untargeted profiling.</span>
-<span id="cb24-571"><a href="#cb24-571" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-572"><a href="#cb24-572" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-556"><a href="#cb24-556" aria-hidden="true" tabindex="-1"></a><span class="fu">### Coefficient of variation in QC pools</span></span>
+<span id="cb24-557"><a href="#cb24-557" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-558"><a href="#cb24-558" aria-hidden="true" tabindex="-1"></a>If pooled QC samples were injected, compute the per-feature CV to assess technical reproducibility:</span>
+<span id="cb24-559"><a href="#cb24-559" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-562"><a href="#cb24-562" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-563"><a href="#cb24-563" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb24-564"><a href="#cb24-564" aria-hidden="true" tabindex="-1"></a>qc_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="fu">colData</span>(se)<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">"QC"</span>)</span>
+<span id="cb24-565"><a href="#cb24-565" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(qc_idx) <span class="sc">&gt;=</span> <span class="dv">2</span>) {</span>
+<span id="cb24-566"><a href="#cb24-566" aria-hidden="true" tabindex="-1"></a>  cv_qc <span class="ot">&lt;-</span> <span class="fu">apply</span>(</span>
+<span id="cb24-567"><a href="#cb24-567" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assay</span>(se)[, qc_idx], <span class="dv">1</span>,</span>
+<span id="cb24-568"><a href="#cb24-568" aria-hidden="true" tabindex="-1"></a>    <span class="cf">function</span>(x) <span class="fu">sd</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">mean</span>(x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb24-569"><a href="#cb24-569" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb24-570"><a href="#cb24-570" aria-hidden="true" tabindex="-1"></a>  <span class="fu">message</span>(<span class="st">"Median CV in QC samples: "</span>, <span class="fu">round</span>(<span class="fu">median</span>(cv_qc, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="dv">1</span>), <span class="st">" %"</span>)</span>
+<span id="cb24-571"><a href="#cb24-571" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb24-572"><a href="#cb24-572" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb24-573"><a href="#cb24-573" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-574"><a href="#cb24-574" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb24-574"><a href="#cb24-574" aria-hidden="true" tabindex="-1"></a>A median CV below 30 % indicates acceptable technical reproducibility for untargeted profiling.</span>
 <span id="cb24-575"><a href="#cb24-575" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-576"><a href="#cb24-576" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Step <span class="pp">|</span> <span class="in">`xcms`</span> function <span class="pp">|</span> Key parameter to tune <span class="pp">|</span></span>
-<span id="cb24-577"><a href="#cb24-577" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|----|</span></span>
-<span id="cb24-578"><a href="#cb24-578" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Peak detection <span class="pp">|</span> <span class="in">`findChromPeaks(CentWaveParam())`</span> <span class="pp">|</span> <span class="in">`ppm`</span>, <span class="in">`peakwidth`</span> <span class="pp">|</span></span>
-<span id="cb24-579"><a href="#cb24-579" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> RT alignment <span class="pp">|</span> <span class="in">`adjustRtime(ObiwarpParam())`</span> <span class="pp">|</span> <span class="in">`binSize`</span> <span class="pp">|</span></span>
-<span id="cb24-580"><a href="#cb24-580" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Feature grouping <span class="pp">|</span> <span class="in">`groupChromPeaks(PeakDensityParam())`</span> <span class="pp">|</span> <span class="in">`minFraction`</span>, <span class="in">`bw`</span> <span class="pp">|</span></span>
-<span id="cb24-581"><a href="#cb24-581" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Peak filling <span class="pp">|</span> <span class="in">`fillChromPeaks(ChromPeakAreaParam())`</span> <span class="pp">|</span> — <span class="pp">|</span></span>
-<span id="cb24-582"><a href="#cb24-582" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Feature matrix export <span class="pp">|</span> <span class="in">`featureValues(value = "into")`</span> <span class="pp">|</span> <span class="in">`method`</span> <span class="pp">|</span></span>
-<span id="cb24-583"><a href="#cb24-583" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-584"><a href="#cb24-584" aria-hidden="true" tabindex="-1"></a>The <span class="in">`SummarizedExperiment`</span> produced at the end of this chapter is the input for the identification chapters that follow (Chapters 8–11) and for the quantification and statistical workflows in Parts III–V.</span>
-<span id="cb24-585"><a href="#cb24-585" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-586"><a href="#cb24-586" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb24-576"><a href="#cb24-576" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-577"><a href="#cb24-577" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-578"><a href="#cb24-578" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb24-579"><a href="#cb24-579" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-580"><a href="#cb24-580" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Step <span class="pp">|</span> <span class="in">`xcms`</span> function <span class="pp">|</span> Key parameter to tune <span class="pp">|</span></span>
+<span id="cb24-581"><a href="#cb24-581" aria-hidden="true" tabindex="-1"></a><span class="pp">|----|----|----|</span></span>
+<span id="cb24-582"><a href="#cb24-582" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Peak detection <span class="pp">|</span> <span class="in">`findChromPeaks(CentWaveParam())`</span> <span class="pp">|</span> <span class="in">`ppm`</span>, <span class="in">`peakwidth`</span> <span class="pp">|</span></span>
+<span id="cb24-583"><a href="#cb24-583" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> RT alignment <span class="pp">|</span> <span class="in">`adjustRtime(ObiwarpParam())`</span> <span class="pp">|</span> <span class="in">`binSize`</span> <span class="pp">|</span></span>
+<span id="cb24-584"><a href="#cb24-584" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Feature grouping <span class="pp">|</span> <span class="in">`groupChromPeaks(PeakDensityParam())`</span> <span class="pp">|</span> <span class="in">`minFraction`</span>, <span class="in">`bw`</span> <span class="pp">|</span></span>
+<span id="cb24-585"><a href="#cb24-585" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Peak filling <span class="pp">|</span> <span class="in">`fillChromPeaks(ChromPeakAreaParam())`</span> <span class="pp">|</span> — <span class="pp">|</span></span>
+<span id="cb24-586"><a href="#cb24-586" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Feature matrix export <span class="pp">|</span> <span class="in">`featureValues(value = "into")`</span> <span class="pp">|</span> <span class="in">`method`</span> <span class="pp">|</span></span>
 <span id="cb24-587"><a href="#cb24-587" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-588"><a href="#cb24-588" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**Parameter Exploration**: Run <span class="in">`findChromPeaks()`</span> on the <span class="in">`faahKO`</span> dataset with <span class="in">`ppm = c(10, 20, 40)`</span>. Plot the number of detected features against <span class="in">`ppm`</span>. At what point do diminishing returns set in?</span>
-<span id="cb24-589"><a href="#cb24-589" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Alignment Diagnosis**: Before and after <span class="in">`adjustRtime()`</span>, extract the retention times of a known internal standard peak. Compute the CV of its RT across all runs. Did alignment improve the CV?</span>
-<span id="cb24-590"><a href="#cb24-590" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>**Grouping Sensitivity**: Vary <span class="in">`minFraction`</span> from 0.3 to 0.9 in steps of 0.1 and report how the number of consensus features changes. Propose a defensible <span class="in">`minFraction`</span> for a study with 12 samples per group and explain your choice.</span>
-<span id="cb24-591"><a href="#cb24-591" aria-hidden="true" tabindex="-1"></a><span class="ss">4.  </span>**Gap-Filling Impact**: Compare the percentage of missing values in your feature matrix before and after <span class="in">`fillChromPeaks()`</span>. In which types of features (abundant vs. low-intensity) does gap filling recover the most values?</span>
-<span id="cb24-592"><a href="#cb24-592" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-593"><a href="#cb24-593" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
-<span id="cb24-594"><a href="#cb24-594" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-595"><a href="#cb24-595" aria-hidden="true" tabindex="-1"></a><span class="fu">## Further Reading</span></span>
+<span id="cb24-588"><a href="#cb24-588" aria-hidden="true" tabindex="-1"></a>The <span class="in">`SummarizedExperiment`</span> produced at the end of this chapter is the input for the identification chapters that follow (Chapters 8–11) and for the quantification and statistical workflows in Parts III–V.</span>
+<span id="cb24-589"><a href="#cb24-589" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-590"><a href="#cb24-590" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb24-591"><a href="#cb24-591" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-592"><a href="#cb24-592" aria-hidden="true" tabindex="-1"></a><span class="ss">1.  </span>**Parameter Exploration**: Run <span class="in">`findChromPeaks()`</span> on the <span class="in">`faahKO`</span> dataset with <span class="in">`ppm = c(10, 20, 40)`</span>. Plot the number of detected features against <span class="in">`ppm`</span>. At what point do diminishing returns set in?</span>
+<span id="cb24-593"><a href="#cb24-593" aria-hidden="true" tabindex="-1"></a><span class="ss">2.  </span>**Alignment Diagnosis**: Before and after <span class="in">`adjustRtime()`</span>, extract the retention times of a known internal standard peak. Compute the CV of its RT across all runs. Did alignment improve the CV?</span>
+<span id="cb24-594"><a href="#cb24-594" aria-hidden="true" tabindex="-1"></a><span class="ss">3.  </span>**Grouping Sensitivity**: Vary <span class="in">`minFraction`</span> from 0.3 to 0.9 in steps of 0.1 and report how the number of consensus features changes. Propose a defensible <span class="in">`minFraction`</span> for a study with 12 samples per group and explain your choice.</span>
+<span id="cb24-595"><a href="#cb24-595" aria-hidden="true" tabindex="-1"></a><span class="ss">4.  </span>**Gap-Filling Impact**: Compare the percentage of missing values in your feature matrix before and after <span class="in">`fillChromPeaks()`</span>. In which types of features (abundant vs. low-intensity) does gap filling recover the most values?</span>
 <span id="cb24-596"><a href="#cb24-596" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-597"><a href="#cb24-597" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Smith CA, Want EJ, O'Maille G, Abagyan R, Siuzdak G. XCMS: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification. *Analytical Chemistry*. 2006;78(3):779–787.</span>
-<span id="cb24-598"><a href="#cb24-598" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Benton HP, Want EJ, Ebbels TMD. Correction of mass calibration gaps in liquid chromatography–mass spectrometry metabolomics data. *Bioinformatics*. 2010;26(19):2488–2489.</span>
-<span id="cb24-599"><a href="#cb24-599" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Rainer J, Vicini A, Salzer L, et al. A modular and expandable ecosystem for metabolomics data annotation in R. *Metabolites*. 2022;12(2):173.</span>
-<span id="cb24-600"><a href="#cb24-600" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>xcms package documentation: <span class="ot">&lt;https://bioconductor.org/packages/xcms&gt;</span></span>
-<span id="cb24-601"><a href="#cb24-601" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-602"><a href="#cb24-602" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
-<span id="cb24-603"><a href="#cb24-603" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-606"><a href="#cb24-606" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb24-607"><a href="#cb24-607" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
-<span id="cb24-608"><a href="#cb24-608" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb24-597"><a href="#cb24-597" aria-hidden="true" tabindex="-1"></a>------------------------------------------------------------------------</span>
+<span id="cb24-598"><a href="#cb24-598" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-599"><a href="#cb24-599" aria-hidden="true" tabindex="-1"></a><span class="fu">## Further Reading</span></span>
+<span id="cb24-600"><a href="#cb24-600" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-601"><a href="#cb24-601" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Smith CA, Want EJ, O'Maille G, Abagyan R, Siuzdak G. XCMS: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification. *Analytical Chemistry*. 2006;78(3):779–787.</span>
+<span id="cb24-602"><a href="#cb24-602" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Benton HP, Want EJ, Ebbels TMD. Correction of mass calibration gaps in liquid chromatography–mass spectrometry metabolomics data. *Bioinformatics*. 2010;26(19):2488–2489.</span>
+<span id="cb24-603"><a href="#cb24-603" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>Rainer J, Vicini A, Salzer L, et al. A modular and expandable ecosystem for metabolomics data annotation in R. *Metabolites*. 2022;12(2):173.</span>
+<span id="cb24-604"><a href="#cb24-604" aria-hidden="true" tabindex="-1"></a><span class="ss">-   </span>xcms package documentation: <span class="ot">&lt;https://bioconductor.org/packages/xcms&gt;</span></span>
+<span id="cb24-605"><a href="#cb24-605" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-606"><a href="#cb24-606" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb24-607"><a href="#cb24-607" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-610"><a href="#cb24-610" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb24-611"><a href="#cb24-611" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb24-612"><a href="#cb24-612" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>27&nbsp; External Validation and Confounder-Robust Biomarker Panels – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./29-isotope-tracing-networking.html" rel="next">
+<link href="./27-ms-imaging.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-eb89a3e8467b0347e4822c73f939f1c7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-a806231a2ff89bd67abf7ff814779758.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./26-single-cell-proteomics.html">Part VI — Specialized and Emerging Applications</a></li><li class="breadcrumb-item"><a href="./28-biomarker-external-validation.html"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling, Machine Learning, and Biological Interpretation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Specialized and Emerging Applications</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Single-Cell Proteomics Analysis with <code>scp</code></span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Mass Spectrometry Imaging with Cardinal</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./28-biomarker-external-validation.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./29-isotope-tracing-networking.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Reproducible Reporting and Capstone</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./30-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./31-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">27.1</span> Learning Objectives</a></li>
+  <li><a href="#the-study" id="toc-the-study" class="nav-link" data-scroll-target="#the-study"><span class="header-section-number">27.2</span> The Study</a></li>
+  <li><a href="#step-1-load-the-locked-discovery-model" id="toc-step-1-load-the-locked-discovery-model" class="nav-link" data-scroll-target="#step-1-load-the-locked-discovery-model"><span class="header-section-number">27.3</span> Step 1 — Load the Locked Discovery Model</a></li>
+  <li><a href="#step-2-confounder-audit-before-trusting-a-biomarker" id="toc-step-2-confounder-audit-before-trusting-a-biomarker" class="nav-link" data-scroll-target="#step-2-confounder-audit-before-trusting-a-biomarker"><span class="header-section-number">27.4</span> Step 2 — Confounder Audit Before Trusting a Biomarker</a></li>
+  <li><a href="#step-3-primary-validation-on-the-held-out-split" id="toc-step-3-primary-validation-on-the-held-out-split" class="nav-link" data-scroll-target="#step-3-primary-validation-on-the-held-out-split"><span class="header-section-number">27.5</span> Step 3 — Primary Validation on the Held-Out Split</a></li>
+  <li><a href="#step-4-delongs-test-is-the-panel-significantly-better" id="toc-step-4-delongs-test-is-the-panel-significantly-better" class="nav-link" data-scroll-target="#step-4-delongs-test-is-the-panel-significantly-better"><span class="header-section-number">27.6</span> Step 4 — DeLong’s Test: Is the Panel <em>Significantly</em> Better?</a></li>
+  <li><a href="#step-5-external-cohort-validation-berlin-prague" id="toc-step-5-external-cohort-validation-berlin-prague" class="nav-link" data-scroll-target="#step-5-external-cohort-validation-berlin-prague"><span class="header-section-number">27.7</span> Step 5 — External Cohort Validation: Berlin → Prague</a></li>
+  <li><a href="#step-6-calibration-does-the-predicted-probability-mean-anything" id="toc-step-6-calibration-does-the-predicted-probability-mean-anything" class="nav-link" data-scroll-target="#step-6-calibration-does-the-predicted-probability-mean-anything"><span class="header-section-number">27.8</span> Step 6 — Calibration: Does the Predicted Probability Mean Anything?</a></li>
+  <li><a href="#common-pitfalls-in-external-validation" id="toc-common-pitfalls-in-external-validation" class="nav-link" data-scroll-target="#common-pitfalls-in-external-validation"><span class="header-section-number">27.9</span> Common Pitfalls in External Validation</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">27.10</span> Summary</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">27.11</span> Exercises</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">27.12</span> Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/28-biomarker-external-validation.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./26-single-cell-proteomics.html">Part VI — Specialized and Emerging Applications</a></li><li class="breadcrumb-item"><a href="./28-biomarker-external-validation.html"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“A model that only works on the data that built it has not been validated — it has been described.”</em></p>
+</blockquote>
+<p>Chapter 23 built a biomarker classifier the right way: nested cross-validation, feature selection inside every fold, and an honest ROC curve with confidence intervals. That discipline earns you a model you can trust <em>on the cohort you had</em>. It does not, by itself, tell you whether the model means anything to a patient recruited at a different hospital, on a different instrument, years later. This chapter covers the two things a real biomarker panel still has to survive after nested CV: an <strong>external cohort</strong> collected independently of the discovery data, and a <strong>confounder audit</strong> that asks whether each candidate biomarker tracks the disease or merely tracks age, sex, or kidney function.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Reporting cross-validated performance from the discovery cohort as if it were external validation. Nested CV estimates how well a model generalizes to <em>new patients drawn from the same recruitment process</em>. It cannot estimate how well it generalizes to a <em>different</em> recruitment process, a different clinical site, or a different batch of the assay. Only a genuinely external cohort can answer that.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="27.1">
+<h2 data-number="27.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">27.1</span> Learning Objectives</h2>
+<p>By the end of this chapter you will be able to:</p>
+<ul>
+<li>Explain why nested cross-validation and external cohort validation answer different questions, and why a biomarker panel needs both</li>
+<li>Lock a model’s coefficients on a discovery cohort and evaluate it, unrefit, on an independent cohort</li>
+<li>Use DeLong’s test to compare correlated ROC curves (a locked panel vs.&nbsp;a simple clinical marker) on the same patients</li>
+<li>Assess calibration (not just discrimination) with a calibration slope and intercept</li>
+<li>Audit candidate biomarkers for confounding before they enter a model, using a deconfounding framework</li>
+<li>Recognize when a manuscript’s headline claim needs a footnote — and report that honestly</li>
+</ul>
+</section>
+<section id="the-study" class="level2" data-number="27.2">
+<h2 data-number="27.2" class="anchored" data-anchor-id="the-study"><span class="header-section-number">27.2</span> The Study</h2>
+<p>This chapter’s dataset and worked example reproduce the primary results of Jerke et al., “Towards a proteomic plasma biomarker panel for diagnosing vasculitis remission,” <em>Nature Communications</em> <strong>17</strong>:6825 (2026), <a href="https://doi.org/10.1038/s41467-026-75755-6">doi:10.1038/s41467-026-75755-6</a> <span class="citation" data-cites="jerke2026vasculitis">(<a href="references.html#ref-jerke2026vasculitis" role="doc-biblioref">Jerke et al. 2026</a>)</span>. The paper looks for plasma protein biomarkers that distinguish <strong>active</strong> ANCA-associated vasculitis from <strong>remission</strong> — a question with real clinical stakes, since remission is currently judged mostly by clinical scores and C-reactive protein (CRP), both of which lag behind the biology.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Dataset and reproducibility">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Dataset and reproducibility
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The study design has four stages: (1) <strong>discovery</strong> — DIA proteomics on 163 Berlin plasma samples (605 proteins quantified); (2) <strong>confounder audit</strong> — <code>metadeconfoundR</code>-style deconfounding narrows 605 proteins to 135 confounder-independent candidates; (3) <strong>feature selection</strong> — LASSO and Boruta narrow 135 to a <strong>7-protein panel</strong> (<code>AHSG</code>, <code>CLEC3B</code>, <code>COMP</code>, <code>F9</code>, <code>LRG1</code>, <code>MCAM</code>, <code>MRC1</code>); (4) <strong>validation</strong> — a locked model is tested on a held-out 40% internal split (Test40) and on an independent <strong>Prague cohort</strong> (n = 108) never touched during model building.</p>
+<p>Raw MS data are deposited at PRIDE <strong>PXD079232</strong>; the authors additionally published a full reproducibility package (processed data, frozen model coefficients, and validation scripts) at <code>github.com/Theda-sys/vasculitis-remission-proteomics</code>, which is what the code in this chapter is built against. Every number quoted below was independently re-derived from that package; the code chunks are shown in full but marked <code>eval: false</code> because the underlying processed data (patient-level protein quantities) lives in that external repository rather than being bundled with this book — clone it to run this chapter live.</p>
+</div>
+</div>
+</section>
+<section id="step-1-load-the-locked-discovery-model" class="level2" data-number="27.3">
+<h2 data-number="27.3" class="anchored" data-anchor-id="step-1-load-the-locked-discovery-model"><span class="header-section-number">27.3</span> Step 1 — Load the Locked Discovery Model</h2>
+<p>The panel was <strong>not</strong> selected on the data you are about to test it on. That single fact is the entire chapter. The 7 proteins and their coefficients were fixed after the discovery and feature-selection stages (Ch 20’s differential abundance and Ch 23’s nested CV, applied upstream of this chapter); what follows only <em>evaluates</em> that already-frozen model.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pROC)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Combined-cohort protein table: one row per patient, one column per protein</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># (columns are named "&lt;GENE&gt;_&lt;UniProt-derived index&gt;", e.g. AHSG_001)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>dfz <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"repo/data/TQLData_combinedCohorts.csv"</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>prots_7 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"AHSG_001"</span>, <span class="st">"CLEC3B_020"</span>, <span class="st">"COMP_023"</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>             <span class="st">"F9_027"</span>, <span class="st">"LRG1_042"</span>, <span class="st">"MCAM_047"</span>, <span class="st">"MRC1_073.."</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(prots_7 <span class="sc">%in%</span> <span class="fu">colnames</span>(dfz)))</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>train60 <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)   <span class="co"># discovery cohort: fit here only</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>test40  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(Patient <span class="sc">%in%</span> test40_patient_ids)  <span class="co"># held-out 40% split</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit is a *check*, not a re-selection: the formula and the 7 proteins are fixed</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>formula_7 <span class="ot">&lt;-</span> <span class="fu">as.formula</span>(<span class="fu">paste</span>(<span class="st">"group01 ~"</span>, <span class="fu">paste</span>(prots_7, <span class="at">collapse =</span> <span class="st">" + "</span>)))</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>model_7panel <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train60, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare against the authors' frozen coefficients -- should match near machine precision</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>frozen_coef <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"repo/models/coef_7panel_Train60.csv"</span>)</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="fu">max</span>(<span class="fu">abs</span>(<span class="fu">coef</span>(model_7panel)[frozen_coef<span class="sc">$</span>term] <span class="sc">-</span> frozen_coef<span class="sc">$</span>Estimate))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Why refit and compare, rather than just load the frozen model?">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Why refit and compare, rather than just load the frozen model?
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Refitting the exact formula on the exact training rows and confirming the coefficients match the authors’ frozen model (to machine precision, typically &lt; 1e-12) is a cheap, powerful sanity check: it proves you have reconstructed their training set correctly <em>before</em> you trust anything you compute downstream. If your refit doesn’t match, stop — the mismatch is in your data handling, not in the paper.</p>
+</div>
+</div>
+</section>
+<section id="step-2-confounder-audit-before-trusting-a-biomarker" class="level2" data-number="27.4">
+<h2 data-number="27.4" class="anchored" data-anchor-id="step-2-confounder-audit-before-trusting-a-biomarker"><span class="header-section-number">27.4</span> Step 2 — Confounder Audit Before Trusting a Biomarker</h2>
+<p>Age, sex, kidney function, and treatment all shift plasma protein levels independently of disease activity. A protein that correlates with the outcome only because it correlates with age is not a biomarker — it is a proxy for age. The discovery stage here used <code>metadeconfoundR</code> <span class="citation" data-cites="birkner2026metadeconfoundr">(<a href="references.html#ref-birkner2026metadeconfoundr" role="doc-biblioref">Birkner et al. 2026</a>)</span> to test every one of the 605 discovery proteins against the outcome <em>and</em> against every measured covariate (age, sex, BMI, eGFR, CRP, treatment), flagging a protein as “deconfounded” only if its association with disease status survives adjustment for every covariate it is <em>also</em> associated with.</p>
+<p>You do not need the specific package to understand or approximate the idea. The core test, for one protein <span class="math inline">p</span> and one covariate <span class="math inline">c</span>, is: does the partial association between <span class="math inline">p</span> and outcome, controlling for <span class="math inline">c</span>, remain significant?</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Minimal deconfounding check for one protein against one covariate,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># using partial Spearman correlation (rank-based, matches the</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># nonparametric spirit of metadeconfoundR without requiring the package)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>deconfound_check <span class="ot">&lt;-</span> <span class="cf">function</span>(protein, outcome, covariate) {</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Residualise protein and outcome against the covariate, then correlate residuals</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  rp <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(protein <span class="sc">~</span> covariate))</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  ro <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(outcome <span class="sc">~</span> covariate))</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor.test</span>(rp, ro, <span class="at">method =</span> <span class="st">"spearman"</span>)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration: a protein correlated with outcome only through age</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))          <span class="co"># outcome driven by age</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>confounded_protein <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)          <span class="co"># protein driven by age only</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>real_protein <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># protein driven by outcome</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, confounded protein: r ="</span>,</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(confounded_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Naive association, confounded protein: r = 0.035 </code></pre>
+</div>
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), confounded protein: r ="</span>,</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(confounded_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Deconfounded (age-adjusted), confounded protein: r = -0.086 </code></pre>
+</div>
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, real protein: r ="</span>,</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(real_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Naive association, real protein: r = 0.451 </code></pre>
+</div>
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), real protein: r ="</span>,</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(real_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Deconfounded (age-adjusted), real protein: r = 0.411 </code></pre>
+</div>
+</div>
+<p>The confounded protein’s association collapses once age is partialled out; the real one survives. Run that logic across every candidate protein and every measured covariate and you get exactly what the discovery stage produced: <strong>605 candidates → 135 confounder-independent proteins</strong>, from which LASSO and Boruta selected the final 7.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Why this belongs before feature selection, not after">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Why this belongs before feature selection, not after
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Deconfounding first, feature selection second. If you let LASSO pick from all 605 proteins and <em>then</em> check the survivors for confounding, you have already let confounded proteins compete for the model’s limited coefficient budget — potentially crowding out real ones. Screen for confounding before you spend your feature-selection step count.</p>
+</div>
+</div>
+</section>
+<section id="step-3-primary-validation-on-the-held-out-split" class="level2" data-number="27.5">
+<h2 data-number="27.5" class="anchored" data-anchor-id="step-3-primary-validation-on-the-held-out-split"><span class="header-section-number">27.5</span> Step 3 — Primary Validation on the Held-Out Split</h2>
+<p>With the model locked, evaluate it once on Test40 — the internal 40% split reserved for exactly this purpose and never used in discovery, deconfounding, or feature selection.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>test40<span class="sc">$</span>prob_panel <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_7panel, <span class="at">newdata =</span> test40, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>roc_panel <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_panel, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>auc_panel <span class="ot">&lt;-</span> <span class="fu">auc</span>(roc_panel)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>ci_panel  <span class="ot">&lt;-</span> <span class="fu">ci.auc</span>(roc_panel, <span class="at">method =</span> <span class="st">"delong"</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"7-protein panel, Test40: AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>            auc_panel, ci_panel[<span class="dv">1</span>], ci_panel[<span class="dv">3</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>7-protein panel, Test40: AUC = 0.974 (0.948-1.000)</code></pre>
+<p>That number is real, not illustrative — it is the reproduced Test40 AUC, matching the paper’s reported 0.974 (0.948–1.000) exactly. Table <a href="#tbl-panel-comparison" class="quarto-xref">Table&nbsp;<span>27.1</span></a> shows what the panel is actually competing against.</p>
+<div id="tbl-panel-comparison" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-panel-comparison-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;27.1: A single AUC in isolation is nearly meaningless — 0.974 only means something set against what a clinician already has for free: CRP and ANCA.
+</figcaption>
+<div aria-describedby="tbl-panel-comparison-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>AUC (95% CI)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ANCA titer alone</td>
+<td>0.746 (0.635–0.857)</td>
+</tr>
+<tr class="even">
+<td>CRP alone</td>
+<td>0.932 (0.880–0.984)</td>
+</tr>
+<tr class="odd">
+<td>CRP + ANCA</td>
+<td>0.893 (0.826–0.959)</td>
+</tr>
+<tr class="even">
+<td><strong>7-protein panel</strong></td>
+<td><strong>0.974 (0.948–1.000)</strong></td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section>
+<section id="step-4-delongs-test-is-the-panel-significantly-better" class="level2" data-number="27.6">
+<h2 data-number="27.6" class="anchored" data-anchor-id="step-4-delongs-test-is-the-panel-significantly-better"><span class="header-section-number">27.6</span> Step 4 — DeLong’s Test: Is the Panel <em>Significantly</em> Better?</h2>
+<p>Two ROC curves computed on the <em>same patients</em> are correlated — you cannot compare their AUCs with an unpaired test. DeLong’s method <span class="citation" data-cites="delong1988comparing">(<a href="references.html#ref-delong1988comparing" role="doc-biblioref">DeLong et al. 1988</a>)</span> accounts for that correlation directly from the two sets of predicted probabilities, with no resampling required.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>roc_crp <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>roc_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>roc_crp_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp,      <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.078</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_anca,     <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 6.7e-05</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp_anca, <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.011</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled" title="Read the manuscript's own claim critically -- even this one">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Read the manuscript’s own claim critically – even this one
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The published paper states the panel “significantly outperformed CRP, ANCA, and CRP+ANCA (p &lt; 0.05 for all).” The reproduced DeLong test against <strong>CRP alone</strong> gives <strong>p = 0.078</strong> — not significant at the conventional threshold. Against ANCA alone and CRP+ANCA, the panel <em>is</em> significantly better (p = 6.7×10⁻⁵ and p = 0.011). This is not a reproduction failure: every number matches the authors’ own frozen output. It is the manuscript’s summary sentence overstating one of its four comparisons. Reproducing a paper’s numbers and reproducing its prose conclusions are different exercises — do both, and report a discrepancy like this one plainly rather than either hiding it or treating the paper as wrong.</p>
+</div>
+</div>
+</section>
+<section id="step-5-external-cohort-validation-berlin-prague" class="level2" data-number="27.7">
+<h2 data-number="27.7" class="anchored" data-anchor-id="step-5-external-cohort-validation-berlin-prague"><span class="header-section-number">27.7</span> Step 5 — External Cohort Validation: Berlin → Prague</h2>
+<p>Test40 is still drawn from the same recruitment process as the training data (Berlin). The real test of generalization is the <strong>Prague cohort</strong> — different site, different sample handling, never seen during model building.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>train_berlin <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>test_prague  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Prague"</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit on ALL of Berlin (not just Train60) -- this is now the deployed model</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>model_berlin <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train_berlin, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>test_prague<span class="sc">$</span>pred <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_berlin, <span class="at">newdata =</span> test_prague, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>roc_prague <span class="ot">&lt;-</span> <span class="fu">roc</span>(test_prague<span class="sc">$</span>group01, test_prague<span class="sc">$</span>pred, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"External validation (Prague, n=%d): AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>            <span class="fu">nrow</span>(test_prague), <span class="fu">auc</span>(roc_prague),</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">1</span>],</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">3</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>External validation (Prague, n=108): AUC = 0.938 (0.897-0.979)</code></pre>
+<p>An AUC of 0.938 on a cohort the model has never seen, collected at a different site, is a materially stronger claim than 0.974 on an internal split — even though the number is numerically lower. <strong>Discrimination dropping slightly on external data is normal and expected; discrimination collapsing (AUC near 0.5) means the “biomarker” was actually a site effect.</strong></p>
+</section>
+<section id="step-6-calibration-does-the-predicted-probability-mean-anything" class="level2" data-number="27.8">
+<h2 data-number="27.8" class="anchored" data-anchor-id="step-6-calibration-does-the-predicted-probability-mean-anything"><span class="header-section-number">27.8</span> Step 6 — Calibration: Does the Predicted Probability Mean Anything?</h2>
+<p>AUC measures whether the model <em>ranks</em> patients correctly. It says nothing about whether a predicted probability of 0.7 corresponds to a 70% chance of remission. That is <strong>calibration</strong>, and it degrades faster than discrimination when a model crosses sites.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>logit_safe <span class="ot">&lt;-</span> <span class="cf">function</span>(p) {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">pmin</span>(<span class="fu">pmax</span>(p, .Machine<span class="sc">$</span>double.eps), <span class="dv">1</span> <span class="sc">-</span> .Machine<span class="sc">$</span>double.eps)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(p <span class="sc">/</span> (<span class="dv">1</span> <span class="sc">-</span> p))</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>cal_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(group01 <span class="sc">~</span> <span class="fu">logit_safe</span>(pred), <span class="at">data =</span> test_prague, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration intercept:"</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration slope:    "</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">2</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>Calibration intercept: 0
+Calibration slope:     0.44</code></pre>
+<p>A perfectly calibrated model has slope 1 and intercept 0. A slope of 0.44 on Prague means the model’s predicted probabilities are systematically <strong>too extreme</strong> on the external cohort — confident predictions near 0 or 1 should be pulled toward the middle before they are shown to a clinician. This is the single most common failure mode when a model moves between sites: discrimination (AUC 0.938) survives noticeably better than calibration (slope 0.44). A ranking-only use of the model (triage, prioritization) is still defensible; a use that reports the probability itself is not, without recalibration.</p>
+<div class="callout callout-style-default callout-tip callout-titled" title="Recalibration is cheap">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Recalibration is cheap
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Because calibration slope/intercept only require a single logistic regression of the outcome on the logit of the existing predictions, refitting a calibration correction on a small labeled subset of the new site’s data (Platt scaling) is far cheaper than rebuilding the model. Do this before deploying a model at a new site, not after noticing predictions look wrong.</p>
+</div>
+</div>
+</section>
+<section id="common-pitfalls-in-external-validation" class="level2" data-number="27.9">
+<h2 data-number="27.9" class="anchored" data-anchor-id="common-pitfalls-in-external-validation"><span class="header-section-number">27.9</span> Common Pitfalls in External Validation</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pitfall</th>
+<th>Why it’s a problem</th>
+<th>What to do instead</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Refitting the model on the external cohort</td>
+<td>You are no longer testing generalization — you have just trained a second model</td>
+<td>Lock coefficients on the discovery cohort; only <em>predict</em> on the external cohort</td>
+</tr>
+<tr class="even">
+<td>Comparing AUCs with an unpaired test</td>
+<td>Ignores that both ROC curves share the same patients</td>
+<td>Use DeLong’s test (paired, no resampling)</td>
+</tr>
+<tr class="odd">
+<td>Reporting only AUC</td>
+<td>Discrimination can survive site transfer while calibration fails</td>
+<td>Always report a calibration slope/intercept alongside AUC</td>
+</tr>
+<tr class="even">
+<td>Treating the discovery cohort’s cross-validated AUC as “external”</td>
+<td>CV only estimates within-cohort generalization</td>
+<td>Reserve a truly independent cohort (different site/time/batch) for the external claim</td>
+</tr>
+<tr class="odd">
+<td>Taking a manuscript’s significance claims at face value</td>
+<td>Authors can (as here) slightly overstate one comparison among several</td>
+<td>Recompute the test yourself from the deposited data before citing the claim</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="summary" class="level2" data-number="27.10">
+<h2 data-number="27.10" class="anchored" data-anchor-id="summary"><span class="header-section-number">27.10</span> Summary</h2>
+<ul>
+<li><strong>External validation and nested CV answer different questions.</strong> Nested CV (Chapter 23) estimates generalization within a recruitment process; external validation estimates generalization <em>across</em> one.</li>
+<li><strong>Confounder screening belongs before feature selection</strong>, not as an afterthought — a candidate biomarker that only tracks age or kidney function should never reach the LASSO step.</li>
+<li><strong>DeLong’s test</strong> compares two ROC curves computed on the same patients without resampling, by accounting for their correlation directly.</li>
+<li><strong>Calibration is a separate property from discrimination</strong> and typically degrades faster when a model crosses sites — always check both.</li>
+<li><strong>Reproducing a paper’s numbers and reproducing its prose are different exercises.</strong> This chapter’s numbers all matched the authors’ frozen output; one of the manuscript’s four significance claims did not survive recomputation, and that discrepancy is worth stating plainly rather than smoothing over.</li>
+</ul>
+</section>
+<section id="exercises" class="level2" data-number="27.11">
+<h2 data-number="27.11" class="anchored" data-anchor-id="exercises"><span class="header-section-number">27.11</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Refit vs.&nbsp;frozen.</strong> Using the panel’s formula, refit the 7-protein model on Train60 and compare your coefficients to the frozen ones in <code>repo/models/coef_7panel_Train60.csv</code>. What is the maximum absolute difference, and what would a large difference (not near machine precision) tell you about your data handling?</p></li>
+<li><p><strong>DeLong by hand.</strong> Simulate two correlated sets of predicted probabilities for the same 100 patients (one “panel”, one “single marker”, both weakly related to the same true outcome). Compare them with <code>pROC::roc.test(..., method = "delong")</code> and with an (incorrect) unpaired AUC comparison. How different are the p-values, and why?</p></li>
+<li><p><strong>Calibration recovery.</strong> Using the Prague predictions and outcomes, fit a Platt-scaling correction (<code>glm(outcome ~ logit(pred), family = binomial())</code>) and recompute the calibration slope on the corrected probabilities. Does discrimination (AUC) change? Should it?</p></li>
+<li><p><strong>Confounder audit at scale.</strong> Extend <code>deconfound_check()</code> to loop over multiple covariates for one protein, flagging the protein as “deconfounded” only if it survives adjustment for <em>every</em> covariate it is also correlated with. What happens to the false-positive rate if you only check one covariate at a time versus all of them?</p></li>
+<li><p><strong>The overstatement.</strong> Re-read Step 4’s DeLong results. Draft one sentence you would send to a co-author, in the style of a peer-review comment, describing the discrepancy between the manuscript’s “p &lt; 0.05 for all” claim and the panel-vs-CRP result (p = 0.078) — precise, not accusatory.</p></li>
+</ol>
+</section>
+<section id="session-information" class="level2" data-number="27.12">
+<h2 data-number="27.12" class="anchored" data-anchor-id="session-information"><span class="header-section-number">27.12</span> Session Information</h2>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>R version 4.6.1 (2026-06-24 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26200)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=English_Switzerland.utf8  LC_CTYPE=English_Switzerland.utf8   
+[3] LC_MONETARY=English_Switzerland.utf8 LC_NUMERIC=C                        
+[5] LC_TIME=English_Switzerland.utf8    
+
+time zone: Europe/Zurich
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices datasets  utils     methods   base     
+
+loaded via a namespace (and not attached):
+ [1] htmlwidgets_1.6.4   BiocManager_1.30.27 compiler_4.6.1     
+ [4] fastmap_1.2.0       cli_3.6.6           htmltools_0.5.9    
+ [7] tools_4.6.1         otel_0.2.0          yaml_2.3.12        
+[10] rmarkdown_2.32      knitr_1.52          jsonlite_2.0.0     
+[13] xfun_0.61           digest_0.6.39       rlang_1.3.0        
+[16] renv_1.2.4          evaluate_1.0.5     </code></pre>
+</div>
+</div>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-birkner2026metadeconfoundr" class="csl-entry" role="listitem">
+Birkner, Till, Chia-Yu Chen, Morgan Essex, et al. 2026. <span>“<span class="nocase">metadeconfoundR</span>: Covariate Analysis of High-Dimensional Cross-Sectional Omics Data.”</span> <em>Bioinformatics Advances</em>, ahead of print. <a href="https://doi.org/10.1093/bioadv/vbag242">https://doi.org/10.1093/bioadv/vbag242</a>.
+</div>
+<div id="ref-delong1988comparing" class="csl-entry" role="listitem">
+DeLong, Elizabeth R., David M. DeLong, and Daniel L. Clarke-Pearson. 1988. <span>“Comparing the Areas Under Two or More Correlated Receiver Operating Characteristic Curves: A Nonparametric Approach.”</span> <em>Biometrics</em> 44 (3): 837–45.
+</div>
+<div id="ref-jerke2026vasculitis" class="csl-entry" role="listitem">
+Jerke, Uwe, Marieluise Kirchner, Theda U. P. Bartolomaeus, et al. 2026. <span>“Towards a Proteomic Plasma Biomarker Panel for Diagnosing Vasculitis Remission.”</span> <em>Nature Communications</em> 17 (1): 6825. <a href="https://doi.org/10.1038/s41467-026-75755-6">https://doi.org/10.1038/s41467-026-75755-6</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+        for (let i=0; i<detailsSrc.length; i++) {
+          const details = detailsSrc[i].parentElement;
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./27-ms-imaging.html" class="pagination-link" aria-label="Mass Spectrometry Imaging with Cardinal">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Mass Spectrometry Imaging with Cardinal</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./29-isotope-tracing-networking.html" class="pagination-link" aria-label="Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking">
+        <span class="nav-page-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># External Validation and Confounder-Robust Biomarker Panels</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; *"A model that only works on the data that built it has not been validated — it has been described."*</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>Chapter 23 built a biomarker classifier the right way: nested cross-validation, feature selection inside every fold, and an honest ROC curve with confidence intervals. That discipline earns you a model you can trust *on the cohort you had*. It does not, by itself, tell you whether the model means anything to a patient recruited at a different hospital, on a different instrument, years later. This chapter covers the two things a real biomarker panel still has to survive after nested CV: an **external cohort** collected independently of the discovery data, and a **confounder audit** that asks whether each candidate biomarker tracks the disease or merely tracks age, sex, or kidney function.</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="The One Mistake to Avoid"}</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>Reporting cross-validated performance from the discovery cohort as if it were external validation. Nested CV estimates how well a model generalizes to *new patients drawn from the same recruitment process*. It cannot estimate how well it generalizes to a *different* recruitment process, a different clinical site, or a different batch of the assay. Only a genuinely external cohort can answer that.</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="fu">## Learning Objectives</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>By the end of this chapter you will be able to:</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Explain why nested cross-validation and external cohort validation answer different questions, and why a biomarker panel needs both</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Lock a model's coefficients on a discovery cohort and evaluate it, unrefit, on an independent cohort</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Use DeLong's test to compare correlated ROC curves (a locked panel vs. a simple clinical marker) on the same patients</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Assess calibration (not just discrimination) with a calibration slope and intercept</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Audit candidate biomarkers for confounding before they enter a model, using a deconfounding framework</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Recognize when a manuscript's headline claim needs a footnote — and report that honestly</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a><span class="fu">## The Study</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>This chapter's dataset and worked example reproduce the primary results of Jerke et al., "Towards a proteomic plasma biomarker panel for diagnosing vasculitis remission," *Nature Communications* **17**:6825 (2026), [doi:10.1038/s41467-026-75755-6](https://doi.org/10.1038/s41467-026-75755-6) [@jerke2026vasculitis]. The paper looks for plasma protein biomarkers that distinguish **active** ANCA-associated vasculitis from **remission** — a question with real clinical stakes, since remission is currently judged mostly by clinical scores and C-reactive protein (CRP), both of which lag behind the biology.</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Dataset and reproducibility"}</span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>The study design has four stages: (1) **discovery** — DIA proteomics on 163 Berlin plasma samples (605 proteins quantified); (2) **confounder audit** — `metadeconfoundR`-style deconfounding narrows 605 proteins to 135 confounder-independent candidates; (3) **feature selection** — LASSO and Boruta narrow 135 to a **7-protein panel** (`AHSG`, `CLEC3B`, `COMP`, `F9`, `LRG1`, `MCAM`, `MRC1`); (4) **validation** — a locked model is tested on a held-out 40% internal split (Test40) and on an independent **Prague cohort** (n = 108) never touched during model building.</span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>Raw MS data are deposited at PRIDE **PXD079232**; the authors additionally published a full reproducibility package (processed data, frozen model coefficients, and validation scripts) at <span class="in">`github.com/Theda-sys/vasculitis-remission-proteomics`</span>, which is what the code in this chapter is built against. Every number quoted below was independently re-derived from that package; the code chunks are shown in full but marked <span class="in">`eval: false`</span> because the underlying processed data (patient-level protein quantities) lives in that external repository rather than being bundled with this book — clone it to run this chapter live.</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 1 — Load the Locked Discovery Model</span></span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a>The panel was **not** selected on the data you are about to test it on. That single fact is the entire chapter. The 7 proteins and their coefficients were fixed after the discovery and feature-selection stages (Ch 20's differential abundance and Ch 23's nested CV, applied upstream of this chapter); what follows only *evaluates* that already-frozen model.</span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pROC)</span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr)</span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true" tabindex="-1"></a><span class="co"># Combined-cohort protein table: one row per patient, one column per protein</span></span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true" tabindex="-1"></a><span class="co"># (columns are named "&lt;GENE&gt;_&lt;UniProt-derived index&gt;", e.g. AHSG_001)</span></span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true" tabindex="-1"></a>dfz <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"repo/data/TQLData_combinedCohorts.csv"</span>)</span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true" tabindex="-1"></a>prots_7 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"AHSG_001"</span>, <span class="st">"CLEC3B_020"</span>, <span class="st">"COMP_023"</span>,</span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true" tabindex="-1"></a>             <span class="st">"F9_027"</span>, <span class="st">"LRG1_042"</span>, <span class="st">"MCAM_047"</span>, <span class="st">"MRC1_073.."</span>)</span>
+<span id="cb19-50"><a href="#cb19-50" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(prots_7 <span class="sc">%in%</span> <span class="fu">colnames</span>(dfz)))</span>
+<span id="cb19-51"><a href="#cb19-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-52"><a href="#cb19-52" aria-hidden="true" tabindex="-1"></a>train60 <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)   <span class="co"># discovery cohort: fit here only</span></span>
+<span id="cb19-53"><a href="#cb19-53" aria-hidden="true" tabindex="-1"></a>test40  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(Patient <span class="sc">%in%</span> test40_patient_ids)  <span class="co"># held-out 40% split</span></span>
+<span id="cb19-54"><a href="#cb19-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-55"><a href="#cb19-55" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit is a *check*, not a re-selection: the formula and the 7 proteins are fixed</span></span>
+<span id="cb19-56"><a href="#cb19-56" aria-hidden="true" tabindex="-1"></a>formula_7 <span class="ot">&lt;-</span> <span class="fu">as.formula</span>(<span class="fu">paste</span>(<span class="st">"group01 ~"</span>, <span class="fu">paste</span>(prots_7, <span class="at">collapse =</span> <span class="st">" + "</span>)))</span>
+<span id="cb19-57"><a href="#cb19-57" aria-hidden="true" tabindex="-1"></a>model_7panel <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train60, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb19-58"><a href="#cb19-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-59"><a href="#cb19-59" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare against the authors' frozen coefficients -- should match near machine precision</span></span>
+<span id="cb19-60"><a href="#cb19-60" aria-hidden="true" tabindex="-1"></a>frozen_coef <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"repo/models/coef_7panel_Train60.csv"</span>)</span>
+<span id="cb19-61"><a href="#cb19-61" aria-hidden="true" tabindex="-1"></a><span class="fu">max</span>(<span class="fu">abs</span>(<span class="fu">coef</span>(model_7panel)[frozen_coef<span class="sc">$</span>term] <span class="sc">-</span> frozen_coef<span class="sc">$</span>Estimate))</span>
+<span id="cb19-62"><a href="#cb19-62" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-63"><a href="#cb19-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-64"><a href="#cb19-64" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Why refit and compare, rather than just load the frozen model?"}</span>
+<span id="cb19-65"><a href="#cb19-65" aria-hidden="true" tabindex="-1"></a>Refitting the exact formula on the exact training rows and confirming the coefficients match the authors' frozen model (to machine precision, typically &lt; 1e-12) is a cheap, powerful sanity check: it proves you have reconstructed their training set correctly *before* you trust anything you compute downstream. If your refit doesn't match, stop — the mismatch is in your data handling, not in the paper.</span>
+<span id="cb19-66"><a href="#cb19-66" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-67"><a href="#cb19-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-68"><a href="#cb19-68" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 2 — Confounder Audit Before Trusting a Biomarker</span></span>
+<span id="cb19-69"><a href="#cb19-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-70"><a href="#cb19-70" aria-hidden="true" tabindex="-1"></a>Age, sex, kidney function, and treatment all shift plasma protein levels independently of disease activity. A protein that correlates with the outcome only because it correlates with age is not a biomarker — it is a proxy for age. The discovery stage here used <span class="in">`metadeconfoundR`</span> <span class="co">[</span><span class="ot">@birkner2026metadeconfoundr</span><span class="co">]</span> to test every one of the 605 discovery proteins against the outcome *and* against every measured covariate (age, sex, BMI, eGFR, CRP, treatment), flagging a protein as "deconfounded" only if its association with disease status survives adjustment for every covariate it is *also* associated with.</span>
+<span id="cb19-71"><a href="#cb19-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-72"><a href="#cb19-72" aria-hidden="true" tabindex="-1"></a>You do not need the specific package to understand or approximate the idea. The core test, for one protein $p$ and one covariate $c$, is: does the partial association between $p$ and outcome, controlling for $c$, remain significant?</span>
+<span id="cb19-73"><a href="#cb19-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-76"><a href="#cb19-76" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-77"><a href="#cb19-77" aria-hidden="true" tabindex="-1"></a><span class="co"># Minimal deconfounding check for one protein against one covariate,</span></span>
+<span id="cb19-78"><a href="#cb19-78" aria-hidden="true" tabindex="-1"></a><span class="co"># using partial Spearman correlation (rank-based, matches the</span></span>
+<span id="cb19-79"><a href="#cb19-79" aria-hidden="true" tabindex="-1"></a><span class="co"># nonparametric spirit of metadeconfoundR without requiring the package)</span></span>
+<span id="cb19-80"><a href="#cb19-80" aria-hidden="true" tabindex="-1"></a>deconfound_check <span class="ot">&lt;-</span> <span class="cf">function</span>(protein, outcome, covariate) {</span>
+<span id="cb19-81"><a href="#cb19-81" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Residualise protein and outcome against the covariate, then correlate residuals</span></span>
+<span id="cb19-82"><a href="#cb19-82" aria-hidden="true" tabindex="-1"></a>  rp <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(protein <span class="sc">~</span> covariate))</span>
+<span id="cb19-83"><a href="#cb19-83" aria-hidden="true" tabindex="-1"></a>  ro <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(outcome <span class="sc">~</span> covariate))</span>
+<span id="cb19-84"><a href="#cb19-84" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor.test</span>(rp, ro, <span class="at">method =</span> <span class="st">"spearman"</span>)</span>
+<span id="cb19-85"><a href="#cb19-85" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-86"><a href="#cb19-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-87"><a href="#cb19-87" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration: a protein correlated with outcome only through age</span></span>
+<span id="cb19-88"><a href="#cb19-88" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb19-89"><a href="#cb19-89" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
+<span id="cb19-90"><a href="#cb19-90" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
+<span id="cb19-91"><a href="#cb19-91" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))          <span class="co"># outcome driven by age</span></span>
+<span id="cb19-92"><a href="#cb19-92" aria-hidden="true" tabindex="-1"></a>confounded_protein <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)          <span class="co"># protein driven by age only</span></span>
+<span id="cb19-93"><a href="#cb19-93" aria-hidden="true" tabindex="-1"></a>real_protein <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># protein driven by outcome</span></span>
+<span id="cb19-94"><a href="#cb19-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-95"><a href="#cb19-95" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, confounded protein: r ="</span>,</span>
+<span id="cb19-96"><a href="#cb19-96" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(confounded_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-97"><a href="#cb19-97" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), confounded protein: r ="</span>,</span>
+<span id="cb19-98"><a href="#cb19-98" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(confounded_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb19-99"><a href="#cb19-99" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, real protein: r ="</span>,</span>
+<span id="cb19-100"><a href="#cb19-100" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(real_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-101"><a href="#cb19-101" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), real protein: r ="</span>,</span>
+<span id="cb19-102"><a href="#cb19-102" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(real_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-103"><a href="#cb19-103" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-104"><a href="#cb19-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-105"><a href="#cb19-105" aria-hidden="true" tabindex="-1"></a>The confounded protein's association collapses once age is partialled out; the real one survives. Run that logic across every candidate protein and every measured covariate and you get exactly what the discovery stage produced: **605 candidates → 135 confounder-independent proteins**, from which LASSO and Boruta selected the final 7.</span>
+<span id="cb19-106"><a href="#cb19-106" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-107"><a href="#cb19-107" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Why this belongs before feature selection, not after"}</span>
+<span id="cb19-108"><a href="#cb19-108" aria-hidden="true" tabindex="-1"></a>Deconfounding first, feature selection second. If you let LASSO pick from all 605 proteins and *then* check the survivors for confounding, you have already let confounded proteins compete for the model's limited coefficient budget — potentially crowding out real ones. Screen for confounding before you spend your feature-selection step count.</span>
+<span id="cb19-109"><a href="#cb19-109" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-110"><a href="#cb19-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-111"><a href="#cb19-111" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — Primary Validation on the Held-Out Split</span></span>
+<span id="cb19-112"><a href="#cb19-112" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-113"><a href="#cb19-113" aria-hidden="true" tabindex="-1"></a>With the model locked, evaluate it once on Test40 — the internal 40% split reserved for exactly this purpose and never used in discovery, deconfounding, or feature selection.</span>
+<span id="cb19-114"><a href="#cb19-114" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-117"><a href="#cb19-117" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-118"><a href="#cb19-118" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-119"><a href="#cb19-119" aria-hidden="true" tabindex="-1"></a>test40<span class="sc">$</span>prob_panel <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_7panel, <span class="at">newdata =</span> test40, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb19-120"><a href="#cb19-120" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-121"><a href="#cb19-121" aria-hidden="true" tabindex="-1"></a>roc_panel <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_panel, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-122"><a href="#cb19-122" aria-hidden="true" tabindex="-1"></a>auc_panel <span class="ot">&lt;-</span> <span class="fu">auc</span>(roc_panel)</span>
+<span id="cb19-123"><a href="#cb19-123" aria-hidden="true" tabindex="-1"></a>ci_panel  <span class="ot">&lt;-</span> <span class="fu">ci.auc</span>(roc_panel, <span class="at">method =</span> <span class="st">"delong"</span>)</span>
+<span id="cb19-124"><a href="#cb19-124" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-125"><a href="#cb19-125" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"7-protein panel, Test40: AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb19-126"><a href="#cb19-126" aria-hidden="true" tabindex="-1"></a>            auc_panel, ci_panel[<span class="dv">1</span>], ci_panel[<span class="dv">3</span>]))</span>
+<span id="cb19-127"><a href="#cb19-127" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-128"><a href="#cb19-128" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-129"><a href="#cb19-129" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-130"><a href="#cb19-130" aria-hidden="true" tabindex="-1"></a><span class="in">7-protein panel, Test40: AUC = 0.974 (0.948-1.000)</span></span>
+<span id="cb19-131"><a href="#cb19-131" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-132"><a href="#cb19-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-133"><a href="#cb19-133" aria-hidden="true" tabindex="-1"></a>That number is real, not illustrative — it is the reproduced Test40 AUC, matching the paper's reported 0.974 (0.948–1.000) exactly. Table @tbl-panel-comparison shows what the panel is actually competing against.</span>
+<span id="cb19-134"><a href="#cb19-134" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-135"><a href="#cb19-135" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Model <span class="pp">|</span> AUC (95% CI) <span class="pp">|</span></span>
+<span id="cb19-136"><a href="#cb19-136" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|</span></span>
+<span id="cb19-137"><a href="#cb19-137" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> ANCA titer alone <span class="pp">|</span> 0.746 (0.635–0.857) <span class="pp">|</span></span>
+<span id="cb19-138"><a href="#cb19-138" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP alone <span class="pp">|</span> 0.932 (0.880–0.984) <span class="pp">|</span></span>
+<span id="cb19-139"><a href="#cb19-139" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP + ANCA <span class="pp">|</span> 0.893 (0.826–0.959) <span class="pp">|</span></span>
+<span id="cb19-140"><a href="#cb19-140" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **7-protein panel** | **0.974 (0.948–1.000)** <span class="pp">|</span></span>
+<span id="cb19-141"><a href="#cb19-141" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-142"><a href="#cb19-142" aria-hidden="true" tabindex="-1"></a>: A single AUC in isolation is nearly meaningless — 0.974 only means something set against what a clinician already has for free: CRP and ANCA. {#tbl-panel-comparison}</span>
+<span id="cb19-143"><a href="#cb19-143" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-144"><a href="#cb19-144" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — DeLong's Test: Is the Panel *Significantly* Better?</span></span>
+<span id="cb19-145"><a href="#cb19-145" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-146"><a href="#cb19-146" aria-hidden="true" tabindex="-1"></a>Two ROC curves computed on the *same patients* are correlated — you cannot compare their AUCs with an unpaired test. DeLong's method <span class="co">[</span><span class="ot">@delong1988comparing</span><span class="co">]</span> accounts for that correlation directly from the two sets of predicted probabilities, with no resampling required.</span>
+<span id="cb19-147"><a href="#cb19-147" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-150"><a href="#cb19-150" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-151"><a href="#cb19-151" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-152"><a href="#cb19-152" aria-hidden="true" tabindex="-1"></a>roc_crp <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-153"><a href="#cb19-153" aria-hidden="true" tabindex="-1"></a>roc_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-154"><a href="#cb19-154" aria-hidden="true" tabindex="-1"></a>roc_crp_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-155"><a href="#cb19-155" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-156"><a href="#cb19-156" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp,      <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.078</span></span>
+<span id="cb19-157"><a href="#cb19-157" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_anca,     <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 6.7e-05</span></span>
+<span id="cb19-158"><a href="#cb19-158" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp_anca, <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.011</span></span>
+<span id="cb19-159"><a href="#cb19-159" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-160"><a href="#cb19-160" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-161"><a href="#cb19-161" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="Read the manuscript's own claim critically -- even this one"}</span>
+<span id="cb19-162"><a href="#cb19-162" aria-hidden="true" tabindex="-1"></a>The published paper states the panel "significantly outperformed CRP, ANCA, and CRP+ANCA (p &lt; 0.05 for all)." The reproduced DeLong test against **CRP alone** gives **p = 0.078** — not significant at the conventional threshold. Against ANCA alone and CRP+ANCA, the panel *is* significantly better (p = 6.7×10⁻⁵ and p = 0.011). This is not a reproduction failure: every number matches the authors' own frozen output. It is the manuscript's summary sentence overstating one of its four comparisons. Reproducing a paper's numbers and reproducing its prose conclusions are different exercises — do both, and report a discrepancy like this one plainly rather than either hiding it or treating the paper as wrong.</span>
+<span id="cb19-163"><a href="#cb19-163" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-164"><a href="#cb19-164" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-165"><a href="#cb19-165" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — External Cohort Validation: Berlin → Prague</span></span>
+<span id="cb19-166"><a href="#cb19-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-167"><a href="#cb19-167" aria-hidden="true" tabindex="-1"></a>Test40 is still drawn from the same recruitment process as the training data (Berlin). The real test of generalization is the **Prague cohort** — different site, different sample handling, never seen during model building.</span>
+<span id="cb19-168"><a href="#cb19-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-171"><a href="#cb19-171" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-172"><a href="#cb19-172" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-173"><a href="#cb19-173" aria-hidden="true" tabindex="-1"></a>train_berlin <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)</span>
+<span id="cb19-174"><a href="#cb19-174" aria-hidden="true" tabindex="-1"></a>test_prague  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Prague"</span>)</span>
+<span id="cb19-175"><a href="#cb19-175" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-176"><a href="#cb19-176" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit on ALL of Berlin (not just Train60) -- this is now the deployed model</span></span>
+<span id="cb19-177"><a href="#cb19-177" aria-hidden="true" tabindex="-1"></a>model_berlin <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train_berlin, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb19-178"><a href="#cb19-178" aria-hidden="true" tabindex="-1"></a>test_prague<span class="sc">$</span>pred <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_berlin, <span class="at">newdata =</span> test_prague, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb19-179"><a href="#cb19-179" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-180"><a href="#cb19-180" aria-hidden="true" tabindex="-1"></a>roc_prague <span class="ot">&lt;-</span> <span class="fu">roc</span>(test_prague<span class="sc">$</span>group01, test_prague<span class="sc">$</span>pred, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-181"><a href="#cb19-181" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"External validation (Prague, n=%d): AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb19-182"><a href="#cb19-182" aria-hidden="true" tabindex="-1"></a>            <span class="fu">nrow</span>(test_prague), <span class="fu">auc</span>(roc_prague),</span>
+<span id="cb19-183"><a href="#cb19-183" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">1</span>],</span>
+<span id="cb19-184"><a href="#cb19-184" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">3</span>]))</span>
+<span id="cb19-185"><a href="#cb19-185" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-186"><a href="#cb19-186" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-187"><a href="#cb19-187" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-188"><a href="#cb19-188" aria-hidden="true" tabindex="-1"></a><span class="in">External validation (Prague, n=108): AUC = 0.938 (0.897-0.979)</span></span>
+<span id="cb19-189"><a href="#cb19-189" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-190"><a href="#cb19-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-191"><a href="#cb19-191" aria-hidden="true" tabindex="-1"></a>An AUC of 0.938 on a cohort the model has never seen, collected at a different site, is a materially stronger claim than 0.974 on an internal split — even though the number is numerically lower. **Discrimination dropping slightly on external data is normal and expected; discrimination collapsing (AUC near 0.5) means the "biomarker" was actually a site effect.**</span>
+<span id="cb19-192"><a href="#cb19-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-193"><a href="#cb19-193" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 6 — Calibration: Does the Predicted Probability Mean Anything?</span></span>
+<span id="cb19-194"><a href="#cb19-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-195"><a href="#cb19-195" aria-hidden="true" tabindex="-1"></a>AUC measures whether the model *ranks* patients correctly. It says nothing about whether a predicted probability of 0.7 corresponds to a 70% chance of remission. That is **calibration**, and it degrades faster than discrimination when a model crosses sites.</span>
+<span id="cb19-196"><a href="#cb19-196" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-199"><a href="#cb19-199" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-200"><a href="#cb19-200" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-201"><a href="#cb19-201" aria-hidden="true" tabindex="-1"></a>logit_safe <span class="ot">&lt;-</span> <span class="cf">function</span>(p) {</span>
+<span id="cb19-202"><a href="#cb19-202" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">pmin</span>(<span class="fu">pmax</span>(p, .Machine<span class="sc">$</span>double.eps), <span class="dv">1</span> <span class="sc">-</span> .Machine<span class="sc">$</span>double.eps)</span>
+<span id="cb19-203"><a href="#cb19-203" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(p <span class="sc">/</span> (<span class="dv">1</span> <span class="sc">-</span> p))</span>
+<span id="cb19-204"><a href="#cb19-204" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-205"><a href="#cb19-205" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-206"><a href="#cb19-206" aria-hidden="true" tabindex="-1"></a>cal_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(group01 <span class="sc">~</span> <span class="fu">logit_safe</span>(pred), <span class="at">data =</span> test_prague, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb19-207"><a href="#cb19-207" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration intercept:"</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-208"><a href="#cb19-208" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration slope:    "</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">2</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-209"><a href="#cb19-209" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-210"><a href="#cb19-210" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-211"><a href="#cb19-211" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-212"><a href="#cb19-212" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration intercept: 0</span></span>
+<span id="cb19-213"><a href="#cb19-213" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration slope:     0.44</span></span>
+<span id="cb19-214"><a href="#cb19-214" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-215"><a href="#cb19-215" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-216"><a href="#cb19-216" aria-hidden="true" tabindex="-1"></a>A perfectly calibrated model has slope 1 and intercept 0. A slope of 0.44 on Prague means the model's predicted probabilities are systematically **too extreme** on the external cohort — confident predictions near 0 or 1 should be pulled toward the middle before they are shown to a clinician. This is the single most common failure mode when a model moves between sites: discrimination (AUC 0.938) survives noticeably better than calibration (slope 0.44). A ranking-only use of the model (triage, prioritization) is still defensible; a use that reports the probability itself is not, without recalibration.</span>
+<span id="cb19-217"><a href="#cb19-217" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-218"><a href="#cb19-218" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Recalibration is cheap"}</span>
+<span id="cb19-219"><a href="#cb19-219" aria-hidden="true" tabindex="-1"></a>Because calibration slope/intercept only require a single logistic regression of the outcome on the logit of the existing predictions, refitting a calibration correction on a small labeled subset of the new site's data (Platt scaling) is far cheaper than rebuilding the model. Do this before deploying a model at a new site, not after noticing predictions look wrong.</span>
+<span id="cb19-220"><a href="#cb19-220" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-221"><a href="#cb19-221" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-222"><a href="#cb19-222" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls in External Validation</span></span>
+<span id="cb19-223"><a href="#cb19-223" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-224"><a href="#cb19-224" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> What to do instead <span class="pp">|</span></span>
+<span id="cb19-225"><a href="#cb19-225" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
+<span id="cb19-226"><a href="#cb19-226" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Refitting the model on the external cohort <span class="pp">|</span> You are no longer testing generalization — you have just trained a second model <span class="pp">|</span> Lock coefficients on the discovery cohort; only *predict* on the external cohort <span class="pp">|</span></span>
+<span id="cb19-227"><a href="#cb19-227" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Comparing AUCs with an unpaired test <span class="pp">|</span> Ignores that both ROC curves share the same patients <span class="pp">|</span> Use DeLong's test (paired, no resampling) <span class="pp">|</span></span>
+<span id="cb19-228"><a href="#cb19-228" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting only AUC <span class="pp">|</span> Discrimination can survive site transfer while calibration fails <span class="pp">|</span> Always report a calibration slope/intercept alongside AUC <span class="pp">|</span></span>
+<span id="cb19-229"><a href="#cb19-229" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating the discovery cohort's cross-validated AUC as "external" <span class="pp">|</span> CV only estimates within-cohort generalization <span class="pp">|</span> Reserve a truly independent cohort (different site/time/batch) for the external claim <span class="pp">|</span></span>
+<span id="cb19-230"><a href="#cb19-230" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Taking a manuscript's significance claims at face value <span class="pp">|</span> Authors can (as here) slightly overstate one comparison among several <span class="pp">|</span> Recompute the test yourself from the deposited data before citing the claim <span class="pp">|</span></span>
+<span id="cb19-231"><a href="#cb19-231" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-232"><a href="#cb19-232" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb19-233"><a href="#cb19-233" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-234"><a href="#cb19-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**External validation and nested CV answer different questions.** Nested CV (Chapter 23) estimates generalization within a recruitment process; external validation estimates generalization *across* one.</span>
+<span id="cb19-235"><a href="#cb19-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Confounder screening belongs before feature selection**, not as an afterthought — a candidate biomarker that only tracks age or kidney function should never reach the LASSO step.</span>
+<span id="cb19-236"><a href="#cb19-236" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**DeLong's test** compares two ROC curves computed on the same patients without resampling, by accounting for their correlation directly.</span>
+<span id="cb19-237"><a href="#cb19-237" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Calibration is a separate property from discrimination** and typically degrades faster when a model crosses sites — always check both.</span>
+<span id="cb19-238"><a href="#cb19-238" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Reproducing a paper's numbers and reproducing its prose are different exercises.** This chapter's numbers all matched the authors' frozen output; one of the manuscript's four significance claims did not survive recomputation, and that discrepancy is worth stating plainly rather than smoothing over.</span>
+<span id="cb19-239"><a href="#cb19-239" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-240"><a href="#cb19-240" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb19-241"><a href="#cb19-241" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-242"><a href="#cb19-242" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Refit vs. frozen.** Using the panel's formula, refit the 7-protein model on Train60 and compare your coefficients to the frozen ones in <span class="in">`repo/models/coef_7panel_Train60.csv`</span>. What is the maximum absolute difference, and what would a large difference (not near machine precision) tell you about your data handling?</span>
+<span id="cb19-243"><a href="#cb19-243" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-244"><a href="#cb19-244" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**DeLong by hand.** Simulate two correlated sets of predicted probabilities for the same 100 patients (one "panel", one "single marker", both weakly related to the same true outcome). Compare them with <span class="in">`pROC::roc.test(..., method = "delong")`</span> and with an (incorrect) unpaired AUC comparison. How different are the p-values, and why?</span>
+<span id="cb19-245"><a href="#cb19-245" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-246"><a href="#cb19-246" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Calibration recovery.** Using the Prague predictions and outcomes, fit a Platt-scaling correction (<span class="in">`glm(outcome ~ logit(pred), family = binomial())`</span>) and recompute the calibration slope on the corrected probabilities. Does discrimination (AUC) change? Should it?</span>
+<span id="cb19-247"><a href="#cb19-247" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-248"><a href="#cb19-248" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Confounder audit at scale.** Extend <span class="in">`deconfound_check()`</span> to loop over multiple covariates for one protein, flagging the protein as "deconfounded" only if it survives adjustment for *every* covariate it is also correlated with. What happens to the false-positive rate if you only check one covariate at a time versus all of them?</span>
+<span id="cb19-249"><a href="#cb19-249" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-250"><a href="#cb19-250" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**The overstatement.** Re-read Step 4's DeLong results. Draft one sentence you would send to a co-author, in the style of a peer-review comment, describing the discrepancy between the manuscript's "p &lt; 0.05 for all" claim and the panel-vs-CRP result (p = 0.078) — precise, not accusatory.</span>
+<span id="cb19-251"><a href="#cb19-251" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-252"><a href="#cb19-252" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb19-253"><a href="#cb19-253" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-256"><a href="#cb19-256" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-257"><a href="#cb19-257" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb19-258"><a href="#cb19-258" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/28-biomarker-external-validation.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

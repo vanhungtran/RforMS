@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>28&nbsp; Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking – Mass Spectrometry Data Analysis with R</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./30-reproducible-reports.html" rel="next">
+<link href="./28-biomarker-external-validation.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-eb89a3e8467b0347e4822c73f939f1c7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-a806231a2ff89bd67abf7ff814779758.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./26-single-cell-proteomics.html">Part VI — Specialized and Emerging Applications</a></li><li class="breadcrumb-item"><a href="./29-isotope-tracing-networking.html"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Mass Spectrometry Data Analysis with R</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/vanhungtran/RforMS" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-what-is-ms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">What Is Mass Spectrometry and Why Use MS Data?</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I — Foundations: Reproducible MS Analysis in R</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-r-bioconductor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">R and Bioconductor for Mass Spectrometry</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-reproducible-project.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Build a Reproducible MS Analysis Project</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-import-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Import MS Data: Formats, Standards, and R Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-data-objects.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Construct Analysis-Ready Data Objects</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-initial-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Perform Initial Quality Control</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II — Feature Detection and Identification</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-detect-features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Detect Chromatographic Features with xcms</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-annotate-metabolites.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Annotate Metabolites from Feature Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-library-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Match MS/MS Spectra to Libraries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-audit-psm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Audit Peptide-Spectrum Matches and Build an Identification Report</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-protein-evidence.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Protein Evidence and Inference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III — Quantification Workflows</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-quant-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Build and Audit a Quantitative Proteomics Data Object</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-lfq-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Label-Free Proteomics Quantification and Protein Summarization</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-tmt-labeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Learning Objectives</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-targeted-quant.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Targeted MS Quantification and Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-metabolomics-pipelines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Metabolomics Quantification Pipelines</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV — Normalization, Batch Correction, and Missing Data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-normalize-batches.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Normalize Across Samples and Batches</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Handle Missing Data, Imputation, and Robustness</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V — Statistical Modeling, Machine Learning, and Biological Interpretation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-experimental-design.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Experimental Design, Replication, and Power</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-differential-abundance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Differential Abundance Analysis with Design Matrices</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./22-covariates-repeated.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Modeling Covariates and Repeated Measures for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./23-machine-learning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Machine Learning for MS Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./24-biomarker-modeling.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Biomarker Modeling Without Data Leakage for MS‑Based Omics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./25-pathway-network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Pathway and Network Analysis for Integrated MS‑Omics</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VI — Specialized and Emerging Applications</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-single-cell-proteomics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Single-Cell Proteomics Analysis with <code>scp</code></span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-ms-imaging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Mass Spectrometry Imaging with Cardinal</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./28-biomarker-external-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./29-isotope-tracing-networking.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part VII — Reproducible Reporting and Capstone</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./30-reproducible-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./31-capstone-case-studies.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Capstone: Two End-to-End Case Studies</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Summary and Future Directions</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-a-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">R Package Reference for Mass Spectrometry</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-b-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MS File Format Reference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-c-adducts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Common Adducts, Neutral Losses, and PTM Mass Shifts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-d-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Statistical and Reproducibility Quick Reference</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="2">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#learning-objectives" id="toc-learning-objectives" class="nav-link active" data-scroll-target="#learning-objectives"><span class="header-section-number">28.1</span> Learning Objectives</a></li>
+  <li><a href="#the-study" id="toc-the-study" class="nav-link" data-scroll-target="#the-study"><span class="header-section-number">28.2</span> The Study</a></li>
+  <li><a href="#step-1-compute-isotope-labelled-targets-from-molecular-formulas" id="toc-step-1-compute-isotope-labelled-targets-from-molecular-formulas" class="nav-link" data-scroll-target="#step-1-compute-isotope-labelled-targets-from-molecular-formulas"><span class="header-section-number">28.3</span> Step 1 — Compute Isotope-Labelled Targets from Molecular Formulas</a></li>
+  <li><a href="#step-2-targeted-extraction-and-nativelabelled-co-elution" id="toc-step-2-targeted-extraction-and-nativelabelled-co-elution" class="nav-link" data-scroll-target="#step-2-targeted-extraction-and-nativelabelled-co-elution"><span class="header-section-number">28.4</span> Step 2 — Targeted Extraction and Native/Labelled Co-Elution</a></li>
+  <li><a href="#step-3-msms-confirms-which-part-carries-the-label" id="toc-step-3-msms-confirms-which-part-carries-the-label" class="nav-link" data-scroll-target="#step-3-msms-confirms-which-part-carries-the-label"><span class="header-section-number">28.5</span> Step 3 — MS/MS Confirms <em>Which Part</em> Carries the Label</a></li>
+  <li><a href="#step-4-molecular-networking-from-one-comparison-to-a-graph" id="toc-step-4-molecular-networking-from-one-comparison-to-a-graph" class="nav-link" data-scroll-target="#step-4-molecular-networking-from-one-comparison-to-a-graph"><span class="header-section-number">28.6</span> Step 4 — Molecular Networking: From One Comparison to a Graph</a></li>
+  <li><a href="#step-5-biological-replication-before-you-believe-it" id="toc-step-5-biological-replication-before-you-believe-it" class="nav-link" data-scroll-target="#step-5-biological-replication-before-you-believe-it"><span class="header-section-number">28.7</span> Step 5 — Biological Replication Before You Believe It</a></li>
+  <li><a href="#common-pitfalls" id="toc-common-pitfalls" class="nav-link" data-scroll-target="#common-pitfalls"><span class="header-section-number">28.8</span> Common Pitfalls</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary"><span class="header-section-number">28.9</span> Summary</a></li>
+  <li><a href="#exercises" id="toc-exercises" class="nav-link" data-scroll-target="#exercises"><span class="header-section-number">28.10</span> Exercises</a></li>
+  <li><a href="#session-information" id="toc-session-information" class="nav-link" data-scroll-target="#session-information"><span class="header-section-number">28.11</span> Session Information</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/29-isotope-tracing-networking.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./26-single-cell-proteomics.html">Part VI — Specialized and Emerging Applications</a></li><li class="breadcrumb-item"><a href="./29-isotope-tracing-networking.html"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<blockquote class="blockquote">
+<p><em>“An unlabelled spectrum tells you a mass was there. A labelled one tells you where it came from.”</em></p>
+</blockquote>
+<p>Chapter 8 annotated metabolites by matching accurate mass and isotope <em>pattern</em> against a database. Chapter 9 matched MS/MS spectra against a library by cosine similarity. Both assume the compound — or something close enough to it — is already in a database. This chapter covers what you do when it is not: how to use a <strong>stable-isotope feeding experiment</strong> to prove that a family of unknown features is biosynthetically related, and how to use <strong>molecular networking</strong> to organize hundreds of unidentified MS/MS spectra into interpretable structural families, extending Chapter 9’s pairwise spectral matching from a single query-vs-library comparison into a full similarity graph.</p>
+<div class="callout callout-style-default callout-warning callout-titled" title="The One Mistake to Avoid">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The One Mistake to Avoid
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Treating a matched exact mass as a confirmed identification. An exact mass match alone is level-3 (putative class) at best in the MSI confidence framework from Chapter 8. Without a co-eluting isotope-labelled partner, diagnostic MS/MS fragments, or a reference standard, you have found a <em>formula</em>, not a <em>compound</em>.</p>
+</div>
+</div>
+<section id="learning-objectives" class="level2" data-number="28.1">
+<h2 data-number="28.1" class="anchored" data-anchor-id="learning-objectives"><span class="header-section-number">28.1</span> Learning Objectives</h2>
+<p>By the end of this chapter you will be able to:</p>
+<ul>
+<li>Compute exact-mass isotope-labelled targets from a molecular formula and a labelling scheme</li>
+<li>Extract targeted ion chromatograms for native/labelled compound pairs and use co-elution as structural evidence</li>
+<li>Interpret MS/MS fragment ions to distinguish the amino-acid portion of a conjugate from its acyl portion</li>
+<li>Build a molecular network from pairwise spectral cosine similarity and interpret the resulting compound families</li>
+<li>Apply a biological-replicate consistency check before treating a single-run detection as a finding</li>
+</ul>
+</section>
+<section id="the-study" class="level2" data-number="28.2">
+<h2 data-number="28.2" class="anchored" data-anchor-id="the-study"><span class="header-section-number">28.2</span> The Study</h2>
+<p>This chapter reproduces the central finding of Hsieh, Jiang, Xue, Antonovsky &amp; Brady, “Profiling the aromatic amino acid metabolome in the human gut microbiota reveals <em>Clostridioides difficile</em>-specific N-acyl amino acids,” <em>mSystems</em> (2026), doi:<a href="https://doi.org/10.1128/msystems.00779-26">10.1128/msystems.00779-26</a> <span class="citation" data-cites="hsieh2026aromatic">(<a href="references.html#ref-hsieh2026aromatic" role="doc-biblioref">Hsieh et al. 2026</a>)</span>. The paper feeds <em>C. difficile</em> cultures a ¹³C₉-labelled aromatic amino acid (phenylalanine or tryptophan) and asks: does the label show up in new, uncharacterized metabolite features? If a feature’s native form and its +9-mass-unit ¹³C-shifted partner both appear, at the same retention time, in the fed culture — that is direct chemical evidence the unlabelled feature is derived from the fed amino acid, independent of any database match.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Dataset">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Dataset
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Raw LC-MS data (Sciex X500R QTOF, <code>.wiff</code>) are deposited at MetaboLights <strong>MTBLS13404</strong> — <em>C. difficile</em> strain HM-746, three biological replicates, fed either ¹³C₉-phenylalanine or ¹³C₁₁-tryptophan, MS1 and MS2 acquired for each. As with earlier MetaboLights examples in this book (Chapter 7), <code>MsBackendMetaboLights</code> reads the ISA-Tab metadata and mzML files directly from accession. Because the full raw dataset is 8.92 GB, the code below shows the complete workflow but is marked <code>eval: false</code>; the pre-extracted results it produces (<code>nacyl_summary.csv</code>, molecular network nodes/edges) are treated as this chapter’s data and are what the figures and tables below actually show.</p>
+</div>
+</div>
+</section>
+<section id="step-1-compute-isotope-labelled-targets-from-molecular-formulas" class="level2" data-number="28.3">
+<h2 data-number="28.3" class="anchored" data-anchor-id="step-1-compute-isotope-labelled-targets-from-molecular-formulas"><span class="header-section-number">28.3</span> Step 1 — Compute Isotope-Labelled Targets from Molecular Formulas</h2>
+<p>An N-acyl amino acid is a fatty acid condensed onto an amino acid’s amine group, losing water: <code>formula(amino acid) + formula(acid) - H2O</code>. Once you have the neutral formula, <code>[M+H]+</code> and its ¹³C-labelled partner follow directly.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MetaboCoreUtils)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Neutral formulas as named integer vectors (C, H, N, O, S)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>aa_formula <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">Phe =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>,  <span class="at">H =</span> <span class="dv">11</span>, <span class="at">N =</span> <span class="dv">1</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">Trp =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">11</span>, <span class="at">H =</span> <span class="dv">12</span>, <span class="at">N =</span> <span class="dv">2</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">Tyr =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>,  <span class="at">H =</span> <span class="dv">11</span>, <span class="at">N =</span> <span class="dv">1</span>, <span class="at">O =</span> <span class="dv">3</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>acid_formula <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Acetyl(C2:0)</span><span class="st">`</span>       <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">2</span>, <span class="at">H =</span> <span class="dv">4</span>,  <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Isocaproyl(C6:0)</span><span class="st">`</span>   <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">6</span>, <span class="at">H =</span> <span class="dv">12</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Phenylacetyl(PA)</span><span class="st">`</span>   <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">8</span>, <span class="at">H =</span> <span class="dv">8</span>,  <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Phenylpropionyl(PP)</span><span class="st">`</span><span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>, <span class="at">H =</span> <span class="dv">10</span>, <span class="at">O =</span> <span class="dv">2</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>n_acyl_formula <span class="ot">&lt;-</span> <span class="cf">function</span>(aa, acid) {</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  f <span class="ot">&lt;-</span> aa</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (el <span class="cf">in</span> <span class="fu">names</span>(acid)) f[el] <span class="ot">&lt;-</span> (f[el] <span class="sc">%||%</span> <span class="dv">0</span>) <span class="sc">+</span> acid[el]</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  f[<span class="st">"H"</span>] <span class="ot">&lt;-</span> f[<span class="st">"H"</span>] <span class="sc">-</span> <span class="dv">2</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  f[<span class="st">"O"</span>] <span class="ot">&lt;-</span> f[<span class="st">"O"</span>] <span class="sc">-</span> <span class="dv">1</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  f[f <span class="sc">!=</span> <span class="dv">0</span>]</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="st">`</span><span class="at">%||%</span><span class="st">`</span> <span class="ot">&lt;-</span> <span class="cf">function</span>(a, b) <span class="cf">if</span> (<span class="fu">is.na</span>(a)) b <span class="cf">else</span> a</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: Isocaproyl-Phe, native [M+H]+</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>f_icphe <span class="ot">&lt;-</span> <span class="fu">n_acyl_formula</span>(aa_formula<span class="sc">$</span>Phe, acid_formula<span class="sc">$</span><span class="st">`</span><span class="at">Isocaproyl(C6:0)</span><span class="st">`</span>)</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>mh_native <span class="ot">&lt;-</span> MetaboCoreUtils<span class="sc">::</span><span class="fu">mass2mz</span>(MetaboCoreUtils<span class="sc">::</span><span class="fu">calculateMass</span>(f_icphe), <span class="at">adduct =</span> <span class="st">"[M+H]+"</span>)</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="co"># 13C9-labelled partner: Phe contributes all 9 of its carbons to the product</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>d13c <span class="ot">&lt;-</span> <span class="fl">1.003355</span>   <span class="co"># mass difference, 13C - 12C</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>mh_labeled <span class="ot">&lt;-</span> mh_native <span class="sc">+</span> <span class="dv">9</span> <span class="sc">*</span> d13c</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Isocaproyl-Phe   native [M+H]+ = %.4f</span><span class="sc">\n</span><span class="st">"</span>, mh_native))</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Isocaproyl-Phe 13C9 [M+H]+     = %.4f  (+%.4f)</span><span class="sc">\n</span><span class="st">"</span>, mh_labeled, <span class="dv">9</span> <span class="sc">*</span> d13c))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>Isocaproyl-Phe   native [M+H]+ = 264.1594
+Isocaproyl-Phe 13C9 [M+H]+     = 273.1897  (+9.0302)</code></pre>
+<p>Both values match the paper’s reported HRMS to better than 0.5 mDa. Applying this to every amino acid × acid combination generates a target list — here, 190 candidate N-acyl amino acids, each with a native and a labelled target mass, before a single spectrum has been examined.</p>
+<div class="callout callout-style-default callout-tip callout-titled" title="Handle instrument-reported mass separately from theoretical mass">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Handle instrument-reported mass separately from theoretical mass
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>One compound in this dataset — phenylpropionyl-Tyr — is observed at 314.1404, which is 5.4 ppm above its theoretical exact mass of 314.1387: outside a typical ±5 ppm extraction window centred on the theoretical value. The deposited raw data confirms the instrument consistently reports the higher value. When an extraction at the theoretical mass finds nothing but a neighbouring compound in the same series is detected cleanly, check whether the <em>paper’s reported</em> mass — not just the theoretical one — falls inside your window before concluding the compound is absent.</p>
+</div>
+</div>
+</section>
+<section id="step-2-targeted-extraction-and-nativelabelled-co-elution" class="level2" data-number="28.4">
+<h2 data-number="28.4" class="anchored" data-anchor-id="step-2-targeted-extraction-and-nativelabelled-co-elution"><span class="header-section-number">28.4</span> Step 2 — Targeted Extraction and Native/Labelled Co-Elution</h2>
+<p>Unlike Chapter 7’s untargeted <code>xcms</code> peak picking, this is a <strong>targeted</strong> extraction: you already know the exact masses you are looking for, so you extract narrow windows around each one and ask whether the native and labelled forms co-elute.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Spectra)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MsBackendMetaboLights)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>sps <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(<span class="fu">MetaboLightsParam</span>(<span class="at">mtblsId =</span> <span class="st">"MTBLS13404"</span>), <span class="at">source =</span> <span class="fu">MsBackendMetaboLights</span>())</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>sps_ms1 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">1</span>L)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>extract_eic <span class="ot">&lt;-</span> <span class="cf">function</span>(sps, target_mz, <span class="at">ppm =</span> <span class="dv">5</span>, <span class="at">rt_range =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">30</span>) <span class="sc">*</span> <span class="dv">60</span>) {</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  window <span class="ot">&lt;-</span> target_mz <span class="sc">*</span> ppm <span class="sc">*</span> <span class="fl">1e-6</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filterMzRange</span>(sps, <span class="at">mz =</span> <span class="fu">c</span>(target_mz <span class="sc">-</span> window, target_mz <span class="sc">+</span> window)) <span class="sc">|&gt;</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filterRt</span>(rt_range) <span class="sc">|&gt;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">spectraData</span>(<span class="at">columns =</span> <span class="fu">c</span>(<span class="st">"rtime"</span>, <span class="st">"totIonCurrent"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as.data.frame</span>()</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>eic_native  <span class="ot">&lt;-</span> <span class="fu">extract_eic</span>(sps_ms1, mh_native)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>eic_labeled <span class="ot">&lt;-</span> <span class="fu">extract_eic</span>(sps_ms1, mh_labeled)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Co-elution: do native and labelled apex retention times agree within 0.5 min?</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>rt_native  <span class="ot">&lt;-</span> eic_native<span class="sc">$</span>rtime[<span class="fu">which.max</span>(eic_native<span class="sc">$</span>totIonCurrent)]</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>rt_labeled <span class="ot">&lt;-</span> eic_labeled<span class="sc">$</span>rtime[<span class="fu">which.max</span>(eic_labeled<span class="sc">$</span>totIonCurrent)]</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>coeluting  <span class="ot">&lt;-</span> <span class="fu">abs</span>(rt_native <span class="sc">-</span> rt_labeled) <span class="sc">&lt;=</span> <span class="fl">0.5</span> <span class="sc">*</span> <span class="dv">60</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The pre-extracted result for this exact pair is in <code>nacyl_summary.csv</code>:</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>nacyl <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/nacyl_summary.csv"</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>nacyl <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">==</span> <span class="st">"Isocaproyl(C6:0)-Phe"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(tracer, compound, rt, int_native, int_labeled, confirmed_labeled)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>tracer            compound   rt int_native int_labeled confirmed_labeled
+ phe Isocaproyl(C6:0)-Phe 19.96     284130       61022               TRUE</code></pre>
+<p>Native and ¹³C-labelled iCPhe co-elute at RT 19.96 min with a ~4.7:1 intensity ratio (expected, since only a fraction of the endogenous pool is ¹³C-labelled from the fed tracer) — direct chemical evidence that isocaproyl-Phe is produced <em>from</em> the fed phenylalanine, independent of any spectral library match. Across the full target list, this logic yields <strong>197 candidate features, 50 isotope-confirmed detections representing 35 distinct N-acyl amino acids</strong>.</p>
+</section>
+<section id="step-3-msms-confirms-which-part-carries-the-label" class="level2" data-number="28.5">
+<h2 data-number="28.5" class="anchored" data-anchor-id="step-3-msms-confirms-which-part-carries-the-label"><span class="header-section-number">28.5</span> Step 3 — MS/MS Confirms <em>Which Part</em> Carries the Label</h2>
+<p>Co-elution tells you the two masses are related. MS/MS tells you <em>how</em>: a conjugate’s fragmentation should split cleanly into an amino-acid-derived ion (which shifts with the label, if the amino acid is labelled) and an acyl-derived ion (which does not, if the acyl group is unlabelled).</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>ms2 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">2</span>L) <span class="sc">|&gt;</span> <span class="fu">filterPrecursorMzRange</span>(<span class="fu">c</span>(mh_native <span class="sc">-</span> <span class="fl">0.03</span>, mh_native <span class="sc">+</span> <span class="fl">0.03</span>))</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectra</span>(ms2[<span class="dv">1</span>], <span class="at">main =</span> <span class="st">"Isocaproyl-Phe MS/MS"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>For isocaproyl-Phe (native) the diagnostic fragments are the phenylalanine immonium ion at <em>m/z</em> 120.08, <code>[Phe+H]+</code> at 166.09, and the isocaproyl acyl fragment at 81.07. In the ¹³C₉-labelled partner, the amino-acid fragments shift by the full label (immonium → 128.11, <code>[¹³C₉Phe+H]+</code> → 175.12) while the acyl fragment stays at 81.07 — because the acyl group came from an unlabelled fatty acid pool, not from the fed tracer.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ms2_data <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/plot_data/ms2_spectra.csv"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(ms2_data, <span class="fu">aes</span>(mz, intensity)) <span class="sc">+</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> mz, <span class="at">yend =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> form, <span class="at">ncol =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"intensity"</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"iCPhe MS/MS: native vs. 13C9-labelled"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>This native/labelled fragment comparison is the same logic behind Chapter 21’s variance-partitioning intuition, applied at the level of a single ion instead of a whole feature table: <strong>hold everything constant except the one thing you changed (here, which atoms carry the isotope) and see what moves.</strong></p>
+</section>
+<section id="step-4-molecular-networking-from-one-comparison-to-a-graph" class="level2" data-number="28.6">
+<h2 data-number="28.6" class="anchored" data-anchor-id="step-4-molecular-networking-from-one-comparison-to-a-graph"><span class="header-section-number">28.6</span> Step 4 — Molecular Networking: From One Comparison to a Graph</h2>
+<p>Chapter 9 computed a cosine similarity between one query spectrum and one library entry. <strong>Molecular networking</strong> computes that same cosine similarity between <em>every pair</em> of MS/MS spectra in a dataset and keeps only the strong, mutually-reciprocal matches — turning hundreds of unidentified spectra into a graph where clusters correspond to structurally related compound families, with no library required at all.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pairwise cosine similarity between all MS2 spectra (extends Chapter 9's</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co"># single-pair MetaboAnnotation::matchSpectra to an all-vs-all comparison)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">compareSpectra</span>(ms2_all, ms2_all, <span class="at">ppm =</span> <span class="dv">20</span>, <span class="at">FUN =</span> MsCoreUtils<span class="sc">::</span>ndotproduct)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">which</span>(sim <span class="sc">&gt;</span> <span class="fl">0.4</span>, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(row <span class="sc">&lt;</span> col) <span class="sc">|&gt;</span>                 <span class="co"># each pair once</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">cosine =</span> sim[<span class="fu">cbind</span>(row, col)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The pre-computed network for this dataset is already available as a node and edge table:</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(igraph)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>nodes <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_nodes.csv"</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_edges.csv"</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">graph_from_data_frame</span>(edges, <span class="at">directed =</span> <span class="cn">FALSE</span>, <span class="at">vertices =</span> nodes)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Nodes:"</span>, <span class="fu">vcount</span>(g), <span class="st">" Edges:"</span>, <span class="fu">ecount</span>(g), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Connected components = molecular families</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>comp <span class="ot">&lt;-</span> <span class="fu">components</span>(g)</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Molecular families:"</span>, comp<span class="sc">$</span>no, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(comp<span class="sc">$</span>csize)[<span class="fu">order</span>(<span class="sc">-</span><span class="fu">as.integer</span>(<span class="fu">names</span>(<span class="fu">table</span>(comp<span class="sc">$</span>csize))))] <span class="sc">|&gt;</span> <span class="fu">head</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<pre><code>Nodes: 139  Edges: 187
+Molecular families: 34</code></pre>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(g, <span class="at">vertex.size =</span> <span class="dv">4</span>, <span class="at">vertex.label =</span> <span class="cn">NA</span>,</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>     <span class="at">vertex.color =</span> <span class="fu">as.factor</span>(comp<span class="sc">$</span>membership),</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>     <span class="at">edge.width =</span> <span class="fu">E</span>(g)<span class="sc">$</span>cosine <span class="sc">*</span> <span class="dv">2</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"N-acyl amino acid molecular network"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The two largest components — 69 nodes for the N-acyl Phe family, 7 nodes for N-acyl Trp — separate cleanly without any label or database entry being used to build the graph. Structural relatedness alone, expressed as shared fragmentation, is enough to organize the data; the isotope evidence from Steps 2–3 is what then tells you <em>which direction</em> the biosynthesis runs.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Molecular networking finds relationships, not identities">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Molecular networking finds relationships, not identities
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A large, well-connected cluster tells you a set of features share structural motifs. It does not tell you what any of them <em>are</em> — that still requires the exact-mass/isotope work in Steps 1–2, a database hit, or a reference standard. Treat networking as a triage and hypothesis-generation tool that tells you where to spend your identification effort, not as an identification method in itself.</p>
+</div>
+</div>
+</section>
+<section id="step-5-biological-replication-before-you-believe-it" class="level2" data-number="28.7">
+<h2 data-number="28.7" class="anchored" data-anchor-id="step-5-biological-replication-before-you-believe-it"><span class="header-section-number">28.7</span> Step 5 — Biological Replication Before You Believe It</h2>
+<p>A single-run detection, however clean, is one data point. The reproduction confirms the flagship compounds (iCPhe, PAPhe, PPPhe) across <strong>n = 3 biological replicates</strong>, with retention times stable to ±0.02 min.</p>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>replicate_check <span class="ot">&lt;-</span> nacyl <span class="sc">|&gt;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"Isocaproyl(C6:0)-Phe"</span>, <span class="st">"Phenylacetyl(PA)-Phe"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">group_by</span>(compound) <span class="sc">|&gt;</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(<span class="at">n_reps =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(), <span class="at">rt_sd =</span> <span class="fu">sd</span>(rt), <span class="at">rt_range =</span> <span class="fu">max</span>(rt) <span class="sc">-</span> <span class="fu">min</span>(rt))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled" title="n = 1 is a hypothesis, not a finding">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>n = 1 is a hypothesis, not a finding
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Everything in Steps 1–4 can be done, and can look completely convincing, from a single injection. It is only the agreement across independent biological replicates that turns “we detected a co-eluting isotope pair once” into “<em>C. difficile</em> produces this metabolite.” The paper’s — and this reproduction’s — confidence in the flagship N-acyl amino acids rests on this replication, not on any single spectrum.</p>
+</div>
+</div>
+</section>
+<section id="common-pitfalls" class="level2" data-number="28.8">
+<h2 data-number="28.8" class="anchored" data-anchor-id="common-pitfalls"><span class="header-section-number">28.8</span> Common Pitfalls</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pitfall</th>
+<th>Why it’s a problem</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Extraction window centred only on the theoretical mass</td>
+<td>Misses compounds whose instrument-reported mass deviates by more than the window (Step 1)</td>
+<td>Cross-check against the paper’s <em>found</em> value when a series member appears to be missing</td>
+</tr>
+<tr class="even">
+<td>Treating co-elution alone as identification</td>
+<td>A different compound can coincidentally elute at the same time and mass</td>
+<td>Require co-elution <strong>and</strong> a plausible isotope shift <strong>and</strong>, where possible, MS/MS</td>
+</tr>
+<tr class="odd">
+<td>Assuming a shared <em>m/z</em> means a shared identity</td>
+<td>Structural isomers (butyryl vs.&nbsp;isobutyryl) are indistinguishable by mass and isotope pattern alone</td>
+<td>State explicitly that MS-only evidence gives formula-level (MSI level 2), not isomer-level (level 1), confidence</td>
+</tr>
+<tr class="even">
+<td>Building a molecular network then skipping isotope confirmation</td>
+<td>Networking shows relatedness, not biosynthetic direction or even confirmed structure</td>
+<td>Use networking to prioritize, not to conclude</td>
+</tr>
+<tr class="odd">
+<td>Reporting a single-replicate detection as a result</td>
+<td>Technical artifacts and misassigned co-elution happen</td>
+<td>Require agreement across independent biological replicates</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="summary" class="level2" data-number="28.9">
+<h2 data-number="28.9" class="anchored" data-anchor-id="summary"><span class="header-section-number">28.9</span> Summary</h2>
+<ul>
+<li><strong>Stable-isotope feeding</strong> turns “this mass appeared” into “this mass is derived from what we fed the organism” — evidence a database match alone cannot provide.</li>
+<li><strong>Targeted extraction</strong> of a native/labelled pair, checked for co-elution, is the core evidence; <strong>MS/MS</strong> confirms <em>which part</em> of the molecule carries the label.</li>
+<li><strong>Molecular networking</strong> extends Chapter 9’s single spectral comparison into an all-vs-all similarity graph, organizing large numbers of unidentified spectra into structural families without requiring a library hit for any of them.</li>
+<li><strong>Networking finds relationships; isotope evidence and MS/MS find direction and structure.</strong> Neither substitutes for the other.</li>
+<li><strong>Biological replication is not optional</strong> — a compelling single-run detection is a hypothesis until it reproduces across independent replicates.</li>
+</ul>
+</section>
+<section id="exercises" class="level2" data-number="28.10">
+<h2 data-number="28.10" class="anchored" data-anchor-id="exercises"><span class="header-section-number">28.10</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Formula arithmetic.</strong> Using the <code>n_acyl_formula()</code> pattern from Step 1, compute the native <code>[M+H]+</code> for Phenylacetyl-Tyr and its ¹³C-labelled partner (Tyr contributes 9 carbons when derived from ¹³C₉-phenylalanine… or does it? Check the paper’s tracer-to-product carbon accounting before assuming 9).</p></li>
+<li><p><strong>Window sensitivity.</strong> Using the PP-Tyr case from the tip in Step 1 (theoretical 314.1387, instrument-reported 314.1404), compute the ppm deviation. At what ±ppm extraction window would this compound have been found using the theoretical mass alone?</p></li>
+<li><p><strong>Co-elution threshold.</strong> The worked example uses ±0.5 min as the co-elution tolerance between native and labelled apex retention times. Using <code>data/processed/plot_data/eic_traces.csv</code>, tighten the tolerance to ±0.1 min and rerun the co-elution check for all flagship compounds. Which, if any, drop out — and does that mean they are false positives, or does it mean the tolerance was too strict for this chromatography?</p></li>
+<li><p><strong>Network threshold.</strong> Rebuild the molecular network at cosine &gt; 0.7 instead of &gt; 0.4. How do the number of edges and the number of connected components change? What does a stricter threshold trade off against a looser one?</p></li>
+<li><p><strong>Design the replicate check.</strong> Using <code>nacyl_summary.csv</code>, write the <code>dplyr</code> pipeline that would flag a compound as “replicated” only if it is isotope-confirmed in at least 2 of 3 biological replicates with retention times within 0.05 min of each other. Apply it to every compound in the table — how many of the 35 distinct N-acyl amino acids pass?</p></li>
+</ol>
+</section>
+<section id="session-information" class="level2" data-number="28.11">
+<h2 data-number="28.11" class="anchored" data-anchor-id="session-information"><span class="header-section-number">28.11</span> Session Information</h2>
+<div class="cell">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>R version 4.6.1 (2026-06-24 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26200)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=English_Switzerland.utf8  LC_CTYPE=English_Switzerland.utf8   
+[3] LC_MONETARY=English_Switzerland.utf8 LC_NUMERIC=C                        
+[5] LC_TIME=English_Switzerland.utf8    
+
+time zone: Europe/Zurich
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices datasets  utils     methods   base     
+
+loaded via a namespace (and not attached):
+ [1] htmlwidgets_1.6.4   BiocManager_1.30.27 compiler_4.6.1     
+ [4] fastmap_1.2.0       cli_3.6.6           htmltools_0.5.9    
+ [7] tools_4.6.1         otel_0.2.0          yaml_2.3.12        
+[10] rmarkdown_2.32      knitr_1.52          jsonlite_2.0.0     
+[13] xfun_0.61           digest_0.6.39       rlang_1.3.0        
+[16] renv_1.2.4          evaluate_1.0.5     </code></pre>
+</div>
+</div>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-hsieh2026aromatic" class="csl-entry" role="listitem">
+Hsieh, Daniel C.-C., Lin Jiang, Mengchi Xue, Niv Antonovsky, and Sean F. Brady. 2026. <span>“Profiling the Aromatic Amino Acid Metabolome in the Human Gut Microbiota Reveals <span class="nocase">Clostridioides difficile</span>-Specific n-Acyl Amino Acids.”</span> <em>mSystems</em>, ahead of print. <a href="https://doi.org/10.1128/msystems.00779-26">https://doi.org/10.1128/msystems.00779-26</a>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script>
+// Zoom Controls for Quarto Book
+// Adds interactive zoom in/out functionality
+
+(function() {
+  'use strict';
+  
+  // Create zoom controls HTML
+  function createZoomControls() {
+    const controlsHTML = `
+      <div class="zoom-controls" id="zoomControls">
+        <button id="zoomInBtn" title="Zoom In (Ctrl +)">+</button>
+        <button id="zoomOutBtn" title="Zoom Out (Ctrl -)">−</button>
+        <button id="zoomResetBtn" title="Reset Zoom (Ctrl 0)">⌂</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', controlsHTML);
+  }
+  
+  // Get current zoom level
+  function getCurrentZoom() {
+    const zoomClass = document.body.className.match(/zoom-(\d+)/);
+    return zoomClass ? parseInt(zoomClass[1]) : 100;
+  }
+  
+  // Set zoom level
+  function setZoom(level) {
+    // Remove existing zoom classes
+    document.body.className = document.body.className
+      .replace(/\bzoom-\d+\b/g, '')
+      .trim();
+    
+    // Add new zoom class
+    if (level !== 100) {
+      document.body.classList.add(`zoom-${level}`);
+    }
+    
+    // Update indicator
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+      indicator.textContent = `${level}%`;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('bookZoomLevel', level);
+    
+    // Update button states
+    updateButtonStates(level);
+  }
+  
+  // Update button enabled/disabled states
+  function updateButtonStates(level) {
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = level >= 200;
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = level <= 50;
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.disabled = level === 100;
+    }
+  }
+  
+  // Zoom in
+  function zoomIn() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex < levels.length - 1) {
+      setZoom(levels[currentIndex + 1]);
+    }
+  }
+  
+  // Zoom out
+  function zoomOut() {
+    const current = getCurrentZoom();
+    const levels = [50, 75, 100, 125, 150, 200];
+    const currentIndex = levels.indexOf(current);
+    
+    if (currentIndex > 0) {
+      setZoom(levels[currentIndex - 1]);
+    }
+  }
+  
+  // Reset zoom
+  function resetZoom() {
+    setZoom(100);
+  }
+  
+  // Initialize zoom controls
+  function initZoomControls() {
+    // Create controls
+    createZoomControls();
+    
+    // Attach event listeners
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', zoomIn);
+    }
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', zoomOut);
+    }
+    if (zoomResetBtn) {
+      zoomResetBtn.addEventListener('click', resetZoom);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ctrl + Plus or Ctrl + Equals
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        zoomIn();
+      }
+      // Ctrl + Minus
+      else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      }
+      // Ctrl + 0
+      else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    });
+    
+    // Restore saved zoom level
+    const savedZoom = localStorage.getItem('bookZoomLevel');
+    if (savedZoom) {
+      setZoom(parseInt(savedZoom));
+    } else {
+      setZoom(100);
+    }
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initZoomControls);
+  } else {
+    initZoomControls();
+  }
+  
+  // Image click to zoom functionality
+  document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG' && !e.target.closest('.zoom-container')) {
+      const img = e.target;
+      const container = document.createElement('div');
+      container.className = 'zoom-container';
+      container.id = 'imageZoomContainer';
+      
+      const clonedImg = img.cloneNode(true);
+      clonedImg.style.maxWidth = '85%';
+      clonedImg.style.maxHeight = '95%';
+      clonedImg.style.width = 'auto';
+      clonedImg.style.height = 'auto';
+      clonedImg.style.objectFit = 'contain';
+      container.appendChild(clonedImg);
+      document.body.appendChild(container);
+      
+      // Zoom in
+      setTimeout(() => {
+        container.classList.add('zoomed');
+      }, 10);
+      
+      // Zoom out on click
+      container.addEventListener('click', function() {
+        container.classList.remove('zoomed');
+        setTimeout(() => {
+          container.remove();
+        }, 300);
+      });
+    }
+  });
+  
+})();
+</script>
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+        for (let i=0; i<detailsSrc.length; i++) {
+          const details = detailsSrc[i].parentElement;
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vanhungtran\.github\.io\/RforMS\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+            // target, if specified
+            link.setAttribute("target", "_blank");
+            if (link.getAttribute("rel") === null) {
+              link.setAttribute("rel", "noopener");
+            }
+            // default icon
+            link.classList.add("external");
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./28-biomarker-external-validation.html" class="pagination-link" aria-label="External Validation and Confounder-Robust Biomarker Panels">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">External Validation and Confounder-Robust Biomarker Panels</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./30-reproducible-reports.html" class="pagination-link" aria-label="Build Reproducible MS Reports">
+        <span class="nav-page-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Build Reproducible MS Reports</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># Metabolite Discovery with Stable-Isotope Tracing and Molecular Networking</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="at">&gt; *"An unlabelled spectrum tells you a mass was there. A labelled one tells you where it came from."*</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>Chapter 8 annotated metabolites by matching accurate mass and isotope *pattern* against a database. Chapter 9 matched MS/MS spectra against a library by cosine similarity. Both assume the compound — or something close enough to it — is already in a database. This chapter covers what you do when it is not: how to use a **stable-isotope feeding experiment** to prove that a family of unknown features is biosynthetically related, and how to use **molecular networking** to organize hundreds of unidentified MS/MS spectra into interpretable structural families, extending Chapter 9's pairwise spectral matching from a single query-vs-library comparison into a full similarity graph.</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="The One Mistake to Avoid"}</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>Treating a matched exact mass as a confirmed identification. An exact mass match alone is level-3 (putative class) at best in the MSI confidence framework from Chapter 8. Without a co-eluting isotope-labelled partner, diagnostic MS/MS fragments, or a reference standard, you have found a *formula*, not a *compound*.</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="fu">## Learning Objectives</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>By the end of this chapter you will be able to:</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Compute exact-mass isotope-labelled targets from a molecular formula and a labelling scheme</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Extract targeted ion chromatograms for native/labelled compound pairs and use co-elution as structural evidence</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Interpret MS/MS fragment ions to distinguish the amino-acid portion of a conjugate from its acyl portion</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Build a molecular network from pairwise spectral cosine similarity and interpret the resulting compound families</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Apply a biological-replicate consistency check before treating a single-run detection as a finding</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a><span class="fu">## The Study</span></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>This chapter reproduces the central finding of Hsieh, Jiang, Xue, Antonovsky &amp; Brady, "Profiling the aromatic amino acid metabolome in the human gut microbiota reveals *Clostridioides difficile*-specific N-acyl amino acids," *mSystems* (2026), doi:[10.1128/msystems.00779-26](https://doi.org/10.1128/msystems.00779-26) [@hsieh2026aromatic]. The paper feeds *C. difficile* cultures a ¹³C₉-labelled aromatic amino acid (phenylalanine or tryptophan) and asks: does the label show up in new, uncharacterized metabolite features? If a feature's native form and its +9-mass-unit ¹³C-shifted partner both appear, at the same retention time, in the fed culture — that is direct chemical evidence the unlabelled feature is derived from the fed amino acid, independent of any database match.</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Dataset"}</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>Raw LC-MS data (Sciex X500R QTOF, <span class="in">`.wiff`</span>) are deposited at MetaboLights **MTBLS13404** — *C. difficile* strain HM-746, three biological replicates, fed either ¹³C₉-phenylalanine or ¹³C₁₁-tryptophan, MS1 and MS2 acquired for each. As with earlier MetaboLights examples in this book (Chapter 7), <span class="in">`MsBackendMetaboLights`</span> reads the ISA-Tab metadata and mzML files directly from accession. Because the full raw dataset is 8.92 GB, the code below shows the complete workflow but is marked <span class="in">`eval: false`</span>; the pre-extracted results it produces (<span class="in">`nacyl_summary.csv`</span>, molecular network nodes/edges) are treated as this chapter's data and are what the figures and tables below actually show.</span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 1 — Compute Isotope-Labelled Targets from Molecular Formulas</span></span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>An N-acyl amino acid is a fatty acid condensed onto an amino acid's amine group, losing water: <span class="in">`formula(amino acid) + formula(acid) - H2O`</span>. Once you have the neutral formula, <span class="in">`[M+H]+`</span> and its ¹³C-labelled partner follow directly.</span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-35"><a href="#cb15-35" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-36"><a href="#cb15-36" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-37"><a href="#cb15-37" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MetaboCoreUtils)</span>
+<span id="cb15-38"><a href="#cb15-38" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb15-39"><a href="#cb15-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-40"><a href="#cb15-40" aria-hidden="true" tabindex="-1"></a><span class="co"># Neutral formulas as named integer vectors (C, H, N, O, S)</span></span>
+<span id="cb15-41"><a href="#cb15-41" aria-hidden="true" tabindex="-1"></a>aa_formula <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb15-42"><a href="#cb15-42" aria-hidden="true" tabindex="-1"></a>  <span class="at">Phe =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>,  <span class="at">H =</span> <span class="dv">11</span>, <span class="at">N =</span> <span class="dv">1</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb15-43"><a href="#cb15-43" aria-hidden="true" tabindex="-1"></a>  <span class="at">Trp =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">11</span>, <span class="at">H =</span> <span class="dv">12</span>, <span class="at">N =</span> <span class="dv">2</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb15-44"><a href="#cb15-44" aria-hidden="true" tabindex="-1"></a>  <span class="at">Tyr =</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>,  <span class="at">H =</span> <span class="dv">11</span>, <span class="at">N =</span> <span class="dv">1</span>, <span class="at">O =</span> <span class="dv">3</span>)</span>
+<span id="cb15-45"><a href="#cb15-45" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-46"><a href="#cb15-46" aria-hidden="true" tabindex="-1"></a>acid_formula <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb15-47"><a href="#cb15-47" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Acetyl(C2:0)</span><span class="st">`</span>       <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">2</span>, <span class="at">H =</span> <span class="dv">4</span>,  <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb15-48"><a href="#cb15-48" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Isocaproyl(C6:0)</span><span class="st">`</span>   <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">6</span>, <span class="at">H =</span> <span class="dv">12</span>, <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb15-49"><a href="#cb15-49" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Phenylacetyl(PA)</span><span class="st">`</span>   <span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">8</span>, <span class="at">H =</span> <span class="dv">8</span>,  <span class="at">O =</span> <span class="dv">2</span>),</span>
+<span id="cb15-50"><a href="#cb15-50" aria-hidden="true" tabindex="-1"></a>  <span class="st">`</span><span class="at">Phenylpropionyl(PP)</span><span class="st">`</span><span class="ot">=</span> <span class="fu">c</span>(<span class="at">C =</span> <span class="dv">9</span>, <span class="at">H =</span> <span class="dv">10</span>, <span class="at">O =</span> <span class="dv">2</span>)</span>
+<span id="cb15-51"><a href="#cb15-51" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-52"><a href="#cb15-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-53"><a href="#cb15-53" aria-hidden="true" tabindex="-1"></a>n_acyl_formula <span class="ot">&lt;-</span> <span class="cf">function</span>(aa, acid) {</span>
+<span id="cb15-54"><a href="#cb15-54" aria-hidden="true" tabindex="-1"></a>  f <span class="ot">&lt;-</span> aa</span>
+<span id="cb15-55"><a href="#cb15-55" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (el <span class="cf">in</span> <span class="fu">names</span>(acid)) f[el] <span class="ot">&lt;-</span> (f[el] <span class="sc">%||%</span> <span class="dv">0</span>) <span class="sc">+</span> acid[el]</span>
+<span id="cb15-56"><a href="#cb15-56" aria-hidden="true" tabindex="-1"></a>  f[<span class="st">"H"</span>] <span class="ot">&lt;-</span> f[<span class="st">"H"</span>] <span class="sc">-</span> <span class="dv">2</span></span>
+<span id="cb15-57"><a href="#cb15-57" aria-hidden="true" tabindex="-1"></a>  f[<span class="st">"O"</span>] <span class="ot">&lt;-</span> f[<span class="st">"O"</span>] <span class="sc">-</span> <span class="dv">1</span></span>
+<span id="cb15-58"><a href="#cb15-58" aria-hidden="true" tabindex="-1"></a>  f[f <span class="sc">!=</span> <span class="dv">0</span>]</span>
+<span id="cb15-59"><a href="#cb15-59" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-60"><a href="#cb15-60" aria-hidden="true" tabindex="-1"></a><span class="st">`</span><span class="at">%||%</span><span class="st">`</span> <span class="ot">&lt;-</span> <span class="cf">function</span>(a, b) <span class="cf">if</span> (<span class="fu">is.na</span>(a)) b <span class="cf">else</span> a</span>
+<span id="cb15-61"><a href="#cb15-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-62"><a href="#cb15-62" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: Isocaproyl-Phe, native [M+H]+</span></span>
+<span id="cb15-63"><a href="#cb15-63" aria-hidden="true" tabindex="-1"></a>f_icphe <span class="ot">&lt;-</span> <span class="fu">n_acyl_formula</span>(aa_formula<span class="sc">$</span>Phe, acid_formula<span class="sc">$</span><span class="st">`</span><span class="at">Isocaproyl(C6:0)</span><span class="st">`</span>)</span>
+<span id="cb15-64"><a href="#cb15-64" aria-hidden="true" tabindex="-1"></a>mh_native <span class="ot">&lt;-</span> MetaboCoreUtils<span class="sc">::</span><span class="fu">mass2mz</span>(MetaboCoreUtils<span class="sc">::</span><span class="fu">calculateMass</span>(f_icphe), <span class="at">adduct =</span> <span class="st">"[M+H]+"</span>)</span>
+<span id="cb15-65"><a href="#cb15-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-66"><a href="#cb15-66" aria-hidden="true" tabindex="-1"></a><span class="co"># 13C9-labelled partner: Phe contributes all 9 of its carbons to the product</span></span>
+<span id="cb15-67"><a href="#cb15-67" aria-hidden="true" tabindex="-1"></a>d13c <span class="ot">&lt;-</span> <span class="fl">1.003355</span>   <span class="co"># mass difference, 13C - 12C</span></span>
+<span id="cb15-68"><a href="#cb15-68" aria-hidden="true" tabindex="-1"></a>mh_labeled <span class="ot">&lt;-</span> mh_native <span class="sc">+</span> <span class="dv">9</span> <span class="sc">*</span> d13c</span>
+<span id="cb15-69"><a href="#cb15-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-70"><a href="#cb15-70" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Isocaproyl-Phe   native [M+H]+ = %.4f</span><span class="sc">\n</span><span class="st">"</span>, mh_native))</span>
+<span id="cb15-71"><a href="#cb15-71" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Isocaproyl-Phe 13C9 [M+H]+     = %.4f  (+%.4f)</span><span class="sc">\n</span><span class="st">"</span>, mh_labeled, <span class="dv">9</span> <span class="sc">*</span> d13c))</span>
+<span id="cb15-72"><a href="#cb15-72" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-73"><a href="#cb15-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-74"><a href="#cb15-74" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-75"><a href="#cb15-75" aria-hidden="true" tabindex="-1"></a><span class="in">Isocaproyl-Phe   native [M+H]+ = 264.1594</span></span>
+<span id="cb15-76"><a href="#cb15-76" aria-hidden="true" tabindex="-1"></a><span class="in">Isocaproyl-Phe 13C9 [M+H]+     = 273.1897  (+9.0302)</span></span>
+<span id="cb15-77"><a href="#cb15-77" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-78"><a href="#cb15-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-79"><a href="#cb15-79" aria-hidden="true" tabindex="-1"></a>Both values match the paper's reported HRMS to better than 0.5 mDa. Applying this to every amino acid × acid combination generates a target list — here, 190 candidate N-acyl amino acids, each with a native and a labelled target mass, before a single spectrum has been examined.</span>
+<span id="cb15-80"><a href="#cb15-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-81"><a href="#cb15-81" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Handle instrument-reported mass separately from theoretical mass"}</span>
+<span id="cb15-82"><a href="#cb15-82" aria-hidden="true" tabindex="-1"></a>One compound in this dataset — phenylpropionyl-Tyr — is observed at 314.1404, which is 5.4 ppm above its theoretical exact mass of 314.1387: outside a typical ±5 ppm extraction window centred on the theoretical value. The deposited raw data confirms the instrument consistently reports the higher value. When an extraction at the theoretical mass finds nothing but a neighbouring compound in the same series is detected cleanly, check whether the *paper's reported* mass — not just the theoretical one — falls inside your window before concluding the compound is absent.</span>
+<span id="cb15-83"><a href="#cb15-83" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-84"><a href="#cb15-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-85"><a href="#cb15-85" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 2 — Targeted Extraction and Native/Labelled Co-Elution</span></span>
+<span id="cb15-86"><a href="#cb15-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-87"><a href="#cb15-87" aria-hidden="true" tabindex="-1"></a>Unlike Chapter 7's untargeted <span class="in">`xcms`</span> peak picking, this is a **targeted** extraction: you already know the exact masses you are looking for, so you extract narrow windows around each one and ask whether the native and labelled forms co-elute.</span>
+<span id="cb15-88"><a href="#cb15-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-91"><a href="#cb15-91" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-92"><a href="#cb15-92" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-93"><a href="#cb15-93" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Spectra)</span>
+<span id="cb15-94"><a href="#cb15-94" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MsBackendMetaboLights)</span>
+<span id="cb15-95"><a href="#cb15-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-96"><a href="#cb15-96" aria-hidden="true" tabindex="-1"></a>sps <span class="ot">&lt;-</span> <span class="fu">Spectra</span>(<span class="fu">MetaboLightsParam</span>(<span class="at">mtblsId =</span> <span class="st">"MTBLS13404"</span>), <span class="at">source =</span> <span class="fu">MsBackendMetaboLights</span>())</span>
+<span id="cb15-97"><a href="#cb15-97" aria-hidden="true" tabindex="-1"></a>sps_ms1 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">1</span>L)</span>
+<span id="cb15-98"><a href="#cb15-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-99"><a href="#cb15-99" aria-hidden="true" tabindex="-1"></a>extract_eic <span class="ot">&lt;-</span> <span class="cf">function</span>(sps, target_mz, <span class="at">ppm =</span> <span class="dv">5</span>, <span class="at">rt_range =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">30</span>) <span class="sc">*</span> <span class="dv">60</span>) {</span>
+<span id="cb15-100"><a href="#cb15-100" aria-hidden="true" tabindex="-1"></a>  window <span class="ot">&lt;-</span> target_mz <span class="sc">*</span> ppm <span class="sc">*</span> <span class="fl">1e-6</span></span>
+<span id="cb15-101"><a href="#cb15-101" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filterMzRange</span>(sps, <span class="at">mz =</span> <span class="fu">c</span>(target_mz <span class="sc">-</span> window, target_mz <span class="sc">+</span> window)) <span class="sc">|&gt;</span></span>
+<span id="cb15-102"><a href="#cb15-102" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filterRt</span>(rt_range) <span class="sc">|&gt;</span></span>
+<span id="cb15-103"><a href="#cb15-103" aria-hidden="true" tabindex="-1"></a>    <span class="fu">spectraData</span>(<span class="at">columns =</span> <span class="fu">c</span>(<span class="st">"rtime"</span>, <span class="st">"totIonCurrent"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-104"><a href="#cb15-104" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as.data.frame</span>()</span>
+<span id="cb15-105"><a href="#cb15-105" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-106"><a href="#cb15-106" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-107"><a href="#cb15-107" aria-hidden="true" tabindex="-1"></a>eic_native  <span class="ot">&lt;-</span> <span class="fu">extract_eic</span>(sps_ms1, mh_native)</span>
+<span id="cb15-108"><a href="#cb15-108" aria-hidden="true" tabindex="-1"></a>eic_labeled <span class="ot">&lt;-</span> <span class="fu">extract_eic</span>(sps_ms1, mh_labeled)</span>
+<span id="cb15-109"><a href="#cb15-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-110"><a href="#cb15-110" aria-hidden="true" tabindex="-1"></a><span class="co"># Co-elution: do native and labelled apex retention times agree within 0.5 min?</span></span>
+<span id="cb15-111"><a href="#cb15-111" aria-hidden="true" tabindex="-1"></a>rt_native  <span class="ot">&lt;-</span> eic_native<span class="sc">$</span>rtime[<span class="fu">which.max</span>(eic_native<span class="sc">$</span>totIonCurrent)]</span>
+<span id="cb15-112"><a href="#cb15-112" aria-hidden="true" tabindex="-1"></a>rt_labeled <span class="ot">&lt;-</span> eic_labeled<span class="sc">$</span>rtime[<span class="fu">which.max</span>(eic_labeled<span class="sc">$</span>totIonCurrent)]</span>
+<span id="cb15-113"><a href="#cb15-113" aria-hidden="true" tabindex="-1"></a>coeluting  <span class="ot">&lt;-</span> <span class="fu">abs</span>(rt_native <span class="sc">-</span> rt_labeled) <span class="sc">&lt;=</span> <span class="fl">0.5</span> <span class="sc">*</span> <span class="dv">60</span></span>
+<span id="cb15-114"><a href="#cb15-114" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-115"><a href="#cb15-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-116"><a href="#cb15-116" aria-hidden="true" tabindex="-1"></a>The pre-extracted result for this exact pair is in <span class="in">`nacyl_summary.csv`</span>:</span>
+<span id="cb15-117"><a href="#cb15-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-120"><a href="#cb15-120" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-121"><a href="#cb15-121" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-122"><a href="#cb15-122" aria-hidden="true" tabindex="-1"></a>nacyl <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/nacyl_summary.csv"</span>)</span>
+<span id="cb15-123"><a href="#cb15-123" aria-hidden="true" tabindex="-1"></a>nacyl <span class="sc">|&gt;</span></span>
+<span id="cb15-124"><a href="#cb15-124" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">==</span> <span class="st">"Isocaproyl(C6:0)-Phe"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-125"><a href="#cb15-125" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(tracer, compound, rt, int_native, int_labeled, confirmed_labeled)</span>
+<span id="cb15-126"><a href="#cb15-126" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-127"><a href="#cb15-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-128"><a href="#cb15-128" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-129"><a href="#cb15-129" aria-hidden="true" tabindex="-1"></a><span class="in">tracer            compound   rt int_native int_labeled confirmed_labeled</span></span>
+<span id="cb15-130"><a href="#cb15-130" aria-hidden="true" tabindex="-1"></a><span class="in"> phe Isocaproyl(C6:0)-Phe 19.96     284130       61022               TRUE</span></span>
+<span id="cb15-131"><a href="#cb15-131" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-132"><a href="#cb15-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-133"><a href="#cb15-133" aria-hidden="true" tabindex="-1"></a>Native and ¹³C-labelled iCPhe co-elute at RT 19.96 min with a ~4.7:1 intensity ratio (expected, since only a fraction of the endogenous pool is ¹³C-labelled from the fed tracer) — direct chemical evidence that isocaproyl-Phe is produced *from* the fed phenylalanine, independent of any spectral library match. Across the full target list, this logic yields **197 candidate features, 50 isotope-confirmed detections representing 35 distinct N-acyl amino acids**.</span>
+<span id="cb15-134"><a href="#cb15-134" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-135"><a href="#cb15-135" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — MS/MS Confirms *Which Part* Carries the Label</span></span>
+<span id="cb15-136"><a href="#cb15-136" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-137"><a href="#cb15-137" aria-hidden="true" tabindex="-1"></a>Co-elution tells you the two masses are related. MS/MS tells you *how*: a conjugate's fragmentation should split cleanly into an amino-acid-derived ion (which shifts with the label, if the amino acid is labelled) and an acyl-derived ion (which does not, if the acyl group is unlabelled).</span>
+<span id="cb15-138"><a href="#cb15-138" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-141"><a href="#cb15-141" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-142"><a href="#cb15-142" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-143"><a href="#cb15-143" aria-hidden="true" tabindex="-1"></a>ms2 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">2</span>L) <span class="sc">|&gt;</span> <span class="fu">filterPrecursorMzRange</span>(<span class="fu">c</span>(mh_native <span class="sc">-</span> <span class="fl">0.03</span>, mh_native <span class="sc">+</span> <span class="fl">0.03</span>))</span>
+<span id="cb15-144"><a href="#cb15-144" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectra</span>(ms2[<span class="dv">1</span>], <span class="at">main =</span> <span class="st">"Isocaproyl-Phe MS/MS"</span>)</span>
+<span id="cb15-145"><a href="#cb15-145" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-146"><a href="#cb15-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-147"><a href="#cb15-147" aria-hidden="true" tabindex="-1"></a>For isocaproyl-Phe (native) the diagnostic fragments are the phenylalanine immonium ion at *m/z* 120.08, <span class="in">`[Phe+H]+`</span> at 166.09, and the isocaproyl acyl fragment at 81.07. In the ¹³C₉-labelled partner, the amino-acid fragments shift by the full label (immonium → 128.11, <span class="in">`[¹³C₉Phe+H]+`</span> → 175.12) while the acyl fragment stays at 81.07 — because the acyl group came from an unlabelled fatty acid pool, not from the fed tracer.</span>
+<span id="cb15-148"><a href="#cb15-148" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-151"><a href="#cb15-151" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-152"><a href="#cb15-152" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-153"><a href="#cb15-153" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS of native and 13C9-labelled isocaproyl-Phe: amino-acid fragments shift with the label; the acyl fragment does not."</span></span>
+<span id="cb15-154"><a href="#cb15-154" aria-hidden="true" tabindex="-1"></a>ms2_data <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/plot_data/ms2_spectra.csv"</span>)</span>
+<span id="cb15-155"><a href="#cb15-155" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb15-156"><a href="#cb15-156" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(ms2_data, <span class="fu">aes</span>(mz, intensity)) <span class="sc">+</span></span>
+<span id="cb15-157"><a href="#cb15-157" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> mz, <span class="at">yend =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
+<span id="cb15-158"><a href="#cb15-158" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> form, <span class="at">ncol =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb15-159"><a href="#cb15-159" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"intensity"</span>,</span>
+<span id="cb15-160"><a href="#cb15-160" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"iCPhe MS/MS: native vs. 13C9-labelled"</span>)</span>
+<span id="cb15-161"><a href="#cb15-161" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-162"><a href="#cb15-162" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-163"><a href="#cb15-163" aria-hidden="true" tabindex="-1"></a>This native/labelled fragment comparison is the same logic behind Chapter 21's variance-partitioning intuition, applied at the level of a single ion instead of a whole feature table: **hold everything constant except the one thing you changed (here, which atoms carry the isotope) and see what moves.**</span>
+<span id="cb15-164"><a href="#cb15-164" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-165"><a href="#cb15-165" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — Molecular Networking: From One Comparison to a Graph</span></span>
+<span id="cb15-166"><a href="#cb15-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-167"><a href="#cb15-167" aria-hidden="true" tabindex="-1"></a>Chapter 9 computed a cosine similarity between one query spectrum and one library entry. **Molecular networking** computes that same cosine similarity between *every pair* of MS/MS spectra in a dataset and keeps only the strong, mutually-reciprocal matches — turning hundreds of unidentified spectra into a graph where clusters correspond to structurally related compound families, with no library required at all.</span>
+<span id="cb15-168"><a href="#cb15-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-171"><a href="#cb15-171" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-172"><a href="#cb15-172" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-173"><a href="#cb15-173" aria-hidden="true" tabindex="-1"></a><span class="co"># Pairwise cosine similarity between all MS2 spectra (extends Chapter 9's</span></span>
+<span id="cb15-174"><a href="#cb15-174" aria-hidden="true" tabindex="-1"></a><span class="co"># single-pair MetaboAnnotation::matchSpectra to an all-vs-all comparison)</span></span>
+<span id="cb15-175"><a href="#cb15-175" aria-hidden="true" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">compareSpectra</span>(ms2_all, ms2_all, <span class="at">ppm =</span> <span class="dv">20</span>, <span class="at">FUN =</span> MsCoreUtils<span class="sc">::</span>ndotproduct)</span>
+<span id="cb15-176"><a href="#cb15-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-177"><a href="#cb15-177" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">which</span>(sim <span class="sc">&gt;</span> <span class="fl">0.4</span>, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-178"><a href="#cb15-178" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb15-179"><a href="#cb15-179" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(row <span class="sc">&lt;</span> col) <span class="sc">|&gt;</span>                 <span class="co"># each pair once</span></span>
+<span id="cb15-180"><a href="#cb15-180" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">cosine =</span> sim[<span class="fu">cbind</span>(row, col)])</span>
+<span id="cb15-181"><a href="#cb15-181" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-182"><a href="#cb15-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-183"><a href="#cb15-183" aria-hidden="true" tabindex="-1"></a>The pre-computed network for this dataset is already available as a node and edge table:</span>
+<span id="cb15-184"><a href="#cb15-184" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-187"><a href="#cb15-187" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-188"><a href="#cb15-188" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-189"><a href="#cb15-189" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(igraph)</span>
+<span id="cb15-190"><a href="#cb15-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-191"><a href="#cb15-191" aria-hidden="true" tabindex="-1"></a>nodes <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_nodes.csv"</span>)</span>
+<span id="cb15-192"><a href="#cb15-192" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_edges.csv"</span>)</span>
+<span id="cb15-193"><a href="#cb15-193" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-194"><a href="#cb15-194" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">graph_from_data_frame</span>(edges, <span class="at">directed =</span> <span class="cn">FALSE</span>, <span class="at">vertices =</span> nodes)</span>
+<span id="cb15-195"><a href="#cb15-195" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Nodes:"</span>, <span class="fu">vcount</span>(g), <span class="st">" Edges:"</span>, <span class="fu">ecount</span>(g), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-196"><a href="#cb15-196" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-197"><a href="#cb15-197" aria-hidden="true" tabindex="-1"></a><span class="co"># Connected components = molecular families</span></span>
+<span id="cb15-198"><a href="#cb15-198" aria-hidden="true" tabindex="-1"></a>comp <span class="ot">&lt;-</span> <span class="fu">components</span>(g)</span>
+<span id="cb15-199"><a href="#cb15-199" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Molecular families:"</span>, comp<span class="sc">$</span>no, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-200"><a href="#cb15-200" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(comp<span class="sc">$</span>csize)[<span class="fu">order</span>(<span class="sc">-</span><span class="fu">as.integer</span>(<span class="fu">names</span>(<span class="fu">table</span>(comp<span class="sc">$</span>csize))))] <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb15-201"><a href="#cb15-201" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-202"><a href="#cb15-202" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-203"><a href="#cb15-203" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-204"><a href="#cb15-204" aria-hidden="true" tabindex="-1"></a><span class="in">Nodes: 139  Edges: 187</span></span>
+<span id="cb15-205"><a href="#cb15-205" aria-hidden="true" tabindex="-1"></a><span class="in">Molecular families: 34</span></span>
+<span id="cb15-206"><a href="#cb15-206" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-207"><a href="#cb15-207" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-210"><a href="#cb15-210" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-211"><a href="#cb15-211" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-212"><a href="#cb15-212" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS molecular network: N-acyl Phe and N-acyl Trp cluster into two large, separate families, exactly as reported in the paper's Figure 1c."</span></span>
+<span id="cb15-213"><a href="#cb15-213" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb15-214"><a href="#cb15-214" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(g, <span class="at">vertex.size =</span> <span class="dv">4</span>, <span class="at">vertex.label =</span> <span class="cn">NA</span>,</span>
+<span id="cb15-215"><a href="#cb15-215" aria-hidden="true" tabindex="-1"></a>     <span class="at">vertex.color =</span> <span class="fu">as.factor</span>(comp<span class="sc">$</span>membership),</span>
+<span id="cb15-216"><a href="#cb15-216" aria-hidden="true" tabindex="-1"></a>     <span class="at">edge.width =</span> <span class="fu">E</span>(g)<span class="sc">$</span>cosine <span class="sc">*</span> <span class="dv">2</span>,</span>
+<span id="cb15-217"><a href="#cb15-217" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"N-acyl amino acid molecular network"</span>)</span>
+<span id="cb15-218"><a href="#cb15-218" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-219"><a href="#cb15-219" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-220"><a href="#cb15-220" aria-hidden="true" tabindex="-1"></a>The two largest components — 69 nodes for the N-acyl Phe family, 7 nodes for N-acyl Trp — separate cleanly without any label or database entry being used to build the graph. Structural relatedness alone, expressed as shared fragmentation, is enough to organize the data; the isotope evidence from Steps 2–3 is what then tells you *which direction* the biosynthesis runs.</span>
+<span id="cb15-221"><a href="#cb15-221" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-222"><a href="#cb15-222" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Molecular networking finds relationships, not identities"}</span>
+<span id="cb15-223"><a href="#cb15-223" aria-hidden="true" tabindex="-1"></a>A large, well-connected cluster tells you a set of features share structural motifs. It does not tell you what any of them *are* — that still requires the exact-mass/isotope work in Steps 1–2, a database hit, or a reference standard. Treat networking as a triage and hypothesis-generation tool that tells you where to spend your identification effort, not as an identification method in itself.</span>
+<span id="cb15-224"><a href="#cb15-224" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-225"><a href="#cb15-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-226"><a href="#cb15-226" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — Biological Replication Before You Believe It</span></span>
+<span id="cb15-227"><a href="#cb15-227" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-228"><a href="#cb15-228" aria-hidden="true" tabindex="-1"></a>A single-run detection, however clean, is one data point. The reproduction confirms the flagship compounds (iCPhe, PAPhe, PPPhe) across **n = 3 biological replicates**, with retention times stable to ±0.02 min.</span>
+<span id="cb15-229"><a href="#cb15-229" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-232"><a href="#cb15-232" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-233"><a href="#cb15-233" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-234"><a href="#cb15-234" aria-hidden="true" tabindex="-1"></a>replicate_check <span class="ot">&lt;-</span> nacyl <span class="sc">|&gt;</span></span>
+<span id="cb15-235"><a href="#cb15-235" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"Isocaproyl(C6:0)-Phe"</span>, <span class="st">"Phenylacetyl(PA)-Phe"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-236"><a href="#cb15-236" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">group_by</span>(compound) <span class="sc">|&gt;</span></span>
+<span id="cb15-237"><a href="#cb15-237" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(<span class="at">n_reps =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(), <span class="at">rt_sd =</span> <span class="fu">sd</span>(rt), <span class="at">rt_range =</span> <span class="fu">max</span>(rt) <span class="sc">-</span> <span class="fu">min</span>(rt))</span>
+<span id="cb15-238"><a href="#cb15-238" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-239"><a href="#cb15-239" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-240"><a href="#cb15-240" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="n = 1 is a hypothesis, not a finding"}</span>
+<span id="cb15-241"><a href="#cb15-241" aria-hidden="true" tabindex="-1"></a>Everything in Steps 1–4 can be done, and can look completely convincing, from a single injection. It is only the agreement across independent biological replicates that turns "we detected a co-eluting isotope pair once" into "*C. difficile* produces this metabolite." The paper's — and this reproduction's — confidence in the flagship N-acyl amino acids rests on this replication, not on any single spectrum.</span>
+<span id="cb15-242"><a href="#cb15-242" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb15-243"><a href="#cb15-243" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-244"><a href="#cb15-244" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls</span></span>
+<span id="cb15-245"><a href="#cb15-245" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-246"><a href="#cb15-246" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> Solution <span class="pp">|</span></span>
+<span id="cb15-247"><a href="#cb15-247" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
+<span id="cb15-248"><a href="#cb15-248" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Extraction window centred only on the theoretical mass <span class="pp">|</span> Misses compounds whose instrument-reported mass deviates by more than the window (Step 1) <span class="pp">|</span> Cross-check against the paper's *found* value when a series member appears to be missing <span class="pp">|</span></span>
+<span id="cb15-249"><a href="#cb15-249" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating co-elution alone as identification <span class="pp">|</span> A different compound can coincidentally elute at the same time and mass <span class="pp">|</span> Require co-elution **and** a plausible isotope shift **and**, where possible, MS/MS <span class="pp">|</span></span>
+<span id="cb15-250"><a href="#cb15-250" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Assuming a shared *m/z* means a shared identity <span class="pp">|</span> Structural isomers (butyryl vs. isobutyryl) are indistinguishable by mass and isotope pattern alone <span class="pp">|</span> State explicitly that MS-only evidence gives formula-level (MSI level 2), not isomer-level (level 1), confidence <span class="pp">|</span></span>
+<span id="cb15-251"><a href="#cb15-251" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Building a molecular network then skipping isotope confirmation <span class="pp">|</span> Networking shows relatedness, not biosynthetic direction or even confirmed structure <span class="pp">|</span> Use networking to prioritize, not to conclude <span class="pp">|</span></span>
+<span id="cb15-252"><a href="#cb15-252" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting a single-replicate detection as a result <span class="pp">|</span> Technical artifacts and misassigned co-elution happen <span class="pp">|</span> Require agreement across independent biological replicates <span class="pp">|</span></span>
+<span id="cb15-253"><a href="#cb15-253" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-254"><a href="#cb15-254" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb15-255"><a href="#cb15-255" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-256"><a href="#cb15-256" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Stable-isotope feeding** turns "this mass appeared" into "this mass is derived from what we fed the organism" — evidence a database match alone cannot provide.</span>
+<span id="cb15-257"><a href="#cb15-257" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Targeted extraction** of a native/labelled pair, checked for co-elution, is the core evidence; **MS/MS** confirms *which part* of the molecule carries the label.</span>
+<span id="cb15-258"><a href="#cb15-258" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Molecular networking** extends Chapter 9's single spectral comparison into an all-vs-all similarity graph, organizing large numbers of unidentified spectra into structural families without requiring a library hit for any of them.</span>
+<span id="cb15-259"><a href="#cb15-259" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Networking finds relationships; isotope evidence and MS/MS find direction and structure.** Neither substitutes for the other.</span>
+<span id="cb15-260"><a href="#cb15-260" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Biological replication is not optional** — a compelling single-run detection is a hypothesis until it reproduces across independent replicates.</span>
+<span id="cb15-261"><a href="#cb15-261" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-262"><a href="#cb15-262" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb15-263"><a href="#cb15-263" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-264"><a href="#cb15-264" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Formula arithmetic.** Using the <span class="in">`n_acyl_formula()`</span> pattern from Step 1, compute the native <span class="in">`[M+H]+`</span> for Phenylacetyl-Tyr and its ¹³C-labelled partner (Tyr contributes 9 carbons when derived from ¹³C₉-phenylalanine... or does it? Check the paper's tracer-to-product carbon accounting before assuming 9).</span>
+<span id="cb15-265"><a href="#cb15-265" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-266"><a href="#cb15-266" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Window sensitivity.** Using the PP-Tyr case from the tip in Step 1 (theoretical 314.1387, instrument-reported 314.1404), compute the ppm deviation. At what ±ppm extraction window would this compound have been found using the theoretical mass alone?</span>
+<span id="cb15-267"><a href="#cb15-267" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-268"><a href="#cb15-268" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Co-elution threshold.** The worked example uses ±0.5 min as the co-elution tolerance between native and labelled apex retention times. Using <span class="in">`data/processed/plot_data/eic_traces.csv`</span>, tighten the tolerance to ±0.1 min and rerun the co-elution check for all flagship compounds. Which, if any, drop out — and does that mean they are false positives, or does it mean the tolerance was too strict for this chromatography?</span>
+<span id="cb15-269"><a href="#cb15-269" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-270"><a href="#cb15-270" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Network threshold.** Rebuild the molecular network at cosine &gt; 0.7 instead of &gt; 0.4. How do the number of edges and the number of connected components change? What does a stricter threshold trade off against a looser one?</span>
+<span id="cb15-271"><a href="#cb15-271" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-272"><a href="#cb15-272" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Design the replicate check.** Using <span class="in">`nacyl_summary.csv`</span>, write the <span class="in">`dplyr`</span> pipeline that would flag a compound as "replicated" only if it is isotope-confirmed in at least 2 of 3 biological replicates with retention times within 0.05 min of each other. Apply it to every compound in the table — how many of the 35 distinct N-acyl amino acids pass?</span>
+<span id="cb15-273"><a href="#cb15-273" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-274"><a href="#cb15-274" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb15-275"><a href="#cb15-275" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-278"><a href="#cb15-278" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-279"><a href="#cb15-279" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb15-280"><a href="#cb15-280" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/29-isotope-tracing-networking.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

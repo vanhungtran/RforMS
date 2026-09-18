@@ -17,6 +17,15 @@ echo ""
 
 # Step 1: Render the Quarto book
 echo "Step 1: Rendering Quarto book..."
+
+# R 4.5.1 on this machine cannot load the base package; point Quarto at the
+# working R 4.6.1 install explicitly so it doesn't fall back to whatever R
+# is first on PATH/registry.
+if [ -f "/c/Program Files/R/R-4.6.1/bin/x64/Rscript.exe" ]; then
+    export QUARTO_R="/c/Program Files/R/R-4.6.1/bin/x64"
+    echo "Using R at $QUARTO_R"
+fi
+
 # Try to find quarto in common locations (Windows)
 QUARTO_CMD=""
 if command -v quarto &> /dev/null; then

@@ -663,6 +663,19 @@ window.Quarto = {
 <h2 data-number="27.4" class="anchored" data-anchor-id="step-2-confounder-audit-before-trusting-a-biomarker"><span class="header-section-number">27.4</span> Step 2 — Confounder Audit Before Trusting a Biomarker</h2>
 <p>Age, sex, kidney function, and treatment all shift plasma protein levels independently of disease activity. A protein that correlates with the outcome only because it correlates with age is not a biomarker — it is a proxy for age. The discovery stage here used <code>metadeconfoundR</code> <span class="citation" data-cites="birkner2026metadeconfoundr">(<a href="references.html#ref-birkner2026metadeconfoundr" role="doc-biblioref">Birkner et al. 2026</a>)</span> to test every one of the 605 discovery proteins against the outcome <em>and</em> against every measured covariate (age, sex, BMI, eGFR, CRP, treatment), flagging a protein as “deconfounded” only if its association with disease status survives adjustment for every covariate it is <em>also</em> associated with.</p>
 <p>You do not need the specific package to understand or approximate the idea. The core test, for one protein <span class="math inline">p</span> and one covariate <span class="math inline">c</span>, is: does the partial association between <span class="math inline">p</span> and outcome, controlling for <span class="math inline">c</span>, remain significant?</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Why this step is simulated, and what real data you can substitute">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Why this step is simulated, and what real data you can substitute
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The Jerke et al.&nbsp;patient-level protein table (with age, sex, eGFR, and the other covariates <code>metadeconfoundR</code> screened) is <strong>not</strong> openly downloadable — per the companion repository, it is available only under a data-sharing agreement with the study authors. The illustration below therefore uses simulated values under the real panel’s own protein names (<code>AHSG</code>, <code>MCAM</code>) rather than pretending to show measured patient data. If you want to run this exact technique on real, fully open mass-spectrometry data with real clinical covariates, CPTAC cohorts (e.g.&nbsp;via the <code>cptac</code> Python package or the NCI Proteomic Data Commons) pair LC-MS/MS protein quantification with de-identified clinical metadata including age, and are a suitable substitute for practicing the check below on genuine measurements.</p>
+</div>
+</div>
 <div class="cell">
 <details open="" class="code-fold">
 <summary>Code</summary>
@@ -676,46 +689,47 @@ window.Quarto = {
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor.test</span>(rp, ro, <span class="at">method =</span> <span class="st">"spearman"</span>)</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration: a protein correlated with outcome only through age</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))          <span class="co"># outcome driven by age</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>confounded_protein <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)          <span class="co"># protein driven by age only</span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>real_protein <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># protein driven by outcome</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, confounded protein: r ="</span>,</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(confounded_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration, using two of the real 7-panel proteins by name:</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># AHSG behaving as an age-confounded signal, MCAM as a genuine outcome signal</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))   <span class="co"># outcome driven by age</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>AHSG <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)                 <span class="co"># simulated: driven by age only</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>MCAM <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># simulated: driven by outcome</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, AHSG: r ="</span>,</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(AHSG, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Naive association, confounded protein: r = 0.035 </code></pre>
+<pre><code>Naive association, AHSG: r = 0.035 </code></pre>
 </div>
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), confounded protein: r ="</span>,</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(confounded_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), AHSG: r ="</span>,</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(AHSG, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Deconfounded (age-adjusted), confounded protein: r = -0.086 </code></pre>
+<pre><code>Deconfounded (age-adjusted), AHSG: r = -0.086 </code></pre>
 </div>
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, real protein: r ="</span>,</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(real_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, MCAM: r ="</span>,</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(MCAM, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Naive association, real protein: r = 0.451 </code></pre>
+<pre><code>Naive association, MCAM: r = 0.451 </code></pre>
 </div>
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), real protein: r ="</span>,</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(real_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), MCAM: r ="</span>,</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(MCAM, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>Deconfounded (age-adjusted), real protein: r = 0.411 </code></pre>
+<pre><code>Deconfounded (age-adjusted), MCAM: r = 0.411 </code></pre>
 </div>
 </div>
-<p>The confounded protein’s association collapses once age is partialled out; the real one survives. Run that logic across every candidate protein and every measured covariate and you get exactly what the discovery stage produced: <strong>605 candidates → 135 confounder-independent proteins</strong>, from which LASSO and Boruta selected the final 7.</p>
+<p>In this simulation, AHSG’s association collapses once age is partialled out, while MCAM’s survives — illustrating the check, not a claim about either protein’s real-world relationship with age. Run the same logic across every candidate protein and every measured covariate on the real cohort and you get exactly what the discovery stage produced: <strong>605 candidates → 135 confounder-independent proteins</strong>, from which LASSO and Boruta selected the final 7.</p>
 <div class="callout callout-style-default callout-note callout-titled" title="Why this belongs before feature selection, not after">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -1713,179 +1727,184 @@ Jerke, Uwe, Marieluise Kirchner, Theda U. P. Bartolomaeus, et al. 2026. <span>�
 <span id="cb19-71"><a href="#cb19-71" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb19-72"><a href="#cb19-72" aria-hidden="true" tabindex="-1"></a>You do not need the specific package to understand or approximate the idea. The core test, for one protein $p$ and one covariate $c$, is: does the partial association between $p$ and outcome, controlling for $c$, remain significant?</span>
 <span id="cb19-73"><a href="#cb19-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-76"><a href="#cb19-76" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-77"><a href="#cb19-77" aria-hidden="true" tabindex="-1"></a><span class="co"># Minimal deconfounding check for one protein against one covariate,</span></span>
-<span id="cb19-78"><a href="#cb19-78" aria-hidden="true" tabindex="-1"></a><span class="co"># using partial Spearman correlation (rank-based, matches the</span></span>
-<span id="cb19-79"><a href="#cb19-79" aria-hidden="true" tabindex="-1"></a><span class="co"># nonparametric spirit of metadeconfoundR without requiring the package)</span></span>
-<span id="cb19-80"><a href="#cb19-80" aria-hidden="true" tabindex="-1"></a>deconfound_check <span class="ot">&lt;-</span> <span class="cf">function</span>(protein, outcome, covariate) {</span>
-<span id="cb19-81"><a href="#cb19-81" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Residualise protein and outcome against the covariate, then correlate residuals</span></span>
-<span id="cb19-82"><a href="#cb19-82" aria-hidden="true" tabindex="-1"></a>  rp <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(protein <span class="sc">~</span> covariate))</span>
-<span id="cb19-83"><a href="#cb19-83" aria-hidden="true" tabindex="-1"></a>  ro <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(outcome <span class="sc">~</span> covariate))</span>
-<span id="cb19-84"><a href="#cb19-84" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor.test</span>(rp, ro, <span class="at">method =</span> <span class="st">"spearman"</span>)</span>
-<span id="cb19-85"><a href="#cb19-85" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb19-86"><a href="#cb19-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-87"><a href="#cb19-87" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration: a protein correlated with outcome only through age</span></span>
-<span id="cb19-88"><a href="#cb19-88" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
-<span id="cb19-89"><a href="#cb19-89" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
-<span id="cb19-90"><a href="#cb19-90" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
-<span id="cb19-91"><a href="#cb19-91" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))          <span class="co"># outcome driven by age</span></span>
-<span id="cb19-92"><a href="#cb19-92" aria-hidden="true" tabindex="-1"></a>confounded_protein <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)          <span class="co"># protein driven by age only</span></span>
-<span id="cb19-93"><a href="#cb19-93" aria-hidden="true" tabindex="-1"></a>real_protein <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># protein driven by outcome</span></span>
-<span id="cb19-94"><a href="#cb19-94" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-95"><a href="#cb19-95" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, confounded protein: r ="</span>,</span>
-<span id="cb19-96"><a href="#cb19-96" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(confounded_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb19-97"><a href="#cb19-97" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), confounded protein: r ="</span>,</span>
-<span id="cb19-98"><a href="#cb19-98" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(confounded_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
-<span id="cb19-99"><a href="#cb19-99" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, real protein: r ="</span>,</span>
-<span id="cb19-100"><a href="#cb19-100" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(real_protein, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb19-101"><a href="#cb19-101" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), real protein: r ="</span>,</span>
-<span id="cb19-102"><a href="#cb19-102" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(real_protein, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb19-103"><a href="#cb19-103" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-104"><a href="#cb19-104" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-105"><a href="#cb19-105" aria-hidden="true" tabindex="-1"></a>The confounded protein's association collapses once age is partialled out; the real one survives. Run that logic across every candidate protein and every measured covariate and you get exactly what the discovery stage produced: **605 candidates → 135 confounder-independent proteins**, from which LASSO and Boruta selected the final 7.</span>
-<span id="cb19-106"><a href="#cb19-106" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-107"><a href="#cb19-107" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Why this belongs before feature selection, not after"}</span>
-<span id="cb19-108"><a href="#cb19-108" aria-hidden="true" tabindex="-1"></a>Deconfounding first, feature selection second. If you let LASSO pick from all 605 proteins and *then* check the survivors for confounding, you have already let confounded proteins compete for the model's limited coefficient budget — potentially crowding out real ones. Screen for confounding before you spend your feature-selection step count.</span>
-<span id="cb19-109"><a href="#cb19-109" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb19-110"><a href="#cb19-110" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-111"><a href="#cb19-111" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — Primary Validation on the Held-Out Split</span></span>
-<span id="cb19-112"><a href="#cb19-112" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-113"><a href="#cb19-113" aria-hidden="true" tabindex="-1"></a>With the model locked, evaluate it once on Test40 — the internal 40% split reserved for exactly this purpose and never used in discovery, deconfounding, or feature selection.</span>
-<span id="cb19-114"><a href="#cb19-114" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-117"><a href="#cb19-117" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-118"><a href="#cb19-118" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb19-119"><a href="#cb19-119" aria-hidden="true" tabindex="-1"></a>test40<span class="sc">$</span>prob_panel <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_7panel, <span class="at">newdata =</span> test40, <span class="at">type =</span> <span class="st">"response"</span>)</span>
-<span id="cb19-120"><a href="#cb19-120" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-121"><a href="#cb19-121" aria-hidden="true" tabindex="-1"></a>roc_panel <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_panel, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb19-122"><a href="#cb19-122" aria-hidden="true" tabindex="-1"></a>auc_panel <span class="ot">&lt;-</span> <span class="fu">auc</span>(roc_panel)</span>
-<span id="cb19-123"><a href="#cb19-123" aria-hidden="true" tabindex="-1"></a>ci_panel  <span class="ot">&lt;-</span> <span class="fu">ci.auc</span>(roc_panel, <span class="at">method =</span> <span class="st">"delong"</span>)</span>
-<span id="cb19-124"><a href="#cb19-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-125"><a href="#cb19-125" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"7-protein panel, Test40: AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb19-126"><a href="#cb19-126" aria-hidden="true" tabindex="-1"></a>            auc_panel, ci_panel[<span class="dv">1</span>], ci_panel[<span class="dv">3</span>]))</span>
-<span id="cb19-127"><a href="#cb19-127" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-128"><a href="#cb19-128" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-129"><a href="#cb19-129" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-130"><a href="#cb19-130" aria-hidden="true" tabindex="-1"></a><span class="in">7-protein panel, Test40: AUC = 0.974 (0.948-1.000)</span></span>
-<span id="cb19-131"><a href="#cb19-131" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-132"><a href="#cb19-132" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-133"><a href="#cb19-133" aria-hidden="true" tabindex="-1"></a>That number is real, not illustrative — it is the reproduced Test40 AUC, matching the paper's reported 0.974 (0.948–1.000) exactly. Table @tbl-panel-comparison shows what the panel is actually competing against.</span>
-<span id="cb19-134"><a href="#cb19-134" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-135"><a href="#cb19-135" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Model <span class="pp">|</span> AUC (95% CI) <span class="pp">|</span></span>
-<span id="cb19-136"><a href="#cb19-136" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|</span></span>
-<span id="cb19-137"><a href="#cb19-137" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> ANCA titer alone <span class="pp">|</span> 0.746 (0.635–0.857) <span class="pp">|</span></span>
-<span id="cb19-138"><a href="#cb19-138" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP alone <span class="pp">|</span> 0.932 (0.880–0.984) <span class="pp">|</span></span>
-<span id="cb19-139"><a href="#cb19-139" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP + ANCA <span class="pp">|</span> 0.893 (0.826–0.959) <span class="pp">|</span></span>
-<span id="cb19-140"><a href="#cb19-140" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **7-protein panel** | **0.974 (0.948–1.000)** <span class="pp">|</span></span>
-<span id="cb19-141"><a href="#cb19-141" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-142"><a href="#cb19-142" aria-hidden="true" tabindex="-1"></a>: A single AUC in isolation is nearly meaningless — 0.974 only means something set against what a clinician already has for free: CRP and ANCA. {#tbl-panel-comparison}</span>
-<span id="cb19-143"><a href="#cb19-143" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-144"><a href="#cb19-144" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — DeLong's Test: Is the Panel *Significantly* Better?</span></span>
-<span id="cb19-145"><a href="#cb19-145" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-146"><a href="#cb19-146" aria-hidden="true" tabindex="-1"></a>Two ROC curves computed on the *same patients* are correlated — you cannot compare their AUCs with an unpaired test. DeLong's method <span class="co">[</span><span class="ot">@delong1988comparing</span><span class="co">]</span> accounts for that correlation directly from the two sets of predicted probabilities, with no resampling required.</span>
-<span id="cb19-147"><a href="#cb19-147" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-150"><a href="#cb19-150" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-151"><a href="#cb19-151" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb19-152"><a href="#cb19-152" aria-hidden="true" tabindex="-1"></a>roc_crp <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb19-153"><a href="#cb19-153" aria-hidden="true" tabindex="-1"></a>roc_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb19-154"><a href="#cb19-154" aria-hidden="true" tabindex="-1"></a>roc_crp_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb19-155"><a href="#cb19-155" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-156"><a href="#cb19-156" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp,      <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.078</span></span>
-<span id="cb19-157"><a href="#cb19-157" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_anca,     <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 6.7e-05</span></span>
-<span id="cb19-158"><a href="#cb19-158" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp_anca, <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.011</span></span>
-<span id="cb19-159"><a href="#cb19-159" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-74"><a href="#cb19-74" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Why this step is simulated, and what real data you can substitute"}</span>
+<span id="cb19-75"><a href="#cb19-75" aria-hidden="true" tabindex="-1"></a>The Jerke et al. patient-level protein table (with age, sex, eGFR, and the other covariates <span class="in">`metadeconfoundR`</span> screened) is **not** openly downloadable — per the companion repository, it is available only under a data-sharing agreement with the study authors. The illustration below therefore uses simulated values under the real panel's own protein names (<span class="in">`AHSG`</span>, <span class="in">`MCAM`</span>) rather than pretending to show measured patient data. If you want to run this exact technique on real, fully open mass-spectrometry data with real clinical covariates, CPTAC cohorts (e.g. via the <span class="in">`cptac`</span> Python package or the NCI Proteomic Data Commons) pair LC-MS/MS protein quantification with de-identified clinical metadata including age, and are a suitable substitute for practicing the check below on genuine measurements.</span>
+<span id="cb19-76"><a href="#cb19-76" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-77"><a href="#cb19-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-80"><a href="#cb19-80" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-81"><a href="#cb19-81" aria-hidden="true" tabindex="-1"></a><span class="co"># Minimal deconfounding check for one protein against one covariate,</span></span>
+<span id="cb19-82"><a href="#cb19-82" aria-hidden="true" tabindex="-1"></a><span class="co"># using partial Spearman correlation (rank-based, matches the</span></span>
+<span id="cb19-83"><a href="#cb19-83" aria-hidden="true" tabindex="-1"></a><span class="co"># nonparametric spirit of metadeconfoundR without requiring the package)</span></span>
+<span id="cb19-84"><a href="#cb19-84" aria-hidden="true" tabindex="-1"></a>deconfound_check <span class="ot">&lt;-</span> <span class="cf">function</span>(protein, outcome, covariate) {</span>
+<span id="cb19-85"><a href="#cb19-85" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Residualise protein and outcome against the covariate, then correlate residuals</span></span>
+<span id="cb19-86"><a href="#cb19-86" aria-hidden="true" tabindex="-1"></a>  rp <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(protein <span class="sc">~</span> covariate))</span>
+<span id="cb19-87"><a href="#cb19-87" aria-hidden="true" tabindex="-1"></a>  ro <span class="ot">&lt;-</span> <span class="fu">residuals</span>(<span class="fu">lm</span>(outcome <span class="sc">~</span> covariate))</span>
+<span id="cb19-88"><a href="#cb19-88" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cor.test</span>(rp, ro, <span class="at">method =</span> <span class="st">"spearman"</span>)</span>
+<span id="cb19-89"><a href="#cb19-89" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-90"><a href="#cb19-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-91"><a href="#cb19-91" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated illustration, using two of the real 7-panel proteins by name:</span></span>
+<span id="cb19-92"><a href="#cb19-92" aria-hidden="true" tabindex="-1"></a><span class="co"># AHSG behaving as an age-confounded signal, MCAM as a genuine outcome signal</span></span>
+<span id="cb19-93"><a href="#cb19-93" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb19-94"><a href="#cb19-94" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">200</span></span>
+<span id="cb19-95"><a href="#cb19-95" aria-hidden="true" tabindex="-1"></a>age <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n, <span class="dv">55</span>, <span class="dv">12</span>)</span>
+<span id="cb19-96"><a href="#cb19-96" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(n, <span class="dv">1</span>, <span class="fu">plogis</span>(<span class="fl">0.05</span> <span class="sc">*</span> (age <span class="sc">-</span> <span class="dv">55</span>)))   <span class="co"># outcome driven by age</span></span>
+<span id="cb19-97"><a href="#cb19-97" aria-hidden="true" tabindex="-1"></a>AHSG <span class="ot">&lt;-</span> <span class="fl">0.08</span> <span class="sc">*</span> age <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)                 <span class="co"># simulated: driven by age only</span></span>
+<span id="cb19-98"><a href="#cb19-98" aria-hidden="true" tabindex="-1"></a>MCAM <span class="ot">&lt;-</span> <span class="fl">1.2</span> <span class="sc">*</span> outcome <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="at">sd =</span> <span class="dv">1</span>)              <span class="co"># simulated: driven by outcome</span></span>
+<span id="cb19-99"><a href="#cb19-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-100"><a href="#cb19-100" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, AHSG: r ="</span>,</span>
+<span id="cb19-101"><a href="#cb19-101" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(AHSG, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-102"><a href="#cb19-102" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), AHSG: r ="</span>,</span>
+<span id="cb19-103"><a href="#cb19-103" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(AHSG, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb19-104"><a href="#cb19-104" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Naive association, MCAM: r ="</span>,</span>
+<span id="cb19-105"><a href="#cb19-105" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">cor</span>(MCAM, outcome, <span class="at">method =</span> <span class="st">"spearman"</span>), <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-106"><a href="#cb19-106" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Deconfounded (age-adjusted), MCAM: r ="</span>,</span>
+<span id="cb19-107"><a href="#cb19-107" aria-hidden="true" tabindex="-1"></a>    <span class="fu">round</span>(<span class="fu">deconfound_check</span>(MCAM, outcome, age)<span class="sc">$</span>estimate, <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-108"><a href="#cb19-108" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-109"><a href="#cb19-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-110"><a href="#cb19-110" aria-hidden="true" tabindex="-1"></a>In this simulation, AHSG's association collapses once age is partialled out, while MCAM's survives — illustrating the check, not a claim about either protein's real-world relationship with age. Run the same logic across every candidate protein and every measured covariate on the real cohort and you get exactly what the discovery stage produced: **605 candidates → 135 confounder-independent proteins**, from which LASSO and Boruta selected the final 7.</span>
+<span id="cb19-111"><a href="#cb19-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-112"><a href="#cb19-112" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Why this belongs before feature selection, not after"}</span>
+<span id="cb19-113"><a href="#cb19-113" aria-hidden="true" tabindex="-1"></a>Deconfounding first, feature selection second. If you let LASSO pick from all 605 proteins and *then* check the survivors for confounding, you have already let confounded proteins compete for the model's limited coefficient budget — potentially crowding out real ones. Screen for confounding before you spend your feature-selection step count.</span>
+<span id="cb19-114"><a href="#cb19-114" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-115"><a href="#cb19-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-116"><a href="#cb19-116" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — Primary Validation on the Held-Out Split</span></span>
+<span id="cb19-117"><a href="#cb19-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-118"><a href="#cb19-118" aria-hidden="true" tabindex="-1"></a>With the model locked, evaluate it once on Test40 — the internal 40% split reserved for exactly this purpose and never used in discovery, deconfounding, or feature selection.</span>
+<span id="cb19-119"><a href="#cb19-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-122"><a href="#cb19-122" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-123"><a href="#cb19-123" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-124"><a href="#cb19-124" aria-hidden="true" tabindex="-1"></a>test40<span class="sc">$</span>prob_panel <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_7panel, <span class="at">newdata =</span> test40, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb19-125"><a href="#cb19-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-126"><a href="#cb19-126" aria-hidden="true" tabindex="-1"></a>roc_panel <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_panel, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-127"><a href="#cb19-127" aria-hidden="true" tabindex="-1"></a>auc_panel <span class="ot">&lt;-</span> <span class="fu">auc</span>(roc_panel)</span>
+<span id="cb19-128"><a href="#cb19-128" aria-hidden="true" tabindex="-1"></a>ci_panel  <span class="ot">&lt;-</span> <span class="fu">ci.auc</span>(roc_panel, <span class="at">method =</span> <span class="st">"delong"</span>)</span>
+<span id="cb19-129"><a href="#cb19-129" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-130"><a href="#cb19-130" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"7-protein panel, Test40: AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb19-131"><a href="#cb19-131" aria-hidden="true" tabindex="-1"></a>            auc_panel, ci_panel[<span class="dv">1</span>], ci_panel[<span class="dv">3</span>]))</span>
+<span id="cb19-132"><a href="#cb19-132" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-133"><a href="#cb19-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-134"><a href="#cb19-134" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-135"><a href="#cb19-135" aria-hidden="true" tabindex="-1"></a><span class="in">7-protein panel, Test40: AUC = 0.974 (0.948-1.000)</span></span>
+<span id="cb19-136"><a href="#cb19-136" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-137"><a href="#cb19-137" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-138"><a href="#cb19-138" aria-hidden="true" tabindex="-1"></a>That number is real, not illustrative — it is the reproduced Test40 AUC, matching the paper's reported 0.974 (0.948–1.000) exactly. Table @tbl-panel-comparison shows what the panel is actually competing against.</span>
+<span id="cb19-139"><a href="#cb19-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-140"><a href="#cb19-140" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Model <span class="pp">|</span> AUC (95% CI) <span class="pp">|</span></span>
+<span id="cb19-141"><a href="#cb19-141" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|</span></span>
+<span id="cb19-142"><a href="#cb19-142" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> ANCA titer alone <span class="pp">|</span> 0.746 (0.635–0.857) <span class="pp">|</span></span>
+<span id="cb19-143"><a href="#cb19-143" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP alone <span class="pp">|</span> 0.932 (0.880–0.984) <span class="pp">|</span></span>
+<span id="cb19-144"><a href="#cb19-144" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> CRP + ANCA <span class="pp">|</span> 0.893 (0.826–0.959) <span class="pp">|</span></span>
+<span id="cb19-145"><a href="#cb19-145" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> **7-protein panel** | **0.974 (0.948–1.000)** <span class="pp">|</span></span>
+<span id="cb19-146"><a href="#cb19-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-147"><a href="#cb19-147" aria-hidden="true" tabindex="-1"></a>: A single AUC in isolation is nearly meaningless — 0.974 only means something set against what a clinician already has for free: CRP and ANCA. {#tbl-panel-comparison}</span>
+<span id="cb19-148"><a href="#cb19-148" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-149"><a href="#cb19-149" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — DeLong's Test: Is the Panel *Significantly* Better?</span></span>
+<span id="cb19-150"><a href="#cb19-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-151"><a href="#cb19-151" aria-hidden="true" tabindex="-1"></a>Two ROC curves computed on the *same patients* are correlated — you cannot compare their AUCs with an unpaired test. DeLong's method <span class="co">[</span><span class="ot">@delong1988comparing</span><span class="co">]</span> accounts for that correlation directly from the two sets of predicted probabilities, with no resampling required.</span>
+<span id="cb19-152"><a href="#cb19-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-155"><a href="#cb19-155" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-156"><a href="#cb19-156" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-157"><a href="#cb19-157" aria-hidden="true" tabindex="-1"></a>roc_crp <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-158"><a href="#cb19-158" aria-hidden="true" tabindex="-1"></a>roc_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-159"><a href="#cb19-159" aria-hidden="true" tabindex="-1"></a>roc_crp_anca <span class="ot">&lt;-</span> <span class="fu">roc</span>(test40<span class="sc">$</span>group01, test40<span class="sc">$</span>prob_crp_anca, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb19-160"><a href="#cb19-160" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-161"><a href="#cb19-161" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="Read the manuscript's own claim critically -- even this one"}</span>
-<span id="cb19-162"><a href="#cb19-162" aria-hidden="true" tabindex="-1"></a>The published paper states the panel "significantly outperformed CRP, ANCA, and CRP+ANCA (p &lt; 0.05 for all)." The reproduced DeLong test against **CRP alone** gives **p = 0.078** — not significant at the conventional threshold. Against ANCA alone and CRP+ANCA, the panel *is* significantly better (p = 6.7×10⁻⁵ and p = 0.011). This is not a reproduction failure: every number matches the authors' own frozen output. It is the manuscript's summary sentence overstating one of its four comparisons. Reproducing a paper's numbers and reproducing its prose conclusions are different exercises — do both, and report a discrepancy like this one plainly rather than either hiding it or treating the paper as wrong.</span>
-<span id="cb19-163"><a href="#cb19-163" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb19-164"><a href="#cb19-164" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-165"><a href="#cb19-165" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — External Cohort Validation: Berlin → Prague</span></span>
-<span id="cb19-166"><a href="#cb19-166" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-167"><a href="#cb19-167" aria-hidden="true" tabindex="-1"></a>Test40 is still drawn from the same recruitment process as the training data (Berlin). The real test of generalization is the **Prague cohort** — different site, different sample handling, never seen during model building.</span>
-<span id="cb19-168"><a href="#cb19-168" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-171"><a href="#cb19-171" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-172"><a href="#cb19-172" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb19-173"><a href="#cb19-173" aria-hidden="true" tabindex="-1"></a>train_berlin <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)</span>
-<span id="cb19-174"><a href="#cb19-174" aria-hidden="true" tabindex="-1"></a>test_prague  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Prague"</span>)</span>
-<span id="cb19-175"><a href="#cb19-175" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-176"><a href="#cb19-176" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit on ALL of Berlin (not just Train60) -- this is now the deployed model</span></span>
-<span id="cb19-177"><a href="#cb19-177" aria-hidden="true" tabindex="-1"></a>model_berlin <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train_berlin, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
-<span id="cb19-178"><a href="#cb19-178" aria-hidden="true" tabindex="-1"></a>test_prague<span class="sc">$</span>pred <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_berlin, <span class="at">newdata =</span> test_prague, <span class="at">type =</span> <span class="st">"response"</span>)</span>
-<span id="cb19-179"><a href="#cb19-179" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-180"><a href="#cb19-180" aria-hidden="true" tabindex="-1"></a>roc_prague <span class="ot">&lt;-</span> <span class="fu">roc</span>(test_prague<span class="sc">$</span>group01, test_prague<span class="sc">$</span>pred, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb19-181"><a href="#cb19-181" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"External validation (Prague, n=%d): AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb19-182"><a href="#cb19-182" aria-hidden="true" tabindex="-1"></a>            <span class="fu">nrow</span>(test_prague), <span class="fu">auc</span>(roc_prague),</span>
-<span id="cb19-183"><a href="#cb19-183" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">1</span>],</span>
-<span id="cb19-184"><a href="#cb19-184" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">3</span>]))</span>
-<span id="cb19-185"><a href="#cb19-185" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-186"><a href="#cb19-186" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-187"><a href="#cb19-187" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-188"><a href="#cb19-188" aria-hidden="true" tabindex="-1"></a><span class="in">External validation (Prague, n=108): AUC = 0.938 (0.897-0.979)</span></span>
-<span id="cb19-189"><a href="#cb19-189" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-190"><a href="#cb19-190" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-191"><a href="#cb19-191" aria-hidden="true" tabindex="-1"></a>An AUC of 0.938 on a cohort the model has never seen, collected at a different site, is a materially stronger claim than 0.974 on an internal split — even though the number is numerically lower. **Discrimination dropping slightly on external data is normal and expected; discrimination collapsing (AUC near 0.5) means the "biomarker" was actually a site effect.**</span>
-<span id="cb19-192"><a href="#cb19-192" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-193"><a href="#cb19-193" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 6 — Calibration: Does the Predicted Probability Mean Anything?</span></span>
-<span id="cb19-194"><a href="#cb19-194" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-195"><a href="#cb19-195" aria-hidden="true" tabindex="-1"></a>AUC measures whether the model *ranks* patients correctly. It says nothing about whether a predicted probability of 0.7 corresponds to a 70% chance of remission. That is **calibration**, and it degrades faster than discrimination when a model crosses sites.</span>
-<span id="cb19-196"><a href="#cb19-196" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-199"><a href="#cb19-199" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-200"><a href="#cb19-200" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb19-201"><a href="#cb19-201" aria-hidden="true" tabindex="-1"></a>logit_safe <span class="ot">&lt;-</span> <span class="cf">function</span>(p) {</span>
-<span id="cb19-202"><a href="#cb19-202" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">pmin</span>(<span class="fu">pmax</span>(p, .Machine<span class="sc">$</span>double.eps), <span class="dv">1</span> <span class="sc">-</span> .Machine<span class="sc">$</span>double.eps)</span>
-<span id="cb19-203"><a href="#cb19-203" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(p <span class="sc">/</span> (<span class="dv">1</span> <span class="sc">-</span> p))</span>
-<span id="cb19-204"><a href="#cb19-204" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb19-205"><a href="#cb19-205" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-206"><a href="#cb19-206" aria-hidden="true" tabindex="-1"></a>cal_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(group01 <span class="sc">~</span> <span class="fu">logit_safe</span>(pred), <span class="at">data =</span> test_prague, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
-<span id="cb19-207"><a href="#cb19-207" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration intercept:"</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb19-208"><a href="#cb19-208" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration slope:    "</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">2</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb19-209"><a href="#cb19-209" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-161"><a href="#cb19-161" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp,      <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.078</span></span>
+<span id="cb19-162"><a href="#cb19-162" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_anca,     <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 6.7e-05</span></span>
+<span id="cb19-163"><a href="#cb19-163" aria-hidden="true" tabindex="-1"></a><span class="fu">roc.test</span>(roc_panel, roc_crp_anca, <span class="at">method =</span> <span class="st">"delong"</span>)   <span class="co"># p = 0.011</span></span>
+<span id="cb19-164"><a href="#cb19-164" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-165"><a href="#cb19-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-166"><a href="#cb19-166" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="Read the manuscript's own claim critically -- even this one"}</span>
+<span id="cb19-167"><a href="#cb19-167" aria-hidden="true" tabindex="-1"></a>The published paper states the panel "significantly outperformed CRP, ANCA, and CRP+ANCA (p &lt; 0.05 for all)." The reproduced DeLong test against **CRP alone** gives **p = 0.078** — not significant at the conventional threshold. Against ANCA alone and CRP+ANCA, the panel *is* significantly better (p = 6.7×10⁻⁵ and p = 0.011). This is not a reproduction failure: every number matches the authors' own frozen output. It is the manuscript's summary sentence overstating one of its four comparisons. Reproducing a paper's numbers and reproducing its prose conclusions are different exercises — do both, and report a discrepancy like this one plainly rather than either hiding it or treating the paper as wrong.</span>
+<span id="cb19-168"><a href="#cb19-168" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-169"><a href="#cb19-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-170"><a href="#cb19-170" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — External Cohort Validation: Berlin → Prague</span></span>
+<span id="cb19-171"><a href="#cb19-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-172"><a href="#cb19-172" aria-hidden="true" tabindex="-1"></a>Test40 is still drawn from the same recruitment process as the training data (Berlin). The real test of generalization is the **Prague cohort** — different site, different sample handling, never seen during model building.</span>
+<span id="cb19-173"><a href="#cb19-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-176"><a href="#cb19-176" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-177"><a href="#cb19-177" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-178"><a href="#cb19-178" aria-hidden="true" tabindex="-1"></a>train_berlin <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Berlin"</span>)</span>
+<span id="cb19-179"><a href="#cb19-179" aria-hidden="true" tabindex="-1"></a>test_prague  <span class="ot">&lt;-</span> dfz <span class="sc">|&gt;</span> <span class="fu">filter</span>(cohort <span class="sc">==</span> <span class="st">"Prague"</span>)</span>
+<span id="cb19-180"><a href="#cb19-180" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-181"><a href="#cb19-181" aria-hidden="true" tabindex="-1"></a><span class="co"># Refit on ALL of Berlin (not just Train60) -- this is now the deployed model</span></span>
+<span id="cb19-182"><a href="#cb19-182" aria-hidden="true" tabindex="-1"></a>model_berlin <span class="ot">&lt;-</span> <span class="fu">glm</span>(formula_7, <span class="at">data =</span> train_berlin, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb19-183"><a href="#cb19-183" aria-hidden="true" tabindex="-1"></a>test_prague<span class="sc">$</span>pred <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_berlin, <span class="at">newdata =</span> test_prague, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb19-184"><a href="#cb19-184" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-185"><a href="#cb19-185" aria-hidden="true" tabindex="-1"></a>roc_prague <span class="ot">&lt;-</span> <span class="fu">roc</span>(test_prague<span class="sc">$</span>group01, test_prague<span class="sc">$</span>pred, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-186"><a href="#cb19-186" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"External validation (Prague, n=%d): AUC = %.3f (%.3f-%.3f)</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb19-187"><a href="#cb19-187" aria-hidden="true" tabindex="-1"></a>            <span class="fu">nrow</span>(test_prague), <span class="fu">auc</span>(roc_prague),</span>
+<span id="cb19-188"><a href="#cb19-188" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">1</span>],</span>
+<span id="cb19-189"><a href="#cb19-189" aria-hidden="true" tabindex="-1"></a>            <span class="fu">ci.auc</span>(roc_prague, <span class="at">method =</span> <span class="st">"delong"</span>)[<span class="dv">3</span>]))</span>
+<span id="cb19-190"><a href="#cb19-190" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-191"><a href="#cb19-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-192"><a href="#cb19-192" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-193"><a href="#cb19-193" aria-hidden="true" tabindex="-1"></a><span class="in">External validation (Prague, n=108): AUC = 0.938 (0.897-0.979)</span></span>
+<span id="cb19-194"><a href="#cb19-194" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-195"><a href="#cb19-195" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-196"><a href="#cb19-196" aria-hidden="true" tabindex="-1"></a>An AUC of 0.938 on a cohort the model has never seen, collected at a different site, is a materially stronger claim than 0.974 on an internal split — even though the number is numerically lower. **Discrimination dropping slightly on external data is normal and expected; discrimination collapsing (AUC near 0.5) means the "biomarker" was actually a site effect.**</span>
+<span id="cb19-197"><a href="#cb19-197" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-198"><a href="#cb19-198" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 6 — Calibration: Does the Predicted Probability Mean Anything?</span></span>
+<span id="cb19-199"><a href="#cb19-199" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-200"><a href="#cb19-200" aria-hidden="true" tabindex="-1"></a>AUC measures whether the model *ranks* patients correctly. It says nothing about whether a predicted probability of 0.7 corresponds to a 70% chance of remission. That is **calibration**, and it degrades faster than discrimination when a model crosses sites.</span>
+<span id="cb19-201"><a href="#cb19-201" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-204"><a href="#cb19-204" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-205"><a href="#cb19-205" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb19-206"><a href="#cb19-206" aria-hidden="true" tabindex="-1"></a>logit_safe <span class="ot">&lt;-</span> <span class="cf">function</span>(p) {</span>
+<span id="cb19-207"><a href="#cb19-207" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">pmin</span>(<span class="fu">pmax</span>(p, .Machine<span class="sc">$</span>double.eps), <span class="dv">1</span> <span class="sc">-</span> .Machine<span class="sc">$</span>double.eps)</span>
+<span id="cb19-208"><a href="#cb19-208" aria-hidden="true" tabindex="-1"></a>  <span class="fu">log</span>(p <span class="sc">/</span> (<span class="dv">1</span> <span class="sc">-</span> p))</span>
+<span id="cb19-209"><a href="#cb19-209" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb19-210"><a href="#cb19-210" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-211"><a href="#cb19-211" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb19-212"><a href="#cb19-212" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration intercept: 0</span></span>
-<span id="cb19-213"><a href="#cb19-213" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration slope:     0.44</span></span>
+<span id="cb19-211"><a href="#cb19-211" aria-hidden="true" tabindex="-1"></a>cal_model <span class="ot">&lt;-</span> <span class="fu">glm</span>(group01 <span class="sc">~</span> <span class="fu">logit_safe</span>(pred), <span class="at">data =</span> test_prague, <span class="at">family =</span> <span class="fu">binomial</span>())</span>
+<span id="cb19-212"><a href="#cb19-212" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration intercept:"</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">1</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-213"><a href="#cb19-213" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Calibration slope:    "</span>, <span class="fu">round</span>(<span class="fu">coef</span>(cal_model)[<span class="dv">2</span>], <span class="dv">3</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
 <span id="cb19-214"><a href="#cb19-214" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb19-215"><a href="#cb19-215" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-216"><a href="#cb19-216" aria-hidden="true" tabindex="-1"></a>A perfectly calibrated model has slope 1 and intercept 0. A slope of 0.44 on Prague means the model's predicted probabilities are systematically **too extreme** on the external cohort — confident predictions near 0 or 1 should be pulled toward the middle before they are shown to a clinician. This is the single most common failure mode when a model moves between sites: discrimination (AUC 0.938) survives noticeably better than calibration (slope 0.44). A ranking-only use of the model (triage, prioritization) is still defensible; a use that reports the probability itself is not, without recalibration.</span>
-<span id="cb19-217"><a href="#cb19-217" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-218"><a href="#cb19-218" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Recalibration is cheap"}</span>
-<span id="cb19-219"><a href="#cb19-219" aria-hidden="true" tabindex="-1"></a>Because calibration slope/intercept only require a single logistic regression of the outcome on the logit of the existing predictions, refitting a calibration correction on a small labeled subset of the new site's data (Platt scaling) is far cheaper than rebuilding the model. Do this before deploying a model at a new site, not after noticing predictions look wrong.</span>
-<span id="cb19-220"><a href="#cb19-220" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb19-221"><a href="#cb19-221" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-222"><a href="#cb19-222" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls in External Validation</span></span>
-<span id="cb19-223"><a href="#cb19-223" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-224"><a href="#cb19-224" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> What to do instead <span class="pp">|</span></span>
-<span id="cb19-225"><a href="#cb19-225" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
-<span id="cb19-226"><a href="#cb19-226" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Refitting the model on the external cohort <span class="pp">|</span> You are no longer testing generalization — you have just trained a second model <span class="pp">|</span> Lock coefficients on the discovery cohort; only *predict* on the external cohort <span class="pp">|</span></span>
-<span id="cb19-227"><a href="#cb19-227" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Comparing AUCs with an unpaired test <span class="pp">|</span> Ignores that both ROC curves share the same patients <span class="pp">|</span> Use DeLong's test (paired, no resampling) <span class="pp">|</span></span>
-<span id="cb19-228"><a href="#cb19-228" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting only AUC <span class="pp">|</span> Discrimination can survive site transfer while calibration fails <span class="pp">|</span> Always report a calibration slope/intercept alongside AUC <span class="pp">|</span></span>
-<span id="cb19-229"><a href="#cb19-229" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating the discovery cohort's cross-validated AUC as "external" <span class="pp">|</span> CV only estimates within-cohort generalization <span class="pp">|</span> Reserve a truly independent cohort (different site/time/batch) for the external claim <span class="pp">|</span></span>
-<span id="cb19-230"><a href="#cb19-230" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Taking a manuscript's significance claims at face value <span class="pp">|</span> Authors can (as here) slightly overstate one comparison among several <span class="pp">|</span> Recompute the test yourself from the deposited data before citing the claim <span class="pp">|</span></span>
-<span id="cb19-231"><a href="#cb19-231" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-232"><a href="#cb19-232" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
-<span id="cb19-233"><a href="#cb19-233" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-234"><a href="#cb19-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**External validation and nested CV answer different questions.** Nested CV (Chapter 23) estimates generalization within a recruitment process; external validation estimates generalization *across* one.</span>
-<span id="cb19-235"><a href="#cb19-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Confounder screening belongs before feature selection**, not as an afterthought — a candidate biomarker that only tracks age or kidney function should never reach the LASSO step.</span>
-<span id="cb19-236"><a href="#cb19-236" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**DeLong's test** compares two ROC curves computed on the same patients without resampling, by accounting for their correlation directly.</span>
-<span id="cb19-237"><a href="#cb19-237" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Calibration is a separate property from discrimination** and typically degrades faster when a model crosses sites — always check both.</span>
-<span id="cb19-238"><a href="#cb19-238" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Reproducing a paper's numbers and reproducing its prose are different exercises.** This chapter's numbers all matched the authors' frozen output; one of the manuscript's four significance claims did not survive recomputation, and that discrepancy is worth stating plainly rather than smoothing over.</span>
-<span id="cb19-239"><a href="#cb19-239" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-240"><a href="#cb19-240" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
-<span id="cb19-241"><a href="#cb19-241" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-242"><a href="#cb19-242" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Refit vs. frozen.** Using the panel's formula, refit the 7-protein model on Train60 and compare your coefficients to the frozen ones in <span class="in">`repo/models/coef_7panel_Train60.csv`</span>. What is the maximum absolute difference, and what would a large difference (not near machine precision) tell you about your data handling?</span>
-<span id="cb19-243"><a href="#cb19-243" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-244"><a href="#cb19-244" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**DeLong by hand.** Simulate two correlated sets of predicted probabilities for the same 100 patients (one "panel", one "single marker", both weakly related to the same true outcome). Compare them with <span class="in">`pROC::roc.test(..., method = "delong")`</span> and with an (incorrect) unpaired AUC comparison. How different are the p-values, and why?</span>
-<span id="cb19-245"><a href="#cb19-245" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-246"><a href="#cb19-246" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Calibration recovery.** Using the Prague predictions and outcomes, fit a Platt-scaling correction (<span class="in">`glm(outcome ~ logit(pred), family = binomial())`</span>) and recompute the calibration slope on the corrected probabilities. Does discrimination (AUC) change? Should it?</span>
-<span id="cb19-247"><a href="#cb19-247" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-248"><a href="#cb19-248" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Confounder audit at scale.** Extend <span class="in">`deconfound_check()`</span> to loop over multiple covariates for one protein, flagging the protein as "deconfounded" only if it survives adjustment for *every* covariate it is also correlated with. What happens to the false-positive rate if you only check one covariate at a time versus all of them?</span>
-<span id="cb19-249"><a href="#cb19-249" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-250"><a href="#cb19-250" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**The overstatement.** Re-read Step 4's DeLong results. Draft one sentence you would send to a co-author, in the style of a peer-review comment, describing the discrepancy between the manuscript's "p &lt; 0.05 for all" claim and the panel-vs-CRP result (p = 0.078) — precise, not accusatory.</span>
-<span id="cb19-251"><a href="#cb19-251" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-252"><a href="#cb19-252" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
-<span id="cb19-253"><a href="#cb19-253" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-256"><a href="#cb19-256" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb19-257"><a href="#cb19-257" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
-<span id="cb19-258"><a href="#cb19-258" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-216"><a href="#cb19-216" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-217"><a href="#cb19-217" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration intercept: 0</span></span>
+<span id="cb19-218"><a href="#cb19-218" aria-hidden="true" tabindex="-1"></a><span class="in">Calibration slope:     0.44</span></span>
+<span id="cb19-219"><a href="#cb19-219" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb19-220"><a href="#cb19-220" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-221"><a href="#cb19-221" aria-hidden="true" tabindex="-1"></a>A perfectly calibrated model has slope 1 and intercept 0. A slope of 0.44 on Prague means the model's predicted probabilities are systematically **too extreme** on the external cohort — confident predictions near 0 or 1 should be pulled toward the middle before they are shown to a clinician. This is the single most common failure mode when a model moves between sites: discrimination (AUC 0.938) survives noticeably better than calibration (slope 0.44). A ranking-only use of the model (triage, prioritization) is still defensible; a use that reports the probability itself is not, without recalibration.</span>
+<span id="cb19-222"><a href="#cb19-222" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-223"><a href="#cb19-223" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Recalibration is cheap"}</span>
+<span id="cb19-224"><a href="#cb19-224" aria-hidden="true" tabindex="-1"></a>Because calibration slope/intercept only require a single logistic regression of the outcome on the logit of the existing predictions, refitting a calibration correction on a small labeled subset of the new site's data (Platt scaling) is far cheaper than rebuilding the model. Do this before deploying a model at a new site, not after noticing predictions look wrong.</span>
+<span id="cb19-225"><a href="#cb19-225" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb19-226"><a href="#cb19-226" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-227"><a href="#cb19-227" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls in External Validation</span></span>
+<span id="cb19-228"><a href="#cb19-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-229"><a href="#cb19-229" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> What to do instead <span class="pp">|</span></span>
+<span id="cb19-230"><a href="#cb19-230" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
+<span id="cb19-231"><a href="#cb19-231" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Refitting the model on the external cohort <span class="pp">|</span> You are no longer testing generalization — you have just trained a second model <span class="pp">|</span> Lock coefficients on the discovery cohort; only *predict* on the external cohort <span class="pp">|</span></span>
+<span id="cb19-232"><a href="#cb19-232" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Comparing AUCs with an unpaired test <span class="pp">|</span> Ignores that both ROC curves share the same patients <span class="pp">|</span> Use DeLong's test (paired, no resampling) <span class="pp">|</span></span>
+<span id="cb19-233"><a href="#cb19-233" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting only AUC <span class="pp">|</span> Discrimination can survive site transfer while calibration fails <span class="pp">|</span> Always report a calibration slope/intercept alongside AUC <span class="pp">|</span></span>
+<span id="cb19-234"><a href="#cb19-234" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating the discovery cohort's cross-validated AUC as "external" <span class="pp">|</span> CV only estimates within-cohort generalization <span class="pp">|</span> Reserve a truly independent cohort (different site/time/batch) for the external claim <span class="pp">|</span></span>
+<span id="cb19-235"><a href="#cb19-235" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Taking a manuscript's significance claims at face value <span class="pp">|</span> Authors can (as here) slightly overstate one comparison among several <span class="pp">|</span> Recompute the test yourself from the deposited data before citing the claim <span class="pp">|</span></span>
+<span id="cb19-236"><a href="#cb19-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-237"><a href="#cb19-237" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb19-238"><a href="#cb19-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-239"><a href="#cb19-239" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**External validation and nested CV answer different questions.** Nested CV (Chapter 23) estimates generalization within a recruitment process; external validation estimates generalization *across* one.</span>
+<span id="cb19-240"><a href="#cb19-240" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Confounder screening belongs before feature selection**, not as an afterthought — a candidate biomarker that only tracks age or kidney function should never reach the LASSO step.</span>
+<span id="cb19-241"><a href="#cb19-241" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**DeLong's test** compares two ROC curves computed on the same patients without resampling, by accounting for their correlation directly.</span>
+<span id="cb19-242"><a href="#cb19-242" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Calibration is a separate property from discrimination** and typically degrades faster when a model crosses sites — always check both.</span>
+<span id="cb19-243"><a href="#cb19-243" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Reproducing a paper's numbers and reproducing its prose are different exercises.** This chapter's numbers all matched the authors' frozen output; one of the manuscript's four significance claims did not survive recomputation, and that discrepancy is worth stating plainly rather than smoothing over.</span>
+<span id="cb19-244"><a href="#cb19-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-245"><a href="#cb19-245" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb19-246"><a href="#cb19-246" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-247"><a href="#cb19-247" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Refit vs. frozen.** Using the panel's formula, refit the 7-protein model on Train60 and compare your coefficients to the frozen ones in <span class="in">`repo/models/coef_7panel_Train60.csv`</span>. What is the maximum absolute difference, and what would a large difference (not near machine precision) tell you about your data handling?</span>
+<span id="cb19-248"><a href="#cb19-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-249"><a href="#cb19-249" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**DeLong by hand.** Simulate two correlated sets of predicted probabilities for the same 100 patients (one "panel", one "single marker", both weakly related to the same true outcome). Compare them with <span class="in">`pROC::roc.test(..., method = "delong")`</span> and with an (incorrect) unpaired AUC comparison. How different are the p-values, and why?</span>
+<span id="cb19-250"><a href="#cb19-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-251"><a href="#cb19-251" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Calibration recovery.** Using the Prague predictions and outcomes, fit a Platt-scaling correction (<span class="in">`glm(outcome ~ logit(pred), family = binomial())`</span>) and recompute the calibration slope on the corrected probabilities. Does discrimination (AUC) change? Should it?</span>
+<span id="cb19-252"><a href="#cb19-252" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-253"><a href="#cb19-253" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Confounder audit at scale.** Extend <span class="in">`deconfound_check()`</span> to loop over multiple covariates for one protein, flagging the protein as "deconfounded" only if it survives adjustment for *every* covariate it is also correlated with. What happens to the false-positive rate if you only check one covariate at a time versus all of them?</span>
+<span id="cb19-254"><a href="#cb19-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-255"><a href="#cb19-255" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**The overstatement.** Re-read Step 4's DeLong results. Draft one sentence you would send to a co-author, in the style of a peer-review comment, describing the discrepancy between the manuscript's "p &lt; 0.05 for all" claim and the panel-vs-CRP result (p = 0.078) — precise, not accusatory.</span>
+<span id="cb19-256"><a href="#cb19-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-257"><a href="#cb19-257" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb19-258"><a href="#cb19-258" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-261"><a href="#cb19-261" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb19-262"><a href="#cb19-262" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb19-263"><a href="#cb19-263" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

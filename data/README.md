@@ -7,6 +7,7 @@
 | `pxd004886/` | PXD004886 DIA benchmark | 14, 19, 20 |
 | `pxd010154/` | PXD010154 Tissue Atlas | 19, 23 |
 | `mtbls38/` | MTBLS38 Metabolite Standards | 08 |
+| `pxd079232/` | PXD079232 vasculitis remission panel — locked coefficients and per-patient predicted probabilities (Train60/Test40/Prague). Source Data from Jerke et al. 2026, *Nat. Commun.* 17:6825, CC-BY 4.0; `github.com/Theda-sys/vasculitis-remission-proteomics`. The raw per-patient protein-concentration-plus-clinical-covariate matrix is *not* included here — it remains gated behind a data-sharing agreement per that repository's README. | 27 |
 | `figures/` | Pre-computed PNG figures | 08, 14, 23 |
 
 ## R Package Data (Auto-Installed)

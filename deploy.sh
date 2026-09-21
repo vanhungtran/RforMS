@@ -61,6 +61,23 @@ done
 echo "✓ Copied $copied_count HTML files to root"
 echo ""
 
+# Step 2b: Remove root-level HTML files that no longer exist under docs/ --
+# e.g. left over from a renamed/renumbered chapter. Without this, deleted or
+# renamed chapters stay live at their old URL forever.
+echo "Step 2b: Removing root-level HTML files with no docs/ counterpart..."
+removed_count=0
+for file in *.html; do
+    [ -f "$file" ] || continue
+    [ "$file" = "zoom-controls.html" ] && continue   # not a rendered chapter
+    if [ ! -f "docs/$file" ]; then
+        rm -f "$file"
+        removed_count=$((removed_count + 1))
+        echo "  Removed (orphaned): $file"
+    fi
+done
+echo "✓ Removed $removed_count orphaned HTML file(s)"
+echo ""
+
 # Step 3: Copy other necessary files
 echo "Step 3: Copying additional files..."
 for file in robots.txt sitemap.xml search.json .nojekyll; do
@@ -70,10 +87,16 @@ for file in robots.txt sitemap.xml search.json .nojekyll; do
     fi
 done
 
-# Copy site_libs directory if it exists (use PowerShell on Windows for reliability)
+# Mirror site_libs/ (not just copy): this removes stale hashed CSS/JS bundles
+# that no longer match the current theme/custom.scss compile, instead of
+# letting them accumulate silently every time the theme changes.
 if [ -d "docs/site_libs" ]; then
-    powershell.exe -Command "New-Item -ItemType Directory -Path 'site_libs' -Force | Out-Null; Copy-Item -Path 'docs/site_libs/*' -Destination 'site_libs' -Recurse -Force"
-    echo "  Copied: site_libs/"
+    powershell.exe -Command "robocopy 'docs/site_libs' 'site_libs' /MIR /NFL /NDL /NJH /NJS /R:1 /W:1; if (\$LASTEXITCODE -ge 8) { exit 1 } else { exit 0 }"
+    if [ $? -ne 0 ]; then
+        echo "✗ Error mirroring site_libs/!"
+        exit 1
+    fi
+    echo "  Mirrored: site_libs/ (stale files removed, not just new ones added)"
 fi
 
 # Copy per-chapter figure/asset directories (docs/<chapter>_files/) to root
@@ -86,34 +109,53 @@ for dir in docs/*_files; do
         echo "  Copied: $base/"
     fi
 done
-echo "✓ Additional files copied"
+
+# Remove root-level *_files/ asset directories with no docs/ counterpart
+# (same staleness problem as the HTML files above).
+for dir in *_files; do
+    [ -d "$dir" ] || continue
+    if [ ! -d "docs/$dir" ]; then
+        rm -rf "$dir"
+        echo "  Removed (orphaned): $dir/"
+    fi
+done
+echo "✓ Additional files synced"
 echo ""
 
 # Step 4: Stage only HTML files and necessary deployment files
 echo "Step 4: Staging files for commit..."
 
-# Add HTML files
-git add ./*.html
+# Add HTML files. Use `git add -A -- '*.html'` (a git pathspec, quoted so
+# the *shell* never expands it) rather than `git add ./*.html` (a shell
+# glob): a shell glob only matches files still present on disk, so it can
+# never stage the Step 2b deletions -- by the time it runs, the orphaned
+# files are already gone and the glob silently has nothing to match.
+git add -A -- '*.html'
 
-# Add necessary deployment files (but not CSS/SCSS)
+# Add necessary deployment files
 git add robots.txt sitemap.xml search.json .nojekyll 2>/dev/null
 
-# Add site_libs (including CSS files)
-git add site_libs/ 2>/dev/null || true
+# Add site_libs/ -- this is the COMPILED theme output (cosmo + custom.scss
+# baked together by `quarto render` into hashed bootstrap-<hash>.min.css).
+# `-A` so Step 2b's robocopy /MIR removals (stale hash files from a past
+# theme/custom.scss revision) are staged as deletions, not left dangling.
+git add -A -- site_libs/ 2>/dev/null || true
 
-# Add per-chapter figure/asset directories
-git add ./*_files/ 2>/dev/null || true
+# Add per-chapter figure/asset directories. Pathspec, not shell glob -- same
+# already-deleted-so-the-glob-misses-it reasoning as the HTML files above.
+# Both the bare pattern (the directory entry itself) and the /** form
+# (its nested contents) are passed explicitly -- a bare '*_files' alone
+# left orphaned nested files (e.g. .../figure-html/*.png) unstaged.
+git add -A -- '*_files' '*_files/**' 2>/dev/null || true
 
 # Add zoom-controls.html
 if [ -f "zoom-controls.html" ]; then
     git add zoom-controls.html
 fi
 
-# Add custom.scss and all CSS/SCSS files
-if [ -f "custom.scss" ]; then
-    git add custom.scss
-fi
-git add ./*.css ./*.scss 2>/dev/null || true
+# custom.scss itself is intentionally NOT staged here: it is book source and
+# stays git-ignored/local-only per this project's tracking policy (see
+# CLAUDE.md). Only its compiled output in site_libs/ above is published.
 
 # Add _quarto.yml if modified
 git add _quarto.yml

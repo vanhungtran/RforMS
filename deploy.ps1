@@ -47,6 +47,22 @@ foreach ($file in $htmlFiles) {
 Write-Host "✓ Copied $copiedCount HTML files to root" -ForegroundColor Green
 Write-Host ""
 
+# Step 2b: Remove root-level HTML files that no longer exist under docs/ --
+# e.g. left over from a renamed/renumbered chapter. Without this, deleted or
+# renamed chapters stay live at their old URL forever.
+Write-Host "Step 2b: Removing root-level HTML files with no docs/ counterpart..." -ForegroundColor Yellow
+$removedCount = 0
+Get-ChildItem -Path "." -Filter "*.html" -File | ForEach-Object {
+    if ($_.Name -eq "zoom-controls.html") { return }   # not a rendered chapter
+    if (-not (Test-Path "docs\$($_.Name)")) {
+        Remove-Item -Path $_.FullName -Force
+        $removedCount++
+        Write-Host "  Removed (orphaned): $($_.Name)" -ForegroundColor Gray
+    }
+}
+Write-Host "✓ Removed $removedCount orphaned HTML file(s)" -ForegroundColor Green
+Write-Host ""
+
 # Step 3: Copy other necessary files (robots.txt, sitemap.xml, search.json, etc.)
 Write-Host "Step 3: Copying additional files..." -ForegroundColor Yellow
 $additionalFiles = @("robots.txt", "sitemap.xml", "search.json", ".nojekyll")
@@ -78,37 +94,57 @@ foreach ($dir in $figureDirs) {
     Write-Host "  Copied: $dest/" -ForegroundColor Gray
 }
 
+# Remove root-level *_files/ asset directories with no docs/ counterpart
+# (same staleness problem as the HTML files above).
+Get-ChildItem -Path "." -Filter "*_files" -Directory | ForEach-Object {
+    if (-not (Test-Path "docs\$($_.Name)")) {
+        Remove-Item -Path $_.FullName -Recurse -Force
+        Write-Host "  Removed (orphaned): $($_.Name)/" -ForegroundColor Gray
+    }
+}
+
 Write-Host "✓ Additional files copied" -ForegroundColor Green
 Write-Host ""
 
 # Step 4: Stage only HTML files and necessary deployment files
 Write-Host "Step 4: Staging files for commit..." -ForegroundColor Yellow
 
-# Add HTML files
-git add *.html
+# Add HTML files. Use `git add -A -- '*.html'` (a git pathspec) rather than
+# a bare wildcard: Step 2b already deleted the orphaned files from disk, so
+# anything that resolves the pattern against the *filesystem* (whether that
+# resolution happens in the shell or via Get-ChildItem) has nothing left to
+# match for them. `-A --` tells git itself to match the pattern against the
+# index, which still knows about paths that were just deleted.
+git add -A -- '*.html'
 
-# Add necessary deployment files (but not CSS/SCSS)
+# Add necessary deployment files
 git add robots.txt
 git add sitemap.xml
 git add search.json
 git add .nojekyll
 
-# Add site_libs (including CSS files)
-git add site_libs/ --force
+# Add site_libs/ -- this is the COMPILED theme output (cosmo + custom.scss
+# baked together by `quarto render` into hashed bootstrap-<hash>.min.css).
+# The Remove-Item + Copy-Item above already makes this a full resync, so
+# `git add` picks up both new/changed files and removed stale ones.
+git add -A -- site_libs/
 
-# Add per-chapter figure/asset directories
-Get-ChildItem -Path "." -Filter "*_files" -Directory | ForEach-Object { git add $_.FullName }
+# Add per-chapter figure/asset directories. Same pathspec reasoning as the
+# HTML files above -- Get-ChildItem can't enumerate a directory that Step 3
+# already removed, so it would never hand orphaned dirs to `git add`.
+# Both the bare pattern and the /** form are passed explicitly -- a bare
+# '*_files' alone left orphaned nested files (e.g. .../figure-html/*.png)
+# unstaged, since it doesn't reliably recurse into matched directories.
+git add -A -- '*_files' '*_files/**'
 
 # Add zoom-controls.html
 if (Test-Path "zoom-controls.html") {
     git add zoom-controls.html
 }
 
-# Add custom.scss and all CSS/SCSS files
-if (Test-Path "custom.scss") {
-    git add custom.scss
-}
-git add *.css *.scss 2>$null
+# custom.scss itself is intentionally NOT staged here: it is book source and
+# stays git-ignored/local-only per this project's tracking policy (see
+# CLAUDE.md). Only its compiled output in site_libs/ above is published.
 
 # Add _quarto.yml if modified
 git add _quarto.yml

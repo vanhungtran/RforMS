@@ -99,6 +99,9 @@ div.csl-indent {
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="site_libs/bootstrap/bootstrap-a806231a2ff89bd67abf7ff814779758.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="site_libs/quarto-contrib/glightbox/glightbox.min.js"></script>
+<link href="site_libs/quarto-contrib/glightbox/glightbox.min.css" rel="stylesheet">
+<link href="site_libs/quarto-contrib/glightbox/lightbox.css" rel="stylesheet">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -671,6 +674,16 @@ Isocaproyl-Phe 13C9 [M+H]+     = 273.1897  (+9.0302)</code></pre>
 <pre><code>tracer            compound   rt int_native int_labeled confirmed_labeled
  phe Isocaproyl(C6:0)-Phe 19.96     284130       61022               TRUE</code></pre>
 <p>Native and ¹³C-labelled iCPhe co-elute at RT 19.96 min with a ~4.7:1 intensity ratio (expected, since only a fraction of the endogenous pool is ¹³C-labelled from the fed tracer) — direct chemical evidence that isocaproyl-Phe is produced <em>from</em> the fed phenylalanine, independent of any spectral library match. Across the full target list, this logic yields <strong>197 candidate features, 50 isotope-confirmed detections representing 35 distinct N-acyl amino acids</strong>.</p>
+<div id="fig-isotope-tracing" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-isotope-tracing-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<a href="data/figures/fig16_isotope_tracing.png" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="Figure&nbsp;28.1: Mass isotopologue distribution (MID) from [U-13C]-glucose stable isotope tracing across key TCA cycle intermediates (Citrate, α-Ketoglutarate, Malate), demonstrating fractional labeling and metabolic flux."><img src="data/figures/fig16_isotope_tracing.png" class="img-fluid figure-img" style="width:80.0%"></a>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-isotope-tracing-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;28.1: Mass isotopologue distribution (MID) from [U-13C]-glucose stable isotope tracing across key TCA cycle intermediates (Citrate, α-Ketoglutarate, Malate), demonstrating fractional labeling and metabolic flux.
+</figcaption>
+</figure>
+</div>
 </section>
 <section id="step-3-msms-confirms-which-part-carries-the-label" class="level2" data-number="28.5">
 <h2 data-number="28.5" class="anchored" data-anchor-id="step-3-msms-confirms-which-part-carries-the-label"><span class="header-section-number">28.5</span> Step 3 — MS/MS Confirms <em>Which Part</em> Carries the Label</h2>
@@ -1685,144 +1698,178 @@ Hsieh, Daniel C.-C., Lin Jiang, Mengchi Xue, Niv Antonovsky, and Sean F. Brady. 
 <span id="cb15-132"><a href="#cb15-132" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-133"><a href="#cb15-133" aria-hidden="true" tabindex="-1"></a>Native and ¹³C-labelled iCPhe co-elute at RT 19.96 min with a ~4.7:1 intensity ratio (expected, since only a fraction of the endogenous pool is ¹³C-labelled from the fed tracer) — direct chemical evidence that isocaproyl-Phe is produced *from* the fed phenylalanine, independent of any spectral library match. Across the full target list, this logic yields **197 candidate features, 50 isotope-confirmed detections representing 35 distinct N-acyl amino acids**.</span>
 <span id="cb15-134"><a href="#cb15-134" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-135"><a href="#cb15-135" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — MS/MS Confirms *Which Part* Carries the Label</span></span>
+<span id="cb15-135"><a href="#cb15-135" aria-hidden="true" tabindex="-1"></a>!<span class="co">[</span><span class="ot">Mass isotopologue distribution (MID) from [U-13C]-glucose stable isotope tracing across key TCA cycle intermediates (Citrate, α-Ketoglutarate, Malate), demonstrating fractional labeling and metabolic flux.</span><span class="co">](data/figures/fig16_isotope_tracing.png)</span>{#fig-isotope-tracing width=80%}</span>
 <span id="cb15-136"><a href="#cb15-136" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-137"><a href="#cb15-137" aria-hidden="true" tabindex="-1"></a>Co-elution tells you the two masses are related. MS/MS tells you *how*: a conjugate's fragmentation should split cleanly into an amino-acid-derived ion (which shifts with the label, if the amino acid is labelled) and an acyl-derived ion (which does not, if the acyl group is unlabelled).</span>
+<span id="cb15-137"><a href="#cb15-137" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 3 — MS/MS Confirms *Which Part* Carries the Label</span></span>
 <span id="cb15-138"><a href="#cb15-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-141"><a href="#cb15-141" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-142"><a href="#cb15-142" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-143"><a href="#cb15-143" aria-hidden="true" tabindex="-1"></a>ms2 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">2</span>L) <span class="sc">|&gt;</span> <span class="fu">filterPrecursorMzRange</span>(<span class="fu">c</span>(mh_native <span class="sc">-</span> <span class="fl">0.03</span>, mh_native <span class="sc">+</span> <span class="fl">0.03</span>))</span>
-<span id="cb15-144"><a href="#cb15-144" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectra</span>(ms2[<span class="dv">1</span>], <span class="at">main =</span> <span class="st">"Isocaproyl-Phe MS/MS"</span>)</span>
-<span id="cb15-145"><a href="#cb15-145" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-146"><a href="#cb15-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-147"><a href="#cb15-147" aria-hidden="true" tabindex="-1"></a>For isocaproyl-Phe (native) the diagnostic fragments are the phenylalanine immonium ion at *m/z* 120.08, <span class="in">`[Phe+H]+`</span> at 166.09, and the isocaproyl acyl fragment at 81.07. In the ¹³C₉-labelled partner, the amino-acid fragments shift by the full label (immonium → 128.11, <span class="in">`[¹³C₉Phe+H]+`</span> → 175.12) while the acyl fragment stays at 81.07 — because the acyl group came from an unlabelled fatty acid pool, not from the fed tracer.</span>
+<span id="cb15-139"><a href="#cb15-139" aria-hidden="true" tabindex="-1"></a>Co-elution tells you the two masses are related. MS/MS tells you *how*: a conjugate's fragmentation should split cleanly into an amino-acid-derived ion (which shifts with the label, if the amino acid is labelled) and an acyl-derived ion (which does not, if the acyl group is unlabelled).</span>
+<span id="cb15-140"><a href="#cb15-140" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-143"><a href="#cb15-143" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-144"><a href="#cb15-144" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-145"><a href="#cb15-145" aria-hidden="true" tabindex="-1"></a>ms2 <span class="ot">&lt;-</span> <span class="fu">filterMsLevel</span>(sps, <span class="dv">2</span>L) <span class="sc">|&gt;</span> <span class="fu">filterPrecursorMzRange</span>(<span class="fu">c</span>(mh_native <span class="sc">-</span> <span class="fl">0.03</span>, mh_native <span class="sc">+</span> <span class="fl">0.03</span>))</span>
+<span id="cb15-146"><a href="#cb15-146" aria-hidden="true" tabindex="-1"></a><span class="fu">plotSpectra</span>(ms2[<span class="dv">1</span>], <span class="at">main =</span> <span class="st">"Isocaproyl-Phe MS/MS"</span>)</span>
+<span id="cb15-147"><a href="#cb15-147" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb15-148"><a href="#cb15-148" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-151"><a href="#cb15-151" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-152"><a href="#cb15-152" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-153"><a href="#cb15-153" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS of native and 13C9-labelled isocaproyl-Phe: amino-acid fragments shift with the label; the acyl fragment does not."</span></span>
-<span id="cb15-154"><a href="#cb15-154" aria-hidden="true" tabindex="-1"></a>ms2_data <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/plot_data/ms2_spectra.csv"</span>)</span>
-<span id="cb15-155"><a href="#cb15-155" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
-<span id="cb15-156"><a href="#cb15-156" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(ms2_data, <span class="fu">aes</span>(mz, intensity)) <span class="sc">+</span></span>
-<span id="cb15-157"><a href="#cb15-157" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> mz, <span class="at">yend =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
-<span id="cb15-158"><a href="#cb15-158" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> form, <span class="at">ncol =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb15-159"><a href="#cb15-159" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"intensity"</span>,</span>
-<span id="cb15-160"><a href="#cb15-160" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"iCPhe MS/MS: native vs. 13C9-labelled"</span>)</span>
-<span id="cb15-161"><a href="#cb15-161" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-162"><a href="#cb15-162" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-163"><a href="#cb15-163" aria-hidden="true" tabindex="-1"></a>This native/labelled fragment comparison is the same logic behind Chapter 21's variance-partitioning intuition, applied at the level of a single ion instead of a whole feature table: **hold everything constant except the one thing you changed (here, which atoms carry the isotope) and see what moves.**</span>
+<span id="cb15-149"><a href="#cb15-149" aria-hidden="true" tabindex="-1"></a>For isocaproyl-Phe (native) the diagnostic fragments are the phenylalanine immonium ion at *m/z* 120.08, <span class="in">`[Phe+H]+`</span> at 166.09, and the isocaproyl acyl fragment at 81.07. In the ¹³C₉-labelled partner, the amino-acid fragments shift by the full label (immonium → 128.11, <span class="in">`[¹³C₉Phe+H]+`</span> → 175.12) while the acyl fragment stays at 81.07 — because the acyl group came from an unlabelled fatty acid pool, not from the fed tracer.</span>
+<span id="cb15-150"><a href="#cb15-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-153"><a href="#cb15-153" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-154"><a href="#cb15-154" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-155"><a href="#cb15-155" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS of native and 13C9-labelled isocaproyl-Phe: amino-acid fragments shift with the label; the acyl fragment does not."</span></span>
+<span id="cb15-156"><a href="#cb15-156" aria-hidden="true" tabindex="-1"></a>ms2_data <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/plot_data/ms2_spectra.csv"</span>)</span>
+<span id="cb15-157"><a href="#cb15-157" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb15-158"><a href="#cb15-158" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(ms2_data, <span class="fu">aes</span>(mz, intensity)) <span class="sc">+</span></span>
+<span id="cb15-159"><a href="#cb15-159" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_segment</span>(<span class="fu">aes</span>(<span class="at">xend =</span> mz, <span class="at">yend =</span> <span class="dv">0</span>)) <span class="sc">+</span></span>
+<span id="cb15-160"><a href="#cb15-160" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> form, <span class="at">ncol =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb15-161"><a href="#cb15-161" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"m/z"</span>, <span class="at">y =</span> <span class="st">"intensity"</span>,</span>
+<span id="cb15-162"><a href="#cb15-162" aria-hidden="true" tabindex="-1"></a>       <span class="at">title =</span> <span class="st">"iCPhe MS/MS: native vs. 13C9-labelled"</span>)</span>
+<span id="cb15-163"><a href="#cb15-163" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb15-164"><a href="#cb15-164" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-165"><a href="#cb15-165" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — Molecular Networking: From One Comparison to a Graph</span></span>
+<span id="cb15-165"><a href="#cb15-165" aria-hidden="true" tabindex="-1"></a>This native/labelled fragment comparison is the same logic behind Chapter 21's variance-partitioning intuition, applied at the level of a single ion instead of a whole feature table: **hold everything constant except the one thing you changed (here, which atoms carry the isotope) and see what moves.**</span>
 <span id="cb15-166"><a href="#cb15-166" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-167"><a href="#cb15-167" aria-hidden="true" tabindex="-1"></a>Chapter 9 computed a cosine similarity between one query spectrum and one library entry. **Molecular networking** computes that same cosine similarity between *every pair* of MS/MS spectra in a dataset and keeps only the strong, mutually-reciprocal matches — turning hundreds of unidentified spectra into a graph where clusters correspond to structurally related compound families, with no library required at all.</span>
+<span id="cb15-167"><a href="#cb15-167" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 4 — Molecular Networking: From One Comparison to a Graph</span></span>
 <span id="cb15-168"><a href="#cb15-168" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-171"><a href="#cb15-171" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-172"><a href="#cb15-172" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-173"><a href="#cb15-173" aria-hidden="true" tabindex="-1"></a><span class="co"># Pairwise cosine similarity between all MS2 spectra (extends Chapter 9's</span></span>
-<span id="cb15-174"><a href="#cb15-174" aria-hidden="true" tabindex="-1"></a><span class="co"># single-pair MetaboAnnotation::matchSpectra to an all-vs-all comparison)</span></span>
-<span id="cb15-175"><a href="#cb15-175" aria-hidden="true" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">compareSpectra</span>(ms2_all, ms2_all, <span class="at">ppm =</span> <span class="dv">20</span>, <span class="at">FUN =</span> MsCoreUtils<span class="sc">::</span>ndotproduct)</span>
-<span id="cb15-176"><a href="#cb15-176" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-177"><a href="#cb15-177" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">which</span>(sim <span class="sc">&gt;</span> <span class="fl">0.4</span>, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb15-178"><a href="#cb15-178" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
-<span id="cb15-179"><a href="#cb15-179" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(row <span class="sc">&lt;</span> col) <span class="sc">|&gt;</span>                 <span class="co"># each pair once</span></span>
-<span id="cb15-180"><a href="#cb15-180" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">cosine =</span> sim[<span class="fu">cbind</span>(row, col)])</span>
-<span id="cb15-181"><a href="#cb15-181" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-182"><a href="#cb15-182" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-183"><a href="#cb15-183" aria-hidden="true" tabindex="-1"></a>The pre-computed network for this dataset is already available as a node and edge table:</span>
+<span id="cb15-169"><a href="#cb15-169" aria-hidden="true" tabindex="-1"></a>Chapter 9 computed a cosine similarity between one query spectrum and one library entry. **Molecular networking** computes that same cosine similarity between *every pair* of MS/MS spectra in a dataset and keeps only the strong, mutually-reciprocal matches — turning hundreds of unidentified spectra into a graph where clusters correspond to structurally related compound families, with no library required at all.</span>
+<span id="cb15-170"><a href="#cb15-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-173"><a href="#cb15-173" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-174"><a href="#cb15-174" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-175"><a href="#cb15-175" aria-hidden="true" tabindex="-1"></a><span class="co"># Pairwise cosine similarity between all MS2 spectra (extends Chapter 9's</span></span>
+<span id="cb15-176"><a href="#cb15-176" aria-hidden="true" tabindex="-1"></a><span class="co"># single-pair MetaboAnnotation::matchSpectra to an all-vs-all comparison)</span></span>
+<span id="cb15-177"><a href="#cb15-177" aria-hidden="true" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">compareSpectra</span>(ms2_all, ms2_all, <span class="at">ppm =</span> <span class="dv">20</span>, <span class="at">FUN =</span> MsCoreUtils<span class="sc">::</span>ndotproduct)</span>
+<span id="cb15-178"><a href="#cb15-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-179"><a href="#cb15-179" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">which</span>(sim <span class="sc">&gt;</span> <span class="fl">0.4</span>, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-180"><a href="#cb15-180" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>() <span class="sc">|&gt;</span></span>
+<span id="cb15-181"><a href="#cb15-181" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(row <span class="sc">&lt;</span> col) <span class="sc">|&gt;</span>                 <span class="co"># each pair once</span></span>
+<span id="cb15-182"><a href="#cb15-182" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">cosine =</span> sim[<span class="fu">cbind</span>(row, col)])</span>
+<span id="cb15-183"><a href="#cb15-183" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb15-184"><a href="#cb15-184" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-187"><a href="#cb15-187" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-188"><a href="#cb15-188" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-189"><a href="#cb15-189" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(igraph)</span>
-<span id="cb15-190"><a href="#cb15-190" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-191"><a href="#cb15-191" aria-hidden="true" tabindex="-1"></a>nodes <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_nodes.csv"</span>)</span>
-<span id="cb15-192"><a href="#cb15-192" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_edges.csv"</span>)</span>
-<span id="cb15-193"><a href="#cb15-193" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-194"><a href="#cb15-194" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">graph_from_data_frame</span>(edges, <span class="at">directed =</span> <span class="cn">FALSE</span>, <span class="at">vertices =</span> nodes)</span>
-<span id="cb15-195"><a href="#cb15-195" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Nodes:"</span>, <span class="fu">vcount</span>(g), <span class="st">" Edges:"</span>, <span class="fu">ecount</span>(g), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb15-196"><a href="#cb15-196" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-197"><a href="#cb15-197" aria-hidden="true" tabindex="-1"></a><span class="co"># Connected components = molecular families</span></span>
-<span id="cb15-198"><a href="#cb15-198" aria-hidden="true" tabindex="-1"></a>comp <span class="ot">&lt;-</span> <span class="fu">components</span>(g)</span>
-<span id="cb15-199"><a href="#cb15-199" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Molecular families:"</span>, comp<span class="sc">$</span>no, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb15-200"><a href="#cb15-200" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(comp<span class="sc">$</span>csize)[<span class="fu">order</span>(<span class="sc">-</span><span class="fu">as.integer</span>(<span class="fu">names</span>(<span class="fu">table</span>(comp<span class="sc">$</span>csize))))] <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
-<span id="cb15-201"><a href="#cb15-201" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-202"><a href="#cb15-202" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-185"><a href="#cb15-185" aria-hidden="true" tabindex="-1"></a>The pre-computed network for this dataset is already available as a node and edge table:</span>
+<span id="cb15-186"><a href="#cb15-186" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-189"><a href="#cb15-189" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-190"><a href="#cb15-190" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-191"><a href="#cb15-191" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(igraph)</span>
+<span id="cb15-192"><a href="#cb15-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-193"><a href="#cb15-193" aria-hidden="true" tabindex="-1"></a>nodes <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_nodes.csv"</span>)</span>
+<span id="cb15-194"><a href="#cb15-194" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"data/processed/molecular_network_edges.csv"</span>)</span>
+<span id="cb15-195"><a href="#cb15-195" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-196"><a href="#cb15-196" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">graph_from_data_frame</span>(edges, <span class="at">directed =</span> <span class="cn">FALSE</span>, <span class="at">vertices =</span> nodes)</span>
+<span id="cb15-197"><a href="#cb15-197" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Nodes:"</span>, <span class="fu">vcount</span>(g), <span class="st">" Edges:"</span>, <span class="fu">ecount</span>(g), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-198"><a href="#cb15-198" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-199"><a href="#cb15-199" aria-hidden="true" tabindex="-1"></a><span class="co"># Connected components = molecular families</span></span>
+<span id="cb15-200"><a href="#cb15-200" aria-hidden="true" tabindex="-1"></a>comp <span class="ot">&lt;-</span> <span class="fu">components</span>(g)</span>
+<span id="cb15-201"><a href="#cb15-201" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Molecular families:"</span>, comp<span class="sc">$</span>no, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb15-202"><a href="#cb15-202" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(comp<span class="sc">$</span>csize)[<span class="fu">order</span>(<span class="sc">-</span><span class="fu">as.integer</span>(<span class="fu">names</span>(<span class="fu">table</span>(comp<span class="sc">$</span>csize))))] <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
 <span id="cb15-203"><a href="#cb15-203" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-204"><a href="#cb15-204" aria-hidden="true" tabindex="-1"></a><span class="in">Nodes: 139  Edges: 187</span></span>
-<span id="cb15-205"><a href="#cb15-205" aria-hidden="true" tabindex="-1"></a><span class="in">Molecular families: 34</span></span>
-<span id="cb15-206"><a href="#cb15-206" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-207"><a href="#cb15-207" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-210"><a href="#cb15-210" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-211"><a href="#cb15-211" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-212"><a href="#cb15-212" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS molecular network: N-acyl Phe and N-acyl Trp cluster into two large, separate families, exactly as reported in the paper's Figure 1c."</span></span>
-<span id="cb15-213"><a href="#cb15-213" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb15-214"><a href="#cb15-214" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(g, <span class="at">vertex.size =</span> <span class="dv">4</span>, <span class="at">vertex.label =</span> <span class="cn">NA</span>,</span>
-<span id="cb15-215"><a href="#cb15-215" aria-hidden="true" tabindex="-1"></a>     <span class="at">vertex.color =</span> <span class="fu">as.factor</span>(comp<span class="sc">$</span>membership),</span>
-<span id="cb15-216"><a href="#cb15-216" aria-hidden="true" tabindex="-1"></a>     <span class="at">edge.width =</span> <span class="fu">E</span>(g)<span class="sc">$</span>cosine <span class="sc">*</span> <span class="dv">2</span>,</span>
-<span id="cb15-217"><a href="#cb15-217" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"N-acyl amino acid molecular network"</span>)</span>
-<span id="cb15-218"><a href="#cb15-218" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-219"><a href="#cb15-219" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-220"><a href="#cb15-220" aria-hidden="true" tabindex="-1"></a>The two largest components — 69 nodes for the N-acyl Phe family, 7 nodes for N-acyl Trp — separate cleanly without any label or database entry being used to build the graph. Structural relatedness alone, expressed as shared fragmentation, is enough to organize the data; the isotope evidence from Steps 2–3 is what then tells you *which direction* the biosynthesis runs.</span>
+<span id="cb15-204"><a href="#cb15-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-205"><a href="#cb15-205" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-206"><a href="#cb15-206" aria-hidden="true" tabindex="-1"></a><span class="in">Nodes: 139  Edges: 187</span></span>
+<span id="cb15-207"><a href="#cb15-207" aria-hidden="true" tabindex="-1"></a><span class="in">Molecular families: 34</span></span>
+<span id="cb15-208"><a href="#cb15-208" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-209"><a href="#cb15-209" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-212"><a href="#cb15-212" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-213"><a href="#cb15-213" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-214"><a href="#cb15-214" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "MS/MS molecular network: N-acyl Phe and N-acyl Trp cluster into two large, separate families, exactly as reported in the paper's Figure 1c."</span></span>
+<span id="cb15-215"><a href="#cb15-215" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb15-216"><a href="#cb15-216" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(g, <span class="at">vertex.size =</span> <span class="dv">4</span>, <span class="at">vertex.label =</span> <span class="cn">NA</span>,</span>
+<span id="cb15-217"><a href="#cb15-217" aria-hidden="true" tabindex="-1"></a>     <span class="at">vertex.color =</span> <span class="fu">as.factor</span>(comp<span class="sc">$</span>membership),</span>
+<span id="cb15-218"><a href="#cb15-218" aria-hidden="true" tabindex="-1"></a>     <span class="at">edge.width =</span> <span class="fu">E</span>(g)<span class="sc">$</span>cosine <span class="sc">*</span> <span class="dv">2</span>,</span>
+<span id="cb15-219"><a href="#cb15-219" aria-hidden="true" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">"N-acyl amino acid molecular network"</span>)</span>
+<span id="cb15-220"><a href="#cb15-220" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 <span id="cb15-221"><a href="#cb15-221" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-222"><a href="#cb15-222" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Molecular networking finds relationships, not identities"}</span>
-<span id="cb15-223"><a href="#cb15-223" aria-hidden="true" tabindex="-1"></a>A large, well-connected cluster tells you a set of features share structural motifs. It does not tell you what any of them *are* — that still requires the exact-mass/isotope work in Steps 1–2, a database hit, or a reference standard. Treat networking as a triage and hypothesis-generation tool that tells you where to spend your identification effort, not as an identification method in itself.</span>
-<span id="cb15-224"><a href="#cb15-224" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-225"><a href="#cb15-225" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-226"><a href="#cb15-226" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — Biological Replication Before You Believe It</span></span>
+<span id="cb15-222"><a href="#cb15-222" aria-hidden="true" tabindex="-1"></a>The two largest components — 69 nodes for the N-acyl Phe family, 7 nodes for N-acyl Trp — separate cleanly without any label or database entry being used to build the graph. Structural relatedness alone, expressed as shared fragmentation, is enough to organize the data; the isotope evidence from Steps 2–3 is what then tells you *which direction* the biosynthesis runs.</span>
+<span id="cb15-223"><a href="#cb15-223" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-224"><a href="#cb15-224" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Molecular networking finds relationships, not identities"}</span>
+<span id="cb15-225"><a href="#cb15-225" aria-hidden="true" tabindex="-1"></a>A large, well-connected cluster tells you a set of features share structural motifs. It does not tell you what any of them *are* — that still requires the exact-mass/isotope work in Steps 1–2, a database hit, or a reference standard. Treat networking as a triage and hypothesis-generation tool that tells you where to spend your identification effort, not as an identification method in itself.</span>
+<span id="cb15-226"><a href="#cb15-226" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb15-227"><a href="#cb15-227" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-228"><a href="#cb15-228" aria-hidden="true" tabindex="-1"></a>A single-run detection, however clean, is one data point. The reproduction confirms the flagship compounds (iCPhe, PAPhe, PPPhe) across **n = 3 biological replicates**, with retention times stable to ±0.02 min.</span>
+<span id="cb15-228"><a href="#cb15-228" aria-hidden="true" tabindex="-1"></a><span class="fu">## Step 5 — Biological Replication Before You Believe It</span></span>
 <span id="cb15-229"><a href="#cb15-229" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-232"><a href="#cb15-232" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-233"><a href="#cb15-233" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
-<span id="cb15-234"><a href="#cb15-234" aria-hidden="true" tabindex="-1"></a>replicate_check <span class="ot">&lt;-</span> nacyl <span class="sc">|&gt;</span></span>
-<span id="cb15-235"><a href="#cb15-235" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"Isocaproyl(C6:0)-Phe"</span>, <span class="st">"Phenylacetyl(PA)-Phe"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb15-236"><a href="#cb15-236" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">group_by</span>(compound) <span class="sc">|&gt;</span></span>
-<span id="cb15-237"><a href="#cb15-237" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(<span class="at">n_reps =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(), <span class="at">rt_sd =</span> <span class="fu">sd</span>(rt), <span class="at">rt_range =</span> <span class="fu">max</span>(rt) <span class="sc">-</span> <span class="fu">min</span>(rt))</span>
-<span id="cb15-238"><a href="#cb15-238" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-<span id="cb15-239"><a href="#cb15-239" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-240"><a href="#cb15-240" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="n = 1 is a hypothesis, not a finding"}</span>
-<span id="cb15-241"><a href="#cb15-241" aria-hidden="true" tabindex="-1"></a>Everything in Steps 1–4 can be done, and can look completely convincing, from a single injection. It is only the agreement across independent biological replicates that turns "we detected a co-eluting isotope pair once" into "*C. difficile* produces this metabolite." The paper's — and this reproduction's — confidence in the flagship N-acyl amino acids rests on this replication, not on any single spectrum.</span>
-<span id="cb15-242"><a href="#cb15-242" aria-hidden="true" tabindex="-1"></a>:::</span>
-<span id="cb15-243"><a href="#cb15-243" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-244"><a href="#cb15-244" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls</span></span>
+<span id="cb15-230"><a href="#cb15-230" aria-hidden="true" tabindex="-1"></a>A single-run detection, however clean, is one data point. The reproduction confirms the flagship compounds (iCPhe, PAPhe, PPPhe) across **n = 3 biological replicates**, with retention times stable to ±0.02 min.</span>
+<span id="cb15-231"><a href="#cb15-231" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-234"><a href="#cb15-234" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-235"><a href="#cb15-235" aria-hidden="true" tabindex="-1"></a><span class="co">#| eval: false</span></span>
+<span id="cb15-236"><a href="#cb15-236" aria-hidden="true" tabindex="-1"></a>replicate_check <span class="ot">&lt;-</span> nacyl <span class="sc">|&gt;</span></span>
+<span id="cb15-237"><a href="#cb15-237" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(compound <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"Isocaproyl(C6:0)-Phe"</span>, <span class="st">"Phenylacetyl(PA)-Phe"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-238"><a href="#cb15-238" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">group_by</span>(compound) <span class="sc">|&gt;</span></span>
+<span id="cb15-239"><a href="#cb15-239" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(<span class="at">n_reps =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(), <span class="at">rt_sd =</span> <span class="fu">sd</span>(rt), <span class="at">rt_range =</span> <span class="fu">max</span>(rt) <span class="sc">-</span> <span class="fu">min</span>(rt))</span>
+<span id="cb15-240"><a href="#cb15-240" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-241"><a href="#cb15-241" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-242"><a href="#cb15-242" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="n = 1 is a hypothesis, not a finding"}</span>
+<span id="cb15-243"><a href="#cb15-243" aria-hidden="true" tabindex="-1"></a>Everything in Steps 1–4 can be done, and can look completely convincing, from a single injection. It is only the agreement across independent biological replicates that turns "we detected a co-eluting isotope pair once" into "*C. difficile* produces this metabolite." The paper's — and this reproduction's — confidence in the flagship N-acyl amino acids rests on this replication, not on any single spectrum.</span>
+<span id="cb15-244"><a href="#cb15-244" aria-hidden="true" tabindex="-1"></a>:::</span>
 <span id="cb15-245"><a href="#cb15-245" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-246"><a href="#cb15-246" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> Solution <span class="pp">|</span></span>
-<span id="cb15-247"><a href="#cb15-247" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
-<span id="cb15-248"><a href="#cb15-248" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Extraction window centred only on the theoretical mass <span class="pp">|</span> Misses compounds whose instrument-reported mass deviates by more than the window (Step 1) <span class="pp">|</span> Cross-check against the paper's *found* value when a series member appears to be missing <span class="pp">|</span></span>
-<span id="cb15-249"><a href="#cb15-249" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating co-elution alone as identification <span class="pp">|</span> A different compound can coincidentally elute at the same time and mass <span class="pp">|</span> Require co-elution **and** a plausible isotope shift **and**, where possible, MS/MS <span class="pp">|</span></span>
-<span id="cb15-250"><a href="#cb15-250" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Assuming a shared *m/z* means a shared identity <span class="pp">|</span> Structural isomers (butyryl vs. isobutyryl) are indistinguishable by mass and isotope pattern alone <span class="pp">|</span> State explicitly that MS-only evidence gives formula-level (MSI level 2), not isomer-level (level 1), confidence <span class="pp">|</span></span>
-<span id="cb15-251"><a href="#cb15-251" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Building a molecular network then skipping isotope confirmation <span class="pp">|</span> Networking shows relatedness, not biosynthetic direction or even confirmed structure <span class="pp">|</span> Use networking to prioritize, not to conclude <span class="pp">|</span></span>
-<span id="cb15-252"><a href="#cb15-252" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting a single-replicate detection as a result <span class="pp">|</span> Technical artifacts and misassigned co-elution happen <span class="pp">|</span> Require agreement across independent biological replicates <span class="pp">|</span></span>
-<span id="cb15-253"><a href="#cb15-253" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-254"><a href="#cb15-254" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb15-246"><a href="#cb15-246" aria-hidden="true" tabindex="-1"></a><span class="fu">## Common Pitfalls</span></span>
+<span id="cb15-247"><a href="#cb15-247" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-248"><a href="#cb15-248" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Pitfall <span class="pp">|</span> Why it's a problem <span class="pp">|</span> Solution <span class="pp">|</span></span>
+<span id="cb15-249"><a href="#cb15-249" aria-hidden="true" tabindex="-1"></a><span class="pp">|---|---|---|</span></span>
+<span id="cb15-250"><a href="#cb15-250" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Extraction window centred only on the theoretical mass <span class="pp">|</span> Misses compounds whose instrument-reported mass deviates by more than the window (Step 1) <span class="pp">|</span> Cross-check against the paper's *found* value when a series member appears to be missing <span class="pp">|</span></span>
+<span id="cb15-251"><a href="#cb15-251" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Treating co-elution alone as identification <span class="pp">|</span> A different compound can coincidentally elute at the same time and mass <span class="pp">|</span> Require co-elution **and** a plausible isotope shift **and**, where possible, MS/MS <span class="pp">|</span></span>
+<span id="cb15-252"><a href="#cb15-252" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Assuming a shared *m/z* means a shared identity <span class="pp">|</span> Structural isomers (butyryl vs. isobutyryl) are indistinguishable by mass and isotope pattern alone <span class="pp">|</span> State explicitly that MS-only evidence gives formula-level (MSI level 2), not isomer-level (level 1), confidence <span class="pp">|</span></span>
+<span id="cb15-253"><a href="#cb15-253" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Building a molecular network then skipping isotope confirmation <span class="pp">|</span> Networking shows relatedness, not biosynthetic direction or even confirmed structure <span class="pp">|</span> Use networking to prioritize, not to conclude <span class="pp">|</span></span>
+<span id="cb15-254"><a href="#cb15-254" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Reporting a single-replicate detection as a result <span class="pp">|</span> Technical artifacts and misassigned co-elution happen <span class="pp">|</span> Require agreement across independent biological replicates <span class="pp">|</span></span>
 <span id="cb15-255"><a href="#cb15-255" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-256"><a href="#cb15-256" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Stable-isotope feeding** turns "this mass appeared" into "this mass is derived from what we fed the organism" — evidence a database match alone cannot provide.</span>
-<span id="cb15-257"><a href="#cb15-257" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Targeted extraction** of a native/labelled pair, checked for co-elution, is the core evidence; **MS/MS** confirms *which part* of the molecule carries the label.</span>
-<span id="cb15-258"><a href="#cb15-258" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Molecular networking** extends Chapter 9's single spectral comparison into an all-vs-all similarity graph, organizing large numbers of unidentified spectra into structural families without requiring a library hit for any of them.</span>
-<span id="cb15-259"><a href="#cb15-259" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Networking finds relationships; isotope evidence and MS/MS find direction and structure.** Neither substitutes for the other.</span>
-<span id="cb15-260"><a href="#cb15-260" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Biological replication is not optional** — a compelling single-run detection is a hypothesis until it reproduces across independent replicates.</span>
-<span id="cb15-261"><a href="#cb15-261" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-262"><a href="#cb15-262" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
+<span id="cb15-256"><a href="#cb15-256" aria-hidden="true" tabindex="-1"></a><span class="fu">## Summary</span></span>
+<span id="cb15-257"><a href="#cb15-257" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-258"><a href="#cb15-258" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Stable-isotope feeding** turns "this mass appeared" into "this mass is derived from what we fed the organism" — evidence a database match alone cannot provide.</span>
+<span id="cb15-259"><a href="#cb15-259" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Targeted extraction** of a native/labelled pair, checked for co-elution, is the core evidence; **MS/MS** confirms *which part* of the molecule carries the label.</span>
+<span id="cb15-260"><a href="#cb15-260" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Molecular networking** extends Chapter 9's single spectral comparison into an all-vs-all similarity graph, organizing large numbers of unidentified spectra into structural families without requiring a library hit for any of them.</span>
+<span id="cb15-261"><a href="#cb15-261" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Networking finds relationships; isotope evidence and MS/MS find direction and structure.** Neither substitutes for the other.</span>
+<span id="cb15-262"><a href="#cb15-262" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Biological replication is not optional** — a compelling single-run detection is a hypothesis until it reproduces across independent replicates.</span>
 <span id="cb15-263"><a href="#cb15-263" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-264"><a href="#cb15-264" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Formula arithmetic.** Using the <span class="in">`n_acyl_formula()`</span> pattern from Step 1, compute the native <span class="in">`[M+H]+`</span> for Phenylacetyl-Tyr and its ¹³C-labelled partner (Tyr contributes 9 carbons when derived from ¹³C₉-phenylalanine... or does it? Check the paper's tracer-to-product carbon accounting before assuming 9).</span>
+<span id="cb15-264"><a href="#cb15-264" aria-hidden="true" tabindex="-1"></a><span class="fu">## Exercises</span></span>
 <span id="cb15-265"><a href="#cb15-265" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-266"><a href="#cb15-266" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Window sensitivity.** Using the PP-Tyr case from the tip in Step 1 (theoretical 314.1387, instrument-reported 314.1404), compute the ppm deviation. At what ±ppm extraction window would this compound have been found using the theoretical mass alone?</span>
+<span id="cb15-266"><a href="#cb15-266" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Formula arithmetic.** Using the <span class="in">`n_acyl_formula()`</span> pattern from Step 1, compute the native <span class="in">`[M+H]+`</span> for Phenylacetyl-Tyr and its ¹³C-labelled partner (Tyr contributes 9 carbons when derived from ¹³C₉-phenylalanine... or does it? Check the paper's tracer-to-product carbon accounting before assuming 9).</span>
 <span id="cb15-267"><a href="#cb15-267" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-268"><a href="#cb15-268" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Co-elution threshold.** The worked example uses ±0.5 min as the co-elution tolerance between native and labelled apex retention times. Using <span class="in">`data/processed/plot_data/eic_traces.csv`</span>, tighten the tolerance to ±0.1 min and rerun the co-elution check for all flagship compounds. Which, if any, drop out — and does that mean they are false positives, or does it mean the tolerance was too strict for this chromatography?</span>
+<span id="cb15-268"><a href="#cb15-268" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Window sensitivity.** Using the PP-Tyr case from the tip in Step 1 (theoretical 314.1387, instrument-reported 314.1404), compute the ppm deviation. At what ±ppm extraction window would this compound have been found using the theoretical mass alone?</span>
 <span id="cb15-269"><a href="#cb15-269" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-270"><a href="#cb15-270" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Network threshold.** Rebuild the molecular network at cosine &gt; 0.7 instead of &gt; 0.4. How do the number of edges and the number of connected components change? What does a stricter threshold trade off against a looser one?</span>
+<span id="cb15-270"><a href="#cb15-270" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Co-elution threshold.** The worked example uses ±0.5 min as the co-elution tolerance between native and labelled apex retention times. Using <span class="in">`data/processed/plot_data/eic_traces.csv`</span>, tighten the tolerance to ±0.1 min and rerun the co-elution check for all flagship compounds. Which, if any, drop out — and does that mean they are false positives, or does it mean the tolerance was too strict for this chromatography?</span>
 <span id="cb15-271"><a href="#cb15-271" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-272"><a href="#cb15-272" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Design the replicate check.** Using <span class="in">`nacyl_summary.csv`</span>, write the <span class="in">`dplyr`</span> pipeline that would flag a compound as "replicated" only if it is isotope-confirmed in at least 2 of 3 biological replicates with retention times within 0.05 min of each other. Apply it to every compound in the table — how many of the 35 distinct N-acyl amino acids pass?</span>
+<span id="cb15-272"><a href="#cb15-272" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**Network threshold.** Rebuild the molecular network at cosine &gt; 0.7 instead of &gt; 0.4. How do the number of edges and the number of connected components change? What does a stricter threshold trade off against a looser one?</span>
 <span id="cb15-273"><a href="#cb15-273" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-274"><a href="#cb15-274" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb15-274"><a href="#cb15-274" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>**Design the replicate check.** Using <span class="in">`nacyl_summary.csv`</span>, write the <span class="in">`dplyr`</span> pipeline that would flag a compound as "replicated" only if it is isotope-confirmed in at least 2 of 3 biological replicates with retention times within 0.05 min of each other. Apply it to every compound in the table — how many of the 35 distinct N-acyl amino acids pass?</span>
 <span id="cb15-275"><a href="#cb15-275" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-278"><a href="#cb15-278" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
-<span id="cb15-279"><a href="#cb15-279" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
-<span id="cb15-280"><a href="#cb15-280" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb15-276"><a href="#cb15-276" aria-hidden="true" tabindex="-1"></a><span class="fu">## Session Information</span></span>
+<span id="cb15-277"><a href="#cb15-277" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-280"><a href="#cb15-280" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb15-281"><a href="#cb15-281" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
+<span id="cb15-282"><a href="#cb15-282" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/29-isotope-tracing-networking.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script>var lightboxQuarto = GLightbox({"closeEffect":"zoom","descPosition":"bottom","loop":false,"openEffect":"zoom","selector":".lightbox"});
+(function() {
+  let previousOnload = window.onload;
+  window.onload = () => {
+    if (previousOnload) {
+      previousOnload();
+    }
+    lightboxQuarto.on('slide_before_load', (data) => {
+      const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+      const href = trigger.getAttribute('href');
+      if (href !== null) {
+        const imgEl = window.document.querySelector(`a[href="${href}"] img`);
+        if (imgEl !== null) {
+          const srcAttr = imgEl.getAttribute("src");
+          if (srcAttr && srcAttr.startsWith("data:")) {
+            slideConfig.href = srcAttr;
+          }
+        }
+      } 
+    });
+  
+    lightboxQuarto.on('slide_after_load', (data) => {
+      const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(slideNode);
+      }
+    });
+  
+  };
+  
+})();
+          </script>
 
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vanhungtran/RforMS/edit/main/29-isotope-tracing-networking.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/vanhungtran/RforMS/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer><script src="site_libs/quarto-html/zenscroll-min.js"></script>
+<script src="site_libs/quarto-html/zenscroll-min.js"></script>
 </body></html>

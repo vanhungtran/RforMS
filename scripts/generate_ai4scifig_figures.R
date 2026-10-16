@@ -101,6 +101,8 @@ p_eic <- ggplot(df_eic, aes(x = RT, y = Intensity / 1e5, colour = Sample)) +
 
 scifig_save(p_eic, file.path(scifig_dir, "fig01_eic_chromatogram"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_eic, file.path(data_fig_dir, "fig01_eic_chromatogram"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig01_eic_chromatogram\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -197,6 +199,8 @@ p_target_decoy <- scifig_target_decoy(
 
 scifig_save(p_target_decoy, file.path(scifig_dir, "fig05_target_decoy_fdr"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_target_decoy, file.path(data_fig_dir, "fig05_target_decoy_fdr"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig05_target_decoy_fdr\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,6 +228,8 @@ p_tmt <- ggplot(df_tmt_cv, aes(x = Channel, y = CV, fill = Channel)) +
 
 scifig_save(p_tmt, file.path(scifig_dir, "fig06_tmt_cv_qc"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_tmt, file.path(data_fig_dir, "fig06_tmt_cv_qc"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig06_tmt_cv_qc\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -243,6 +249,8 @@ p_prm_cal <- scifig_calibration_curve(
 )
 
 scifig_save(p_prm_cal, file.path(scifig_dir, "fig07_targeted_calibration"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_prm_cal, file.path(data_fig_dir, "fig07_targeted_calibration"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig07_targeted_calibration\n")
 
@@ -360,6 +368,8 @@ scifig_save(p_pca_cohort, file.path(scifig_dir, "fig10_pca_cohort"), journal = "
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 scifig_save(p_pca_cohort, file.path(data_fig_dir, "03_PCA"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_pca_cohort, file.path(data_fig_dir, "fig10_pca_cohort"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig10_pca_cohort & data/figures/03_PCA\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -385,6 +395,8 @@ if (file.exists(de_file)) {
               width_class = "single", height_mm = 70, formats = c("png", "pdf"))
   scifig_save(p_volcano, file.path(data_fig_dir, "05_volcano"), journal = "nature",
               width_class = "single", height_mm = 70, formats = c("png", "pdf"))
+  scifig_save(p_volcano, file.path(data_fig_dir, "fig11_volcano_differential"), journal = "nature",
+              width_class = "single", height_mm = 70, formats = c("png", "pdf"))
   cat("  ✓ Saved: fig11_volcano_differential & data/figures/05_volcano\n")
 }
 
@@ -407,6 +419,8 @@ p_cal <- scifig_calibration(
 )
 
 scifig_save(p_cal, file.path(scifig_dir, "fig12_biomarker_calibration"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_cal, file.path(data_fig_dir, "fig12_biomarker_calibration"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig12_biomarker_calibration\n")
 
@@ -482,6 +496,8 @@ p_sc_qc <- ggplot(df_sc_qc, aes(x = TotalCounts / 1e5, y = ProteinsIdentified, c
 
 scifig_save(p_sc_qc, file.path(scifig_dir, "fig14_single_cell_qc"), journal = "nature",
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_sc_qc, file.path(data_fig_dir, "fig14_single_cell_qc"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig14_single_cell_qc\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -510,12 +526,14 @@ p_roc <- scifig_roc(roc_list, auc_values = auc_vals, title = "Multi-Cohort Exter
 
 scifig_save(p_roc, file.path(scifig_dir, "fig15_multicohort_roc"), journal = "nature",
             width_class = "single", height_mm = 68, formats = c("png", "pdf"))
+scifig_save(p_roc, file.path(data_fig_dir, "fig15_multicohort_roc"), journal = "nature",
+            width_class = "single", height_mm = 68, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig15_multicohort_roc\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FIG 16: Isotope Tracing Mass Isotopologue Distribution (Chapter 29)
 # ─────────────────────────────────────────────────────────────────────────────
-cat("\n[15/16] Generating Fig 16: 13C Metabolic Flux Isotopologue Distribution (Ch 29)...\n")
+cat("\n[15/17] Generating Fig 16: 13C Metabolic Flux Isotopologue Distribution (Ch 29)...\n")
 
 df_flux <- data.frame(
   Metabolite = rep(c("Citrate", "alpha-Ketoglutarate", "Malate"), each = 7),
@@ -541,6 +559,57 @@ p_flux <- ggplot(df_flux, aes(x = Isotopologue, y = Fraction * 100, fill = Metab
     fill = "Metabolite"
   ) +
   theme_scifigure(base_size = 7.5, grid = "y")
+
+scifig_save(p_flux, file.path(scifig_dir, "fig16_isotope_tracing"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_flux, file.path(data_fig_dir, "fig16_isotope_tracing"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+cat("  ✓ Saved: fig16_isotope_tracing\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIG 17: Spatial Shrunken Centroids MSI Segmentation (Chapter 27 / Cardinal)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n[16/17] Generating Fig 17: MSI Spatial Segmentation (Ch 27)...\n")
+
+set.seed(1234)
+grid_x <- 1:40
+grid_y <- 1:30
+msi_grid <- expand.grid(x = grid_x, y = grid_y)
+
+dist_center <- sqrt((msi_grid$x - 20.5)^2 + (msi_grid$y - 15.5)^2)
+dist_hip_left <- sqrt((msi_grid$x - 14)^2 + (msi_grid$y - 18)^2 * 1.5)
+dist_hip_right <- sqrt((msi_grid$x - 27)^2 + (msi_grid$y - 18)^2 * 1.5)
+
+segment <- rep("Segment 1: Cortex", nrow(msi_grid))
+segment[dist_center <= 8] <- "Segment 3: Thalamus / Midbrain"
+segment[dist_hip_left <= 5 | dist_hip_right <= 5] <- "Segment 2: Hippocampus"
+segment[(dist_hip_left > 5 & dist_hip_left <= 7) | (dist_hip_right > 5 & dist_hip_right <= 7)] <- "Segment 4: Corpus Callosum"
+in_tissue <- ((msi_grid$x - 20.5) / 18)^2 + ((msi_grid$y - 15.5) / 13)^2 <= 1.0
+msi_df <- msi_grid[in_tissue, ]
+msi_df$segment <- factor(segment[in_tissue], 
+                         levels = c("Segment 1: Cortex", 
+                                    "Segment 2: Hippocampus", 
+                                    "Segment 3: Thalamus / Midbrain", 
+                                    "Segment 4: Corpus Callosum"))
+
+p_msi <- ggplot(msi_df, aes(x = x * 0.2, y = y * 0.2, fill = segment)) +
+  geom_raster() +
+  scale_fill_scifigure(palette = "nature") +
+  coord_fixed() +
+  labs(
+    title = "Spatial Shrunken Centroids Segmentation (Cardinal MSI)",
+    subtitle = expression(paste("Regularised spatial clustering (", italic(r) == 2, ", ", italic(k) == 4, ")")),
+    x = "x coordinate (mm)",
+    y = "y coordinate (mm)",
+    fill = "Segment"
+  ) +
+  theme_scifigure(base_size = 7.5, grid = "none")
+
+scifig_save(p_msi, file.path(scifig_dir, "fig17_msi_segmentation"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_msi, file.path(data_fig_dir, "fig17_msi_segmentation"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+cat("  ✓ Saved: fig17_msi_segmentation\n")
 
 # ── Additional Pipeline Figures in data/figures/ ─────────────────────────────
 cat("\n[16/16] Generating Remaining Pipeline Figures in data/figures/...\n")

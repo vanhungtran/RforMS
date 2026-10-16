@@ -146,8 +146,22 @@ if (Test-Path "zoom-controls.html") {
 # stays git-ignored/local-only per this project's tracking policy (see
 # CLAUDE.md). Only its compiled output in site_libs/ above is published.
 
-# Add _quarto.yml if modified
-git add _quarto.yml
+# Sync figure assets between data/figures, figures/scifig and docs/
+New-Item -ItemType Directory -Force -Path "docs\data\figures", "docs\figures\scifig", "data\figures", "figures\scifig" | Out-Null
+if (Test-Path "data\figures\*") { Copy-Item -Path "data\figures\*" -Destination "docs\data\figures" -Recurse -Force }
+if (Test-Path "docs\data\figures\*") { Copy-Item -Path "docs\data\figures\*" -Destination "data\figures" -Recurse -Force }
+if (Test-Path "figures\scifig\*") { Copy-Item -Path "figures\scifig\*" -Destination "docs\figures\scifig" -Recurse -Force }
+if (Test-Path "docs\figures\scifig\*") { Copy-Item -Path "docs\figures\scifig\*" -Destination "figures\scifig" -Recurse -Force }
+
+# Add cover image if modified
+git add cover.png docs/cover.png 2>$null
+
+# Add R companion package files and pipeline updates
+git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R 2>$null
+git add R/ man/ tests/ scripts/ code/ 2>$null
+git add data/figures/ figures/scifig/ 2>$null
+git add docs/ 2>$null
+git add deploy.sh deploy.ps1 .gitignore 2>$null
 
 Write-Host "✓ Files staged" -ForegroundColor Green
 Write-Host ""

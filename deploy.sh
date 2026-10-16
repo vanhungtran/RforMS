@@ -118,7 +118,14 @@ for dir in *_files; do
         echo "  Removed (orphaned): $dir/"
     fi
 done
-echo "✓ Additional files synced"
+
+# Sync figure assets between data/figures, figures/scifig and docs/
+mkdir -p docs/data/figures docs/figures/scifig data/figures figures/scifig
+cp -r data/figures/* docs/data/figures/ 2>/dev/null || true
+cp -r docs/data/figures/* data/figures/ 2>/dev/null || true
+cp -r figures/scifig/* docs/figures/scifig/ 2>/dev/null || true
+cp -r docs/figures/scifig/* figures/scifig/ 2>/dev/null || true
+echo "✓ Additional files and figure assets synced"
 echo ""
 
 # Step 4: Stage only HTML files and necessary deployment files

@@ -10,6 +10,12 @@ if (dir.exists("C:/Users/lucas/AppData/Local/R/win-library/4.6")) {
   .libPaths(unique(c(.libPaths(), "C:/Users/lucas/AppData/Local/R/win-library/4.6")))
 }
 
+local_rlibs <- file.path(getwd(), "r_libs")
+if (dir.exists(local_rlibs)) {
+  .libPaths(unique(c(.libPaths(), local_rlibs)))
+}
+
+
 
 # Source all package functions from R/
 r_files <- list.files("R", pattern = "\\.R$", full.names = TRUE)

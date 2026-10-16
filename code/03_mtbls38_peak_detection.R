@@ -9,6 +9,14 @@ suppressPackageStartupMessages({
   library(patchwork)
 })
 
+# Source AI4SciFig theme if available
+if (file.exists("R/theme_scifig.R")) {
+  source("R/theme_scifig.R")
+} else if (file.exists("../R/theme_scifig.R")) {
+  source("../R/theme_scifig.R")
+}
+
+
 analysis_dir <- "analysis"
 project_dir  <- "."
 raw_dir       <- file.path(project_dir, "raw", "MTBLS38")
@@ -181,7 +189,7 @@ for (i in seq_len(min(9, nrow(top9)))) {
          subtitle=sprintf("m/z=%.4f found (%.1f ppm) | rt=%.1fs",
            bp$mz, bp$ppm_error, bp$rt),
          x="RT (s)", y="Intensity") +
-    theme_minimal(base_size=9)
+    (if (exists("theme_scifigure")) theme_scifigure(base_size=7, grid="both") else theme_minimal(base_size=9))
 
   # Zoom to peak region if peak found
   if (!is.null(bp)) {
@@ -205,12 +213,12 @@ if (nrow(best_compound) > 0) {
   zoom <- df[df$rt >= bp$rtmin-20 & df$rt <= bp$rtmax+20, ]
 
   p <- ggplot(zoom, aes(x=rt, y=int)) +
-    geom_area(fill="steelblue", alpha=0.15) +
-    geom_line(color="steelblue", linewidth=0.6) +
+    geom_area(fill="#0F4D92", alpha=0.15) +
+    geom_line(color="#0F4D92", linewidth=0.6) +
     annotate("rect", xmin=bp$rtmin, xmax=bp$rtmax,
              ymin=0, ymax=max(zoom$int)*1.05,
-             fill=NA, color="red", linetype="dashed", linewidth=0.8) +
-    annotate("point", x=bp$rt, y=bp$into, color="red", size=3) +
+             fill=NA, color="#D95F02", linetype="dashed", linewidth=0.8) +
+    annotate("point", x=bp$rt, y=bp$into, color="#D95F02", size=3) +
     annotate("label", x=bp$rt, y=bp$into*1.1,
              label=sprintf("m/z = %.4f\nrt = %.1f s\nSNR = %.0f",
                bp$mz, bp$rt, bp$into/bp$intb),
@@ -218,7 +226,7 @@ if (nrow(best_compound) > 0) {
     labs(title=sprintf("Peak Anatomy — %s", best_compound$compound),
          subtitle="Dashed box = CentWave peak boundaries | Red dot = apex",
          x="Retention Time (s)", y="Intensity") +
-    theme_minimal(base_size=13)
+    (if (exists("theme_scifigure")) theme_scifigure(base_size=7.5, grid="both") else theme_minimal(base_size=13))
   print(p)
   dev.off()
   cat("  ✓ Saved: 02_peak_anatomy.pdf\n")
@@ -228,13 +236,14 @@ if (nrow(best_compound) > 0) {
 pdf(file.path(out_fig, "03_mass_accuracy.pdf"), width=8, height=5)
 acc <- summary_df[!is.na(summary_df$ppm_error), ]
 p <- ggplot(acc, aes(x=ppm_error)) +
-  geom_histogram(fill="steelblue", bins=20, alpha=0.8) +
-  geom_vline(xintercept=c(-25, 25), linetype="dashed", color="red") +
+  geom_histogram(fill="#0F4D92", bins=20, alpha=0.85) +
+  geom_vline(xintercept=c(-25, 25), linetype="dashed", color="#D95F02") +
   labs(title="Mass Accuracy of Detected Peaks vs Known Standards",
        subtitle=sprintf("%d compounds, median error = %.1f ppm",
          nrow(acc), median(acc$ppm_error, na.rm=TRUE)),
        x="Mass Error (ppm)", y="Count") +
-  theme_minimal(base_size=12)
+  (if (exists("theme_scifigure")) theme_scifigure(base_size=7.5, grid="both") else theme_minimal(base_size=12))
+
 print(p)
 dev.off()
 cat("  ✓ Saved: 03_mass_accuracy.pdf\n")

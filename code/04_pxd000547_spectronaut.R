@@ -29,6 +29,14 @@ suppressPackageStartupMessages({
   library(limma)
 })
 
+# Source AI4SciFig theme if available
+if (file.exists("R/theme_scifig.R")) {
+  source("R/theme_scifig.R")
+} else if (file.exists("../R/theme_scifig.R")) {
+  source("../R/theme_scifig.R")
+}
+
+
 # ── Paths ──────────────────────────────────────────────────────────────────
 get_script_path <- function() {
   cmd_args <- commandArgs(trailingOnly = FALSE)
@@ -295,7 +303,8 @@ if (length(unique(group_pattern)) >= 2 && !any(is.na(pair_id))) {
     geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
     labs(title = "Paired Differential Expression — PXD000547",
          x = "log2 Fold Change", y = "-log10(adjusted P-value)") +
-    theme_minimal(base_size = 12)
+    (if (exists("theme_scifigure")) theme_scifigure(base_size = 7.5, grid = "both") else theme_minimal(base_size = 12))
+
   print(p)
   dev.off()
   cat("  ✓ Saved: 05_volcano.pdf\n")

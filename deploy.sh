@@ -21,10 +21,11 @@ echo "Step 1: Rendering Quarto book..."
 # R 4.5.1 on this machine cannot load the base package; point Quarto at the
 # working R 4.6.1 install explicitly so it doesn't fall back to whatever R
 # is first on PATH/registry.
-if [ -f "/c/Program Files/R/R-4.6.1/bin/x64/Rscript.exe" ]; then
-    export QUARTO_R="/c/Program Files/R/R-4.6.1/bin/x64"
+if [ -f "/c/Program Files/R/R-4.6.1/bin/x64/Rscript.exe" ] || [ -f "C:/Program Files/R/R-4.6.1/bin/x64/Rscript.exe" ]; then
+    export QUARTO_R="C:/Program Files/R/R-4.6.1/bin/x64"
     echo "Using R at $QUARTO_R"
 fi
+
 
 # Try to find quarto in common locations (Windows)
 QUARTO_CMD=""
@@ -91,13 +92,11 @@ done
 # that no longer match the current theme/custom.scss compile, instead of
 # letting them accumulate silently every time the theme changes.
 if [ -d "docs/site_libs" ]; then
-    powershell.exe -Command "robocopy 'docs/site_libs' 'site_libs' /MIR /NFL /NDL /NJH /NJS /R:1 /W:1; if (\$LASTEXITCODE -ge 8) { exit 1 } else { exit 0 }"
-    if [ $? -ne 0 ]; then
-        echo "✗ Error mirroring site_libs/!"
-        exit 1
-    fi
+    rm -rf site_libs
+    cp -r docs/site_libs .
     echo "  Mirrored: site_libs/ (stale files removed, not just new ones added)"
 fi
+
 
 # Copy per-chapter figure/asset directories (docs/<chapter>_files/) to root
 # so root-served pages don't reference missing images.
@@ -162,6 +161,14 @@ git add _quarto.yml
 
 # Add cover image if modified
 git add cover.png docs/cover.png 2>/dev/null || true
+
+# Add R companion package files and pipeline updates
+git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R 2>/dev/null || true
+git add R/ man/ tests/ scripts/ code/ 2>/dev/null || true
+git add data/figures/ figures/scifig/ 2>/dev/null || true
+git add docs/ 2>/dev/null || true
+git add deploy.sh deploy.ps1 .gitignore 2>/dev/null || true
+
 
 echo "✓ Files staged"
 echo ""

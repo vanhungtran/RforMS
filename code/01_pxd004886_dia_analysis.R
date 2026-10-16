@@ -60,7 +60,8 @@ analysis_path <- function(...) file.path(analysis_dir, ...)
 dir.create(analysis_path("results", "figures"), recursive = TRUE, showWarnings = FALSE)
 dir.create(analysis_path("results", "tables"),  recursive = TRUE, showWarnings = FALSE)
 
-theme_base <- if (has_cowplot) theme_cowplot(12) else theme_bw(base_size = 12)
+if (file.exists(project_path("R", "theme_scifig.R"))) source(project_path("R", "theme_scifig.R"))
+theme_base <- if (exists("theme_scifigure")) theme_scifigure(base_size = 8) else if (has_cowplot) theme_cowplot(12) else theme_bw(base_size = 12)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 1: Load OpenSWATH peptide-level data

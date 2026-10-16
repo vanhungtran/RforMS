@@ -31,6 +31,14 @@ suppressPackageStartupMessages({
   library(RColorBrewer)
 })
 
+# Source AI4SciFig theme if available
+if (file.exists("R/theme_scifig.R")) {
+  source("R/theme_scifig.R")
+} else if (file.exists("../R/theme_scifig.R")) {
+  source("../R/theme_scifig.R")
+}
+
+
 # ── Paths ──────────────────────────────────────────────────────────────────
 get_script_path <- function() {
   cmd_args <- commandArgs(trailingOnly = FALSE)
@@ -207,7 +215,8 @@ p <- ggplot(pca_scores, aes(x = PC1, y = PC2, label = organ)) +
   labs(title = "PCA of Human Tissue Proteomes",
        x = sprintf("PC1 (%s%%)", pca_var[1]),
        y = sprintf("PC2 (%s%%)", pca_var[2])) +
-  theme_minimal(base_size = 12)
+  (if (exists("theme_scifigure")) theme_scifigure(base_size = 7.5, grid = "both") else theme_minimal(base_size = 12))
+
 print(p)
 dev.off()
 cat("  ✓ Saved: 02_tissue_pca.pdf\n")

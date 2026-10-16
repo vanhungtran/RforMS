@@ -611,6 +611,132 @@ scifig_save(p_msi, file.path(data_fig_dir, "fig17_msi_segmentation"), journal = 
             width_class = "single", height_mm = 65, formats = c("png", "pdf"))
 cat("  ✓ Saved: fig17_msi_segmentation\n")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FIG 18: MS/MS Spectral Library Mirror Plot (Chapter 10)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n[17/20] Generating Fig 18: MS/MS Spectral Mirror Plot (Ch 10)...\n")
+
+mz_peaks <- c(69.04, 83.05, 110.07, 138.06, 163.06, 195.09)
+query_int <- c(22, 18, 45, 100, 35, 82)
+ref_int   <- c(20, 15, 48, 100, 30, 88)
+
+set.seed(42)
+mz_noise <- sort(runif(15, 50, 200))
+q_noise <- runif(15, 1, 8)
+r_noise <- runif(15, 1, 7)
+
+df_mirror <- data.frame(
+  mz = c(mz_peaks, mz_noise, mz_peaks, mz_noise),
+  intensity = c(query_int, q_noise, -ref_int, -r_noise),
+  type = c(rep("Query Spectrum (Experimental)", length(mz_peaks) + length(mz_noise)),
+           rep("Library Reference (GNPS)", length(mz_peaks) + length(mz_noise))),
+  matched = c(rep(TRUE, length(mz_peaks)), rep(FALSE, length(mz_noise)),
+              rep(TRUE, length(mz_peaks)), rep(FALSE, length(mz_noise)))
+)
+
+df_labels <- data.frame(
+  mz = mz_peaks,
+  intensity = query_int + 6,
+  label = sprintf("%.2f", mz_peaks)
+)
+
+p_mirror <- ggplot(df_mirror, aes(x = mz, y = intensity, colour = type)) +
+  geom_segment(aes(xend = mz, yend = 0), linewidth = 0.55) +
+  geom_hline(yintercept = 0, colour = "#333333", linewidth = 0.4) +
+  geom_text(data = df_labels, aes(x = mz, y = intensity, label = label),
+            inherit.aes = FALSE, size = 2.1, colour = "#222222") +
+  annotate("label", x = 65, y = 85, label = "Query Spectrum\n[M+H]+ = 195.0877",
+           size = 2.2, fill = "white", alpha = 0.85, label.padding = unit(0.2, "lines")) +
+  annotate("label", x = 65, y = -85, label = "Library: Caffeine\nCosine Score = 0.94",
+           size = 2.2, fill = "white", alpha = 0.85, label.padding = unit(0.2, "lines")) +
+  scale_color_manual(values = c("Query Spectrum (Experimental)" = "#0F4D92",
+                                "Library Reference (GNPS)" = "#D95F02")) +
+  scale_y_continuous(labels = function(x) abs(x), limits = c(-115, 115)) +
+  labs(
+    title = "MS/MS Spectral Library Match — Head-to-Tail Mirror Plot",
+    subtitle = "Experimental query (top, blue) vs GNPS library reference (bottom, orange)",
+    x = expression(italic(m/z)),
+    y = "Relative Intensity (%)"
+  ) +
+  theme_scifigure(base_size = 7.5, grid = "both") +
+  theme(legend.position = "none")
+
+scifig_save(p_mirror, file.path(scifig_dir, "fig18_spectral_mirror"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_mirror, file.path(data_fig_dir, "fig18_spectral_mirror"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+cat("  ✓ Saved: fig18_spectral_mirror\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIG 19: Statistical Power vs Sample Size Curve (Chapter 20)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n[18/20] Generating Fig 19: Statistical Power vs Sample Size (Ch 20)...\n")
+
+n_grid <- seq(3, 30, by = 1)
+calc_power <- function(n, d, sig_level = 0.05 / 5000) {
+  pnorm(d * sqrt(n / 2) - qnorm(1 - sig_level / 2)) * 100
+}
+
+df_power <- data.frame(
+  n = rep(n_grid, 2),
+  Effect = rep(c("Log2FC = 1.0 (2-fold)", "Log2FC = 1.5 (2.8-fold)"), each = length(n_grid)),
+  Power = c(sapply(n_grid, calc_power, d = 1.0 / 0.8),
+            sapply(n_grid, calc_power, d = 1.5 / 0.8))
+)
+
+p_power <- ggplot(df_power, aes(x = n, y = Power, colour = Effect)) +
+  geom_line(linewidth = 0.75) +
+  geom_point(size = 1.3) +
+  geom_hline(yintercept = 80, linetype = "dashed", colour = "#D95F02", linewidth = 0.45) +
+  annotate("text", x = 4, y = 84, label = "Target Power: 80%", size = 2.1, colour = "#D95F02", hjust = 0) +
+  scale_color_scifigure(palette = "nature") +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20)) +
+  labs(
+    title = "Statistical Power vs. Biological Replicates per Group",
+    subtitle = "5,000 features tested | FDR = 5% (Bonferroni planning threshold) | SD = 0.8",
+    x = "Biological Replicates per Group (n)",
+    y = "Statistical Power (%)",
+    colour = "Effect Size"
+  ) +
+  theme_scifigure(base_size = 7.5, grid = "both")
+
+scifig_save(p_power, file.path(scifig_dir, "fig19_power_curve"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_power, file.path(data_fig_dir, "fig19_power_curve"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+cat("  ✓ Saved: fig19_power_curve\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIG 20: Machine Learning Feature Importance / VIP (Chapter 23)
+# ─────────────────────────────────────────────────────────────────────────────
+cat("\n[19/20] Generating Fig 20: ML Feature Importance (Ch 23)...\n")
+
+df_vip <- data.frame(
+  Feature = factor(c("P02768 (ALB)", "P01024 (C3)", "P02787 (TF)", "P04264 (KRT1)",
+                     "P02649 (APOE)", "P01009 (A1AT)", "P02765 (A2M)", "P19827 (ITIH1)",
+                     "P00738 (HP)", "P02652 (APOA2)", "P01023 (A2M)", "P02763 (ORM1)"),
+                   levels = rev(c("P02768 (ALB)", "P01024 (C3)", "P02787 (TF)", "P04264 (KRT1)",
+                                  "P02649 (APOE)", "P01009 (A1AT)", "P02765 (A2M)", "P19827 (ITIH1)",
+                                  "P00738 (HP)", "P02652 (APOA2)", "P01023 (A2M)", "P02763 (ORM1)"))),
+  Importance = c(18.4, 15.2, 13.8, 11.5, 9.7, 8.6, 7.8, 6.9, 6.2, 5.5, 4.8, 4.1)
+)
+
+p_vip <- ggplot(df_vip, aes(x = Importance, y = Feature)) +
+  geom_col(fill = "#0F4D92", width = 0.65) +
+  labs(
+    title = "Top MS Biomarker Features (Random Forest Importance)",
+    subtitle = "Ranked by Mean Decrease in Gini across 5-fold repeated CV",
+    x = "Variable Importance (Mean Decrease Gini)",
+    y = "Protein Feature"
+  ) +
+  theme_scifigure(base_size = 7.5, grid = "x")
+
+scifig_save(p_vip, file.path(scifig_dir, "fig20_ml_variable_importance"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+scifig_save(p_vip, file.path(data_fig_dir, "fig20_ml_variable_importance"), journal = "nature",
+            width_class = "single", height_mm = 65, formats = c("png", "pdf"))
+cat("  ✓ Saved: fig20_ml_variable_importance\n")
+
 # ── Additional Pipeline Figures in data/figures/ ─────────────────────────────
 cat("\n[16/16] Generating Remaining Pipeline Figures in data/figures/...\n")
 

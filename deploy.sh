@@ -41,8 +41,27 @@ else
     QUARTO_CMD="quarto"
 fi
 
+# Temporarily suspend OneDrive sync processes if running to prevent file locks (os error 1224) during render
+ONEDRIVE_WAS_RUNNING=0
+if tasklist //NH //FI "IMAGENAME eq OneDrive.exe" 2>/dev/null | grep -i "OneDrive.exe" > /dev/null 2>&1; then
+    ONEDRIVE_WAS_RUNNING=1
+    echo "Temporarily pausing OneDrive to prevent file locks during render..."
+    taskkill //F //IM OneDrive.exe > /dev/null 2>&1 || true
+    taskkill //F //IM OneDrive.Sync.Service.exe > /dev/null 2>&1 || true
+    sleep 1
+fi
+
 $QUARTO_CMD render
-if [ $? -ne 0 ]; then
+RENDER_EXIT_CODE=$?
+
+if [ $ONEDRIVE_WAS_RUNNING -eq 1 ]; then
+    echo "Restarting OneDrive in background..."
+    if [ -f "/c/Program Files/Microsoft OneDrive/OneDrive.exe" ]; then
+        "/c/Program Files/Microsoft OneDrive/OneDrive.exe" /background > /dev/null 2>&1 &
+    fi
+fi
+
+if [ $RENDER_EXIT_CODE -ne 0 ]; then
     echo "✗ Error rendering book!"
     exit 1
 fi

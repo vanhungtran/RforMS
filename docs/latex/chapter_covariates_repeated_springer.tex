@@ -157,7 +157,7 @@ Satterthwaite~\cite{satterthwaite1946approximate} constructs an approximate $F$-
     \label{eq:kr_lambda}
     \boldsymbol{\Lambda} = \sum_{r=1}^K \sum_{s=1}^K \operatorname{Cov}(\hat{\theta}_r, \hat{\theta}_s) \left( \mathbf{Q}_{rs} - \mathbf{P}_r \boldsymbol{\Phi} \mathbf{P}_s \right)
     \end{equation}
-    Here, $\operatorname{Cov}(\hat{\boldsymbol{\theta}}) \approx \mathcal{I}_R^{-1}$ is the inverse of the REML expected information matrix, $\mathbf{P}_r = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{X}$, and $\mathbf{Q}_{rs} = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{V} \frac{\partial \mathbf{V}^{-1}}{\partial \theta_s} \mathbf{X}$.
+    Here, $\operatorname{Cov}(\hat{\boldsymbol{\theta}}) \approx \mathcal{I}_R^{-1}$ is the inverse of the REML expected information matrix, $\mathbf{P}_r = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{X}$, and $\mathbf{Q}_{rs} = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{V} \frac{\partial \mathbf{V}^{-1}}{\partial \theta_s} \mathbf{X}$.\footnote{In the canonical formulation of Kenward \& Roger \cite{kenward1997small}, the expectation adjustment is symmetrized as $\frac{1}{2}(\mathbf{Q}_{rs} + \mathbf{Q}_{sr})$; Eq.~(\ref{eq:kr_lambda}) presents the standard symmetric equivalent under common variance-component covariance parameterizations.}
     \item \textbf{Degrees-of-Freedom Adjustment:} The Wald statistic $F = \frac{(\mathbf{L}\hat{\boldsymbol{\beta}})^T (\mathbf{L} \operatorname{Var}_{\text{KR}}(\hat{\boldsymbol{\beta}}) \mathbf{L}^T)^{-1} (\mathbf{L}\hat{\boldsymbol{\beta}})}{q}$ is scaled by an empirical factor to match a non-central $F(q, \nu_{\text{KR}})$ distribution with fractional denominator degrees of freedom $\nu_{\text{KR}}$.
 \end{enumerate}
 This Kenward-Roger adjustment is the recommended small-sample standard implemented in \texttt{lmerTest} and \texttt{dream}, bridging classical mixed models with empirical Bayes shrinkage \cite{smyth2004linear, ritchie2015limma, hoffman2021dream, kuznetsova2017lmertest}.
@@ -373,7 +373,7 @@ The coefficient \texttt{armActive:time\_facT\_24} represents a classical differe
 \label{eq:did_estimator}
 \hat{\delta} = \left( \bar{y}_{\text{Active}, T_{24}} - \bar{y}_{\text{Active}, T_0} \right) - \left( \bar{y}_{\text{Placebo}, T_{24}} - \bar{y}_{\text{Placebo}, T_0} \right)
 \end{equation}
-By contrasting changes from baseline between treatment groups, the model automatically cancels out baseline subject heterogeneity as well as non-specific instrument drift or placebo effects occurring across the 24-week study window.
+By contrasting changes from baseline between treatment groups, the model automatically cancels out baseline subject heterogeneity as well as non-specific instrument drift or placebo effects occurring across the 24-hour study window.
 \end{notebox}
 
 \begin{rchunk}{Variance Partitioning Analysis}
@@ -395,7 +395,7 @@ PROT\_003 0.058 0.000      0.435    0.230     0.277
 
 \begin{notebox}
 \textbf{Tutor's Diagnostic Advice: Interpreting Variance Partitioning}\\
-In \texttt{variancePartition}, all factors are specified as random effects so that their variance contributions are mapped to a standardized fraction $f_k \in [0, 1]$ summing to 1. Because each patient belongs to a single treatment arm, \texttt{(1 | patient\_id)} is structurally nested within \texttt{(1 | arm)}. Furthermore, with only two arm levels, the treatment variance component is estimated with low statistical precision. Consequently, variance partitioning serves strictly as an \textit{exploratory diagnostic audit} to verify whether technical batch noise ($6.8\%\text{--}7.3\%$) is contained relative to patient baseline heterogeneity ($25.9\%\text{--}43.5\%$) and temporal dynamics ($18.4\%\text{--}26.9\%$). Formal hypothesis testing is appropriately reserved for fixed-effects contrasts within \texttt{dream}.
+In \texttt{variancePartition}, all factors are specified as random effects so that their variance contributions are mapped to a standardized fraction $f_k \in [0, 1]$ summing to 1. Because each patient belongs to a single treatment arm, \texttt{(1 | patient\_id)} is structurally nested within \texttt{(1 | arm)}. Furthermore, with only two arm levels, the treatment variance component is estimated with low statistical precision. Consequently, variance partitioning serves strictly as an \textit{exploratory diagnostic audit} to verify whether technical batch noise ($0.0\%\text{--}7.3\%$) is contained relative to patient baseline heterogeneity ($25.9\%\text{--}43.5\%$) and temporal dynamics ($18.4\%\text{--}26.9\%$). Formal hypothesis testing is appropriately reserved for fixed-effects contrasts within \texttt{dream}.
 \end{notebox}
 
 \begin{rchunk}{Continuous Longitudinal Modeling via Natural Cubic Splines}
@@ -406,6 +406,11 @@ fit_spline_eb <- eBayes(fit_spline)
 
 cat("Spline Model Fitted Coefficients:\n")
 print(colnames(coef(fit_spline_eb)))
+
+# Extract non-linear treatment x time interaction contrast
+res_spline <- topTable(fit_spline_eb, coef = "armActive:ns(time_num, df = 2)2", number = 3, sort.by = "P")
+cat("\nTop Features for Non-Linear Spline Interaction:\n")
+head(res_spline[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 3)
 \end{rchunk}
 
 \begin{routput}
@@ -414,6 +419,12 @@ Spline Model Fitted Coefficients:
 {}[3] "ns(time\_num, df = 2)1"           "ns(time\_num, df = 2)2"          
 {}[5] "batchRunB"                       "armActive:ns(time\_num, df = 2)1"
 {}[7] "armActive:ns(time\_num, df = 2)2"
+
+Top Features for Non-Linear Spline Interaction:
+            logFC  AveExpr        t      P.Value    adj.P.Val
+PROT\_001 3.758080 17.49220 20.19106 1.103618e-30 1.103618e-29
+PROT\_009 3.606614 18.75416 17.19980 1.156422e-26 5.782111e-26
+PROT\_010 3.398209 20.09713 14.73900 5.179534e-23 1.726511e-22
 \end{routput}
 
 % =============================================================================

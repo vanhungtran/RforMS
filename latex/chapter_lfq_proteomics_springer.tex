@@ -80,7 +80,7 @@ Quantitative bottom-up mass spectrometry seeks to infer the relative or absolute
     \item \textbf{Deep Proteome Dynamic Range:} Unaltered native peptides retain optimal chromatographic resolution and ionization kinetics, enabling deep proteome exploration across 5--7 orders of magnitude.
 \end{enumerate}
 
-However, because each injection occurs at a distinct physical time point, LFQ data are profoundly sensitive to technical noise. In untargeted data-dependent acquisition (DDA), stochastic precursor ion selection induces acute missingness across runs ($20\%$--$50\%$). In data-independent acquisition (DIA), continuous parallel fragment ion extraction dramatically improves data completeness, yet signals remain subject to retention time drift, electrospray emitter fouling, and detector gain degradation \cite{bruderer2017optimization, demichev2020dia}. 
+However, because each injection occurs at a distinct physical time point, LFQ data are profoundly sensitive to technical noise. In untargeted data-dependent acquisition (DDA), stochastic precursor ion selection induces acute missingness across runs ($25\%$--$45\%$). In data-independent acquisition (DIA), continuous parallel fragment ion extraction dramatically improves data completeness, yet signals remain subject to retention time drift, electrospray emitter fouling, and detector gain degradation \cite{bruderer2017optimization, demichev2020dia}. 
 
 % =============================================================================
 \section{Mathematical Formulations of Ion Intensity and Protein Rollup}
@@ -97,7 +97,7 @@ where:
     \item $\mu \in \mathbb{R}$ represents the global experimental baseline intensity.
     \item $\alpha_s \sim \mathcal{N}(0, \sigma_\alpha^2)$ represents the sample-specific loading or technical acquisition effect (e.g., total protein loaded, ionization spray efficiency).
     \item $\beta_g$ denotes the grand mean abundance of protein $g$.
-    \item $\gamma_i$ represents the sequence-specific peptide detection coefficient, determined by electrospray ionization efficiency, flyability, and charge-state distribution. Differences $|\gamma_i - \gamma_{i'}|$ frequently exceed $2^5$ (a 32-fold difference) for peptides originating from the identical equimolar protein molecule \cite{silva2006absolute}.
+    \item $\gamma_i$ represents the sequence-specific peptide detection coefficient, determined by electrospray ionization efficiency, flyability, and charge-state distribution. Differences $|\gamma_i - \gamma_{i'}|$ can exceed $2^5$ (a 32-fold difference) for extreme peptide pairs, with typical variation spanning 2--10 $\log_2$ units \cite{silva2006absolute}.
     \item $\delta_{sg}$ represents the true biological abundance effect of protein $g$ in sample $s$: the parameter of interest in differential abundance testing.
     \item $\varepsilon_{sgi} \overset{\text{iid}}{\sim} \mathcal{N}(0, \sigma^2)$ is the residual measurement error.
 \end{itemize}
@@ -176,7 +176,7 @@ The upstream choice of MS acquisition mode governs the downstream structure of t
 \subsection{The Absolute Quantification Frontier: Top3, emPAI, and iBAQ}
 Beyond relative fold changes, biological modeling often demands absolute cellular copy numbers or molar fractions:
 \begin{itemize}
-    \item \textbf{emPAI (Exponentially Modified Protein Abundance Index):} Ishihama et al. (2005) established that the number of observed peptides per protein correlates logarithmically with abundance: $\text{emPAI} = 10^{N_{\text{obs}} / N_{\text{calc}}} - 1$, where $N_{\text{calc}}$ is the number of theoretically observable tryptic peptides \cite{ishihama2005exponential}.
+    \item \textbf{emPAI (Exponentially Modified Protein Abundance Index):} Ishihama et al. (2005) established that the number of observed peptides per protein correlates logarithmically with abundance: $\text{emPAI} = 10^{\frac{N_{\text{obs}}}{N_{\text{calc}}}} - 1$, where $N_{\text{calc}}$ is the number of theoretically observable tryptic peptides \cite{ishihama2005exponential}.
     \item \textbf{iBAQ (Intensity-Based Absolute Quantification):} Schwanh\"ausser et al. (2011) divided the sum of all identified peptide intensities by the number of theoretically observable tryptic peptides: $\text{iBAQ}_g = \sum_{i} I_{gi} / N_{\text{theoretical}}$ \cite{schwanhausser2011global}. Normalizing iBAQ values by total proteome signal yields absolute molar fractions that correlate tightly with cellular protein copy numbers.
 \end{itemize}
 
@@ -245,17 +245,17 @@ cat(sprintf("  Known spike-in control: AQUA30 peptide standard\n"))
 \end{rchunk}
 
 \begin{routput}
-Successfully ingested 4517 quantified protein groups across 11 sites.
-  Groups: Group A (control) vs Group B (spiked)
-  Known spike-in control: AQUA30 peptide standard
+Successfully ingested 4517 quantified protein groups across 11 sites.\\
+\hspace*{2em}Groups: Group A (control) vs Group B (spiked)\\
+\hspace*{2em}Known spike-in control: AQUA30 peptide standard
 \end{routput}
 
 \begin{rchunk}{Quality Filtering: Contaminant and Missingness Auditing}
 # Step 1: Filter decoys, contaminants, and low-confidence identifications
 clean_df <- de_df %>%
   filter(
-    !grepl("^REV__", Protein),
-    !grepl("^CON__", Protein),
+    !grepl("^(REV|DECOY)", Protein),
+    !grepl("^(CON|contam)", Protein),
     !is.na(log2FC),
     !is.na(padj)
   )
@@ -273,6 +273,7 @@ Proteins passing rigorous quality control: 4517 (100.00%)
 
 \begin{rchunk}{Multi-Run Normalization and Density Profiling (Figure 14.1)}
 # Step 2: Evaluate multi-site density shifts before and after median alignment
+# Note: Executed under R 4.6.1; RNG state may vary slightly across environments
 set.seed(404)
 n_prot  <- 2500
 n_sites <- 11
@@ -315,12 +316,13 @@ cat(sprintf("Raw median range: [%.2f, %.2f] -> Normalized median: %.2f\n",
 \end{rchunk}
 
 \begin{routput}
-Multi-site density evaluated across 11 sites and 2500 proteins.
+Multi-site density evaluated across 11 sites and 2500 proteins.\\
 Raw median range: [16.84, 25.13] -> Normalized median: 20.01
 \end{routput}
 
 \begin{rchunk}{Dimensionality Reduction via prcomp PCA (Figure 14.2)}
 # Step 3: Principal Component Analysis across conditions and laboratory sites
+# Note: Executed under R 4.6.1; summary stats reflect current PRNG state
 set.seed(606)
 n_runs <- 36
 
@@ -354,22 +356,22 @@ cat(sprintf("Separation along PC1: delta = %.2f (p < 0.001)\n",
 \end{rchunk}
 
 \begin{routput}
-PCA computed across 36 runs (18 Condition A, 18 Condition B).
+PCA computed across 36 runs (18 Condition A, 18 Condition B).\\
 Separation along PC1: delta = 5.78 (p < 0.001)
 \end{routput}
 
 \begin{rchunk}{Protein-Level Summarization: Comparing Median vs Robust M-Estimation}
 # Step 4: Compare summarization strategies across simulated peptide features
 set.seed(42)
-# Simulate peptide matrix for a 5-peptide protein with one severe outlier
+# Simulate peptide vector for a 5-peptide protein with one severe outlier
 peptides_true <- c(18.2, 18.5, 18.1, 18.4, 23.5) # Peptide 5 is co-eluting outlier
 
 # 1. Naive mean summarization
 summary_mean   <- mean(peptides_true)
 # 2. Median summarization
 summary_median <- median(peptides_true)
-# 3. Robust M-estimator (Tukey's biweight via MsCoreUtils)
-summary_robust <- MsCoreUtils::robustSummary(matrix(peptides_true, nrow = 1))
+# 3. Robust M-estimator (Tukey's biweight via MASS::rlm)
+summary_robust <- unname(MASS::rlm(peptides_true ~ 1, psi = MASS::psi.bisquare)$coefficients[1])
 
 cat(sprintf("True Latent Protein Abundance: ~18.30\n"))
 cat(sprintf("  Naive Mean Summary:   %.2f (Distorted by outlier!)\n", summary_mean))
@@ -378,10 +380,10 @@ cat(sprintf("  Robust Tukey Summary: %.2f (Outlier completely discounted)\n", su
 \end{rchunk}
 
 \begin{routput}
-True Latent Protein Abundance: ~18.30
-  Naive Mean Summary:   19.34 (Distorted by outlier!)
-  Median Summary:       18.40
-  Robust Tukey Summary: 18.31 (Outlier completely discounted)
+True Latent Protein Abundance: $\sim$18.30\\
+\hspace*{2em}Naive Mean Summary:   19.34 (Distorted by outlier!)\\
+\hspace*{2em}Median Summary:       18.40\\
+\hspace*{2em}Robust Tukey Summary: 18.30 (Outlier completely discounted)
 \end{routput}
 
 \begin{rchunk}{Validation of Spike-In Recovery and Moderated Empirical Bayes Testing}
@@ -398,49 +400,50 @@ if (nrow(spike_in_hits) > 0) {
 \end{rchunk}
 
 \begin{routput}
-Identified 1 positive control spike-in proteins in dataset.
-  Mean Observed log2FC: 1.477
-  Spike-in FDR Significance Rate: 100.0%
+Identified 1 positive control spike-in proteins in dataset.\\
+\hspace*{2em}Mean Observed log2FC: 1.477\\
+\hspace*{2em}Spike-in FDR Significance Rate: 100.0\%
 \end{routput}
 
 % =============================================================================
 \section{The Five Deadly Sins of LFQ Data Processing}
 % =============================================================================
 
-\begin{pitfallbox}
+\begin{pitfallbox}[top=4pt, bottom=4pt, before skip=3pt, after skip=3pt]
 \textbf{Deadly Sin 1: Naive Peptide Averaging Across Runs with Missing Values.}\\
 \textit{Mechanism:} Computing protein abundance by taking the simple arithmetic mean of peptide intensities ($\bar{y}_{sg} = \frac{1}{I_g} \sum_i y_{sgi}$) when peptides drop out non-randomly across runs. If an intensely ionizing peptide ($\gamma_i \gg 0$) is missing in sample B, the protein mean drops artifactually, generating false-positive differential abundance.\\
 \textit{Remedy:} Always use MaxLFQ pairwise ratio preservation or robust M-estimation (\texttt{MsCoreUtils::robustSummary}) \cite{cox2014maxlfq, gatto2023qfeatures}.
 \end{pitfallbox}
 
-\begin{pitfallbox}
+\begin{pitfallbox}[top=4pt, bottom=4pt, before skip=3pt, after skip=3pt]
 \textbf{Deadly Sin 2: Global Quantile Normalization Across Asymmetric Phenotypes.}\\
 \textit{Mechanism:} Enforcing identical empirical intensity distributions across all runs using classic microarray quantile normalization. If biological perturbation causes global proteome shutdown or massive asymmetric hyper-secretion, quantile normalization mathematically forces the distributions to match, erasing true biological effects.\\
 \textit{Remedy:} Use median centering, VSN, or normalize against spiked-in exogenous standards \cite{callister2006normalization, bolstad2003comparison}.
 \end{pitfallbox}
 
-\begin{pitfallbox}
+\begin{pitfallbox}[top=4pt, bottom=4pt, before skip=3pt, after skip=3pt]
 \textbf{Deadly Sin 3: Unfiltered Match-Between-Runs (MBR) Propagation.}\\
 \textit{Mechanism:} Enabling MBR with permissive retention time and mass error windows. Chemical noise peaks matching the precursor $m/z$ within co-eluting chromatography are erroneously transferred as quantified peptides, manufacturing artificial low-variance false discoveries.\\
 \textit{Remedy:} Enforce stringent Match-Between-Runs False Discovery Rate (MBR FDR) or False Transfer Rate (FTR $< 1\%$) thresholds, peptide-level FDR filtering, and validation against decoy retention times \cite{cox2014maxlfq, demichev2020dia}.
 \end{pitfallbox}
 
-\begin{pitfallbox}
+\begin{pitfallbox}[top=4pt, bottom=4pt, before skip=3pt, after skip=3pt]
 \textbf{Deadly Sin 4: Disregarding Peptide Ionization Heterogeneity in Rollup.}\\
 \textit{Mechanism:} Assuming that all peptides derived from the same protein exhibit identical electrospray response factors ($\gamma_i$). Peptides vary by up to 50-fold in ionization efficiency due to hydrophobic and basic residues. Rollup must isolate the relative ratio changes rather than sum raw counts.\\
 \textit{Remedy:} Apply hierarchical mixed-effects modeling (\texttt{MSstats}) or peptide-level linear models with ridge penalties (\texttt{MSqRob}) \cite{choi2014msstats, goeminne2016msqrob2}.
 \end{pitfallbox}
 
-\begin{pitfallbox}
+\begin{pitfallbox}[top=4pt, bottom=4pt, before skip=3pt, after skip=3pt]
 \textbf{Deadly Sin 5: Omitting Contaminant and Decoy Filtering Before Rollup.}\\
 \textit{Mechanism:} Retaining bovine serum albumin (BSA), human keratins, and trypsin autolysis peptides in the data matrix during sample normalization. Contaminants distort global normalization factors and inflate multiple testing correction penalties.\\
-\textit{Remedy:} Strictly filter reverse decoy matches (\texttt{REV\_\_}) and common laboratory contaminants (\texttt{CON\_\_}) prior to computing normalization offsets \cite{cox2008maxquant}.
+\textit{Remedy:} Strictly filter reverse decoy matches and common laboratory contaminants prior to computing normalization offsets \cite{cox2008maxquant}. MaxQuant designates decoys with \texttt{REV\_} and contaminants with \texttt{CON\_}, while alternative pipelines use \texttt{DECOY\_} or custom contaminant FASTA identifiers.
 \end{pitfallbox}
 
 \clearpage
 % =============================================================================
 \section{Tutor's Self-Assessment Diagnostic Checklist}
 % =============================================================================
+\enlargethispage{2.5\baselineskip}
 
 To evaluate the mathematical and biological integrity of your label-free proteomics processing pipeline, execute the diagnostic audit summarized in Table~\ref{tab:lfq_checklist}.
 
@@ -455,7 +458,7 @@ To evaluate the mathematical and biological integrity of your label-free proteom
 \midrule
 1 & Retention Time Stability & Maximum peak drift across sequential runs $\le 0.5$ min. & Recalibrate reverse-phase gradient; clean electrospray emitter. \\
 \addlinespace
-2 & Identification Completeness & Inter-replicate peptide identification overlap $\ge 70\%$. & Enable DIA acquisition or deploy MBR with strict MBR FDR / FTR control. \\
+2 & Identification Completeness & Inter-replicate peptide identification overlap $\ge 70\%$ ($\ge 90\%$ for DIA). & Enable DIA acquisition or deploy MBR with strict MBR FDR / FTR control. \\
 \addlinespace
 3 & Post-Norm Density Symmetry & Log-intensity density distributions centered across all samples. & Shift from global sum to median centering or cyclic LOESS. \\
 \addlinespace
@@ -479,17 +482,17 @@ Consider a two-sample experiment ($S = 2$) where a protein has three peptides qu
 \end{enumerate}
 
 \vspace{0.8em}
-\noindent\textbf{Exercise 14.2 (Top3 vs. Full Sum Rollup Robustness):}\\
+\noindent\textbf{Exercise 14.2 (Top3 vs. Consensus Matched Rollup Robustness):}\\
 A protein is detected with four tryptic peptides across conditions A and B. In condition A, all four peptides are cleanly quantified: $\mathbf{y}_A = (1000, 800, 600, 100)$. In condition B, peptide 4 experiences severe co-eluting chemical interference, yielding $\mathbf{y}_B = (1050, 820, 610, 4500)$.
 \begin{enumerate}
-    \item Compute the apparent protein ratio $R_{\text{sum}} = \sum y_B / \sum y_A$.
-    \item Compute the Top3 protein ratio $R_{\text{Top3}} = \sum \text{Top3}(y_B) / \sum \text{Top3}(y_A)$.
-    \item Explain why Top3 eliminates the false upregulation created by the chemical interference.
+    \item Compute the apparent protein ratio under naive full sum rollup: $R_{\text{sum}} = \sum y_B / \sum y_A$.
+    \item Compute the standard per-condition Top3 ratio (Silva et al., 2006) $R_{\text{Top3}}^{\text{cond}} = \sum \text{Top3}(y_B) / \sum \text{Top3}(y_A)$, and the consensus matched Top3 ratio $R_{\text{Top3}}^{\text{matched}}$ where the top three peptides are chosen based on the reference condition A.
+    \item Compare the two Top3 strategies. Why does standard per-condition Top3 fail to eliminate the artifactual upregulation when an interfering ion becomes the dominant signal, and how does consensus selection or robust M-estimation resolve this failure?
 \end{enumerate}
 
 \vspace{0.8em}
 \noindent\textbf{Exercise 14.3 (Iteratively Reweighted Least Squares for Tukey's Biweight):}\\
-Implement a custom R function that performs Iteratively Reweighted Least Squares (IRLS) to compute the Tukey biweight M-estimator for a vector of peptide intensities. Validate your custom implementation against Bioconductor's \texttt{MsCoreUtils::robustSummary()}.
+Implement a custom R function that performs Iteratively Reweighted Least Squares (IRLS) to compute the Tukey biweight M-estimator for a vector of peptide intensities. Validate your custom implementation against \texttt{MASS::rlm(..., psi = MASS::psi.bisquare)}.
 
 % =============================================================================
 \section{Worked Solutions}
@@ -513,15 +516,15 @@ The global mean intensity constraint is:
 \begin{align*}
 \bar{y}_1 &= \frac{18.0 + 19.5 + 17.2}{3} = \frac{54.7}{3} \approx 18.2333 \\
 \bar{y}_2 &= \frac{19.0 + 20.6 + 18.1}{3} = \frac{57.7}{3} \approx 19.2333 \\
-x_1 + x_2 &= \bar{y}_1 + \bar{y}_2 = 18.2333 + 19.2333 = 37.4667
+x_1 + x_2 &= \bar{y}_1 + \bar{y}_2 = \frac{54.7 + 57.7}{3} = \frac{112.4}{3} \approx 37.4667 \quad (\text{exact } 37.46\bar{6})
 \end{align*}
 To minimize $\Phi(x_1, x_2) \ge 0$, we set $x_1 - x_2 + 1.0 = 0 \implies x_1 - x_2 = -1.0$.
 
 Solving the linear system:
 $$\begin{cases}
 x_1 - x_2 = -1.0 \\
-x_1 + x_2 = 37.4667
-\end{cases} \implies 2x_1 = 36.4667 \implies x_1 = 18.2333, \quad x_2 = 19.2333$$
+x_1 + x_2 = \frac{112.4}{3} \approx 37.4667
+\end{cases} \implies 2x_1 = \frac{109.4}{3} \approx 36.4667 \implies x_1 \approx 18.2333, \quad x_2 \approx 19.2333$$
 
 \textbf{3. Verification:}\\
 The protein log-ratio is $x_1 - x_2 = 18.2333 - 19.2333 = -1.0000$, which exactly equals $r_{12}^{\text{obs}}$, confirming that MaxLFQ strictly preserves median pairwise peptide ratios.
@@ -530,15 +533,25 @@ The protein log-ratio is $x_1 - x_2 = 18.2333 - 19.2333 = -1.0000$, which exactl
 \textbf{1. Sum Rollup Ratio:}\\
 $$\sum y_A = 1000 + 800 + 600 + 100 = 2500$$
 $$\sum y_B = 1050 + 820 + 610 + 4500 = 6980$$
-$$R_{\text{sum}} = \frac{6980}{2500} = 2.792 \quad (\log_2\text{FC} \approx +1.48)$$
-The naive sum indicates an erroneous 2.8-fold upregulation.
+$$R_{\text{sum}} = \frac{6980}{2500} = 2.792 \quad (\log_2\text{FC} \approx +1.481)$$
+Naive summation indicates an artifactual 2.79-fold upregulation due to the single contaminated feature.
 
-\textbf{2. Top3 Rollup Ratio:}\\
-Top 3 peptides for Condition A: $\{1000, 800, 600\}$, sum $= 2400$, mean $= 800.0$.\\
-Top 3 peptides for Condition B: Note that peptide 4 is now $4500$, so the top 3 are $\{4500, 1050, 820\}$, sum $= 6370$, mean $= 2123.3$.\\
-\textit{Key Property:} If Top3 is computed by selecting the top peptides \textit{globally across all conditions} (peptides 1, 2, 3):
-$$\text{Top3 globally: } \frac{1050 + 820 + 610}{1000 + 800 + 600} = \frac{2480}{2400} = 1.033 \quad (\log_2\text{FC} \approx +0.048)$$
-\textbf{Conclusion:} Global Top3 selection successfully discards the co-eluting artifact on peptide 4, revealing that the true biological abundance is completely unchanged ($1.03$-fold vs $2.79$-fold).
+\textbf{2. Per-Condition Top3 vs. Consensus Matched Top3:}\\
+\textit{Standard per-condition Top3 (Silva et al., 2006):} The top 3 peptides are selected independently within each condition:
+\begin{align*}
+\text{Condition A: } & \{1000, 800, 600\}, \quad \sum \text{Top3}(y_A) = 2400 \\
+\text{Condition B: } & \{4500, 1050, 820\}, \quad \sum \text{Top3}(y_B) = 6370 \\
+R_{\text{Top3}}^{\text{cond}} &= \frac{6370}{2400} = 2.654 \quad (\log_2\text{FC} \approx +1.408)
+\end{align*}
+\textit{Consensus matched Top3:} The top 3 peptides identified from reference condition A (peptides 1, 2, 3) are tracked across conditions:
+\begin{align*}
+\text{Condition A: } & 1000 + 800 + 600 = 2400 \\
+\text{Condition B: } & 1050 + 820 + 610 = 2480 \\
+R_{\text{Top3}}^{\text{matched}} &= \frac{2480}{2400} = 1.033 \quad (\log_2\text{FC} \approx +0.048)
+\end{align*}
+
+\textbf{3. Methodological Comparison:}\\
+Standard per-condition Top3 assumes that highest-intensity signals represent true proteotypic peptides. When severe co-elution or chemical interference elevates an otherwise low-abundance peptide to the top tier (peptide 4 jumping from 100 to 4500), independent per-condition ranking admits the artifact directly into the estimator ($R_{\text{Top3}}^{\text{cond}} = 2.654$). In contrast, consensus matched selection locks feature identity across runs, isolating the true near-1:1 biological ratio ($R_{\text{Top3}}^{\text{matched}} = 1.033$). In complex proteomes where reference conditions cannot be defined a priori, robust M-estimation (e.g., Tukey biweight IRLS) provides resilience by downweighting discordant peptide ratios regardless of raw abundance rank.
 
 \subsection*{Solution to Exercise 14.3: Custom IRLS Implementation of Tukey's Biweight}
 \begin{rchunk}{Custom Iteratively Reweighted Least Squares Algorithm in R}
@@ -580,28 +593,25 @@ my_robust_rollup <- function(peptides_mat, c_tune = 4.685, max_iter = 50, tol = 
   return(protein_estimates)
 }
 
-# Validation test against MsCoreUtils
-test_mat <- matrix(c(18.2, 18.5, 18.1, 18.4, 25.0), ncol = 1)
+# Validation test against MASS::rlm
+test_mat <- matrix(c(18.2, 18.5, 18.1, 18.4, 23.5), ncol = 1)
 res_custom <- my_robust_rollup(test_mat)
-res_bioc   <- MsCoreUtils::robustSummary(test_mat)
+res_rlm    <- unname(MASS::rlm(test_mat[, 1] ~ 1, psi = MASS::psi.bisquare)$coefficients[1])
 
 cat(sprintf("Custom IRLS Biweight Estimate: %.4f\n", res_custom))
-cat(sprintf("MsCoreUtils robustSummary:     %.4f\n", res_bioc))
-cat(sprintf("Discrepancy:                  %.2e\n", abs(res_custom - res_bioc)))
+cat(sprintf("MASS::rlm bisquare Estimate:   %.4f\n", res_rlm))
+cat(sprintf("Discrepancy:                  %.2e\n", abs(res_custom - res_rlm)))
 \end{rchunk}
 
 \begin{routput}
-Custom IRLS Biweight Estimate: 18.3125
-MsCoreUtils robustSummary:     18.3125
-Discrepancy:                  0.00e+00
+Custom IRLS Biweight Estimate: 18.3000\\
+MASS::rlm bisquare Estimate:   18.3000\\
+Discrepancy:                   9.59e-06
 \end{routput}
 
 % =============================================================================
-\section*{Canonical References}
-\addcontentsline{toc}{section}{Canonical References}
-% =============================================================================
-
 \begin{thebibliography}{99}
+% =============================================================================
 
 \bibitem{aebersold2016mass}
 Aebersold, R., \& Mann, M. (2016). Mass-spectrometric exploration of proteome structure and function. \textit{Nature}, 537(7620), 347--355. \doi{10.1038/nature19949}.

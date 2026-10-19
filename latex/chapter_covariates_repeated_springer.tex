@@ -37,39 +37,6 @@ This chapter establishes a rigorous mathematical, methodological, and computatio
 \noindent\rule{\textwidth}{0.4pt}
 
 % =============================================================================
-% Tutor's Methodological Roadmap
-% =============================================================================
-
-\begin{table}[ht]
-\centering
-\caption{Tutor's Methodological Roadmap: Four Checkpoints for Complex and Longitudinal Omics}
-\label{tab:repeated_roadmap}
-\small
-\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
-\toprule
-\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
-\midrule
-\textbf{1. Dependency Mapping} & Repeated sampling of identical patients across timepoints or tissue biopsies \cite{hurlbert1984pseudoreplication, diggle2002analysis}. & Distinguish between-subject biological factors from within-subject longitudinal kinetics. & Pseudoreplication: treating repeated draws as independent. Remedy: Linear mixed model with random intercepts \cite{laird1982random}. \\
-\addlinespace
-\textbf{2. Variance Partitioning} & Total variation split into patient baseline, treatment response, and technical noise \cite{hoffman2016variancepartition}. & Quantify Intraclass Correlation Coefficient (ICC); audit technical vs. biological variance fractions. & Technical batch swamping biological signal. Remedy: Model batch as fixed or random blocking factor \cite{choi2014msstats, huang2020msstatstmt}. \\
-\addlinespace
-\textbf{3. Trajectory Selection} & Non-linear pharmacodynamic time curves or decaying biomarker kinetics \cite{hastie1990generalized, wood2017generalized}. & Parameterize longitudinal dynamics via natural cubic splines or polynomial terms. & Forcing linear fit onto peaked/transient responses. Remedy: Natural spline basis matrix \texttt{ns(time, df=3)}. \\
-\addlinespace
-\textbf{4. Moderated Inference} & High-dimensional small-sample testing across thousands of proteins \cite{hoffman2021dream, smyth2004linear}. & Shrink feature residual variances; approximate degrees of freedom via Kenward-Roger \cite{kenward1997small}. & Deflated standard errors in unbalanced cohorts. Remedy: Deploy \texttt{dream} with REML moderation \cite{hoffman2021dream, ritchie2015limma}. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\begin{notebox}
-\textbf{Tutor's Methodological Advice: The True Cost of Pseudoreplication}\\
-Treating repeated measures from the same patient as independent samples violates the Gauss-Markov theorem \cite{hurlbert1984pseudoreplication}. For the estimation of the overall mean in a balanced one-way random-intercept design, if $m$ samples per patient exhibit an intraclass correlation $\rho = 0.60$, the effective sample size is not $N \times m$, but rather:
-\begin{equation}
-N_{\text{eff}} = \frac{N \times m}{1 + (m - 1)\rho}
-\end{equation}
-For 10 patients sampled 4 times ($n_{\text{total}} = 40$), the effective sample size is only $40 / (1 + 3 \times 0.60) = 40 / 2.8 \approx 14.3$. Running an unblocked test invents over 25 degrees of freedom out of thin air, generating massive false-positive discovery rates.
-\end{notebox}
-
-% =============================================================================
 \section{Introduction: The Structural Complexity of Omics Experiments}
 % =============================================================================
 
@@ -81,7 +48,7 @@ A pervasive misconception in high-throughput biomolecular analysis is that diffe
     \item \textbf{Extraneous Technical Confounders:} Samples analyzed over weeks or months inevitably span multiple LC columns, chromatography gradients, instrument calibrations, digestion batches, and operator shifts \cite{leek2010tackling, johnson2007adjusting, broadhurst2018guidelines}.
 \end{itemize}
 
-When structured or longitudinal observations are analyzed with naive methods that treat each mass spectrum as an independent realization, standard errors are artificially compressed by a factor that depends on the magnitude of the within-subject correlation. This structural mismatch produces severe false-positive inflation. Conversely, when large patient-to-patient baseline variability is left unmodeled in paired designs, genuine drug responses are swallowed by inter-individual heterogeneity, producing false negatives \cite{broadhurst2006statistical}. The statistical model must faithfully reflect the physical architecture of the experiment \cite{cox2014maxlfq, demichev2020dia}.
+When structured or longitudinal observations are analyzed with naive methods that treat each mass spectrum as an independent realization, standard errors are artificially compressed by a factor that depends on the magnitude of the within-subject correlation. This structural mismatch produces severe false-positive inflation. Conversely, when large patient-to-patient baseline variability is left unmodeled in paired designs, genuine drug responses are swallowed by inter-individual heterogeneity, producing false negatives \cite{broadhurst2006statistical}. The statistical model must faithfully reflect the physical architecture of the experiment \cite{cox2014maxlfq, demichev2020dia, choi2014msstats, huang2020msstatstmt}.
 
 % =============================================================================
 \section{Mathematical Foundations of Linear Mixed-Effects Models}
@@ -193,7 +160,7 @@ Satterthwaite~\cite{satterthwaite1946approximate} constructs an approximate $F$-
     Here, $\operatorname{Cov}(\hat{\boldsymbol{\theta}}) \approx \mathcal{I}_R^{-1}$ is the inverse of the REML expected information matrix, $\mathbf{P}_r = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{X}$, and $\mathbf{Q}_{rs} = \mathbf{X}^T \frac{\partial \mathbf{V}^{-1}}{\partial \theta_r} \mathbf{V} \frac{\partial \mathbf{V}^{-1}}{\partial \theta_s} \mathbf{X}$.
     \item \textbf{Degrees-of-Freedom Adjustment:} The Wald statistic $F = \frac{(\mathbf{L}\hat{\boldsymbol{\beta}})^T (\mathbf{L} \operatorname{Var}_{\text{KR}}(\hat{\boldsymbol{\beta}}) \mathbf{L}^T)^{-1} (\mathbf{L}\hat{\boldsymbol{\beta}})}{q}$ is scaled by an empirical factor to match a non-central $F(q, \nu_{\text{KR}})$ distribution with fractional denominator degrees of freedom $\nu_{\text{KR}}$.
 \end{enumerate}
-This Kenward-Roger adjustment is the recommended small-sample standard implemented in \texttt{lmerTest} and \texttt{dream} \cite{hoffman2021dream, kuznetsova2017lmertest}.
+This Kenward-Roger adjustment is the recommended small-sample standard implemented in \texttt{lmerTest} and \texttt{dream}, bridging classical mixed models with empirical Bayes shrinkage \cite{smyth2004linear, ritchie2015limma, hoffman2021dream, kuznetsova2017lmertest}.
 
 % =============================================================================
 \section{Alternative Covariance Structures and Longitudinal Splines}
@@ -285,7 +252,14 @@ The Intraclass Correlation Coefficient (ICC), denoted $\rho$, is the fraction of
 \rho = \frac{\operatorname{Cov}(y_{ij}, y_{ik})}{\sqrt{\operatorname{Var}(y_{ij})\operatorname{Var}(y_{ik})}} = \frac{\sigma_b^2}{\sigma_b^2 + \sigma_e^2}
 \end{equation}
 
-When $\rho > 0.10$, naive OLS standard errors are invalid. Analysts must use linear mixed models, generalized estimating equations (GEE), or cluster-robust standard errors \cite{hurlbert1984pseudoreplication, diggle2002analysis}.
+\subsection{The Effective Sample Size of Pseudoreplicated Cohorts}
+
+Treating repeated measures from the same patient as independent samples violates the Gauss-Markov theorem \cite{hurlbert1984pseudoreplication}. For the estimation of the overall mean in a balanced one-way random-intercept design, if $m$ samples per patient exhibit an intraclass correlation $\rho$, the effective biological sample size is:
+\begin{equation}
+\label{eq:neff}
+N_{\text{eff}} = \frac{N \times m}{1 + (m - 1)\rho}
+\end{equation}
+For instance, in a cohort of $N = 10$ patients sampled at $m = 4$ timepoints ($n_{\text{total}} = 40$) with $\rho = 0.60$, the effective sample size is only $N_{\text{eff}} = 40 / [1 + 3(0.60)] = 40 / 2.80 \approx 14.3$. An unblocked naive test invents over 25 degrees of freedom out of thin air, generating severe anti-conservative bias and false-positive discoveries. Consequently, when $\rho > 0.10$, naive OLS standard errors are substantially deflated; analysts must deploy linear mixed models, generalized estimating equations (GEE), or cluster-robust standard errors \cite{hurlbert1984pseudoreplication, diggle2002analysis}.
 
 % =============================================================================
 \section{Hands-On R Laboratory: Longitudinal dream Analysis}

@@ -181,6 +181,7 @@ Within each extracted ROI $\mathbf{s}(t)$, CentWave applies the Continuous Wavel
 \end{equation}
 The prefactor $\frac{2}{\sqrt{3\sigma}\pi^{1/4}}$ guarantees that the wavelet has unit $L^2$-norm:
 \begin{equation}
+\label{eq:l2_norm}
 \|\psi\|_{L^2}^2 = \int_{-\infty}^{\infty} |\psi(t)|^2 \, dt = 1
 \end{equation}
 
@@ -259,7 +260,7 @@ The corrected retention time is then adjusted as $t_{R, \text{aligned}} = t_R - 
 \small
 \caption{Comparison of retention time alignment algorithms in \texttt{xcms}.}
 \label{tab:alignment_comparison}
-\begin{tabularx}{\textwidth}{l p{4.2cm} p{4.2cm} X}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{4.0cm} X}
 \toprule
 \textbf{Algorithm} & \textbf{Input Data} & \textbf{Advantages} & \textbf{Primary Failure Mode} \\
 \midrule
@@ -283,16 +284,16 @@ After retention time alignment, chromatographic peaks across all samples are clu
 \end{equation}
 where $h$ is the bandwidth parameter (\texttt{bw}, typically 2--5 seconds for UHPLC). Valleys where $\hat{f}(t)$ drops below a threshold define the boundaries of individual features. A valid feature must contain peaks from at least a fraction of samples within at least one experimental group (parameter \texttt{minFraction}, typically $\ge 0.50$) \cite{mclean2021metabolomics}.
 
-\subsection{Gap-Filling (\texttt{fillChromPeaks}): Mitigating Artificial Zeros}
+\subsection{Gap-Filling (\texttt{fillChromPeaks}): Mitigating Artificial Missingness}
 
-In untargeted omics, if an analyte was present at low abundance in sample $k$, CentWave may fail to trigger an automated peak detection if baseline noise pushes the signal slightly below the signal-to-noise threshold ($\text{S/N} < 10$). If left uncorrected, sample $k$ receives an artificial missing value (\texttt{NA}) or zero, introducing spurious missingness that distorts statistical imputation and downstream differential testing (Chapter 19).
+In untargeted omics, if an analyte is present at low abundance in sample $k$, CentWave may fail to trigger an automated peak detection if baseline noise pushes the signal slightly below the signal-to-noise threshold ($\text{S/N} < 10$). By default, \texttt{xcms::featureValues()} assigns \texttt{NA} to samples where a feature was not picked. Leaving these entries as \texttt{NA} (or naively imputing them with zero, which is itself a flawed practice) manufactures an artificial $15$--$25\%$ missing-data rate for authentic, detected molecules, severely distorting downstream statistical imputation and differential abundance testing (Chapter 19).
 
-The \texttt{fillChromPeaks} algorithm executes targeted re-integration across the raw data surface:
+To eliminate this artifact, the \texttt{fillChromPeaks} algorithm executes targeted re-integration across the raw data surface:
 \begin{equation}
 \label{eq:gap_fill}
 \hat{A}_{p, k} = \int_{t_{R, \min}^{(p)}}^{t_{R, \max}^{(p)}} \int_{m/z_{\min}^{(p)}}^{m/z_{\max}^{(p)}} I_k(t_R, m/z) \; d(m/z) \; dt_R
 \end{equation}
-where $I_k(t_R, m/z)$ denotes the raw detector ion intensity surface of sample $k$, $[t_{R, \min}^{(p)}, t_{R, \max}^{(p)}]$ is the consensus retention time window established by the correspondence feature group $p$, and $[m/z_{\min}^{(p)}, m/z_{\max}^{(p)}]$ is the consensus mass bounding box across the cohort. By querying the raw instrumental files directly at these coordinates, \texttt{fillChromPeaks} measures authentic background detector noise or low-level ion flux, transforming artificial zero entries into genuine quantitative measurements \cite{benton2015evaluating, gieling2020assessment}.
+where $I_k(t_R, m/z)$ denotes the raw detector ion intensity surface of sample $k$, $[t_{R, \min}^{(p)}, t_{R, \max}^{(p)}]$ is the consensus retention time window established by the correspondence feature group $p$, and $[m/z_{\min}^{(p)}, m/z_{\max}^{(p)}]$ is the consensus mass bounding box across the cohort. By querying the raw instrumental files directly at these coordinates, \texttt{fillChromPeaks} replaces artificial \texttt{NA}s with genuine, low-level integrated ion flux or physical baseline background measurements \cite{benton2015evaluating, gieling2020assessment}.
 
 \subsection{Downstream Annotation and Spectral Deconvolution}
 
@@ -497,8 +498,8 @@ FT00004     32100   31800   33400   32900
 \begin{pitfallbox}
 \textbf{Deadly Sin 4: Omitting the Gap-Filling (\texttt{fillChromPeaks}) Step}\\
 \textit{Mechanism:} Exporting \texttt{featureValues(data\_grouped)} directly without re-integrating missing values \cite{benton2015evaluating}.\\
-\textit{Mathematical Failure:} A real analyte present at modest intensity will randomly miss the $\text{S/N} \ge 10$ detection cutoff in 10--20\% of samples. Omitting gap-filling leaves 15\% missing cells in the feature matrix, creating artificial zeros that mislead downstream imputation and differential testing.\\
-\textit{Remedy:} Always execute \texttt{fillChromPeaks()} to integrate background raw detector signal for unpicked samples.
+\textit{Mathematical Failure:} An authentic analyte present at modest intensity will randomly fall below the automated detection threshold ($\text{S/N} \ge 10$) in 10--20\% of samples due to stochastic baseline fluctuations. By default, \texttt{xcms::featureValues()} assigns \texttt{NA} to samples where a peak was not detected. Leaving these as \texttt{NA}s (or naively imputing them with zero) manufactures artificial missingness that misleads downstream imputation models, distorts empirical Bayes moderation, and deflates statistical power.\\
+\textit{Remedy:} Always execute \texttt{fillChromPeaks()} to re-integrate background raw detector signal for unpicked samples, replacing artificial \texttt{NA}s with genuine, low-level integrated ion flux.
 \end{pitfallbox}
 
 \begin{pitfallbox}
@@ -558,8 +559,8 @@ Consider the Mexican hat (Ricker) wavelet defined as the normalized second deriv
 \psi(t) = C \left( 1 - \frac{t^2}{\sigma^2} \right) e^{-\frac{t^2}{2\sigma^2}}
 \end{equation*}
 \begin{enumerate}
-    \item Prove analytically that $\psi(t)$ has zero total area ($\int_{-\infty}^\infty \psi(t) dt = 0$) and zero first moment ($\int_{-\infty}^\infty t \psi(t) dt = 0$). Explain why this mathematical property suppresses constant baseline offsets and linear baseline drift in liquid chromatography.
-    \item Derive the exact $L^2$-normalization constant $C$ such that $\|\psi\|_{L^2}^2 = \int_{-\infty}^\infty |\psi(t)|^2 dt = 1$, and confirm that $C = \frac{2}{\sqrt{3\sigma}\pi^{1/4}}$.
+    \item Prove analytically that $\psi(t)$ has zero total area ($\int_{-\infty}^\infty \psi(t) \, dt = 0$) and zero first moment ($\int_{-\infty}^\infty t \, \psi(t) \, dt = 0$). Explain why this mathematical property suppresses constant baseline offsets and linear baseline drift in liquid chromatography.
+    \item Derive the exact $L^2$-normalization constant $C$ such that $\|\psi\|_{L^2}^2 = \int_{-\infty}^\infty |\psi(t)|^2 \, dt = 1$, and confirm that $C = \frac{2}{\sqrt{3\sigma}\pi^{1/4}}$.
 \end{enumerate}
 
 \subsection*{Exercise 8.3: Dynamic Time Warping and Obiwarp Alignment Mechanics}

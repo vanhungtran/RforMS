@@ -1,0 +1,23 @@
+audit_tmt_channels <- function(tmt_matrix, cv_threshold = 10.0) {
+  # tmt_matrix: proteins (rows) x channels (columns)
+  cv_results <- data.frame(
+    Channel = colnames(tmt_matrix),
+    Mean_Intensity = colMeans(tmt_matrix, na.rm = TRUE),
+    SD_Intensity   = apply(tmt_matrix, 2, sd, na.rm = TRUE)
+  ) %>%
+    mutate(
+      CV_Percent = (SD_Intensity / Mean_Intensity) * 100,
+      Status     = ifelse(CV_Percent > cv_threshold, "FLAGGED (High CV)", "PASS")
+    )
+
+  return(cv_results)
+}
+
+# Run on simulated 6-channel data
+test_data <- matrix(rnorm(600, mean = 20000, sd = 1500), nrow = 100, ncol = 6)
+# Introduce technical failure in channel 4
+test_data[, 4] <- test_data[, 4] * rnorm(100, mean = 1, sd = 0.35)
+colnames(test_data) <- paste0("TMT_", 1:6)
+
+qc_summary <- audit_tmt_channels(test_data)
+print(qc_summary[, c("Channel", "CV_Percent", "Status")])

@@ -1,0 +1,44 @@
+my_robust_rollup <- function(Y, c_tune = 4.685, max_iter = 50, tol = 1e-6) {
+  # Y is an I x S matrix (peptides x samples)
+  S <- ncol(Y)
+  protein_estimates <- numeric(S)
+
+  for (s in 1:S) {
+    y <- Y[, s]
+    y <- y[!is.na(y)]
+    if (length(y) == 0) { protein_estimates[s] <- NA; next }
+    if (length(y) <= 2) { protein_estimates[s] <- median(y); next }
+
+    # Initial estimate: sample median
+    x_curr <- median(y)
+
+    for (iter in 1:max_iter) {
+      scale_est <- median(abs(y - x_curr)) / 0.6745
+      if (scale_est < 1e-8) break
+
+      u <- (y - x_curr) / (c_tune * scale_est)
+      # Tukey biweight weights
+      w <- ifelse(abs(u) <= 1, (1 - u^2)^2, 0)
+
+      if (sum(w) < 1e-8) break
+      x_next <- sum(w * y) / sum(w)
+
+      if (abs(x_next - x_curr) < tol) {
+        x_curr <- x_next
+        break
+      }
+      x_curr <- x_next
+    }
+    protein_estimates[s] <- x_curr
+  }
+  return(protein_estimates)
+}
+
+# Validation test against MsCoreUtils
+test_mat <- matrix(c(18.2, 18.5, 18.1, 18.4, 25.0), ncol = 1)
+res_custom <- my_robust_rollup(test_mat)
+res_bioc   <- MsCoreUtils::robustSummary(test_mat)
+
+cat(sprintf("Custom IRLS Biweight Estimate: %.4f\n", res_custom))
+cat(sprintf("MsCoreUtils robustSummary:     %.4f\n", res_bioc))
+cat(sprintf("Discrepancy:                  %.2e\n", abs(res_custom - res_bioc)))

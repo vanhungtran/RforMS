@@ -152,9 +152,8 @@ mkdir -p docs/data/figures docs/figures/scifig data/figures figures/scifig docs/
 cp -r data/figures/* docs/data/figures/ 2>/dev/null || true
 cp -r docs/data/figures/* data/figures/ 2>/dev/null || true
 cp -r figures/scifig/* docs/figures/scifig/ 2>/dev/null || true
-cp -r docs/figures/scifig/* figures/scifig/ 2>/dev/null || true
-cp -r latex/chapter_differential_abundance_springer.* docs/latex/ 2>/dev/null || true
-echo "✓ Additional files, figure assets, and LaTeX chapter synced"
+cp -r latex/*.pdf latex/*.tex latex/*.sty docs/latex/ 2>/dev/null || true
+echo "✓ Additional files, figure assets, and LaTeX chapters synced"
 echo ""
 
 # Step 4: Stage only HTML files and necessary deployment files

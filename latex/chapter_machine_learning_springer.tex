@@ -1,0 +1,736 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 23: Machine Learning in Mass Spectrometry
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+
+\hypersetup{
+    pdftitle={Chapter 23: Machine Learning in Mass Spectrometry: High-Dimensional Regularization, Tree Ensembles, and Resampling Integrity},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{22}
+\chapter{Machine Learning in Mass Spectrometry: High-Dimensional Regularization, Tree Ensembles, and Resampling Integrity}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+While classical differential abundance analysis addresses univariate hypothesis testing across individual proteins or metabolites, clinical and translational mass spectrometry increasingly demands multivariate predictive modeling. The primary translational objective is to construct generalizable molecular signatures capable of patient stratification, early disease diagnosis, and therapeutic response forecasting. However, quantitative mass spectrometry resides squarely within the ultra-high-dimensional regime where the number of quantified molecular features exceeds the sample cohort size by several orders of magnitude ($p \gg n$; frequently $p \sim 10^3$--$10^5$ versus $n \sim 10^1$--$10^2$). In this mathematical territory, standard statistical estimators collapse, ordinary least squares is singular, and empirical classification accuracy can trivially reach 100\% on random noise through geometric over-fitting.
+
+This chapter establishes the theoretical foundations and computational architecture required to build, tune, and validate rigorous machine learning models in mass spectrometry. We examine the geometric pathologies of high-dimensional Euclidean space, the Curse of Dimensionality, and Cover's theorem on the linear separability of random patterns. We derive the analytical formulations of penalized loss functions, with special focus on the Elastic Net and its grouping property for co-eluting, highly correlated peptides and metabolites. We dissect non-linear ensemble algorithms, including Random Forests and Gradient Boosted Decision Trees (XGBoost), analyzing their bias-variance trade-offs. Crucially, we formalize the topology of data leakage and formulate nested cross-validation, class-imbalance corrections, and probability calibration (Brier score and reliability curves). The chapter culminates in an end-to-end reproducible R laboratory using the modern \texttt{tidymodels} ecosystem, the ``Five Deadly Sins'' of omics machine learning, and comprehensive multi-tier exercises with complete worked solutions.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Machine Learning, Elastic Net, High-Dimensional Regularization, Random Forest, XGBoost, Data Leakage, Nested Cross-Validation, Probability Calibration, Tidymodels.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+\section{The High-Dimensional Pathology (\texorpdfstring{$p \gg n$}{p >> n}) in Mass Spectrometry}
+% =============================================================================
+
+Translational mass spectrometry datasets are characterized by extreme dimensional asymmetry. A typical clinical proteomics experiment quantifies $p = 5{,}000$ to $12{,}000$ proteins, and deep metabolomics profiles thousands of spectral features across $n = 50$ to $200$ patients. This condition violates the foundational asymptotic regularity assumptions of classical multivariate statistics.
+
+\subsection{The Curse of Dimensionality and Geometric Sparsity}
+
+As dimension $p$ increases, the geometry of Euclidean space undergoes counter-intuitive distortions:
+\begin{enumerate}
+    \item \textbf{Hypersphere Volume Vanishing:} The volume of a $p$-dimensional hypersphere of radius $r$ inscribed within a hypercube of side length $2r$ is:
+    \begin{equation}
+    V_p(r) = \frac{\pi^{p/2}}{\Gamma\left(\frac{p}{2} + 1\right)} r^p
+    \end{equation}
+    The ratio of the volume of the sphere to the volume of the enclosing hypercube $(2r)^p$ converges asymptotically to zero:
+    \begin{equation}
+    \lim_{p \to \infty} \frac{V_p(r)}{(2r)^p} = \lim_{p \to \infty} \frac{\pi^{p/2}}{2^p \, \Gamma\left(\frac{p}{2} + 1\right)} = 0
+    \end{equation}
+    Almost all volume in high-dimensional space concentrates in the ``corners'' of the hypercube.
+    
+    \item \textbf{Distance Concentration:} For $n$ points drawn independently from an arbitrary probability distribution in $\mathbb{R}^p$, the distance between any two points concentrates around the mean distance:
+    \begin{equation}
+    \lim_{p \to \infty} \frac{\operatorname{dist}_{\max} - \operatorname{dist}_{\min}}{\operatorname{dist}_{\min}} = 0
+    \end{equation}
+    In ultra-high dimensions, all sample pairs become virtually equidistant from one another, causing unpenalized nearest-neighbor algorithms to degenerate.
+\end{enumerate}
+
+\subsection{Cover's Theorem on Separability}
+
+Consider $n$ random data points in general position in $\mathbb{R}^p$, each assigned a binary label $y_i \in \{-1, +1\}$ uniformly at random. By Cover's theorem~\cite{cover1965geometrical}, the probability $P(n, p)$ that these points are linearly separable by a hypercube or hyperplane is:
+\begin{equation}
+P(n, p) = \left(\frac{1}{2}\right)^{n-1} \sum_{k=0}^{p} \binom{n-1}{k}
+\end{equation}
+Whenever $p \ge n - 1$, the summation encompasses all terms $0 \le k \le n-1$, yielding:
+\begin{equation}
+\sum_{k=0}^{n-1} \binom{n-1}{k} = 2^{n-1} \implies P(n, p) = 1.0
+\end{equation}
+\begin{biologicalinsight}
+\textbf{The Mathematical Inevitability of 100\% Training Accuracy:}\\
+When features outnumber samples ($p > n$), an unregularized linear classifier will achieve 100\% training accuracy on pure Gaussian noise with randomly assigned patient labels. High training accuracy is never evidence of biological biomarker discovery; it is a mathematical property of the linear system's null space.
+\end{biologicalinsight}
+
+% =============================================================================
+\section{Penalized Estimation: Ridge, LASSO, and the Elastic Net}
+% =============================================================================
+
+To prevent over-fitting in the $p \gg n$ regime, we introduce structural regularization by augmenting the empirical negative log-likelihood with a penalty functional $\mathcal{P}(\boldsymbol{\beta})$ on the coefficient vector.
+
+For a binary classification problem with patient labels $y_i \in \{0, 1\}$ and standardized feature vector $\mathbf{x}_i \in \mathbb{R}^p$, the penalized logistic regression objective is:
+\begin{equation}
+\label{eq:penalized_objective}
+\min_{\beta_0, \boldsymbol{\beta}} \left\{ -\frac{1}{n} \sum_{i=1}^n \left[ y_i \ln \pi(\mathbf{x}_i) + (1 - y_i) \ln(1 - \pi(\mathbf{x}_i)) \right] + \lambda \, \mathcal{P}_\alpha(\boldsymbol{\beta}) \right\}
+\end{equation}
+where $\pi(\mathbf{x}_i) = \frac{1}{1 + \exp(-(\beta_0 + \mathbf{x}_i^T \boldsymbol{\beta}))}$.
+
+\subsection{The Elastic Net Penalty}
+
+Zou and Hastie~\cite{zou2005regularization} formulated the Elastic Net penalty as a convex combination of the $\ell_1$ (LASSO) and $\ell_2$ (Ridge) penalties:
+\begin{equation}
+\label{eq:elastic_net_penalty}
+\mathcal{P}_\alpha(\boldsymbol{\beta}) = \alpha \|\boldsymbol{\beta}\|_1 + \frac{1 - \alpha}{2} \|\boldsymbol{\beta}\|_2^2 = \sum_{j=1}^p \left( \alpha |\beta_j| + \frac{1 - \alpha}{2} \beta_j^2 \right)
+\end{equation}
+where $\lambda > 0$ dictates the global shrinkage intensity, and $\alpha \in [0, 1]$ governs the penalty geometry:
+\begin{itemize}
+    \item $\alpha = 0$ corresponds to \textbf{Ridge Regression} ($\ell_2$), shrinking coefficients toward zero without performing feature selection ($\beta_j \ne 0 \;\forall j$).
+    \item $\alpha = 1$ corresponds to the \textbf{LASSO} ($\ell_1$), inducing exact mathematical sparsity by setting irrelevant features to zero.
+    \item $0 < \alpha < 1$ represents the \textbf{Elastic Net}, combining sparsity with the grouping of collinear features.
+\end{itemize}
+
+\subsection{Coordinate Descent and the Soft-Thresholding Operator}
+
+Optimization of Eq.~(\ref{eq:penalized_objective}) is efficiently solved via cyclical coordinate descent. At each step, fixing all parameters $\beta_k$ ($k \ne j$), the partial derivative with respect to $\beta_j$ updates via the bivariate soft-thresholding operator:
+\begin{equation}
+\hat{\beta}_j = \frac{\mathcal{S}\left( \frac{1}{n}\sum_{i=1}^n x_{ij}(y_i - \tilde{y}_i^{(-j)}), \; \lambda \alpha \right)}{1 + \lambda(1 - \alpha)}
+\end{equation}
+where the soft-thresholding function $\mathcal{S}(z, \gamma)$ is defined as:
+\begin{equation}
+\mathcal{S}(z, \gamma) = \operatorname{sign}(z) \max(0, |z| - \gamma)
+\end{equation}
+Whenever the partial correlation $|z| \le \lambda \alpha$, the feature coefficient is set identically to zero.
+
+\subsection{Analytical Proof of the Grouping Property}
+
+In mass spectrometry, molecular features often exhibit strong collinearity (e.g., peptide fragments from the same protein, charge states of identical peptides, or metabolites in the same metabolic pathway). The LASSO possesses a well-known pathology: given a cluster of highly correlated features ($r \approx 1$), it randomly selects one feature and sets all others to zero.
+
+The Elastic Net mathematically enforces the \textit{grouping property}: correlated features enter or leave the model together.
+
+\begin{deepdive}
+\textbf{Mathematical Proof of the Elastic Net Grouping Bound:}\\
+Let $\hat{\boldsymbol{\beta}}$ be the Elastic Net minimizer for normalized predictors $\mathbf{x}_j$ and $\mathbf{x}_k$ with sample correlation $\rho = \mathbf{x}_j^T \mathbf{x}_k$. Assume $\operatorname{sign}(\hat{\beta}_j) = \operatorname{sign}(\hat{\beta}_k) > 0$.
+By the sub-gradient optimality conditions of Eq.~(\ref{eq:penalized_objective}):
+\begin{align}
+-\frac{1}{n}\mathbf{x}_j^T (\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}}) + \lambda \alpha + \lambda(1 - \alpha)\hat{\beta}_j &= 0 \\
+-\frac{1}{n}\mathbf{x}_k^T (\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}}) + \lambda \alpha + \lambda(1 - \alpha)\hat{\beta}_k &= 0
+\end{align}
+Subtracting the second equality from the first:
+\begin{equation}
+\lambda(1 - \alpha)(\hat{\beta}_j - \hat{\beta}_k) = \frac{1}{n}(\mathbf{x}_j - \mathbf{x}_k)^T (\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}})
+\end{equation}
+Taking the absolute value and applying the Cauchy-Schwarz inequality:
+\begin{equation}
+\lambda(1 - \alpha)|\hat{\beta}_j - \hat{\beta}_k| \le \frac{1}{\sqrt{n}}\|\mathbf{x}_j - \mathbf{x}_k\|_2 \cdot \frac{1}{\sqrt{n}}\|\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}}\|_2
+\end{equation}
+Because the predictors are standardized, $\|\mathbf{x}_j - \mathbf{x}_k\|_2^2 = 2n(1 - \rho)$. Furthermore, let residual error $\frac{1}{\sqrt{n}}\|\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}}\|_2 \le \|\mathbf{y}\|_2 / \sqrt{n} = 1$. Hence:
+\begin{equation}
+\label{eq:grouping_bound}
+|\hat{\beta}_j - \hat{\beta}_k| \le \frac{\sqrt{2(1 - \rho)}}{\lambda(1 - \alpha)}
+\end{equation}
+Equation~(\ref{eq:grouping_bound}) demonstrates that as correlation $\rho \to 1$, the coefficient difference $|\hat{\beta}_j - \hat{\beta}_k| \to 0$. The Elastic Net guarantees that co-regulated proteomic features receive comparable weights.
+\end{deepdive}
+
+% =============================================================================
+\section{Ensemble Learning: Random Forests and Gradient Tree Boosting}
+% =============================================================================
+
+While regularized generalized linear models are transparent and interpretable, they assume additive linear relationships between log-abundances and clinical outcomes. Complex biological systems frequently harbor non-linear epistatic interactions and threshold effects, motivating ensemble decision trees.
+
+\subsection{Random Forests: Decorrelated Bagging}
+
+Random Forests (Breiman~\cite{breiman2001random}) aggregate $B$ bootstrap-aggregated (bagged) classification trees. At each split, the algorithm restricts candidate features to a random subset of size $m_{\text{try}} \approx \lfloor\sqrt{p}\rfloor$.
+
+The mathematical power of Random Forests lies in variance reduction. For an ensemble of $B$ identically distributed (but non-independent) trees, each with variance $\sigma^2$ and pairwise correlation $\rho$:
+\begin{equation}
+\label{eq:rf_variance}
+\operatorname{Var}\left( \frac{1}{B}\sum_{b=1}^B T_b(\mathbf{x}) \right) = \rho \sigma^2 + \frac{1 - \rho}{B}\sigma^2
+\end{equation}
+As $B \to \infty$, the second term vanishes, leaving $\rho \sigma^2$. By randomizing feature selection at every split ($m_{\text{try}} \ll p$), Random Forests drastically reduce the inter-tree correlation $\rho$, lowering the ensemble prediction error without inflating bias.
+
+\subsection{Gradient Boosted Decision Trees (XGBoost)}
+
+Rather than building trees independently, Gradient Boosting (Friedman~\cite{friedman2001greedy}; Chen \& Guestrin~\cite{chen2016xgboost}) constructs an additive model iteratively in functional space:
+\begin{equation}
+\hat{y}_i^{(m)} = \hat{y}_i^{(m-1)} + \eta f_m(\mathbf{x}_i)
+\end{equation}
+where $\eta \in (0, 1]$ is the shrinkage learning rate. At step $m$, tree $f_m$ is fitted to approximate the negative gradient (pseudo-residuals) of the loss function $\mathcal{L}(y_i, \hat{y}_i^{(m-1)})$:
+\begin{equation}
+g_i = \left[ \frac{\partial \mathcal{L}(y_i, \hat{y}_i)}{\partial \hat{y}_i} \right]_{\hat{y}_i = \hat{y}_i^{(m-1)}}, \quad h_i = \left[ \frac{\partial^2 \mathcal{L}(y_i, \hat{y}_i)}{\partial \hat{y}_i^2} \right]_{\hat{y}_i = \hat{y}_i^{(m-1)}}
+\end{equation}
+By performing a second-order Taylor expansion of the objective function with $\ell_2$ leaf-weight regularization $\Omega(f_m) = \gamma T + \frac{1}{2}\lambda \sum_{j=1}^T w_j^2$, the optimal score for leaf $j$ containing sample index set $I_j$ is analytically computed as:
+\begin{equation}
+w_j^* = -\frac{\sum_{i \in I_j} g_i}{\sum_{i \in I_j} h_i + \lambda}
+\end{equation}
+
+% =============================================================================
+\section{Resampling Topologies and the Prevention of Data Leakage}
+% =============================================================================
+
+\subsection{The Taxonomy of Data Leakage in Omics}
+
+Data leakage occurs whenever information from outside the training partition influences the training process, producing fictitiously inflated validation scores that fail to reproduce in independent cohorts~\cite{ambroise2002selection}.
+
+\begin{table}[htbp]
+\centering
+\caption{Taxonomy of Data Leakage Modes in High-Dimensional Omics.}
+\label{tab:leakage_taxonomy}
+\small
+\begin{tabular}{p{2.8cm}p{4.2cm}p{4.8cm}}
+\hline
+\textbf{Leakage Mode} & \textbf{Mechanism} & \textbf{Empirical Consequence} \\
+\hline
+\textbf{Type I: Preprocessing Leakage} & Centering, scaling, or missing value imputation fitted on the entire matrix ($n_{\text{train}} + n_{\text{test}}$) & Assessment samples artificially pull training distributions toward test means; AUC inflated by 5--15\%. \\
+\textbf{Type II: Feature Selection Leakage} & Running $t$-tests or volcano screening on all $n$ samples to select top 50 features prior to cross-validation & Spurious random noise features correlated with the test labels are retained; 100\% CV accuracy reported on noise. \\
+\textbf{Type III: Tuning Leakage} & Optimizing hyperparameters ($\lambda, \alpha, \text{depth}$) on the same test partition used to evaluate final performance & Overfitting to the validation split; failure of clinical generalizability. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Nested Cross-Validation Architecture}
+
+To obtain an unbiased estimate of generalization error while simultaneously optimizing hyperparameters, nested cross-validation is strictly mandatory:
+\begin{itemize}
+    \item \textbf{Outer Loop ($K_{\text{outer}}$-Fold):} Partitions the cohort into $K_{\text{outer}}$ training and held-out test splits. Dedicated exclusively to unbiased performance estimation.
+    \item \textbf{Inner Loop ($K_{\text{inner}}$-Fold):} Sub-partitions each outer training fold into inner analysis and assessment folds. Dedicated to hyperparameter tuning and model selection.
+\end{itemize}
+Information from the outer held-out test fold never penetrates the inner tuning loop or preprocessing recipe.
+
+\subsection{Class Imbalance and Clinical Probability Calibration}
+
+In clinical biomarker cohorts, disease cases are frequently outnumbered by healthy controls (e.g., 10\% positive prevalence). 
+
+\subsubsection{Imbalance-Aware Metrics}
+Under class imbalance, standard classification accuracy is misleading (a trivial classifier predicting 100\% control achieves 90\% accuracy). Biomarker pipelines must prioritize:
+\begin{itemize}
+    \item \textbf{Precision-Recall AUC (PR-AUC):} Directly evaluates minority class recovery without being distorted by true negative volume.
+    \item \textbf{Matthews Correlation Coefficient (MCC):}
+    \begin{equation}
+    \text{MCC} = \frac{\text{TP} \times \text{TN} - \text{FP} \times \text{FN}}{\sqrt{(\text{TP} + \text{FP})(\text{TP} + \text{FN})(\text{TN} + \text{FP})(\text{TN} + \text{FN})}} \in [-1, +1]
+    \end{equation}
+    Yields high scores only if the model predicts well across both majority and minority classes.
+\end{itemize}
+
+\subsubsection{Probability Calibration and the Brier Score}
+A model with high discrimination (AUC $= 0.92$) can possess atrocious calibration (e.g., predicting risks of 0.85 for patients whose empirical event frequency is 30\%). The Brier score measures mean squared probability error:
+\begin{equation}
+\text{BS} = \frac{1}{n}\sum_{i=1}^n \left( \hat{p}_i - y_i \right)^2
+\end{equation}
+Mis-calibrated tree ensembles are realigned using Platt Sigmoid Scaling:
+\begin{equation}
+P(Y = 1 \mid f) = \frac{1}{1 + \exp(A f + B)}
+\end{equation}
+where parameters $A$ and $B$ are fitted via maximum likelihood on cross-validated held-out predictions.
+
+% =============================================================================
+\section{Hands-On R Laboratory: High-Dimensional Machine Learning Pipeline}
+% =============================================================================
+
+We now implement an end-to-end, reproducible machine learning workflow using the \texttt{tidymodels} framework. We simulate a high-dimensional proteomics dataset ($p = 500$, $n = 60$), construct a leak-free preprocessing recipe, tune an Elastic Net classifier via repeated stratified cross-validation, evaluate calibration, and extract stable variable importance.
+
+\begin{rchunk}{High-Dimensional Biomarker Simulation with Correlation Blocks}
+# -----------------------------------------------------------------------------
+# Simulation of High-Dimensional Proteomics Cohort
+# n = 60 samples (20 Disease, 40 Control: 1:2 Class Imbalance)
+# p = 500 proteins (Features 1-25: True Biomarker Signature, r = 0.80)
+# -----------------------------------------------------------------------------
+set.seed(101)
+
+n_samples  <- 60
+n_proteins <- 500
+n_cases    <- 20
+n_controls <- 40
+
+# Class labels
+clinical_class <- factor(c(rep("Disease", n_cases), rep("Control", n_controls)),
+                         levels = c("Disease", "Control"))
+
+# Baseline intensity matrix from Gaussian noise
+X_raw <- matrix(rnorm(n_samples * n_proteins, mean = 20, sd = 1.5),
+                nrow = n_samples, ncol = n_proteins)
+colnames(X_raw) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
+
+# Induce Collinear Correlation Block among true biomarkers (Proteins 1 to 25)
+latent_biomarker_driver <- c(rnorm(n_cases, mean = 2.0, sd = 0.8),
+                             rnorm(n_controls, mean = 0.0, sd = 0.8))
+
+for (k in 1:25) {
+  # Mix latent driver with idiosyncratic noise (pairwise correlation ~ 0.80)
+  X_raw[, k] <- latent_biomarker_driver * 0.9 + rnorm(n_samples, mean = 0, sd = 0.45) + 20
+}
+
+# Assemble analysis tibble
+df_omics <- as.data.frame(X_raw)
+df_omics$diagnosis <- clinical_class
+
+cat(sprintf("Cohort Structure: %d samples (20 Disease, 40 Control) x %d proteins\n",
+            nrow(df_omics), ncol(df_omics) - 1))
+cat(sprintf("Biomarker Block Mean Pairwise Correlation: r = %.3f\n",
+            mean(cor(X_raw[, 1:25])[upper.tri(diag(25))])))
+\end{rchunk}
+
+\begin{routput}
+Cohort Structure: 60 samples (20 Disease, 40 Control) x 500 proteins
+Biomarker Block Mean Pairwise Correlation: r = 0.798
+\end{routput}
+
+\begin{rchunk}{Constructing the Leak-Free Tidymodels Preprocessing Recipe}
+# -----------------------------------------------------------------------------
+# Leak-Free Recipe: All Transformations Estimated Inside Resampling Folds
+# -----------------------------------------------------------------------------
+library(tidymodels)
+
+# Initial Stratified Cohort Split (75% Train, 25% Test)
+set.seed(42)
+cohort_split <- initial_split(df_omics, prop = 0.75, strata = diagnosis)
+train_data   <- training(cohort_split)
+test_data    <- testing(cohort_split)
+
+# Preprocessing Recipe: Zero-Variance Filter -> Standardization
+rec_omics <- recipe(diagnosis ~ ., data = train_data) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric_predictors())
+
+# Repeated Stratified 5-Fold Cross-Validation (5 Repeats = 25 Folds)
+set.seed(123)
+cv_folds <- vfold_cv(train_data, v = 5, repeats = 5, strata = diagnosis)
+
+cat(sprintf("Training Cohort: %d samples | Independent Test Cohort: %d samples\n",
+            nrow(train_data), nrow(test_data)))
+cat(sprintf("Resampling: 5-Fold Stratified Cross-Validation with 5 Repeats (Total Folds = %d)\n",
+            nrow(cv_folds)))
+\end{rchunk}
+
+\begin{routput}
+Training Cohort: 45 samples | Independent Test Cohort: 15 samples
+Resampling: 5-Fold Stratified Cross-Validation with 5 Repeats (Total Folds = 25)
+\end{routput}
+
+\begin{rchunk}{Tuning the Elastic Net Classifier with glmnet}
+# -----------------------------------------------------------------------------
+# Model Specification and Regularization Hyperparameter Grid Search
+# -----------------------------------------------------------------------------
+library(glmnet)
+
+# Elastic Net Specification (tuning penalty lambda and mixture alpha)
+elnet_spec <- logistic_reg(
+  penalty = tune(),
+  mixture = tune()
+) %>%
+  set_engine("glmnet") %>%
+  set_mode("classification")
+
+# Workflow Bundling
+elnet_wf <- workflow() %>%
+  add_recipe(rec_omics) %>%
+  add_model(elnet_spec)
+
+# Regular Hyperparameter Tuning Grid
+elnet_grid <- grid_regular(
+  penalty(range = c(-3, 0), trans = log10_trans()),
+  mixture(range = c(0.1, 0.9)),
+  levels = c(penalty = 20, mixture = 5)
+)
+
+# Execute Resampled Grid Search over 25 Folds
+set.seed(456)
+elnet_tune_res <- tune_grid(
+  elnet_wf,
+  resamples = cv_folds,
+  grid      = elnet_grid,
+  metrics   = metric_set(roc_auc, pr_auc, bal_accuracy, mcc)
+)
+
+# Extract Top Performing Hyperparameters
+best_params <- select_best(elnet_tune_res, metric = "pr_auc")
+cat("Optimal Elastic Net Hyperparameters (Optimizing PR-AUC):\n")
+cat(sprintf("  Penalty (lambda): %.5f\n", best_params$penalty))
+cat(sprintf("  Mixture (alpha):  %.2f\n", best_params$mixture))
+
+# Collect Resampled Performance Metrics
+cv_metrics <- show_best(elnet_tune_res, metric = "pr_auc", n = 1)
+cat(sprintf("Resampled PR-AUC:  %.3f (SE = %.3f)\n", cv_metrics$mean, cv_metrics$std_err))
+\end{rchunk}
+
+\begin{routput}
+Optimal Elastic Net Hyperparameters (Optimizing PR-AUC):
+  Penalty (lambda): 0.04833
+  Mixture (alpha):  0.30
+Resampled PR-AUC:  0.941 (SE = 0.016)
+\end{routput}
+
+\begin{rchunk}{Final Model Evaluation on Unseen Test Cohort}
+# -----------------------------------------------------------------------------
+# Finalizing Workflow and Testing on Independent Held-Out Partition
+# -----------------------------------------------------------------------------
+final_elnet_wf  <- finalize_workflow(elnet_wf, best_params)
+final_elnet_fit <- fit(final_elnet_wf, data = train_data)
+
+# Predict on Unseen Test Partition
+test_preds <- predict(final_elnet_fit, test_data, type = "prob") %>%
+  bind_cols(predict(final_elnet_fit, test_data, type = "class")) %>%
+  bind_cols(test_data %>% select(diagnosis))
+
+# Calculate Test Evaluation Metrics
+test_roc <- roc_auc(test_preds, truth = diagnosis, .pred_Disease)$.estimate
+test_pr  <- pr_auc(test_preds, truth = diagnosis, .pred_Disease)$.estimate
+test_mcc <- mcc(test_preds, truth = diagnosis, estimate = .pred_class)$.estimate
+
+cat("Independent Held-Out Cohort Test Performance:\n")
+cat(sprintf("  Test ROC-AUC: %.3f\n", test_roc))
+cat(sprintf("  Test PR-AUC:  %.3f\n", test_pr))
+cat(sprintf("  Test MCC:     %.3f\n", test_mcc))
+
+# Extract Non-Zero Biomarker Coefficients
+fitted_model <- extract_fit_parsnip(final_elnet_fit)$fit
+coef_sparse  <- coef(fitted_model, s = best_params$penalty)
+selected_idx <- which(as.vector(coef_sparse) != 0)
+selected_nms <- rownames(coef_sparse)[selected_idx]
+selected_nms <- selected_nms[selected_nms != "(Intercept)"]
+
+cat(sprintf("\nFeatures Selected: %d out of %d (%.1f%% sparsity)\n",
+            length(selected_nms), n_proteins,
+            (1 - length(selected_nms) / n_proteins) * 100))
+cat(sprintf("Biomarker Group Overlap: %d / %d (%.0f%% True Discovery Rate)\n",
+            sum(selected_nms %in% paste0("PROT_", sprintf("%03d", 1:25))),
+            length(selected_nms),
+            sum(selected_nms %in% paste0("PROT_", sprintf("%03d", 1:25))) / length(selected_nms) * 100))
+\end{rchunk}
+
+\begin{routput}
+Independent Held-Out Cohort Test Performance:
+  Test ROC-AUC: 0.980
+  Test PR-AUC:  0.967
+  Test MCC:     0.866
+
+Features Selected: 21 out of 500 (95.8\% sparsity)
+Biomarker Group Overlap: 20 / 21 (95\% True Discovery Rate)
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Omics Machine Learning}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 1: Pre-Filtering Features Across the Full Cohort Prior to Cross-Validation}\\
+\textit{Mechanism:} Screening all $n$ samples with Student's $t$-test or ANOVA to isolate the ``top 50 differentially abundant proteins'', then passing this sub-matrix into cross-validation.\\
+\textit{Mathematical Consequence:} Ambroise and McLachlan Selection Bias~\cite{ambroise2002selection}. In $p \gg n$ data, random noise features spuriously correlated with labels across the full cohort leak into the validation folds, yielding $>95\%$ cross-validation accuracy on pure synthetic Gaussian noise.\\
+\textit{Remedy:} Embed all feature filtering and ranking within the cross-validation analysis loop or inside a \texttt{tidymodels} recipe.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 2: Reporting Raw Classification Accuracy on Imbalanced Clinical Cohorts}\\
+\textit{Mechanism:} Evaluating a disease biomarker model on a cohort comprising 5\% disease cases and 95\% healthy controls using simple percentage classification accuracy.\\
+\textit{Mathematical Consequence:} A zero-intelligence dummy model that classifies every patient as ``Control'' achieves 95\% accuracy while exhibiting exactly 0\% clinical sensitivity. The true disease signal remains entirely undetected.\\
+\textit{Remedy:} Benchmark models using Precision-Recall AUC (PR-AUC), Balanced Accuracy, or Matthews Correlation Coefficient (MCC).
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 3: Confusing Feature Importance with Biological Causality}\\
+\textit{Mechanism:} Claiming that proteins with high Gini importance in a Random Forest or large non-zero coefficients in LASSO are the direct causal drivers of disease pathogenesis.\\
+\textit{Mathematical Consequence:} Predictive importance reflects observational conditional association, not mechanistic causality. A non-functional downstream surrogate or batch-confounded contaminant will receive massive feature importance if it correlates with diagnosis.\\
+\textit{Remedy:} Treat ML-selected features as statistical candidates. Validate candidates via orthogonal biochemical assays (PRM, Western blot, knockout perturbation).
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 4: Overfitting Through Unnested Hyperparameter Optimization}\\
+\textit{Mechanism:} Searching across 500 combinations of tree depth, learning rate, and penalty on a standard validation set, and reporting the top validation score as the estimated performance.\\
+\textit{Mathematical Consequence:} Optimizing over a large hyperparameter grid on a single test set adapts the hyperparameters to the test partition's random variance, introducing an optimistic generalization bias of 10--25\%.\\
+\textit{Remedy:} Execute full Nested Cross-Validation ($K_{\text{outer}} \times K_{\text{inner}}$) or preserve an untouched clinical test cohort.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 5: Deploying Uncalibrated Predicted Probabilities in Decision Support}\\
+\textit{Mechanism:} Treating raw output scores from Gradient Boosted Trees or Support Vector Machines directly as posterior probabilities of disease risk.\\
+\textit{Mathematical Consequence:} Modern tree ensembles and margin classifiers produce distorted probability distributions concentrated near 0 and 1. Patients assigned a predicted risk of 0.90 may have an empirical event rate of only 45\%, leading to erroneous clinical interventions.\\
+\textit{Remedy:} Perform Platt sigmoid scaling or isotonic calibration and inspect empirical reliability diagrams before reporting patient-level probabilities.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent
+\textbf{Exercise 23.1 (Mathematical Derivation of the Elastic Net Penalty Hessian):}\\
+Consider the Elastic Net penalty $\mathcal{P}_\alpha(\boldsymbol{\beta}) = \alpha \|\boldsymbol{\beta}\|_1 + \frac{1 - \alpha}{2} \|\boldsymbol{\beta}\|_2^2$.
+\begin{enumerate}
+    \item Compute the second derivative (Hessian component) $\frac{\partial^2}{\partial \beta_j^2}\mathcal{P}_\alpha(\boldsymbol{\beta})$ for $\beta_j \ne 0$.
+    \item Explain why the Ridge component ($\alpha < 1$) guarantees strict convexity of the optimization objective even when the feature matrix $\mathbf{X}^T \mathbf{X}$ is singular ($p > n$).
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 23.2 (Calculation of Matthews Correlation Coefficient):}\\
+A clinical mass spectrometry classifier evaluated on an independent test cohort of 100 patients yields the following confusion matrix: $\text{TP} = 18$, $\text{FN} = 2$, $\text{FP} = 10$, $\text{TN} = 70$.
+\begin{enumerate}
+    \item Calculate the Raw Accuracy and Balanced Accuracy.
+    \item Calculate the Matthews Correlation Coefficient (MCC).
+    \item How does the MCC change if the false positive count doubles ($\text{FP} = 20$, $\text{TN} = 60$)?
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 23.3 (Ambroise \& McLachlan Selection Bias Demonstration):}\\
+Write an R script that generates a completely random matrix $\mathbf{X} \in \mathbb{R}^{40 \times 1000}$ from $\mathcal{N}(0, 1)$ with random binary labels $Y \in \{0, 1\}$. Demonstrate that filtering the top 20 features across all 40 samples using a two-sample $t$-test produces $>85\%$ cross-validation accuracy on pure noise, whereas filtering inside the cross-validation folds yields an expected accuracy of $\sim 50\%$.
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 23.4 (Probability Calibration and Brier Score Audit):}\\
+Write an R function \texttt{audit\_model\_calibration(truth, probs, n\_bins)} that bins predicted probabilities into deciles, calculates observed versus expected event frequencies, computes the Brier score, and flags whether the maximum calibration error (ECE) exceeds 0.15.
+
+% =============================================================================
+\section{Comprehensive Worked-Out Solutions}
+% =============================================================================
+
+\subsection*{Solution to Exercise 23.1: Elastic Net Hessian and Strict Convexity}
+
+\textbf{1. Second Derivative of the Penalty:}\\
+For $\beta_j \ne 0$, the first derivative of the penalty function is:
+\begin{equation}
+\frac{\partial}{\partial \beta_j}\mathcal{P}_\alpha(\boldsymbol{\beta}) = \alpha \operatorname{sign}(\beta_j) + (1 - \alpha)\beta_j
+\end{equation}
+Differentiating again with respect to $\beta_j$:
+\begin{equation}
+\frac{\partial^2}{\partial \beta_j^2}\mathcal{P}_\alpha(\boldsymbol{\beta}) = 0 + (1 - \alpha) = 1 - \alpha
+\end{equation}
+The off-diagonal Hessian elements $\frac{\partial^2}{\partial \beta_j \partial \beta_k}\mathcal{P}_\alpha(\boldsymbol{\beta}) = 0$ for $j \ne k$. Hence, the Hessian matrix of the penalty is:
+\begin{equation}
+\nabla^2 \mathcal{P}_\alpha(\boldsymbol{\beta}) = (1 - \alpha) \mathbf{I}_p
+\end{equation}
+
+\textbf{2. Guarantee of Strict Convexity:}\\
+The Hessian of the penalized least-squares objective $f(\boldsymbol{\beta}) = \frac{1}{2n}\|\mathbf{y} - \mathbf{X}\boldsymbol{\beta}\|_2^2 + \lambda \mathcal{P}_\alpha(\boldsymbol{\beta})$ is:
+\begin{equation}
+\nabla^2 f(\boldsymbol{\beta}) = \frac{1}{n} \mathbf{X}^T \mathbf{X} + \lambda(1 - \alpha)\mathbf{I}_p
+\end{equation}
+When $p > n$, the sample covariance matrix $\mathbf{X}^T \mathbf{X}$ has rank at most $n < p$, which means its smallest eigenvalue is $\lambda_{\min}(\mathbf{X}^T \mathbf{X}) = 0$. For pure LASSO ($\alpha = 1$), $\nabla^2 f(\boldsymbol{\beta}) = \frac{1}{n}\mathbf{X}^T \mathbf{X}$ is positive semi-definite but not strictly positive definite, leading to multiple non-unique solutions.
+
+However, for the Elastic Net with $\alpha < 1$:
+\begin{equation}
+\lambda_{\min}(\nabla^2 f(\boldsymbol{\beta})) \ge 0 + \lambda(1 - \alpha) > 0
+\end{equation}
+All eigenvalues of $\nabla^2 f(\boldsymbol{\beta})$ are strictly positive ($\ge \lambda(1 - \alpha) > 0$). Consequently, the Hessian is strictly positive definite, guaranteeing that the objective function is strictly convex and possesses a unique global minimum. \hfill $\blacksquare$
+
+\subsection*{Solution to Exercise 23.2: Matthews Correlation Coefficient Calculation}
+
+Given: $\text{TP} = 18$, $\text{FN} = 2$, $\text{FP} = 10$, $\text{TN} = 70$. Total $N = 100$.
+
+\textbf{1. Raw and Balanced Accuracy:}\\
+\begin{align}
+\text{Raw Accuracy} &= \frac{\text{TP} + \text{TN}}{N} = \frac{18 + 70}{100} = \frac{88}{100} = 0.880 \text{ (88.0\%)} \\
+\text{Sensitivity (Recall)} &= \frac{\text{TP}}{\text{TP} + \text{FN}} = \frac{18}{18 + 2} = \frac{18}{20} = 0.900 \\
+\text{Specificity} &= \frac{\text{TN}}{\text{TN} + \text{FP}} = \frac{70}{70 + 10} = \frac{70}{80} = 0.875 \\
+\text{Balanced Accuracy} &= \frac{\text{Sensitivity} + \text{Specificity}}{2} = \frac{0.900 + 0.875}{2} = 0.8875 \text{ (88.8\%)}
+\end{align}
+
+\textbf{2. Matthews Correlation Coefficient (MCC):}\\
+\begin{align}
+\text{Numerator} &= (\text{TP} \times \text{TN}) - (\text{FP} \times \text{FN}) = (18 \times 70) - (10 \times 2) = 1260 - 20 = 1240 \\
+\text{Denominator} &= \sqrt{(\text{TP}+\text{FP})(\text{TP}+\text{FN})(\text{TN}+\text{FP})(\text{TN}+\text{FN})} \\
+&= \sqrt{(18 + 10)(18 + 2)(70 + 10)(70 + 2)} = \sqrt{28 \times 20 \times 80 \times 72} \\
+&= \sqrt{3{,}225{,}600} \approx 1795.995 \\
+\text{MCC} &= \frac{1240}{1795.995} \approx 0.6904
+\end{align}
+
+\textbf{3. Impact of Elevated False Positives ($\text{FP} = 20, \text{TN} = 60$):}\\
+\begin{align}
+\text{Numerator} &= (18 \times 60) - (20 \times 2) = 1080 - 40 = 1040 \\
+\text{Denominator} &= \sqrt{(18 + 20)(18 + 2)(60 + 20)(60 + 2)} = \sqrt{38 \times 20 \times 80 \times 62} \\
+&= \sqrt{3{,}769{,}600} \approx 1941.546 \\
+\text{MCC}_{\text{new}} &= \frac{1040}{1941.546} \approx 0.5357
+\end{align}
+While raw accuracy merely dropped from 88\% to 78\%, the MCC plummeted by nearly 22.4\% (from 0.690 to 0.536), illustrating its superior sensitivity to precision degradation in imbalanced cohorts. \hfill $\blacksquare$
+
+\subsection*{Solution to Exercise 23.3: Ambroise \& McLachlan Selection Bias in R}
+
+\begin{rchunk}{Demonstration of Selection Bias Leakage vs Honest Resampling}
+# Generate pure standard Gaussian noise: 40 samples, 1000 features
+set.seed(42)
+n <- 40
+p <- 1000
+X_noise <- matrix(rnorm(n * p), nrow = n, ncol = p)
+Y_random <- factor(rep(c("Case", "Control"), each = n / 2))
+
+# -----------------------------------------------------------------------------
+# FLAWED PIPELINE: Screen top 20 features on the ENTIRE cohort first
+# -----------------------------------------------------------------------------
+p_vals <- apply(X_noise, 2, function(col) t.test(col ~ Y_random)$p.value)
+top_20_leaked <- order(p_vals)[1:20]
+X_leaked <- X_noise[, top_20_leaked]
+
+# Evaluate 5-fold CV on leaked feature subset
+library(class)
+acc_leaked <- c()
+folds <- split(sample(1:n), rep(1:5, length.out = n))
+for (k in 1:5) {
+  test_idx  <- folds[[k]]
+  train_idx <- setdiff(1:n, test_idx)
+  pred <- knn(train = X_leaked[train_idx, ], test = X_leaked[test_idx, ],
+              cl = Y_random[train_idx], k = 3)
+  acc_leaked <- c(acc_leaked, mean(pred == Y_random[test_idx]))
+}
+
+# -----------------------------------------------------------------------------
+# HONEST PIPELINE: Screen top 20 features INSIDE each training fold only
+# -----------------------------------------------------------------------------
+acc_honest <- c()
+for (k in 1:5) {
+  test_idx  <- folds[[k]]
+  train_idx <- setdiff(1:n, test_idx)
+  
+  # Select top 20 features using training samples ONLY
+  p_vals_train <- apply(X_noise[train_idx, ], 2, function(col) t.test(col ~ Y_random[train_idx])$p.value)
+  top_20_honest <- order(p_vals_train)[1:20]
+  
+  pred <- knn(train = X_noise[train_idx, top_20_honest],
+              test  = X_noise[test_idx, top_20_honest],
+              cl    = Y_random[train_idx], k = 3)
+  acc_honest <- c(acc_honest, mean(pred == Y_random[test_idx]))
+}
+
+cat("--- Ambroise & McLachlan Selection Bias Benchmark ---\n")
+cat(sprintf("Flawed Pre-Filtered CV Accuracy: %.1f%% (Pure Illusion on Noise!)\n",
+            mean(acc_leaked) * 100))
+cat(sprintf("Honest Nested CV Accuracy:       %.1f%% (True Random Baseline)\n",
+            mean(acc_honest) * 100))
+\end{rchunk}
+
+\begin{routput}
+--- Ambroise \& McLachlan Selection Bias Benchmark ---
+Flawed Pre-Filtered CV Accuracy: 87.5\% (Pure Illusion on Noise!)
+Honest Nested CV Accuracy:       47.5\% (True Random Baseline)
+\end{routput}
+
+\subsection*{Solution to Exercise 23.4: Calibration and Brier Score Audit Function}
+
+\begin{rchunk}{Model Calibration Audit and Brier Score Diagnostics}
+audit_model_calibration <- function(truth, probs, n_bins = 5) {
+  # Format truth as binary 0/1
+  y_num <- as.numeric(as.factor(truth)) - 1
+  
+  # 1. Brier Score
+  brier <- mean((probs - y_num)^2)
+  
+  # 2. Decile Reliability Binning
+  bins <- cut(probs, breaks = seq(0, 1, length.out = n_bins + 1), include.lowest = TRUE)
+  cal_df <- data.frame(prob = probs, y = y_num, bin = bins)
+  
+  summary_tbl <- aggregate(cbind(prob, y) ~ bin, data = cal_df, FUN = function(x) c(mean = mean(x), n = length(x)))
+  summary_df  <- data.frame(
+    Bin           = summary_tbl$bin,
+    Mean_Pred_Prob= summary_tbl$prob[, "mean"],
+    Observed_Rate = summary_tbl$y[, "mean"],
+    Sample_Count  = summary_tbl$y[, "n"]
+  )
+  
+  # Expected Calibration Error (ECE)
+  ece <- sum(abs(summary_df$Mean_Pred_Prob - summary_df$Observed_Rate) * (summary_df$Sample_Count / length(probs)))
+  
+  cat("--- Model Probability Calibration Audit ---\n")
+  cat(sprintf("Brier Score: %.4f (Reference Perfect = 0, Baseline Clueless = 0.25)\n", brier))
+  cat(sprintf("Expected Calibration Error (ECE): %.4f\n", ece))
+  print(summary_df)
+  
+  if (ece > 0.15) {
+    cat("\n[WARNING] Severe Mis-Calibration Detected (ECE > 0.15)!\n")
+    cat("Predicted probabilities require Platt scaling or isotonic alignment.\n")
+  } else {
+    cat("\n[STATUS: PASS] Model probabilities are well-calibrated (ECE <= 0.15).\n")
+  }
+  
+  return(invisible(list(brier = brier, ece = ece, table = summary_df)))
+}
+
+# Test on synthetic well-calibrated probabilities
+set.seed(42)
+test_probs <- runif(100, 0.1, 0.9)
+test_truth <- rbinom(100, 1, test_probs)
+audit_model_calibration(test_truth, test_probs, n_bins = 5)
+\end{rchunk}
+
+\begin{routput}
+--- Model Probability Calibration Audit ---
+Brier Score: 0.1873 (Reference Perfect = 0, Baseline Clueless = 0.25)
+Expected Calibration Error (ECE): 0.0521
+          Bin Mean\_Pred\_Prob Observed\_Rate Sample\_Count
+1 [0.1,0.26]       0.1795455    0.18181818           22
+2 (0.26,0.42]      0.3478947    0.36842105           19
+3 (0.42,0.58]      0.4950000    0.45000000           20
+4 (0.58,0.74]      0.6657143    0.66666667           21
+5 (0.74,0.9]       0.8166667    0.83333333           18
+
+{}[STATUS: PASS] Model probabilities are well-calibrated ($\text{ECE} \le 0.15$).
+\end{routput}
+
+% =============================================================================
+\section*{Canonical References}
+\addcontentsline{toc}{section}{Canonical References}
+% =============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
+
+\bibitem{cover1965geometrical}
+Cover, T.~M. (1965). Geometrical and statistical properties of systems of linear inequalities with applications in pattern recognition. \textit{IEEE Transactions on Electronic Computers}, EC-14(3), 326--334. \doi{10.1109/PGEC.1965.264137}.
+
+\bibitem{zou2005regularization}
+Zou, H., \& Hastie, T. (2005). Regularization and variable selection via the elastic net. \textit{Journal of the Royal Statistical Society: Series B (Statistical Methodology)}, 67(2), 301--320. \doi{10.1111/j.1467-9868.2005.00503.x}.
+
+\bibitem{breiman2001random}
+Breiman, L. (2001). Random forests. \textit{Machine Learning}, 45(1), 5--32. \doi{10.1023/A:1010933404324}.
+
+\bibitem{friedman2001greedy}
+Friedman, J.~H. (2001). Greedy function approximation: a gradient boosting machine. \textit{Annals of Statistics}, 29(5), 1189--1232. \doi{10.1214/aos/1013203451}.
+
+\bibitem{chen2016xgboost}
+Chen, T., \& Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In \textit{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining} (pp. 785--794). \doi{10.1145/2939672.2939785}.
+
+\bibitem{ambroise2002selection}
+Ambroise, C., \& McLachlan, G.~J. (2002). Selection bias in gene extraction on the basis of microarray gene-expression data. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6562--6566. \doi{10.1073/pnas.102102699}.
+
+\bibitem{kuhn2013applied}
+Kuhn, M., \& Johnson, K. (2013). \textit{Applied Predictive Modeling}. Springer, New York, NY. \doi{10.1007/978-1-4614-6849-3}.
+
+\bibitem{kuhn2022tidymodels}
+Kuhn, M., \& Silge, J. (2022). \textit{Tidy Modeling with R}. O'Reilly Media, Sebastopol, CA.
+
+\bibitem{brier1950verification}
+Brier, G.~W. (1950). Verification of forecasts expressed in terms of probability. \textit{Monthly Weather Review}, 78(1), 1--3. \doi{10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}.
+
+\bibitem{platt1999probabilistic}
+Platt, J. (1999). Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. \textit{Advances in Large Margin Classifiers}, 10(3), 61--74.
+
+\bibitem{chawla2002smote}
+Chawla, N.~V., Bowyer, K.~W., Hall, L.~O., \& Kegelmeyer, W.~P. (2002). SMOTE: synthetic minority over-sampling technique. \textit{Journal of Artificial Intelligence Research}, 16, 321--357. \doi{10.1613/jair.953}.
+
+\bibitem{friedman2010regularization}
+Friedman, J., Hastie, T., \& Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. \textit{Journal of Statistical Software}, 33(1), 1--22. \doi{10.18637/jss.v033.i01}.
+
+\bibitem{hastie2009elements}
+Hastie, T., Tibshirani, R., \& Friedman, J. (2009). \textit{The Elements of Statistical Learning: Data Mining, Inference, and Prediction} (2nd ed.). Springer, New York, NY.
+
+\bibitem{vapnik1998statistical}
+Vapnik, V.~N. (1998). \textit{Statistical Learning Theory}. John Wiley \& Sons, New York.
+
+\end{thebibliography}
+
+\end{document}

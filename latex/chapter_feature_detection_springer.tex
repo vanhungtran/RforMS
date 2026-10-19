@@ -69,7 +69,7 @@ Never analyze an untargeted LC-MS feature matrix that has not undergone raw ion 
 \section{Introduction: The Anatomy of a High-Resolution LC-MS Data Surface}
 % =============================================================================
 
-Modern untargeted liquid chromatography--mass spectrometry systems (e.g., Ultra-High Performance Liquid Chromatography coupled to Quadrupole Time-of-Flight [UHPLC-Q-TOF] or Orbitrap mass spectrometers) generate massive datasets \cite{patti2012metabolomics, aebersold2016mass}. A single 45-minute analytical run contains millions of individual $(m/z, I)$ ion measurements collected across thousands of successive scan cycles.
+Modern untargeted liquid chromatography--mass spectrometry systems (e.g., Ultra-High Performance Liquid Chromatography coupled to Quadrupole Time-of-Flight [UHPLC-Q-TOF] or Orbitrap mass spectrometers) generate massive datasets \cite{patti2012metabolomics, aebersold2016mass, want2010global, forcisi2015liquid, boland2023health}. A single 45-minute analytical run contains millions of individual $(m/z, I)$ ion measurements collected across thousands of successive scan cycles.
 
 To perform downstream statistical modeling, machine learning, or differential abundance analysis, this raw three-dimensional manifold $\mathcal{S}(t_R, m/z, I)$ must be mapped onto a discrete two-dimensional quantitative feature matrix:
 \begin{equation}
@@ -160,6 +160,9 @@ W(a, b) = \frac{1}{\sqrt{a}} \int_{-\infty}^{\infty} s(t) \psi\left( \frac{t - b
 \end{enumerate}
 \end{svgraybox}
 
+\subsection{Algorithmic Ecosystem: Beyond CentWave}
+While CentWave remains the flagship peak detection algorithm within Bioconductor's \texttt{xcms}, untargeted mass spectrometry relies on a rich ecosystem of complementary open-source platforms. Key computational frameworks include MZmine 2 and MZmine 3 \cite{pluskal2010mzmine, schmid2023mzmine}, which implement modular grid-based and wavelet peak pickers; OpenMS \cite{rost2016openms}, providing high-performance C++ algorithmic primitives; MS-DIAL \cite{tsugawa2015msdial}, specializing in data-independent acquisition (DIA) and lipidomic deconvolution; and Skyline \cite{maclean2010skyline}, which excels in targeted peak integration and quality auditing. Modern workflows leverage standardized mzML architectures to manage large multi-file cohorts across these diverse engines \cite{rivas2016moving, chambers2012cross}.
+
 % =============================================================================
 \section{Retention Time Alignment: Dynamic Warping vs. Peak Density LOESS}
 % =============================================================================
@@ -229,6 +232,10 @@ The \texttt{fillChromPeaks} algorithm executes targeted re-integration:
 I_{\text{filled}} = \int_{m/z_{\min}}^{m/z_{\max}} \int_{t_{R, \min}}^{t_{R, \max}} \mathcal{S}_{\text{sample } A}(t_R, m/z) \; dt_R \; dm/z
 \end{equation}
 By directly integrating the raw instrumental signal over the exact $m/z$ and retention time boundaries defined by the consensus feature across other samples, gap-filling replaces artificial missing values with genuine physical background noise measurements \cite{benton2015evaluating, gieling2020assessment}.
+
+\subsection{Downstream Annotation and Spectral Deconvolution}
+
+Following peak correspondence and gap-filling, feature matrices undergo isotopic and adduct grouping to reconstruct pseudo-spectra corresponding to individual chemical metabolites. Tools such as CAMERA \cite{kuhl2012camera} and RAMClustR \cite{broeckling2014ramclustr} cluster co-eluting features based on chromatographic peak shape correlation and exact mass differences ($\Delta m = 1.00335\text{ Da}$ for $^{13}\text{C}$, $+21.9820\text{ Da}$ for $[M+\text{Na}]^+ - [M+\text{H}]^+$). Denoising algorithms with isotopic credentialing \cite{huan2015denoising} remove background artifacts. Deconvolved spectra are subsequently queried against public repositories or annotated using retention time indexing \cite{domingo2018automated}, pseudomass decomposition \cite{stravs2013automatic}, and deep combinatorial fragmentation trees via SIRIUS 4 \cite{duhrkop2019sirius}.
 
 % =============================================================================
 \section{Hands-On R Laboratory: End-to-End Feature Detection Workflow}

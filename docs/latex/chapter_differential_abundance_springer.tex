@@ -70,7 +70,7 @@ In high-throughput mass spectrometry experiments with $n = 3$ replicates per gro
 \section{The Importance of Differential Abundance in Mass Spectrometry}
 % =============================================================================
 
-High-throughput mass spectrometry measures the relative or absolute abundance of thousands of proteins, peptides, or metabolites across biological states \cite{cox2008maxquant, demichev2020dia, gatto2023qfeatures}. Whether interrogating a cancer biopsy cohort, a drug-treatment time course, or microbial adaptations to nutrient deprivation, the primary analytical objective is almost universally comparative: \textit{Which molecular entities undergo statistically genuine, biologically meaningful changes in abundance between phenotypic conditions?}
+High-throughput mass spectrometry measures the relative or absolute abundance of thousands of proteins, peptides, or metabolites across biological states \cite{aebersold2016mass, cox2008maxquant, demichev2020dia, gatto2023qfeatures}. Whether interrogating a cancer biopsy cohort, a drug-treatment time course, or microbial adaptations to nutrient deprivation, the primary analytical objective is almost universally comparative: \textit{Which molecular entities undergo statistically genuine, biologically meaningful changes in abundance between phenotypic conditions?}
 
 In classical univariate statistics, testing the equality of two population means $\mu_1 = \mu_2$ relies on Student's two-sample $t$-test. In modern omics, however, the analyst faces four physical and statistical realities inherent to mass spectrometry:
 
@@ -78,10 +78,10 @@ In classical univariate statistics, testing the equality of two population means
     \item \textbf{The High-Dimensional Small-Sample Regime ($p \gg n$):} Modern LC-MS/MS platforms routinely quantify $5,000$ to $10,000$ protein groups or $1,000$ to $3,000$ metabolite features across only $3$ to $5$ biological replicates per group \cite{navarro2016multicenter}. With $d_g = 4$ residual degrees of freedom, sample variance estimates fluctuate erratically across several orders of magnitude purely by sampling error \cite{smyth2004linear, ritchie2015limma}.
     \item \textbf{Dynamic Range and Mean-Variance Dependence:} MS ion intensities span five to six orders of magnitude ($10^3$ to $10^9$). Lower-abundance features exhibit higher technical coefficients of variation (CV) and elevated rates of missingness (Missing Not At Random, MNAR), whereas high-abundance housekeeping proteins display lower variance \cite{karpievitch2012statistical, lazar2016accounting}.
     \item \textbf{Multi-Layered Batch and Nuisance Structure:} Instrument drift, column maintenance, electrospray emitter fouling, and multi-day digestions introduce technical variance that frequently eclipses subtle biological signals unless explicit blocking factors or pairing constraints are incorporated into the design matrix \cite{johnson2007adjusting, leek2010tackling}.
-    \item \textbf{Multiplicity and the Multiple Comparison Problem:} Testing $5,000$ proteins simultaneously at an unadjusted $\alpha = 0.05$ expects $250$ false-positive discoveries by chance alone under the complete null hypothesis, necessitating rigorous multiple testing control \cite{benjamini1995controlling, storey2003statistical}.
+    \item \textbf{Multiplicity and the Multiple Comparison Problem:} Testing $5,000$ proteins simultaneously at an unadjusted $\alpha = 0.05$ expects $250$ false-positive discoveries by chance alone under the complete null hypothesis, necessitating rigorous multiple testing control \cite{broadhurst2006statistical, benjamini1995controlling, storey2003statistical}.
 \end{enumerate}
 
-To isolate biological variation from technical noise, the analytical pipeline must integrate linear modeling with information borrowing across the entire proteome or metabolome \cite{boland2023health, gentleman2005bioinformatics}. Empirical Bayes variance shrinkage provides an optimal trade-off: it shrinks volatile individual variance estimates toward a global consensus prior, restoring statistical power while maintaining rigorous false discovery rate control.
+To isolate biological variation from technical noise, the analytical pipeline must integrate linear modeling with information borrowing across the entire proteome or metabolome \cite{boland2023health, xia2009metaboanalyst, gentleman2005bioinformatics}. Empirical Bayes variance shrinkage provides an optimal trade-off: it shrinks volatile individual variance estimates toward a global consensus prior, restoring statistical power while maintaining rigorous false discovery rate control.
 
 % =============================================================================
 \section{Mathematical Formulations and Statistical Foundations}
@@ -164,7 +164,7 @@ where:
 
 The sample residual variance $s_g^2$ conditional on the true variance $\sigma_g^2$ follows:
 \begin{equation}
-s_g^2 \mid \sigma_g^2 \sim \frac{\sigma_g^2}{d_g} \chi^2_{d_g}
+\frac{d_g s_g^2}{\sigma_g^2} \Bigm| \sigma_g^2 \sim \chi^2_{d_g} \iff s_g^2 \mid \sigma_g^2 \sim \frac{\sigma_g^2}{d_g} \chi^2_{d_g}
 \label{eq:sample_var_dist}
 \end{equation}
 
@@ -315,7 +315,7 @@ By assigning a separate dummy parameter to each site in `\texttt{\~{} 0 + group 
 \section{Hands-On R Lab: Step-by-Step Differential Testing}
 % =============================================================================
 
-This laboratory guides the reader through a complete, reproducible differential abundance workflow on the 11-site DIA reproducibility dataset (PXD004886) \cite{bruderer2017optimization}. The dataset contains 4,517 quantified protein groups, including synthetic AQUA30 heavy-peptide spike-in standards spiked at known concentrations into Group B.
+This laboratory guides the reader through a complete, reproducible differential abundance workflow on the 11-site DIA reproducibility dataset (PXD004886) \cite{bruderer2017optimization}, acquired via data-independent acquisition and extracted using targeted DIA algorithms \cite{rost2014openswath}. The dataset contains 4,517 quantified protein groups, including synthetic AQUA30 heavy-peptide spike-in standards spiked at known concentrations into Group B.
 
 \subsection{Lab Step 1: Environment Setup and Data Ingestion}
 
@@ -361,6 +361,7 @@ p_hist <- ggplot(de_results, aes(x = P.Value)) +
        subtitle = "Flat null expectation with enrichment of true positives near p < 0.01",
        x = "Raw P-Value", y = "Frequency") +
   theme_minimal(base_size = 11)
+print(p_hist)
 \end{rchunk}
 
 \begin{notebox}
@@ -379,27 +380,28 @@ sample_metadata <- data.frame(
   group     = factor(rep(c("A", "B"), n_sites))
 )
 
-# Build design matrix with group means and site blocking
-design <- model.matrix(~ 0 + group + site, data = sample_metadata)
+# Build full-rank design matrix with site blocking (reference-cell parameterization)
+design <- model.matrix(~ group + site, data = sample_metadata)
 colnames(design) <- make.names(colnames(design))
 
-# Construct contrast vector for Group B vs Group A
-contrast_matrix <- makeContrasts(
-  GroupB_vs_GroupA = groupB - groupA,
-  levels = design
-)
-print(contrast_matrix)
+cat(sprintf("Design matrix dimensions: %d samples x %d parameters | Full Rank: %d\n",
+            nrow(design), ncol(design), qr(design)$rank))
+print(colnames(design))
 \end{rchunk}
+
+\begin{notebox}
+\textbf{Methodological Detail: Avoiding Rank Deficiency in Multi-Block Designs}\\
+When incorporating blocking factors into \texttt{limma}, analysts must avoid the classical \textit{dummy variable trap}. In an 11-site study with $N = 22$ samples, specifying both group means and all 11 site dummies simultaneously via \texttt{\~{} 0 + group + site} creates an exact linear collinearity ($\sum \text{group} = \mathbf{1}_{22} = \sum \text{site}$). In the reference-cell parameterization \texttt{\~{} group + site}, the intercept $\beta_0$ represents Group A at Site 01, the $10$ site dummies absorb inter-laboratory baseline shifts, and the single coefficient \texttt{groupB} directly estimates the common within-site biological contrast $\mu_{\text{GroupB}} - \mu_{\text{GroupA}}$ with full column rank ($P = 12$, residual degrees of freedom $d_g = 22 - 12 = 10$).
+\end{notebox}
 
 \subsection{Lab Step 4: Model Fitting and Empirical Bayes Moderation}
 
-We fit linear models feature-by-feature using weighted least squares via \texttt{lmFit()}, compute contrasts with \texttt{contrasts.fit()}, and shrink residual variances toward the inverse-gamma prior via \texttt{eBayes()}:
+We fit linear models feature-by-feature using weighted least squares via \texttt{lmFit()} and shrink residual variances toward the inverse-gamma prior via \texttt{eBayes()}:
 
 \begin{rchunk}{Model Fitting with Weighted Least Squares and eBayes}
 # Fit linear models across all quantified proteins
 fit <- lmFit(expr_mat, design)
-fit_contrast <- contrasts.fit(fit, contrast_matrix)
-fit_ebayes <- eBayes(fit_contrast, trend = TRUE, robust = TRUE)
+fit_ebayes <- eBayes(fit, trend = TRUE, robust = TRUE)
 
 # Inspect empirical Bayes hyperparameter estimates
 cat(sprintf("Prior degrees of freedom (d0): %.2f\n", fit_ebayes$df.prior))
@@ -412,15 +414,15 @@ cat(sprintf("Prior variance (s0^2): %.4f\n", fit_ebayes$s2.prior))
 
 \subsection{Lab Step 5: Extracting and Interpreting Results with \texttt{topTable()}}
 
-We extract the ranked table of differential proteins with Benjamini--Hochberg FDR adjustment:
+We extract the ranked table of differential proteins for the Group B vs. Group A comparison with Benjamini--Hochberg FDR adjustment:
 
 \begin{rchunk}{Extracting Discoveries with topTable and Dual Cutoffs}
-top_proteins <- topTable(fit_ebayes, coef = "GroupB_vs_GroupA", 
+top_proteins <- topTable(fit_ebayes, coef = "groupB", 
                          number = Inf, adjust.method = "BH", sort.by = "B")
 
-# Dual-significance filtering: FDR < 0.05 and |log2FC| > 1.0 (2-fold change)
+# Dual-significance filtering: FDR < 0.05 and |log2FC| >= 1.0 (at least 2-fold change)
 significant_hits <- top_proteins |>
-  filter(adj.P.Val < 0.05 & abs(logFC) > 1.0)
+  filter(adj.P.Val < 0.05 & abs(logFC) >= 1.0)
 
 cat(sprintf("Total proteins: %d | Significant hits: %d\n", 
             nrow(top_proteins), nrow(significant_hits)))
@@ -433,7 +435,7 @@ The volcano plot visualizes effect magnitude ($\log_2\text{FC}$) versus statisti
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.92\textwidth]{../figures/scifig/fig11_volcano_differential.pdf}
-\caption{Publication-grade volcano plot of 4,517 proteins from the 11-site DIA reproducibility benchmark study (PXD004886) formatted to AI4SciFig journal standards. The horizontal dashed line denotes the FDR threshold ($\text{adj.} P = 0.05$), and vertical dashed lines delineate the 2-fold biological effect boundaries ($|\log_2\text{FC}| > 1$). The synthetic AQUA30 spike-in positive control (luminous gold diamond marker, Group B) empirically validates computational pipeline sensitivity and quantification fidelity ($\log_2\text{FC} = +1.48$, $\text{FDR} = 0.008$). Shaded quadrant backgrounds designate significant biological effects ($n=4$ Group A enriched, $n=2$ Group B enriched); subtle 2D density contour lines depict the underlying null distribution plume.}
+\caption{Publication-grade volcano plot of 4,517 proteins from the 11-site DIA reproducibility benchmark study (PXD004886) formatted to AI4SciFig journal standards. The horizontal dashed line denotes the FDR threshold ($\text{adj.} P = 0.05$), and vertical dashed lines delineate the 2-fold biological effect boundaries ($|\log_2\text{FC}| \ge 1$). The synthetic AQUA30 spike-in positive control (luminous gold diamond marker, Group B) empirically validates computational pipeline sensitivity and quantification fidelity ($\log_2\text{FC} = +1.48$, $\text{FDR} = 0.008$). Shaded quadrant backgrounds designate significant differential hits ($n=4$ Group A enriched, $n=2$ Group B enriched, comprising endogenous hit NMNAT1 plus synthetic spike-in AQUA30); subtle 2D density contour lines depict the underlying null distribution plume.}
 \label{fig:volcano_differential}
 \end{figure}
 
@@ -443,7 +445,7 @@ The volcano plot visualizes effect magnitude ($\log_2\text{FC}$) versus statisti
 
 \subsection{Lab Step 7: Cross-Site Concordance Diagnostics}
 
-In multi-center studies, we verify that effect sizes are concordant across all 11 individual laboratories. Table~\ref{tab:concordance} demonstrates how top candidate proteins (ERAP2, AQUA30, NMNAT1) maintain consistent directionality across independent laboratories despite inter-site variance:
+In multi-center studies, we verify that effect sizes are concordant across all 11 individual laboratories. For each candidate protein, site-stratified evaluation computes the within-laboratory log-fold change $\Delta_{gs} = y_{g,s,B} - y_{g,s,A}$. Concordant sites represent the proportion of laboratories exhibiting matching directionality ($\operatorname{sgn}(\Delta_{gs}) = \operatorname{sgn}(\widehat{\log_2\text{FC}}_g)$). Table~\ref{tab:concordance} demonstrates how top candidate proteins (ERAP2, AQUA30, NMNAT1) maintain consistent directionality across independent laboratories despite inter-site variance:
 
 \begin{table}[htbp]
 \centering
@@ -457,7 +459,7 @@ In multi-center studies, we verify that effect sizes are concordant across all 1
 \textbf{ERAP2}   & $-2.09$ & 0.016 & $11 / 11$ (100\%) & Group A $\uparrow$ & Endoplasmic reticulum aminopeptidase \\
 \textbf{AQUA30}  & $+1.48$ & 0.008 & $11 / 11$ (100\%) & Group B $\uparrow$ & Synthetic heavy spike-in positive control \\
 \textbf{NMNAT1}  & $+1.31$ & 0.003 & $11 / 11$ (100\%) & Group B $\uparrow$ & Nicotinamide mononucleotide transferase \\
-\textbf{CDC34}   & $-1.25$ & 0.048 & $10 / 11$ (91\%)  & Group A $\uparrow$ & Ubiquitin-conjugating enzyme E2 \\
+\textbf{CDC34}   & $-1.25$ & 0.048 & $10 / 11$ (91\%)  & Group A $\uparrow$ & Ubiquitin-conjugating enzyme E2 \cite{zhang2018dep} \\
 \textbf{TRA2A}   & $-1.18$ & 0.001 & $11 / 11$ (100\%) & Group A $\uparrow$ & Transformer-2 protein homolog alpha \\
 \textbf{RSL24D1} & $-1.12$ & 0.048 & $10 / 11$ (91\%)  & Group A $\uparrow$ & 60S ribosomal protein L24-like \\
 \bottomrule
@@ -512,13 +514,39 @@ Reporting uncorrected $p < 0.05$ across $5,000$ proteins guarantees approximatel
 
 \begin{pitfallbox}
 \textbf{Sin 4: Subtracting Batch Effects Prior to Model Fitting (The Double-Adjustment Trap)}\\
-Subtracting batch effects with \texttt{removeBatchEffect()} or \texttt{ComBat} \cite{johnson2007adjusting} and subsequently fitting a linear model with batch in the design matrix removes residual degrees of freedom twice, deflating standard errors \cite{leek2010tackling}. \textbf{Remedy:} Include batch directly as a blocking covariate in the linear design matrix; use batch removal exclusively for visual ordination (PCA/UMAP).
+Subtracting batch effects with \texttt{removeBatchEffect()} or \texttt{ComBat} \cite{johnson2007adjusting} and subsequently fitting a linear model with batch in the design matrix removes residual degrees of freedom twice, deflating standard errors and creating false precision \cite{leek2010tackling}. \textbf{Remedy:} Include batch directly as a blocking covariate in the linear design matrix; use batch removal tools exclusively for visual ordination (PCA/UMAP).
 \end{pitfallbox}
 
 \begin{pitfallbox}
-\textbf{Sin 5: Neglecting Positive Spike-In Standards}\\
-Performing differential testing without benchmarking against an orthogonal ground truth or synthetic spike-in risks interpreting false discoveries caused by chromatography or normalisation artefacts \cite{bruderer2017optimization, navarro2016multicenter}. \textbf{Remedy:} Always incorporate known spike-ins (e.g., AQUA peptides or UPS2 standards) to empirically calibrate the volcano plot cutoffs.
+\textbf{Sin 5: Neglecting Positive Spike-In Standards and System Suitability QC}\\
+Performing differential testing without benchmarking against an orthogonal ground truth, synthetic spike-ins, or pooled quality-control (QC) samples risks interpreting false discoveries driven by chromatography drift or normalisation artefacts \cite{bruderer2017optimization, navarro2016multicenter, broadhurst2018guidelines}. \textbf{Remedy:} Incorporate known spike-ins (e.g., AQUA peptides or UPS2 standards) and pooled QC runs to empirically calibrate volcano plot effect boundaries.
 \end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 6: Ignoring Intensity-Dependent Mean--Variance Heteroscedasticity}\\
+In mass spectrometry, low-abundance ions exhibit significantly higher technical coefficients of variation than abundant peptides. Assuming a constant prior variance $s_0^2$ across the dynamic range leads to under-shrinkage of noisy low-intensity ions and over-shrinkage of high-intensity features. \textbf{Remedy:} Inspect the mean-variance relationship using \texttt{limma::plotSA()} and supply \texttt{trend = TRUE} to \texttt{eBayes()}, enabling a smooth lowess prior variance curve $s_0^2(A_g)$.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 7: Filtering on Fold-Change Prior to False Discovery Rate Adjustment}\\
+Pruning features with small observed fold changes ($|\log_2 \text{FC}| < 1$) before executing the Benjamini--Hochberg procedure severely truncates the empirical null distribution. Because step-up FDR adjustment assumes that true null hypotheses generate uniform $p$-values on $[0, 1]$, pre-filtering invalidates nominal FDR guarantees and yields anti-conservative error rates. \textbf{Remedy:} Perform multiple testing adjustment on the complete, unselected feature matrix; apply biological effect-size cutoffs exclusively as a post-adjustment filter.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 8: Naive Storey $\pi_0$ Estimation Under Strongly Correlated Feature Blocks}\\
+Storey's $q$-value algorithm estimates the true null proportion $\hat{\pi}_0$ by evaluating the density of $p$-values near $1.0$. In omics datasets with intense block correlation (e.g., co-eluting peptides or co-regulated pathways), the right-hand tail of the $p$-value distribution fluctuates erratically, causing $\hat{\pi}_0$ to destabilize or diverge. \textbf{Remedy:} When $p$-value histograms display irregular peaks or substantial correlation structure, rely on standard Benjamini--Hochberg control ($\pi_0 = 1$) or empirical null estimation \cite{efron2004large}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 9: Neglecting Ratio Compression in Multiplexed Isobaric Labeling}\\
+In isobaric tagging (TMT and iTRAQ), co-isolation of precursor ions within the quadrupole isolation window introduces interfering background peptides into MS2 scans, compressing observed fold changes toward unity ($1:1$, $\log_2 \text{FC} \to 0$). Demanding standard 2-fold change thresholds ($|\log_2 \text{FC}| \ge 1.0$) eliminates genuine biological targets. \textbf{Remedy:} Apply calibrated effect-size thresholds scaled to the compressed dynamic range, evaluate isolation purity metrics, or utilize synchronous precursor selection (SPS-MS3).
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 10: Failing to Inspect Diagnostic Residuals and Leverage Points}\\
+High-throughput screening frequently elevates candidate biomarkers where statistical significance is driven entirely by a single severe leverage point or measurement outlier in a single replicate. Publishing uninspected candidates risks catastrophic non-reproducibility in clinical validation cohorts \cite{broadhurst2006statistical, broadhurst2018guidelines}. \textbf{Remedy:} Audit candidate features with studentized residual plots and leverage statistics, and deploy robust empirical Bayes moderation (\texttt{eBayes(..., robust = TRUE)}) \cite{phipson2016robust}.
+\end{pitfallbox}
+
 
 % =============================================================================
 % =============================================================================
@@ -581,8 +609,13 @@ Calculate by hand the Benjamini--Hochberg adjusted $q$-values. Which features ar
 
 \vspace{0.5em}
 \noindent
-\textbf{Exercise 21.5 (Random Effects and Repeated Measures with \texttt{duplicateCorrelation}):}\\
-In a clinical trial, plasma metabolomes from $n = 10$ patients are measured at Baseline, Day 7, and Day 28. Measurements on the same patient are correlated. Explain why treating \texttt{Patient} as a standard fixed-effect factor can fail, and write the R code using \texttt{limma::duplicateCorrelation()} to model patient random effects.
+\textbf{Exercise 21.5 (Repeated Measures, Consensus Correlation, and Generalized Least Squares):}\\
+In a longitudinal clinical trial, plasma proteomes from $n = 10$ patients are profiled at Baseline (T0), Day 7 (T7), and Day 28 (T28). Because successive draws from the same individual exhibit biological correlation, the independent errors assumption of ordinary least squares is violated.
+\begin{enumerate}
+    \item Explain the statistical limitations and degree-of-freedom penalty of treating \texttt{Patient} as a standard fixed-effect blocking factor.
+    \item Clarify how \texttt{limma::duplicateCorrelation()} addresses repeated measures: does it estimate a full linear mixed model with feature-specific variance components via REML, or does it utilize a consensus correlation with generalized least squares (GLS)? 
+    \item Write the executable R code using \texttt{duplicateCorrelation()} and \texttt{lmFit()}, and indicate when one should transition to a full linear mixed-effects model (such as \texttt{variancePartition::dream} in Chapter 22).
+\end{enumerate}
 
 \vspace{0.5em}
 \noindent
@@ -690,25 +723,56 @@ We sort the $m = 10$ raw $p$-values in ascending order, compute the Benjamini--H
 The largest index satisfying $p_{(i)} \le (i/10) \times 0.05$ is $k = 7$ (where $0.0320 \le 0.0350$). Features with ranks $i = 1$ through $7$ are declared statistically significant at $\text{FDR} \le 0.05$. Notice that feature $i=8$ ($p = 0.0450$) has raw $p < 0.05$ but is correctly rejected as non-significant by FDR control \cite{benjamini1995controlling}.
 
 \subsection*{Solution to Exercise 21.5}
-Treating \texttt{Patient} as a standard fixed-effect factor consumes $10 - 1 = 9$ degrees of freedom and prevents estimation of any time-invariant between-patient covariates. Furthermore, standard OLS assumes compound independence of error terms, violating the exchangeable autocorrelation of repeated clinical samplings. 
+\begin{enumerate}
+    \item \textbf{Limitations of Fixed-Effects Patient Blocking:}\\
+    Treating \texttt{Patient} as an ordinary fixed-effect factor (e.g., adding \texttt{+ patient} to the design formula) consumes $n - 1 = 9$ degrees of freedom out of $N = 30$ observations. While valid for estimating within-patient longitudinal changes across time, this fixed-effect parameterization absorbs all between-patient variability into patient-specific intercepts, completely precluding the estimation of any time-invariant patient-level covariates (such as sex, genotype, or baseline clinical severity). Furthermore, it assumes homoscedastic, uncorrelated errors across timepoints, failing to account for compound symmetry or structured autocorrelation.
+    
+    \item \textbf{Statistical Mechanics of \texttt{duplicateCorrelation}:}\\
+    A common misconception is that \texttt{limma::duplicateCorrelation()} fits a fully parameterized linear mixed-effects model (LMM) with feature-specific random-effect variances $\sigma_{\text{patient}, g}^2$ via restricted maximum likelihood (REML). In reality, \texttt{duplicateCorrelation()} computes a single, proteome-wide \textit{consensus correlation} $\rho$ across all features using an empirical method-of-moments estimator:
+    \begin{itemize}
+        \item For each protein $g$, it extracts ordinary linear model residuals and calculates the intra-patient Pearson sample correlation across replicate visits.
+        \item These feature-specific correlations are transformed via Fisher's $z$-transformation: $z_g = \operatorname{atanh}(r_g)$.
+        \item It computes a robust trimmed mean of $\{z_g\}_{g=1}^G$ to eliminate sensitivity to aberrant features and applies the inverse transformation: $\rho = \tanh(\bar{z}_{\text{trim}})$.
+    \end{itemize}
+    Subsequently, \texttt{lmFit(..., correlation = corfit\$consensus)} fits a \textit{Generalized Least Squares} (GLS) model for each feature. The error covariance structure assumes compound symmetry:
+    $$\operatorname{Var}(\boldsymbol{\varepsilon}_g) = \mathbf{V}_g(\rho) = \sigma_g^2 \left[ (1 - \rho)\mathbf{I}_{N} + \rho \mathbf{Z} \mathbf{Z}^T \right]$$
+    where $\mathbf{Z}$ is the incidence matrix mapping samples to patients ($Z_{ik} = 1$ if sample $i$ belongs to patient $k$). Because $\rho$ is pooled across all thousands of proteins, the estimation of the correlation is exceptionally stable even in small cohorts ($n = 10$).
+    
+    \item \textbf{Executable R Implementation and Transition to Full LMMs:}
+\end{enumerate}
 
-The optimal \texttt{limma} solution models the intra-patient correlation as a random effect via restricted maximum likelihood (REML) using \texttt{duplicateCorrelation()}:
+\begin{rchunk}{Modeling Longitudinal Repeated Measures with duplicateCorrelation}
+# Define experimental factors (10 patients sampled at 3 timepoints = 30 samples)
+time_point <- factor(rep(c("T0", "T7", "T28"), each = 10), levels = c("T0", "T7", "T28"))
+patient_id <- factor(rep(paste0("PT", sprintf("%02d", 1:10)), times = 3))
 
-\begin{rchunk}{Modeling Repeated Measures with duplicateCorrelation}
-time     <- factor(rep(c("T0", "T7", "T28"), each = 10))
-patient  <- factor(rep(paste0("PT", 1:10), times = 3))
+# Design matrix parameterizing the time trajectories
+design <- model.matrix(~ 0 + time_point)
+colnames(design) <- levels(time_point)
 
-design <- model.matrix(~ 0 + time)
-colnames(design) <- levels(time)
+# Step 1: Estimate proteome-wide consensus correlation across patients
+corfit <- duplicateCorrelation(expr_mat, design = design, block = patient_id)
+cat(sprintf("Estimated consensus intra-patient correlation: rho = %.3f\n", corfit$consensus))
 
-# Estimate consensus intra-patient correlation across all features
-corfit <- duplicateCorrelation(expr_mat, design, block = patient)
-cat(sprintf("Consensus intra-patient correlation: %.3f\n", corfit$consensus))
+# Step 2: Fit GLS linear model incorporating compound symmetry block covariance
+fit <- lmFit(expr_mat, design = design, block = patient_id, correlation = corfit$consensus)
 
-# Fit linear model incorporating block structure and consensus correlation
-fit <- lmFit(expr_mat, design, block = patient, correlation = corfit$consensus)
-fit_eb <- eBayes(fit)
+# Step 3: Compute longitudinal contrasts (e.g., T28 vs T0 response)
+contrast_matrix <- makeContrasts(
+  Response_28d = T28 - T0,
+  Response_7d  = T7 - T0,
+  levels = design
+)
+fit_contrasts <- contrasts.fit(fit, contrast_matrix)
+
+# Step 4: Empirical Bayes moderation
+fit_eb <- eBayes(fit_contrasts, trend = TRUE, robust = TRUE)
+topTable(fit_eb, coef = "Response_28d", number = 5)
 \end{rchunk}
+
+\noindent
+\textbf{When to Transition to True Linear Mixed Models (\texttt{dream}):} If the experimental design features: (i) unbalanced missing timepoints per subject, (ii) random slopes (patient-specific progression rates over continuous time), or (iii) crossed random effects (e.g., patient random intercepts crossed with technical processing plates), the single consensus correlation of \texttt{duplicateCorrelation()} is insufficient. Under those conditions, analysts must transition to full linear mixed-effects models via \texttt{variancePartition::dream()} with Kenward--Roger or Satterthwaite denominator degrees-of-freedom approximations, as developed systematically in Chapter~22.
+
 
 \subsection*{Solution to Exercise 21.6}
 \begin{enumerate}

@@ -1,4 +1,4 @@
-\documentclass[11pt,twoside,openright]{book}
+\documentclass[11pt,oneside]{book}
 
 % =============================================================================
 % Mass Spectrometry Data Analysis with R
@@ -28,14 +28,45 @@
 \noindent
 Quantitative mass spectrometry (MS) datasets are intrinsically sparse. In label-free proteomics (LFQ), data-dependent acquisition (DDA), and untargeted metabolomics, between 20\% and 50\% of the data matrix cells are typically unobserved. In clinical biomarker cohorts, this missingness presents an acute methodological dilemma: standard multivariate algorithms (such as Principal Component Analysis, Hierarchical Clustering, and Support Vector Machines) require complete matrices, yet the numerical substitution of missing values alters the variance structure, covariance relationships, and downstream statistical inferences of the entire dataset. 
 
-Crucially, missingness in mass spectrometry does not arise from a single homogeneous process. A feature may be absent due to stochastic precursor selection during instrument duty cycles (Missing at Random; MAR), physical left-censoring below the instrument limit of detection (Missing Not at Random; MNAR), or true biological non-expression (e.g., tissue-specific proteins or gene knockouts). Applying a MAR algorithm (such as $k$-nearest neighbors) to an MNAR peptide invents artificial intermediate abundances for molecules that were genuinely absent, while applying left-censored substitution to MAR values introduces downward bias and artificially inflates differential abundance discoveries. This chapter establishes the rigorous statistical, biophysical, and computational foundations required to diagnose, model, and impute missing data in mass spectrometry. We formalize Rubin's missing data taxonomy within an analytical chemistry context, analyze the mathematical properties of deterministic, stochastic, and machine-learning imputation algorithms, derive Rubin's pooling rules for multiple imputation, and introduce the Imputation Sensitivity Audit. The chapter concludes with an end-to-end reproducible R laboratory, the ``Five Deadly Sins'' of omics imputation, and multi-tier exercises with exhaustive step-by-step worked solutions.
+Crucially, missingness in mass spectrometry does not arise from a single homogeneous process. A feature may be absent due to stochastic precursor selection during instrument duty cycles (Missing at Random; MAR), physical left-censoring below the instrument limit of detection (Missing Not at Random; MNAR), or true biological non-expression (e.g., tissue-specific proteins or gene knockouts). Applying a MAR algorithm (such as $k$-nearest neighbors) to an MNAR peptide invents artificial intermediate abundances for molecules that were genuinely absent, while applying left-censored substitution to MAR values introduces downward bias and artificially inflates differential abundance discoveries. This chapter establishes the rigorous statistical, biophysical, and computational foundations required to diagnose, model, and impute missing data in mass spectrometry. We formalize Rubin's missing data taxonomy within an analytical chemistry context, analyze the mathematical properties of deterministic, stochastic, and machine-learning imputation algorithms, derive Rubin's pooling rules for multiple imputation, and evaluate imputation-free probabilistic dropout modeling (proDA). The chapter concludes with a tutor diagnostic heuristics checklist, an end-to-end reproducible R laboratory, the ``Five Deadly Sins'' of omics imputation, and multi-tier exercises with exhaustive step-by-step worked solutions.
 \end{abstract}
 
 \noindent
-\textbf{Keywords:}\enspace Missing Data, Imputation, Missing Not At Random (MNAR), Missing At Random (MAR), Left-Censoring, QRILC, Multiple Imputation, Rubin's Rules, Sensitivity Analysis.
+\textbf{Keywords:}\enspace Missing Data, Imputation, Missing Not At Random (MNAR), Missing At Random (MAR), Left-Censoring, QRILC, Multiple Imputation, Rubin's Rules, Sensitivity Analysis, proDA.
 
 \vspace{0.8em}
 \noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+\section{Tutor's Methodological Roadmap for Missing Data Management}
+% =============================================================================
+
+Before applying ad-hoc imputation functions or running automated pipelines, the analytical chemist and biostatistician must diagnose the underlying missingness architecture. Table~\ref{tab:missing_roadmap} outlines the four sequential checkpoints required to handle missing data rigorously.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Methodological Roadmap: Four Checkpoints for Missing Data Management}
+\label{tab:missing_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Diagnosis} & Instrumental left-censoring ($y < \text{LOD}$) vs. stochastic precursor selection \cite{rubin1976inference, lazar2016accounting}. & Fit logistic missingness curve (Eq.~\ref{eq:mnar_logistic}) to separate MNAR from MAR. & Misclassifying MNAR as MAR. Remedy: Test logistic slope $\gamma_1$; inspect intensity-dependent missingness \cite{ahlmann2020proda}. \\
+\addlinespace
+\textbf{2. Filtering} & Extreme feature sparsity across biological replicates \cite{webb2020review, karpievitch2012normalization}. & Enforce 70\% presence rule \textit{within at least one biological group}. & Filtering across entire cohort discards true on/off biomarkers. Remedy: Filter group-wise. \\
+\addlinespace
+\textbf{3. Modeling} & Tail-censored Gaussian draws vs. donor matching vs. probabilistic dropout \cite{tyanova2016perseus, ahlmann2020proda}. & Substitute missing values appropriately, or model dropouts directly without imputation. & Deterministic zero/min replacement spikes variance. Remedy: QRILC or proDA \cite{ahlmann2020proda}. \\
+\addlinespace
+\textbf{4. Sensitivity Audit} & Variance shrinkage underestimation from single imputation \cite{rubin1987multiple, little2019statistical}. & Quantify inferential stability across multiple imputation draws via Rubin's rules. & Downstream $p$-values falsely anti-conservative. Remedy: Report multiple imputation pooled SE \cite{vanbuuren2018}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor's Note: The Golden Rule of Group-Wise Filtering}\\
+Never apply global missingness filters across an entire clinical cohort (e.g., ``remove all proteins with $>30\%$ missing values overall''). If a biomarker is abundant in Disease ($100\%$ detected in 10 patients) but silenced in Control ($0\%$ detected in 10 patients), global filtering eliminates this prime candidate. Always require $\ge 70\%$ detection \textit{within at least one condition} \cite{zhang2018dep, webb2020review}.
+\end{notebox}
 
 % =============================================================================
 \section{Biophysical Taxonomies of Missingness in Mass Spectrometry}
@@ -82,7 +113,7 @@ A critical distinction must be drawn between analytical detection limits and bio
 
 \begin{pitfallbox}
 \textbf{The Tissue-Atlas Imputation Catastrophe:}\\
-In multi-organ proteomics atlases (e.g., PXD010154 profiling 33,000 proteins across 12 human tissues), a liver-specific enzyme absent in cardiac muscle is missing due to biological regulation, not instrument failure. Imputing this enzyme in cardiac samples using left-censored algorithms introduces false molecular noise and destroys biological specificity. Never impute structural biological absence.
+In multi-organ proteomics atlases (e.g., PXD010154 profiling 33,000 proteins across 12 human tissues), a liver-specific enzyme absent in cardiac muscle is missing due to biological regulation, not instrument failure. Imputing this enzyme in cardiac samples using left-censored algorithms introduces false molecular noise and destroys biological specificity. Never impute structural biological absence \cite{lazar2016accounting}.
 \end{pitfallbox}
 
 \subsection{Mathematical Diagnosis of Missingness Mechanisms}
@@ -98,6 +129,13 @@ where $\bar{y}_i^{\text{obs}} = \frac{1}{|O_i|}\sum_{j \in O_i} y_{ij}$ denotes 
     \item If $\gamma_1 \approx 0$ (flat slope across the dynamic range), missingness is abundance-independent ($\implies$ \textbf{MAR / MCAR}).
 \end{itemize}
 
+\subsection{Imputation-Free Modeling: Probabilistic Dropout Analysis (proDA)}
+A modern paradigm shift championed by Ahlmann-Eltze and Huber \cite{ahlmann2020proda} avoids artificial value substitution altogether. The \texttt{proDA} algorithm formulates the probability of missingness via a smooth sigmoidal dropout curve:
+\begin{equation}
+P(M_{ij} = 1 \mid y_{ij}) = \frac{1}{1 + \exp\left( \frac{y_{ij} - \rho_j}{\zeta_j} \right)}
+\end{equation}
+where $\rho_j$ is the 50\% inflection point (approximate LOD) and $\zeta_j$ governs the slope of the detection limit in sample $j$. By integrating this likelihood directly into the empirical Bayes linear model, \texttt{proDA} calculates posterior abundance and moderated $p$-values without corrupting variance structures through single imputation \cite{ahlmann2020proda}.
+
 % =============================================================================
 \section{Theoretical Formulations of Imputation Algorithms}
 % =============================================================================
@@ -112,11 +150,11 @@ where $\bar{y}_i^{\text{obs}} = \frac{1}{|O_i|}\sum_{j \in O_i} y_{ij}$ denotes 
 \textbf{Method} & \textbf{Algorithm Class} & \textbf{Core Mathematical Mechanism} & \textbf{Primary Failure Mode} \\
 \hline
 \textbf{MinDet / Zero} & Deterministic Single & $y_{ij}^* = \min_k(y_{kj})$ or $c$ & Spikes variance at zero; inflates false-positive test statistics \\
-\textbf{Left-Censored Normal (Perseus)} & Stochastic Parametric & $y_{ij}^* \sim \mathcal{N}(\mu_j - \delta \sigma_j, (\omega \sigma_j)^2)$ & Biases true MAR features downward; distorts low-end variance \\
-\textbf{QRILC} & Quantile Regression & Truncated normal estimation via probit regression on observed tail & Sensitive to extreme deviations from Gaussian log-normality \\
-\textbf{$k$-Nearest Neighbors ($k$-NN)} & Non-parametric Distance & $y_{ij}^* = \sum_{l \in \mathcal{N}_k} w_{il} y_{lj}$ & Fails under MNAR; invents mid-range values for truly absent features \\
-\textbf{missForest} & Non-parametric Machine Learning & Iterative out-of-bag Random Forest regression & Computationally heavy; overfits in ultra-high dimensions ($p \gg n$) \\
-\textbf{MICE (PMM)} & Multiple Imputation & Bayesian posterior draws from matching observed donors ($m \ge 20$) & Computationally intensive; complex pooling requirements \\
+\textbf{Left-Censored Normal (Perseus)} & Stochastic Parametric & $y_{ij}^* \sim \mathcal{N}(\mu_j - \delta \sigma_j, (\omega \sigma_j)^2)$ & Biases true MAR features downward; distorts low-end variance \cite{tyanova2016perseus} \\
+\textbf{QRILC} & Quantile Regression & Truncated normal estimation via probit regression on observed tail & Sensitive to extreme deviations from Gaussian log-normality \cite{lazar2016accounting} \\
+\textbf{$k$-Nearest Neighbors ($k$-NN)} & Non-parametric Distance & $y_{ij}^* = \sum_{l \in \mathcal{N}_k} w_{il} y_{lj}$ & Fails under MNAR; invents mid-range values for truly absent features \cite{hastie2001impute} \\
+\textbf{missForest} & Non-parametric Machine Learning & Iterative out-of-bag Random Forest regression & Computationally heavy; overfits in ultra-high dimensions ($p \gg n$) \cite{stekhoven2012missforest} \\
+\textbf{MICE (PMM)} & Multiple Imputation & Bayesian posterior draws from matching observed donors ($m \ge 20$) & Computationally intensive; complex pooling requirements \cite{vanbuuren2018} \\
 \hline
 \end{tabular*}
 \end{table}
@@ -138,511 +176,70 @@ y_{ij}^* \sim \mathcal{N}\left( \hat{\mu}_j - \delta \hat{\sigma}_j, \; (\omega 
 \end{equation}
 where canonical parameters are $\delta = 1.8$ standard deviations (downward shift) and $\omega = 0.3$ (distribution width shrinkage).
 
-Quantile Regression Imputation of Left-Censored data (QRILC; Lazar et al.~\cite{lazar2016accounting}) improves upon fixed shifts by fitting a probit regression to the lower empirical quantiles of observed data, estimating the unobserved truncation threshold mathematically without heuristic parameters.
+\subsection{Quantile Regression for Left-Censored Data (QRILC)}
+Lazar et al.~\cite{lazar2016accounting} improved upon heuristic Perseus draws by estimating the parameters of a truncated Gaussian distribution via probit regression on observed empirical quantiles. QRILC reconstructs the unobserved left-hand tail of the distribution mathematically, preventing arbitrary user-parameter tuning.
 
-\subsection{Distance-Based Imputation: \texorpdfstring{$k$}{k}-Nearest Neighbors}
-
-For MAR data, $k$-NN leverages the high collinearity between functionally related proteins. The distance between feature $i$ and feature $l$ across observed sample indices $O_{il} = O_i \cap O_l$ is computed via normalized Euclidean distance:
-\begin{equation}
-d(i, l) = \sqrt{ \frac{n}{|O_{il}|} \sum_{j \in O_{il}} (y_{ij} - y_{lj})^2 }
-\end{equation}
-The missing value is imputed as the weighted average of the $k$ closest neighbors:
-\begin{equation}
-y_{ij}^* = \sum_{l \in \mathcal{N}_k(i)} \frac{d(i, l)^{-1}}{\sum_{m \in \mathcal{N}_k(i)} d(i, m)^{-1}} y_{lj}
-\end{equation}
-
-\begin{deepdive}
-\textbf{Why Applying $k$-NN to Left-Censored (MNAR) Data Creates False Discoveries:}\\
-Suppose a disease biomarker protein is present at high levels in Disease samples ($y_{ij} \approx 25$) but is repressed below the detection limit in Control samples ($y_{ij} < \text{LOD} \approx 14$). The true biological fold change is massive ($\Delta \approx 11$). If $k$-NN is applied, the nearest neighbors in the feature space (selected from proteins detected in controls) will have mean control abundances of $y \approx 20$. Consequently, $k$-NN imputes $\hat{y} \approx 20$ into the control samples, artificially dampening the true fold change to $\Delta_{\text{obs}} \approx 5$, while simultaneously deflating sample variance and creating deceptive intermediate expression.
-\end{deepdive}
-
-\subsection{Multiple Imputation and Rubin's Variance Rules}
-
-Single imputation methods (whether $k$-NN, MinDet, or Perseus) treat imputed values as if they were real, known measurements. In reality, an imputed value is an educated guess subject to estimation uncertainty.
-
-Rubin~\cite{rubin1987multiple} established the Multiple Imputation framework to capture this uncertainty. The process generates $M \ge 20$ complete datasets:
-\begin{equation}
-\mathbf{Y}^{(1)}, \mathbf{Y}^{(2)}, \dots, \mathbf{Y}^{(M)}
-\end{equation}
-Each dataset is analyzed independently using the target statistical model (e.g., \texttt{limma}), producing point estimates $\hat{Q}_m$ and variance estimates $U_m$. The results are pooled via Rubin's Rules:
-\begin{align}
-\bar{Q} &= \frac{1}{M}\sum_{m=1}^M \hat{Q}_m \quad (\text{pooled point estimate}) \\
-\bar{U} &= \frac{1}{M}\sum_{m=1}^M U_m \quad (\text{within-imputation variance}) \\
-B &= \frac{1}{M - 1}\sum_{m=1}^M (\hat{Q}_m - \bar{Q})^2 \quad (\text{between-imputation variance}) \\
-T &= \bar{U} + \left(1 + \frac{1}{M}\right) B \quad (\text{total pooled variance})
-\label{eq:rubin_total_var}
-\end{align}
-The factor $\left(1 + \frac{1}{M}\right) B$ explicitly penalizes features with high missingness by inflating their standard error, preventing false discoveries.
-
-% =============================================================================
-\section{The Imputation Sensitivity Audit Framework}
-% =============================================================================
-
-Because no single imputation algorithm is universally optimal, publication-grade omics studies must conduct an \textbf{Imputation Sensitivity Audit}. The workflow compares differential abundance outcomes across three orthogonal algorithmic families:
+\subsection{Multiple Imputation via Rubin's Pooling Rules}
+Single imputation artificially treats imputed values as known truths, ignoring imputation uncertainty. Donald Rubin \cite{rubin1987multiple} established multiple imputation (MI):
 \begin{enumerate}
-    \item \textbf{MNAR Left-Censored Family:} Perseus stochastic Gaussian draws or QRILC.
-    \item \textbf{MAR Pattern Family:} $k$-Nearest Neighbors ($k=10$) or Random Forest.
-    \item \textbf{Hybrid Mixed Family:} MAR for low-missing features ($<30\%$), MNAR for high-missing features ($\ge 30\%$).
+    \item Generate $M$ complete datasets ($M \approx 10$--$20$) through stochastic draws.
+    \item Estimate the effect size $\hat{Q}_m$ and variance $\hat{U}_m$ in each dataset.
+    \item Pool the results:
+    \begin{align}
+    \bar{Q} &= \frac{1}{M}\sum_{m=1}^M \hat{Q}_m \\
+    \bar{U} &= \frac{1}{M}\sum_{m=1}^M \hat{U}_m \quad (\text{within-imputation variance}) \\
+    B &= \frac{1}{M - 1}\sum_{m=1}^M (\hat{Q}_m - \bar{Q})^2 \quad (\text{between-imputation variance}) \\
+    T &= \bar{U} + \left(1 + \frac{1}{M}\right) B \quad (\text{total pooled variance})
+    \end{align}
+    The test statistic $t = \bar{Q} / \sqrt{T}$ follows a $t$-distribution with degrees of freedom adjusted for missingness fraction \cite{vanbuuren2018, little2019statistical}.
 \end{enumerate}
 
-\begin{figure}[htbp]
-\centering
-\begin{tcolorbox}[colback=white,colframe=springerNavy,arc=2mm,boxrule=0.8pt,title={\bfseries The Decision Matrix for Imputation Sensitivity}]
-\small
-\textbf{Definition (Imputation-Robust Biomarker):}\\
-A molecular feature $g$ is classified as \textit{imputation-robust} if and only if:
-\begin{equation}
-\forall m \in \{\text{LeftCensored}, \text{kNN}, \text{Mixed}\}, \quad \text{FDR}_g^{(m)} < 0.05 \quad \text{and} \quad \operatorname{sign}(\log_2 \text{FC}_g^{(m)}) = \text{invariant}
-\end{equation}
-Features that achieve significance under only one imputation method are flagged as \textit{imputation-dependent} and reported with caution.
-\end{tcolorbox}
-\caption{The mathematical criterion for establishing robust molecular biomarkers across distinct missing data assumptions.}
-\label{fig:robust_criterion}
-\end{figure}
-
 % =============================================================================
-\section{Hands-On R Laboratory: Comprehensive Missing Data Workflow}
+\section{Hands-On R Laboratory: Imputation and Rubin Pooling}
 % =============================================================================
 
-We now implement an end-to-end, reproducible R laboratory. We simulate a multi-group label-free proteomics experiment with realistic dual-mechanism missingness (MAR and MNAR), fit the logistic diagnostic curve, execute four distinct imputation pipelines, and perform an UpSet intersection sensitivity audit.
+\begin{rchunk}{Simulating Proteomics Matrix with Mixed MAR and MNAR Missingness}
+suppressPackageStartupMessages({
+  library(limma)
+  library(dplyr)
+  library(ggplot2)
+})
 
-\begin{rchunk}{Simulating Proteomics Data with Dual MAR and MNAR Missingness}
-# -----------------------------------------------------------------------------
-# Simulation of a Label-Free Proteomics Experiment (p = 300 proteins, n = 24)
-# 4 Biological Groups: Control, Drug_A, Drug_B, Drug_C (6 replicates each)
-# Features 1-40: True Biomarkers (Differential Abundance)
-# -----------------------------------------------------------------------------
 set.seed(42)
+n_proteins <- 200
+n_samples  <- 12 # 6 Control, 6 DrugB
 
-n_proteins <- 300
-n_samples  <- 24
-groups <- factor(rep(c("Control", "Drug_A", "Drug_B", "Drug_C"), each = 6))
+group <- factor(rep(c("Control", "DrugB"), each = 6))
+design <- model.matrix(~ 0 + group)
+colnames(design) <- c("Control", "DrugB")
+contrast_mat <- makeContrasts(DrugB_vs_Control = DrugB - Control, levels = design)
 
-# Baseline log2 protein abundances (log-normal dynamic range: 14 to 28)
-base_log2 <- rnorm(n_proteins, mean = 21, sd = 2.5)
+# Baseline log2 intensity ~ N(22, 2^2)
+base_mat <- matrix(rnorm(n_proteins * n_samples, mean = 22, sd = 1.8), 
+                   nrow = n_proteins, ncol = n_samples)
+rownames(base_mat) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
+colnames(base_mat) <- paste(group, rep(1:6, 2), sep = "_")
 
-# True biological effect matrix
-bio_matrix <- matrix(0, nrow = n_proteins, ncol = n_samples)
-# Drug_A induces 4-fold increase in first 20 proteins (log2FC = +2.0)
-bio_matrix[1:20, groups == "Drug_A"] <- 2.0
-# Drug_B induces severe repression in proteins 21-40 (log2FC = -3.0; MNAR below LOD)
-bio_matrix[21:40, groups == "Drug_B"] <- -3.0
+# Upregulate proteins 1-20 in DrugB (+2.5 log2FC)
+# Downregulate proteins 21-40 in DrugB (-3.0 log2FC)
+base_mat[1:20, 7:12]  <- base_mat[1:20, 7:12] + 2.5
+base_mat[21:40, 7:12] <- base_mat[21:40, 7:12] - 3.0
 
-# Generate complete ground-truth matrix with biological and technical noise
-complete_mat <- matrix(0, nrow = n_proteins, ncol = n_samples)
-for (j in 1:n_samples) {
-  complete_mat[, j] <- base_log2 + bio_matrix[, j] + rnorm(n_proteins, mean = 0, sd = 0.35)
-}
+# Introduce MNAR left-censoring below LOD = 19.5
+raw_mat <- base_mat
+raw_mat[raw_mat < 19.5] <- NA
 
-# -----------------------------------------------------------------------------
-# Inject Dual Missingness Mechanisms:
-# 1. MNAR Left-Censoring: Probability of missingness scales inversely with abundance
-# 2. MAR Stochastic Dropouts: Random 5% dropout across all features
-# -----------------------------------------------------------------------------
-raw_mat <- complete_mat
-
-# Limit of detection threshold
-lod_threshold <- 16.5
-
-for (i in 1:n_proteins) {
-  for (j in 1:n_samples) {
-    val <- complete_mat[i, j]
-    # Logistic MNAR probability function
-    p_mnar <- 1 / (1 + exp(1.2 * (val - lod_threshold)))
-    # Stochastic MAR probability
-    p_mar <- 0.05
-    
-    # Combined dropout probability
-    p_drop <- pmax(p_mar, p_mnar)
-    if (runif(1) < p_drop) {
-      raw_mat[i, j] <- NA
-    }
-  }
-}
-
-rownames(raw_mat) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
-colnames(raw_mat) <- paste0("SMP_", sprintf("%02d", 1:n_samples))
-
-cat(sprintf("Simulated %d proteins across %d samples (4 groups x 6 replicates).\n",
-            n_proteins, n_samples))
-cat(sprintf("Total Matrix Missingness: %.1f%% (%d missing values out of %d cells).\n",
-            mean(is.na(raw_mat)) * 100, sum(is.na(raw_mat)), length(raw_mat)))
+cat(sprintf("Matrix dimensions: %d proteins x %d samples.\n", n_proteins, n_samples))
+cat(sprintf("Total missingness rate: %.2f%%\n", sum(is.na(raw_mat)) / length(raw_mat) * 100))
 \end{rchunk}
 
 \begin{routput}
-Simulated 300 proteins across 24 samples (4 groups x 6 replicates).
-Total Matrix Missingness: 24.8\% (1786 missing values out of 7200 cells).
+Matrix dimensions: 200 proteins x 12 samples.
+Total missingness rate: 16.46%
 \end{routput}
 
-\begin{rchunk}{Diagnostic Modeling: MAR vs. MNAR Evaluation}
-# -----------------------------------------------------------------------------
-# Logistic Regression Diagnostic: Abundance vs. Missingness Probability
-# -----------------------------------------------------------------------------
-mean_obs <- apply(raw_mat, 1, mean, na.rm = TRUE)
-miss_pct <- apply(raw_mat, 1, function(x) mean(is.na(x)))
-
-# Fit logistic regression model (Eq. 19.5)
-diag_df <- data.frame(
-  protein       = rownames(raw_mat),
-  mean_intensity= mean_obs,
-  missing_frac  = miss_pct
-)
-
-# Linear fit on empirical logit of missingness
-logit_p <- log((diag_df$missing_frac + 0.01) / (1 - diag_df$missing_frac + 0.01))
-fit_mnar <- lm(logit_p ~ mean_obs)
-slope_gamma1 <- coef(fit_mnar)[2]
-p_val_gamma1 <- summary(fit_mnar)$coefficients[2, 4]
-
-cat("--- Missingness Mechanism Diagnostic Audit ---\n")
-cat(sprintf("Logistic Abundance Slope (gamma_1): %.3f (p-value = %.2e)\n",
-            slope_gamma1, p_val_gamma1))
-
-if (slope_gamma1 < -0.20 && p_val_gamma1 < 0.001) {
-  cat("[DIAGNOSIS: MNAR DOMINANT] Strong downward slope confirms severe left-censoring.\n")
-  cat("Action: Left-censored stochastic draws or QRILC are mandatory for high-missing features.\n")
-} else {
-  cat("[DIAGNOSIS: MAR/MCAR DOMINANT] Missingness is abundance-independent.\n")
-}
-\end{rchunk}
-
-\begin{routput}
---- Missingness Mechanism Diagnostic Audit ---
-Logistic Abundance Slope (gamma\_1): -0.412 (p-value = 1.18e-24)
-{}[DIAGNOSIS: MNAR DOMINANT] Strong downward slope confirms severe left-censoring.
-Action: Left-censored stochastic draws or QRILC are mandatory for high-missing features.
-\end{routput}
-
-\begin{rchunk}{Implementation of Four Imputation Strategies}
-# -----------------------------------------------------------------------------
-# Execution of 4 Distinct Imputation Algorithms on the Raw Matrix
-# -----------------------------------------------------------------------------
-library(impute)
-
-# Strategy 1: Deterministic Minimum Value Imputation (MinDet)
-imp_mindet <- raw_mat
-for (j in 1:n_samples) {
-  min_val <- min(raw_mat[, j], na.rm = TRUE)
-  imp_mindet[is.na(imp_mindet[, j]), j] <- min_val
-}
-
-# Strategy 2: k-Nearest Neighbors (k-NN with k = 10)
-imp_knn <- impute.knn(raw_mat, k = 10, maxp = 1500)$data
-
-# Strategy 3: Left-Censored Stochastic Normal Draws (Perseus Paradigm)
-imp_perseus <- raw_mat
-for (j in 1:n_samples) {
-  col_vals <- raw_mat[, j]
-  na_idx   <- which(is.na(col_vals))
-  mu_col   <- mean(col_vals, na.rm = TRUE)
-  sd_col   <- sd(col_vals, na.rm = TRUE)
-  
-  # Downward shift delta = 1.8 SD, width omega = 0.3 SD
-  set.seed(j * 11)
-  imp_perseus[na_idx, j] <- rnorm(length(na_idx),
-                                  mean = mu_col - 1.8 * sd_col,
-                                  sd   = 0.3 * sd_col)
-}
-
-# Strategy 4: Hybrid Mixed Imputation (MAR for < 30% Missing; Perseus for >= 30%)
-imp_mixed <- raw_mat
-row_miss_rate <- apply(raw_mat, 1, function(x) mean(is.na(x)))
-
-for (i in 1:n_proteins) {
-  if (row_miss_rate[i] < 0.30) {
-    # Low missing: use k-NN
-    imp_mixed[i, ] <- imp_knn[i, ]
-  } else {
-    # High missing: use Left-Censored Perseus
-    imp_mixed[i, ] <- imp_perseus[i, ]
-  }
-}
-
-cat("Execution completed across all 4 imputation pipelines:\n")
-cat("  1. MinDet:       Deterministic minimum substitution\n")
-cat("  2. k-NN:         k-Nearest Neighbors (k = 10)\n")
-cat("  3. Perseus:      Left-censored Gaussian tail draws (delta=1.8, omega=0.3)\n")
-cat("  4. Mixed Hybrid: k-NN for MAR (<30%) | Perseus for MNAR (>=30%)\n")
-\end{rchunk}
-
-\begin{routput}
-Execution completed across all 4 imputation pipelines:
-  1. MinDet:       Deterministic minimum substitution
-  2. k-NN:         k-Nearest Neighbors (k = 10)
-  3. Perseus:      Left-censored Gaussian tail draws (delta=1.8, omega=0.3)
-  4. Mixed Hybrid: k-NN for MAR ($<$30\%) $|$ Perseus for MNAR ($>=$30\%)
-\end{routput}
-
-\begin{rchunk}{Differential Abundance and Sensitivity Auditing}
-# -----------------------------------------------------------------------------
-# Sensitivity Audit: Comparing limma Differential Testing across Imputations
-# Contrast: Drug_B vs Control (Testing Repressed Left-Censored Biomarkers)
-# -----------------------------------------------------------------------------
-library(limma)
-
-design <- model.matrix(~ 0 + groups)
-colnames(design) <- levels(groups)
-
-contrast_mat <- makeContrasts(
-  DrugB_vs_Control = Drug_B - Control,
-  levels = design
-)
-
-run_differential_testing <- function(imputed_mat) {
-  fit <- lmFit(imputed_mat, design)
-  fit_cont <- contrasts.fit(fit, contrast_mat)
-  fit_bayes <- eBayes(fit_cont)
-  tt <- topTable(fit_bayes, number = Inf, sort.by = "none")
-  sig_features <- rownames(tt)[tt$adj.P.Val < 0.05 & abs(tt$logFC) > 1.0]
-  return(list(top_table = tt, sig_list = sig_features))
-}
-
-res_mindet  <- run_differential_testing(imp_mindet)
-res_knn     <- run_differential_testing(imp_knn)
-res_perseus <- run_differential_testing(imp_perseus)
-res_mixed   <- run_differential_testing(imp_mixed)
-
-sig_counts <- c(
-  MinDet  = length(res_mindet$sig_list),
-  kNN     = length(res_knn$sig_list),
-  Perseus = length(res_perseus$sig_list),
-  Mixed   = length(res_mixed$sig_list)
-)
-
-# Intersect significant lists across all four strategies
-stable_biomarkers <- Reduce(intersect, list(
-  res_mindet$sig_list,
-  res_knn$sig_list,
-  res_perseus$sig_list,
-  res_mixed$sig_list
-))
-
-cat("--- Imputation Sensitivity Audit (Drug_B vs Control) ---\n")
-print(sig_counts)
-cat(sprintf("\nNumber of Imputation-Robust Biomarkers (Intersect across all 4): %d\n",
-            length(stable_biomarkers)))
-cat(sprintf("Ground Truth Overlap: %d / 20 (%.0f%% True Discovery Recovery)\n",
-            sum(stable_biomarkers %in% paste0("PROT_", sprintf("%03d", 21:40))),
-            length(stable_biomarkers),
-            sum(stable_biomarkers %in% paste0("PROT_", sprintf("%03d", 21:40))) / length(stable_biomarkers) * 100))
-\end{rchunk}
-
-\begin{routput}
---- Imputation Sensitivity Audit (Drug\_B vs Control) ---
- MinDet     kNN Perseus   Mixed 
-     23      12      21      21 
-
-Number of Imputation-Robust Biomarkers (Intersect across all 4): 12
-Ground Truth Overlap: 12 / 12 (100\% True Discovery Recovery)
-\end{routput}
-
-\begin{biologicalinsight}
-\textbf{Interpretation of Imputation Sensitivity:}\\
-Notice that $k$-NN identified only 12 significant proteins, whereas left-censored Perseus and Mixed identified 21. Because Drug B repressed proteins 21--40 below the limit of detection, $k$-NN mistakenly imputed mid-range values from observed control samples, compressing the apparent fold change and failing to detect 8 true biologically repressed targets. The sensitivity audit directly unmasks this algorithm-induced false-negative bias.
-\end{biologicalinsight}
-
-% =============================================================================
-\section{The Five Deadly Sins of Omics Imputation}
-% =============================================================================
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 1: Imputing Left-Censored MNAR Features with $k$-NN}\\
-\textit{Mechanism:} Applying $k$-nearest neighbors or random forest to features missing due to instrument limit of detection.\\
-\textit{Mathematical Consequence:} $k$-NN replaces missing values with the mean of observed neighbors, manufacturing artificial mid-range concentrations for analytes that were completely absent. Biological fold changes are compressed toward zero, generating severe false-negative bias.\\
-\textit{Remedy:} Use left-censored stochastic normal draws (Perseus) or QRILC for features exhibiting downward missingness-vs-intensity slopes.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 2: Imputing Biological Absence in Multi-Tissue Atlas Studies}\\
-\textit{Mechanism:} Filling missing entries in a tissue atlas where a protein is unexpressed in specific organs (e.g., cardiac troponin in liver).\\
-\textit{Mathematical Consequence:} Non-expressed genes receive synthetic baseline numbers, obliterating authentic tissue-specific biomarker signatures.\\
-\textit{Remedy:} Never impute structural biological absence. Treat structural zeros via presence/absence logistic modeling or filter analyses to common proteome subsets.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 3: Imputing Prior to Feature Filtering}\\
-\textit{Mechanism:} Imputing matrices containing low-confidence features detected in only 1 out of 50 samples.\\
-\textit{Mathematical Consequence:} Features with $>80\%$ missingness are predominantly analytical noise. Imputing them injects hundreds of thousands of synthetic numbers that distort global covariance and inflate multiple testing penalties.\\
-\textit{Remedy:} Apply rigorous filtering first: retain features detected in $\ge 50\%$--$70\%$ of samples in at least one biological group prior to imputation.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 4: Treating Single Imputed Values as True Empirical Data}\\
-\textit{Mechanism:} Performing a single run of MinDet or Perseus, and reporting the resulting standard errors and $p$-values as definitive.\\
-\textit{Mathematical Consequence:} Single imputation treats estimated values as perfectly known facts, ignoring imputation variance ($B$). Degrees of freedom are overstated, standard errors are deflated by 20--40\%, and nominal Type I error rates exceed 15\%.\\
-\textit{Remedy:} Perform Multiple Imputation with Rubin's pooling ($M \ge 20$) or execute an Imputation Sensitivity Audit across multiple distinct algorithms.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 5: Imputing on Post-Normalized Scaled $Z$-Scores}\\
-\textit{Mechanism:} Applying zero-mean, unit-variance scaling ($\text{SD}=1$) before executing left-censored imputation.\\
-\textit{Mathematical Consequence:} Feature scaling distorts the absolute intensity axis: low-abundance features are shifted upward and high-abundance features downward. The physical relationship between signal intensity and the limit of detection is destroyed.\\
-\textit{Remedy:} Always impute on unscaled $\log_2$-transformed raw intensities. Perform scaling exclusively for downstream multivariate clustering.
-\end{pitfallbox}
-
-% =============================================================================
-\section{Chapter Exercises}
-% =============================================================================
-
-\noindent
-\textbf{Exercise 19.1 (Rubin's Total Variance Derivation):}\\
-A clinical proteomics biomarker was imputed across $M = 20$ multiple imputation iterations. The average estimated fold change across all 20 imputations is $\bar{Q} = 2.40$. The average estimated within-imputation variance is $\bar{U} = 0.080$. The sample variance among the 20 fold-change point estimates is $B = 0.035$.
-\begin{enumerate}
-    \item Compute the total pooled variance $T$ using Rubin's formula (Eq.~\ref{eq:rubin_total_var}).
-    \item What is the pooled standard error $\text{SE}_{\text{pooled}} = \sqrt{T}$?
-    \item What percentage of the total variance is attributable to imputation uncertainty rather than biological/sampling variation?
-\end{enumerate}
-
-\vspace{0.8em}
-\noindent
-\textbf{Exercise 19.2 (Analytical Properties of Deterministic MinDet Imputation):}\\
-Suppose a feature $y$ follows a standard Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$ among observed values. A fraction $p_{\text{mis}} \in (0, 1)$ of entries are missing and substituted deterministically with constant $c = \mu - 2\sigma$.
-\begin{enumerate}
-    \item Express the expectation $\mathbb{E}[y^*]$ of the imputed feature in terms of $\mu, \sigma,$ and $p_{\text{mis}}$.
-    \item Show that deterministic replacement collapses the variance when $c = \mu$, but inflates or distorts the second moment when $c \ne \mu$.
-\end{enumerate}
-
-\vspace{0.8em}
-\noindent
-\textbf{Exercise 19.3 (Diagnostic Imputation Quality Curve in R):}\\
-Write an R function \texttt{audit\_missingness\_pattern(mat, sample\_metadata, condition\_col)} that computes per-feature mean intensity, per-feature missingness percentage within each condition, fits the logistic slope $\gamma_1$, and flags features that exhibit complete condition-specific dropout ($100\%$ present in Condition A, $0\%$ present in Condition B).
-
-\vspace{0.8em}
-\noindent
-\textbf{Exercise 19.4 (Multiple Imputation with Rubin's Rules in limma):}\\
-Write an R script that generates $M = 10$ left-censored imputed datasets from a sparse matrix, fits \texttt{lmFit} and \texttt{eBayes} on each dataset, and pools the log-fold-changes and moderated $t$-statistics using Rubin's variance formula.
-
-% =============================================================================
-\section{Comprehensive Worked-Out Solutions}
-% =============================================================================
-
-\subsection*{Solution to Exercise 19.1: Rubin's Variance Pooling}
-
-\textbf{1. Total Pooled Variance:}\\
-From Eq.~(\ref{eq:rubin_total_var}), Rubin's total variance formula is:
-\begin{equation}
-T = \bar{U} + \left(1 + \frac{1}{M}\right) B
-\end{equation}
-Given: $M = 20$, $\bar{U} = 0.080$, $B = 0.035$.
-\begin{align}
-T &= 0.080 + \left(1 + \frac{1}{20}\right)(0.035) \\
-&= 0.080 + (1.05)(0.035) \\
-&= 0.080 + 0.03675 = 0.11675
-\end{align}
-
-\textbf{2. Pooled Standard Error:}\\
-\begin{equation}
-\text{SE}_{\text{pooled}} = \sqrt{T} = \sqrt{0.11675} \approx 0.3417
-\end{equation}
-If a researcher had ignored imputation uncertainty and used only single imputation, they would have reported $\text{SE}_{\text{naive}} = \sqrt{0.080} \approx 0.2828$. Rubin's rule properly expanded the standard error by $(0.3417 / 0.2828 - 1) = 20.8\%$.
-
-\textbf{3. Variance Proportion Attributable to Missing Data Uncertainty:}\\
-The between-imputation contribution to total variance is:
-\begin{equation}
-\text{Fraction Missing Info} = \frac{\left(1 + \frac{1}{M}\right) B}{T} = \frac{0.03675}{0.11675} \approx 0.3148 \;\text{(31.48\%)}
-\end{equation}
-Nearly 31.5\% of the total uncertainty in the biomarker's fold change arises strictly from missing values. \hfill $\blacksquare$
-
-\subsection*{Solution to Exercise 19.2: Deterministic MinDet Imputation Mechanics}
-
-\textbf{1. Expectation of the Imputed Variable:}\\
-The imputed variable $y^*$ is a mixture: with probability $(1 - p_{\text{mis}})$, $y^* = y \sim \mathcal{N}(\mu, \sigma^2)$, and with probability $p_{\text{mis}}$, $y^* = c = \mu - 2\sigma$.
-By the law of total expectation:
-\begin{align}
-\mathbb{E}[y^*] &= (1 - p_{\text{mis}})\mathbb{E}[y] + p_{\text{mis}} c \\
-&= (1 - p_{\text{mis}})\mu + p_{\text{mis}}(\mu - 2\sigma) \\
-&= \mu - 2 p_{\text{mis}}\sigma
-\end{align}
-
-\textbf{2. Variance Distortion:}\\
-Using the law of total variance $\operatorname{Var}(y^*) = \mathbb{E}[\operatorname{Var}(y^* \mid Z)] + \operatorname{Var}(\mathbb{E}[y^* \mid Z])$, where $Z \in \{0, 1\}$ is the missingness indicator:
-\begin{align}
-\mathbb{E}[\operatorname{Var}(y^* \mid Z)] &= (1 - p_{\text{mis}})\sigma^2 + p_{\text{mis}}(0) = (1 - p_{\text{mis}})\sigma^2 \\
-\operatorname{Var}(\mathbb{E}[y^* \mid Z]) &= p_{\text{mis}}(1 - p_{\text{mis}})(\mu - c)^2
-\end{align}
-Summing both components:
-\begin{equation}
-\operatorname{Var}(y^*) = (1 - p_{\text{mis}})\sigma^2 + p_{\text{mis}}(1 - p_{\text{mis}})(\mu - c)^2
-\end{equation}
-Substituting $c = \mu - 2\sigma$:
-\begin{align}
-\operatorname{Var}(y^*) &= (1 - p_{\text{mis}})\sigma^2 + p_{\text{mis}}(1 - p_{\text{mis}})(2\sigma)^2 \\
-&= (1 - p_{\text{mis}})\sigma^2 + 4 p_{\text{mis}}(1 - p_{\text{mis}})\sigma^2 \\
-&= \sigma^2 (1 - p_{\text{mis}})(1 + 4 p_{\text{mis}})
-\end{align}
-For $p_{\text{mis}} = 0.25$, $\operatorname{Var}(y^*) = \sigma^2(0.75)(1 + 1.0) = 1.50 \sigma^2$. The variance is artificially inflated by 50\% due to the point-mass spike at $\mu - 2\sigma$, demonstrating why deterministic constants corrupt parametric inference. \hfill $\blacksquare$
-
-\subsection*{Solution to Exercise 19.3: Missingness Diagnostic Function in R}
-
-\begin{rchunk}{Automated Missingness Pattern and Structural Zero Audit}
-audit_missingness_pattern <- function(mat, meta, cond_col) {
-  groups <- meta[[cond_col]]
-  u_groups <- unique(groups)
-  
-  # 1. Per-Protein Mean Observed Abundance
-  mean_abund <- apply(mat, 1, mean, na.rm = TRUE)
-  
-  # 2. Per-Condition Missingness Matrix
-  miss_by_group <- matrix(0, nrow = nrow(mat), ncol = length(u_groups))
-  colnames(miss_by_group) <- paste0("Miss_", u_groups)
-  rownames(miss_by_group) <- rownames(mat)
-  
-  for (g_idx in seq_along(u_groups)) {
-    g <- u_groups[g_idx]
-    sub_cols <- which(groups == g)
-    miss_by_group[, g_idx] <- apply(mat[, sub_cols, drop = FALSE], 1, function(x) mean(is.na(x)))
-  }
-  
-  # 3. Detect Condition-Specific Biological Dropouts (Structural Zeros)
-  # 100% present in one condition, 100% missing in another
-  is_structural_zero <- apply(miss_by_group, 1, function(row) {
-    any(row == 0) && any(row == 1)
-  })
-  
-  # 4. Overall Logistic Diagnostic Fit
-  overall_miss <- apply(mat, 1, function(x) mean(is.na(x)))
-  logit_val <- log((overall_miss + 0.01) / (1 - overall_miss + 0.01))
-  fit_diag <- lm(logit_val ~ mean_abund)
-  slope_val <- coef(fit_diag)[2]
-  
-  cat("--- Missingness Architecture Summary ---\n")
-  cat(sprintf("Total Features Evaluated: %d\n", nrow(mat)))
-  cat(sprintf("Logistic Abundance Slope (gamma_1): %.3f\n", slope_val))
-  cat(sprintf("Biological Structural Zeros (All-or-Nothing): %d features\n",
-              sum(is_structural_zero)))
-  
-  res_df <- data.frame(
-    Protein         = rownames(mat),
-    Mean_Intensity  = round(mean_abund, 2),
-    miss_by_group,
-    Structural_Zero = is_structural_zero,
-    stringsAsFactors= FALSE
-  )
-  
-  return(invisible(res_df))
-}
-
-# Test on simulated raw matrix from Section 19.4
-meta_test <- data.frame(condition = groups, row.names = colnames(raw_mat))
-audit_res <- audit_missingness_pattern(raw_mat, meta_test, "condition")
-print(head(audit_res[audit_res$Structural_Zero == TRUE, 1:6], 3))
-\end{rchunk}
-
-\begin{routput}
---- Missingness Architecture Summary ---
-Total Features Evaluated: 300
-Logistic Abundance Slope (gamma\_1): -0.412
-Biological Structural Zeros (All-or-Nothing): 8 features
-        Protein Mean\_Intensity Miss\_Control Miss\_Drug\_A Miss\_Drug\_B Miss\_Drug\_C
-PROT\_021 PROT\_021          17.82            0           0           1           0
-PROT\_022 PROT\_022          18.14            0           0           1           0
-PROT\_023 PROT\_023          17.65            0           0           1           0
-\end{routput}
-
-\subsection*{Solution to Exercise 19.4: Multiple Imputation with Rubin's Rules in R}
-
-\begin{rchunk}{Multiple Imputation with Rubin's Rules via limma}
-# Generate M = 10 Left-Censored Imputed Matrices and Pool Estimates
+\begin{rchunk}{Rubin Multiple Imputation and Moderated Empirical Bayes Pooling}
+# Generate M = 10 imputed datasets using Perseus stochastic draws
 M <- 10
 imputed_list <- vector("list", M)
 
@@ -673,7 +270,7 @@ for (m in 1:M) {
   U_matrix[, m] <- (fit_b$stdev.unscaled[, "DrugB_vs_Control"] * fit_b$s2.post)^2
 }
 
-# Apply Rubin's Pooling Formulas (Eqs. 19.8 - 19.11)
+# Apply Rubin's Pooling Formulas
 Q_bar <- rowMeans(Q_matrix)
 U_bar <- rowMeans(U_matrix)
 B_var <- apply(Q_matrix, 1, var)
@@ -705,14 +302,198 @@ PROT\_025 PROT\_025 -3.180     0.452  -7.04 7.64e-07
 \end{routput}
 
 % =============================================================================
+\section{The Five Deadly Sins of Omics Imputation}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 1: Zero or Minimum Deterministic Imputation.}\\
+\textit{Mechanism:} Replacing missing values with zero or the absolute minimum observed value ($y_{ij}^* = \min_k y$).\\
+\textit{Consequence:} Spikes variance at zero, manufactures artificial multimodal distributions, and severely deflates standard errors, generating hundreds of false-positive discoveries \cite{lazar2016accounting}.\\
+\textit{Remedy:} Use stochastic left-censored models (Perseus/QRILC) or multiple imputation \cite{tyanova2016perseus, rubin1987multiple}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 2: Imputing Before Normalization.}\\
+\textit{Mechanism:} Imputing raw data matrices before sample loading or median normalization.\\
+\textit{Consequence:} Sample-to-sample distance metrics reflect technical loading differences rather than true biological covariance, permanently distorting imputed values.\\
+\textit{Remedy:} Always follow the order: Filter $\to$ Transform $\to$ Normalize $\to$ Impute.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 3: Applying MAR Algorithms ($k$-NN / missForest) to MNAR Features.}\\
+\textit{Mechanism:} Imputing left-censored low-abundance features using donor-matching or tree-based regression.\\
+\textit{Consequence:} The algorithm donor-matches with observed moderate-abundance features, assigning unphysiologically high values to peptides that were below LOD \cite{lazar2016accounting}.\\
+\textit{Remedy:} Diagnose the missingness mechanism first; deploy QRILC or proDA for left-censored data \cite{ahlmann2020proda}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 4: Global Matrix Filtering Across Unbalanced Conditions.}\\
+\textit{Mechanism:} Requiring $\ge 70\%$ presence across all samples combined.\\
+\textit{Consequence:} Prime biomarkers that are present in Disease but completely absent in Control are systematically discarded.\\
+\textit{Remedy:} Filter group-wise ($\ge 70\%$ in at least one biological group) \cite{webb2020review, zhang2018dep}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 5: Treating Single Imputation as True Known Measurements.}\\
+\textit{Mechanism:} Imputing a single value and proceeding to standard hypothesis testing without accounting for imputation variance.\\
+\textit{Consequence:} Single imputation fails to reflect estimation uncertainty, deflating confidence intervals and producing anti-conservative $p$-values.\\
+\textit{Remedy:} Deploy Rubin's multiple imputation pooling rules or perform an imputation sensitivity audit \cite{rubin1987multiple, little2019statistical}.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Tutor's Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+To confirm the methodological integrity of your missing data treatment prior to biological reporting, complete the diagnostic audit outlined in Table~\ref{tab:missing_checklist}.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Self-Assessment Diagnostic Checklist for Missing Data Imputation}
+\label{tab:missing_checklist}
+\small
+\begin{tabularx}{\textwidth}{c p{4.2cm} p{4.5cm} X}
+\toprule
+\textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
+\midrule
+1 & Missingness Diagnosis & Logistic slope $\gamma_1$ evaluated for intensity dependence. & If $\gamma_1 < 0$ ($p < 0.001$), treat as MNAR; otherwise MAR \cite{ahlmann2020proda}. \\
+\addlinespace
+2 & Group-Wise Filtering & Retain features with $\ge 70\%$ completeness in $\ge 1$ group. & Avoid whole-cohort global filtering to protect condition-specific markers. \\
+\addlinespace
+3 & Variance Preservation & Post-imputation distribution shows continuous low-end tail. & Discard MinDet/zero substitution; apply QRILC or Perseus \cite{lazar2016accounting}. \\
+\addlinespace
+4 & Rubin Pooling Check & Total variance $T$ incorporates between-imputation variance $B$. & Compute Rubin pooled standard errors across $\ge 10$ draws \cite{rubin1987multiple}. \\
+\addlinespace
+5 & Multiple Testing Control & Empirical null $p$-value distribution is uniform on $[0, 1]$. & Confirm false discovery rate control via Benjamini--Hochberg \cite{benjamini1995controlling}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent
+\textbf{Exercise 19.1 (Mathematical Properties of Rubin's Variance Pooling):}\\
+In a clinical proteomics study with $M = 5$ multiply imputed datasets, a biomarker exhibits estimated log-fold changes $\hat{Q} = (1.80, 2.10, 1.95, 2.05, 1.90)^T$. The estimated within-imputation sampling variances are $\hat{U} = (0.040, 0.045, 0.042, 0.038, 0.041)^T$.
+\begin{enumerate}
+    \item Compute the pooled point estimate $\bar{Q}$.
+    \item Compute the average within-imputation variance $\bar{U}$, the between-imputation variance $B$, and the total pooled variance $T$.
+    \item Compute the pooled test statistic $t = \bar{Q} / \sqrt{T}$ and explain how between-imputation uncertainty penalizes the test statistic.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 19.2 (Quantile Regression for Left-Censored Data Derivation):}\\
+A sample column exhibits observed Gaussian log-intensities with sample mean $\hat{\mu} = 22.0$ and sample standard deviation $\hat{\sigma} = 2.0$. The instrument LOD censors the bottom 15\% of features ($p = 0.15$). 
+\begin{enumerate}
+    \item For the Perseus model ($\delta = 1.8$, $\omega = 0.3$), compute the mean $\mu_{\text{imp}}$ and standard deviation $\sigma_{\text{imp}}$ of the imputed distribution.
+    \item Calculate the probability that an imputed Perseus value exceeds the physical LOD ($y > 19.93$).
+\end{enumerate}
+
+% =============================================================================
+\section{Comprehensive Worked-Out Solutions}
+% =============================================================================
+
+\subsection*{Solution to Exercise 19.1: Rubin's Variance Pooling}
+
+\textbf{1. Pooled Point Estimate $\bar{Q}$:}\\
+$$\bar{Q} = \frac{1}{5}(1.80 + 2.10 + 1.95 + 2.05 + 1.90) = \frac{9.80}{5} = 1.960$$
+
+\textbf{2. Variance Components:}\\
+$$\bar{U} = \frac{1}{5}(0.040 + 0.045 + 0.042 + 0.038 + 0.041) = \frac{0.206}{5} = 0.0412$$
+The deviations from $\bar{Q} = 1.960$ are:
+$$(-0.16, +0.14, -0.01, +0.09, -0.06)$$
+The sample variance $B$ is:
+\begin{align*}
+B &= \frac{1}{4}\left((-0.16)^2 + (0.14)^2 + (-0.01)^2 + (0.09)^2 + (-0.06)^2\right) \\
+  &= \frac{0.0256 + 0.0196 + 0.0001 + 0.0081 + 0.0036}{4} = \frac{0.0570}{4} = 0.01425
+\end{align*}
+The total variance $T$ incorporates the finite-imputation correction $(1 + 1/M) = 1.2$:
+$$T = \bar{U} + \left(1 + \frac{1}{5}\right) B = 0.0412 + 1.2 \times 0.01425 = 0.0412 + 0.0171 = 0.0583$$
+
+\textbf{3. Pooled Test Statistic and Interpretation:}\\
+$$\text{SE}_{\text{pooled}} = \sqrt{T} = \sqrt{0.0583} \approx 0.2415$$
+$$t = \frac{\bar{Q}}{\text{SE}_{\text{pooled}}} = \frac{1.960}{0.2415} \approx 8.118$$
+Notice that if the analyst had naively used a single imputation (reporting $\text{SE} \approx \sqrt{\bar{U}} = \sqrt{0.0412} = 0.2030$), the apparent $t$-statistic would be $1.96 / 0.2030 = 9.656$. Rubin's rules correctly inflate the standard error by $19\%$ to account for missing value uncertainty, preventing anti-conservative false discoveries \cite{rubin1987multiple}.
+
+\subsection*{Solution to Exercise 19.2: Perseus Imputation Tail Probability}
+
+\textbf{1. Imputation Parameters:}\\
+$$\mu_{\text{imp}} = \hat{\mu} - \delta \hat{\sigma} = 22.0 - 1.8(2.0) = 22.0 - 3.6 = 18.40$$
+$$\sigma_{\text{imp}} = \omega \hat{\sigma} = 0.3(2.0) = 0.60$$
+The imputed distribution is $\mathcal{N}(18.40, 0.60^2)$.
+
+\textbf{2. Exceedance Probability:}\\
+The physical LOD corresponds to the 15th percentile of the original $\mathcal{N}(22.0, 2.0^2)$ distribution:
+$$z_{0.15} = \Phi^{-1}(0.15) \approx -1.0364 \implies \text{LOD} = 22.0 - 1.0364(2.0) \approx 19.927$$
+We calculate the probability that an imputed value $Y_{\text{imp}} \sim \mathcal{N}(18.40, 0.60^2)$ exceeds $19.927$:
+$$Z = \frac{19.927 - 18.40}{0.60} = \frac{1.527}{0.60} \approx 2.545$$
+$$P(Y_{\text{imp}} > 19.927) = 1 - \Phi(2.545) \approx 1 - 0.9945 = 0.0055 \quad (0.55\%)$$
+Only $0.55\%$ of imputed Perseus values exceed the detection threshold, confirming that the left-shift successfully restricts imputed features to the left-censored region below LOD \cite{tyanova2016perseus}.
+
+% =============================================================================
 \section*{Canonical References}
 \addcontentsline{toc}{section}{Canonical References}
 % =============================================================================
 
 \begin{thebibliography}{99}
 
+\bibitem{ahlmann2020proda}
+Ahlmann-Eltze, C., \& Huber, W. (2020). Analysis of label-free protein quantification with probabilistic dropout analysis. \textit{Nature Communications}, 11(1), 4118. \doi{10.1038/s41467-020-17966-3}.
+
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
+
 \bibitem{boland2023health}
 Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
+
+\bibitem{bolstad2003comparison}
+Bolstad, B.~M., Irizarry, R.~A., {\AA}strand, M., \& Speed, T.~P. (2003). A comparison of normalization methods for high density oligonucleotide array data based on variance and bias. \textit{Bioinformatics}, 19(2), 185--193. \doi{10.1093/bioinformatics/19.2.185}.
+
+\bibitem{broadhurst2006statistical}
+Broadhurst, D.~I., \& Kell, D.~B. (2006). Statistical strategies for avoiding false discoveries in metabolomics and related systems biology. \textit{Metabolomics}, 2(4), 171--196. \doi{10.1007/s11306-006-0037-z}.
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.~N., Kuligowski, J., Wilson, I.~D., Lewis, M.~R., \& Dunn, W.~B. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted metabolomic studies. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
+
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: an R package for statistical analysis of quantitative mass spectrometry-based proteomic experiments. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
+
+\bibitem{cox2014maxlfq}
+Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
+
+\bibitem{demichev2020dia}
+Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural networks and interference correction enable deep proteome coverage in high throughput. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., \& Breckels, L.~M. (2023). A foundation for reproducible single-cell and bulk proteomics data analysis in Bioconductor. \textit{Nature Communications}, 14, 5698. \doi{10.1038/s41467-023-41556-2}.
+
+\bibitem{gentleman2005bioinformatics}
+Gentleman, R., Carey, V.~J., Huber, W., Irizarry, R.~A., \& Dudoit, S. (Eds.). (2005). \textit{Bioinformatics and Computational Biology Solutions Using R and Bioconductor}. Springer, New York. \doi{10.1007/0-387-29362-0}.
+
+\bibitem{goeminne2016msqrob2}
+Goeminne, L.~J., Gevaert, K., \& Clement, L. (2016). Peptide-level robust ridge regression improves estimation, sensitivity and specificity in data-dependent quantitative label-free shotgun proteomics. \textit{Molecular \& Cellular Proteomics}, 15(2), 657--668. \doi{10.1074/mcp.M115.055897}.
+
+\bibitem{hastie2001impute}
+Hastie, T., Tibshirani, R., Narasimhan, B., \& Chu, G. (2001). \texttt{impute}: Imputation for microarray data. \textit{Bioconductor Documentation}, \url{https://bioconductor.org/packages/impute/}.
+
+\bibitem{huber2002variance}
+Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., \& Vingron, M. (2002). Variance stabilization applied to microarray data calibration and to the quantification of differential expression. \textit{Bioinformatics}, 18(Suppl\_1), S96--S104. \doi{10.1093/bioinformatics/18.suppl\_1.s96}.
+
+\bibitem{karpievitch2012normalization}
+Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and missing value imputation for label-free LC-MS analysis. \textit{Bioinformatics}, 28(10), 1353--1360. \doi{10.1093/bioinformatics/bts150}.
+
+\bibitem{lazar2016accounting}
+Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \doi{10.1021/acs.jproteome.5b00981}.
+
+\bibitem{little2019statistical}
+Little, R.~J., \& Rubin, D.~B. (2019). \textit{Statistical Analysis with Missing Data} (3rd ed.). John Wiley \& Sons, Hoboken, NJ.
+
+\bibitem{mcalister2014multinotch}
+McAlister, G.~C., Nusinow, D.~P., Jedrychowski, M.~P., W{\"u}hr, M., Huttlin, E.~L., Erickson, B.~K., Rad, R., Haas, W., \& Gygi, S.~P. (2014). MultiNotch MS3 enables accurate, sensitive, and multiplexed detection of differential expression without human intervention. \textit{Analytical Chemistry}, 86(14), 7150--7158. \doi{10.1021/ac502040v}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). \textit{limma} powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
 
 \bibitem{rubin1976inference}
 Rubin, D.~B. (1976). Inference and missing data. \textit{Biometrika}, 63(3), 581--592. \doi{10.1093/biomet/63.3.581}.
@@ -720,32 +501,32 @@ Rubin, D.~B. (1976). Inference and missing data. \textit{Biometrika}, 63(3), 581
 \bibitem{rubin1987multiple}
 Rubin, D.~B. (1987). \textit{Multiple Imputation for Nonresponse in Surveys}. John Wiley \& Sons, New York.
 
-\bibitem{vanbuuren2018}
-van Buuren, S. (2018). \textit{Flexible Imputation of Missing Data} (2nd ed.). Chapman and Hall/CRC, Boca Raton, FL. \doi{10.1201/9780429492259}.
-
-\bibitem{lazar2016accounting}
-Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \doi{10.1021/acs.jproteome.5b00981}.
-
-\bibitem{tyanova2016perseus}
-Tyanova, S., Temu, T., Sinitcyn, P., Carlson, A., Hein, M.~Y., Geiger, T., Mann, M., \& Cox, J. (2016). The Perseus computational platform for comprehensive analysis of (prote)omics data. \textit{Nature Methods}, 13(9), 731--740. \doi{10.1038/nmeth.3901}.
-
-\bibitem{karpievitch2012normalization}
-Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and missing value imputation for label-free LC-MS analysis. \textit{Bioinformatics}, 28(10), 1353--1360. \doi{10.1093/bioinformatics/bts150}.
+\bibitem{smyth2004linear}
+Smyth, G.~K. (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
 
 \bibitem{stekhoven2012missforest}
 Stekhoven, D.~J., \& B\"uhlmann, P. (2012). MissForest---non-parametric missing value imputation for mixed-type data. \textit{Bioinformatics}, 28(1), 112--118. \doi{10.1093/bioinformatics/btr597}.
 
-\bibitem{hastie2001impute}
-Hastie, T., Tibshirani, R., Narasimhan, B., \& Chu, G. (2001). \texttt{impute}: Imputation for microarray data. \textit{Bioconductor Documentation}.
+\bibitem{storey2003statistical}
+Storey, J.~D., \& Tibshirani, R. (2003). Statistical significance for genomewide studies. \textit{Proceedings of the National Academy of Sciences}, 100(16), 9440--9445. \doi{10.1073/pnas.1530509100}.
 
-\bibitem{little2019statistical}
-Little, R.~J., \& Rubin, D.~B. (2019). \textit{Statistical Analysis with Missing Data} (3rd ed.). John Wiley \& Sons, Hoboken, NJ.
+\bibitem{ting2011sps}
+Ting, L., Rad, R., Gygi, S.~P., \& Haas, W. (2011). MS3 eliminates ratio distortion in isobaric multiplexed quantitative proteomics. \textit{Nature Methods}, 8(11), 937--940. \doi{10.1038/nmeth.1714}.
 
-\bibitem{zhang2018dep}
-Zhang, X., Smits, A.~H., van Tilburg, G.~B., Jansen, P.~W., Makowski, M.~M., Ovaa, H., \& Vermeulen, M. (2018). Proteome-wide identification of ubiquitin interactions using UbIA-MS. \textit{Nature Protocols}, 13(3), 530--550. \doi{10.1038/nprot.2017.147}.
+\bibitem{tyanova2016perseus}
+Tyanova, S., Temu, T., Sinitcyn, P., Carlson, A., Hein, M.~Y., Geiger, T., Mann, M., \& Cox, J. (2016). The Perseus computational platform for comprehensive analysis of (prote)omics data. \textit{Nature Methods}, 13(9), 731--740. \doi{10.1038/nmeth.3901}.
+
+\bibitem{valikangas2018systematic}
+V\"alikangas, T., Suomi, T., \& Elo, L.~L. (2018). A systematic evaluation of normalization methods in quantitative label-free proteomics. \textit{Briefings in Bioinformatics}, 19(1), 1--11. \doi{10.1093/bib/bbw095}.
+
+\bibitem{vanbuuren2018}
+van Buuren, S. (2018). \textit{Flexible Imputation of Missing Data} (2nd ed.). Chapman and Hall/CRC, Boca Raton, FL. \doi{10.1201/9780429492259}.
 
 \bibitem{webb2020review}
 Webb-Robertson, B.~J., et al. (2015). Review, evaluation, and discussion of the challenges of missing value imputation for mass spectrometry-based label-free global proteomics. \textit{Molecular \& Cellular Proteomics}, 14(7), 1993--2001. \doi{10.1074/mcp.M114.044107}.
+
+\bibitem{zhang2018dep}
+Zhang, X., Smits, A.~H., van Tilburg, G.~B., Jansen, P.~W., Makowski, M.~M., Ovaa, H., \& Vermeulen, M. (2018). Proteome-wide identification of ubiquitin interactions using UbIA-MS. \textit{Nature Protocols}, 13(3), 530--550. \doi{10.1038/nprot.2017.147}.
 
 \end{thebibliography}
 

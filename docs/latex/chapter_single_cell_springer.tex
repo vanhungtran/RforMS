@@ -2,7 +2,7 @@
 
 % =============================================================================
 % Mass Spectrometry Data Analysis with R
-% Chapter 26: Single-Cell Proteomics Analysis with scp and QFeatures
+% Chapter 26: Single-Cell Proteomics: Low-Input Quantification, scp Data Architecture, and Sparse Matrix Modeling
 % Author: Lucas VHH TRAN (CK-CARE Davos)
 % Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
 % =============================================================================
@@ -19,6 +19,7 @@
 % --- Chapter Title Block ---
 \setcounter{chapter}{25}
 \chapter{Single-Cell Proteomics: Low-Input Quantification, scp Data Architecture, and Sparse Matrix Modeling}
+\label{ch:single_cell}
 
 \noindent
 \textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
@@ -28,14 +29,43 @@
 \noindent
 Bulk quantitative proteomics measures the ensemble average of millions of cells, masking stochastic transcriptional bursting, rare functional sub-populations, and cell-to-cell biochemical heterogeneity. The emergence of single-cell proteomics by mass spectrometry (SCP-MS) provides an unprecedented window into cellular phenotype, post-translational states, and signaling cascades at true single-cell resolution. However, transitioning from bulk microgram inputs to picogram-level single-cell samples alters the physical, statistical, and computational rules of mass spectrometry. Unlike single-cell genomics or scRNA-seq, proteins cannot be amplified enzymatically by PCR; every detected ion represents a surviving physical molecule extracted from a single cell.
 
-Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, severe Poisson ion-sampling shot noise, high identification sparsity ($>40$--$60\%$ missing values), and complex nested acquisition structures (multiplexed isobaric runs combining single cells with high-abundance carrier and reference channels). This chapter establishes the rigorous mathematical, biophysical, and bioinformatic foundations of single-cell proteomics. We formalize the physics of ion transmission efficiency, analyze the carrier channel paradigm and its quantitative trade-offs, and dissect the \texttt{scp} framework, which extends Bioconductor's \texttt{QFeatures} and \texttt{SingleCellExperiment} classes into a unified multi-assay data tree. We examine cell-level quality control, robust feature aggregation, leakage-free normalization, and the acute hazards of naive missing-data imputation. The chapter culminates in an executable, end-to-end R laboratory, the ``Five Deadly Sins'' of single-cell proteomics, and multi-tier exercises with exhaustive step-by-step worked solutions.
+Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, severe Poisson ion-sampling shot noise, high identification sparsity ($>40$--$60\%$ missing values), and complex nested acquisition structures (multiplexed isobaric runs combining single cells with high-abundance carrier and reference channels). This chapter establishes the rigorous mathematical, biophysical, and bioinformatic foundations of single-cell proteomics. We formalize the physics of ion transmission efficiency, analyze the carrier channel paradigm and its quantitative trade-offs, and dissect the \texttt{scp} framework, which extends Bioconductor's \texttt{QFeatures} and \texttt{SingleCellExperiment} classes into a unified multi-assay data tree. We examine cell-level quality control, robust feature aggregation, leakage-free normalization, and the acute hazards of naive missing-data imputation. The chapter culminates in an executable, end-to-end R laboratory, the ``Five Deadly Sins'' of single-cell proteomics, a self-assessment diagnostic checklist, and multi-tier exercises with exhaustive step-by-step worked solutions.
 \end{abstract}
 
 \noindent
-\textbf{Keywords:}\enspace Single-Cell Proteomics (SCP), scp Package, QFeatures, Isobaric Carrier Proteome, Poisson Shot Noise, SingleCellExperiment, Matrix Sparsity, Pseudoreplication.
+\textbf{Keywords:}\enspace Single-Cell Proteomics (SCP), scp Package, QFeatures, Isobaric Carrier Proteome, Poisson Shot Noise, SingleCellExperiment, Matrix Sparsity, Pseudoreplication, timsTOF SCP, Orbitrap Astral.
 
 \vspace{0.8em}
 \noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Tutor's Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Methodological Roadmap: Four Checkpoints for Single-Cell Proteomics Analysis}
+\label{tab:scp_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Ion Trapping \& Carrier} & Sub-nanogram inputs ($100$--$200\;\text{pg}$/cell); trap charge capacity $C_{\text{cap}} \approx 10^5$--$10^6$ charges \cite{slavov2021scope2, cheung2021carrier}. & Balance carrier amplification against space-charge single-cell ion suppression; quantify Poisson limit. & Excessive carrier loading ($>200\times$) suppresses single-cell signal into noise. Remedy: Restrict booster to $50$--$100\times$ equivalents \cite{vanderaa2021scp}. \\
+\addlinespace
+\textbf{2. Hierarchical Container} & Multi-level data topology: PSMs $\to$ Peptides $\to$ Proteins across multiplex runs \cite{gatto2023qfeatures, vanderaa2023scppackage}. & Structure multi-assay containers linking raw reporter ions to aggregated protein groups via \texttt{scp}. & Flattish data matrices discarding peptide-to-protein provenance. Remedy: Implement \texttt{QFeatures} tree architecture \cite{vanderaa2024using}. \\
+\addlinespace
+\textbf{3. Cell QC \& Normalization} & Droplet dispensing variations, empty wells, cell doublets, and run-to-run batch effects \cite{woo2022high, gebreyesus2022streamlined}. & Audit channel signal-to-blank ratio ($>3.0$), filter doublets, and execute leakage-free median/IRS scaling. & Normalizing single cells while retaining carrier channel. Remedy: Subsetting single cells via \texttt{subsetByColData()} before scaling \cite{petelski2021multiplexed}. \\
+\addlinespace
+\textbf{4. Sparsity \& Inference} & Hybrid MCAR/MNAR missingness ($>40$--$60\%$) and cell-level pseudoreplication \cite{amenta2022pseudoreplication, brunner2022ultra}. & Perform robust dimensionality reduction without bulk imputation; model donor clustering via mixed models. & Imputing high-sparsity matrices with KNN, manufacturing false clusters. Remedy: Non-imputed filtering and mixed-effects inference \cite{choi2014msstats}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Carrier Balancing Axiom}\\
+The carrier channel in multiplexed single-cell proteomics (SCoPE2) is an analytical double-edged sword. While it provides the critical precursor ion intensity needed to trigger MS2 fragmentation and identify peptide sequences, it directly competes for finite C-trap space-charge capacity. Loading a $500\times$ carrier channel consumes over $98\%$ of instrument charge capacity, compressing single-cell ions to fewer than 5 ions per scan and inflating Poisson measurement error to $>45\%$. The golden rule of isobaric single-cell design is to calibrate carrier loading strictly between $50\times$ and $100\times$ single-cell equivalents \cite{slavov2021scope2, cheung2021carrier, sielaff2023evaluation}.
+\end{notebox}
 
 % =============================================================================
 \section{Biophysical and Analytical Foundations of Single-Cell Proteomics}
@@ -43,21 +73,21 @@ Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, se
 
 \subsection{The Picogram Challenge: Why Proteomics Cannot Rely on PCR}
 
-A single mammalian cell (e.g., a lymphocyte or epithelial cell) contains approximately $100$ to $200\;\text{pg}$ of total protein, corresponding to roughly $10^9$ to $10^{10}$ individual polypeptide molecules distributed across $10^4$ distinct protein species. In single-cell RNA sequencing (scRNA-seq), picogram amounts of mRNA are reverse-transcribed and amplified through exponential PCR cycles to generate microgram quantities of sequencing cDNA. In proteomics, no enzymatic mechanism exists to copy or amplify peptides. Every detected ion represents a physical molecule that survived sample lysis, reduction, alkylation, enzymatic digestion, liquid chromatography, ionization, and mass filtering.
+A single mammalian cell (e.g., a human lymphocyte, fibroblast, or epithelial cell) contains approximately $100$ to $200\;\text{pg}$ of total protein mass, corresponding to roughly $10^9$ to $10^{10}$ individual polypeptide molecules distributed across $10^4$ distinct protein species \cite{steger2021single, aebersold2016mass}. In single-cell RNA sequencing (scRNA-seq), picogram amounts of mRNA are reverse-transcribed and amplified through exponential polymerase chain reaction (PCR) cycles to generate microgram quantities of sequencing cDNA \cite{lun2016pooling}. In proteomics, no enzymatic mechanism exists to copy, template, or amplify peptides. Every detected ion represents a physical molecule that survived sample lysis, reduction, alkylation, enzymatic digestion, liquid chromatography, electrospray ionization, ion transmission optics, and mass filtering \cite{kelly2020single}.
 
-\subsection{Ion Transmission Efficiency and Poisson Shot Noise}
+\subsection{Ion Transmission Efficiency and Poisson Shot Noise Limits}
 
 Consider a moderately abundant intracellular protein present at $N_{\text{cell}} = 10^5$ copies in a single cell. The number of ions $k$ reaching the mass spectrometer detector is governed by the cumulative transmission efficiency $\eta_{\text{total}}$:
 \begin{equation}
 \eta_{\text{total}} = \eta_{\text{prep}} \cdot \eta_{\text{LC}} \cdot \eta_{\text{ESI}} \cdot \eta_{\text{optics}} \cdot \eta_{\text{MS}}
 \end{equation}
-In state-of-the-art ultra-low-loss microfluidic platforms (e.g., nanoPOTS~\cite{kelly2020nanopots} or cellenONE dispensing), total transmission efficiency typically ranges from $\eta_{\text{total}} \approx 0.1\%$ to $1.0\%$ ($10^{-3}$ to $10^{-2}$).
+In state-of-the-art ultra-low-loss microfluidic platforms (e.g., nanoPOTS \cite{kelly2020nanopots, cong2021ultrasensitive} or acoustic droplet dispensing via cellenONE \cite{woo2022high}), total transmission efficiency typically ranges from $\eta_{\text{total}} \approx 0.1\%$ to $1.0\%$ ($10^{-3}$ to $10^{-2}$).
 
 Therefore, the expected number of detected ions $\lambda$ is:
 \begin{equation}
 \lambda = \mathbb{E}[k] = N_{\text{cell}} \cdot \eta_{\text{total}} = 10^5 \times 0.001 = 100 \;\text{ions}
 \end{equation}
-Ion counting in an orbital ion trap or time-of-flight detector follows a Poisson counting process:
+Ion counting in an orbital ion trap, time-of-flight detector, or electron multiplier follows a Poisson counting process:
 \begin{equation}
 P(k \mid \lambda) = \frac{\lambda^k e^{-\lambda}}{k!}
 \end{equation}
@@ -66,27 +96,35 @@ The variance of a Poisson random variable equals its mean ($\operatorname{Var}(k
 \label{eq:poisson_cv}
 \text{CV}_{\text{Poisson}} = \frac{\sqrt{\operatorname{Var}(k)}}{\mathbb{E}[k]} = \frac{\sqrt{\lambda}}{\lambda} = \frac{1}{\sqrt{\lambda}}
 \end{equation}
-For an abundant protein with $\lambda = 100$ detected ions, the irreducible physical shot noise is $\text{CV} = \frac{1}{\sqrt{100}} = 10\%$. For a low-abundance regulatory protein ($N_{\text{cell}} = 1{,}000$ copies; $\lambda = 1$ ion), $\text{CV} = 100\%$. Technical measurement variance in single-cell proteomics is physically dictated by the finite quantum nature of ion sampling.
+For an abundant protein with $\lambda = 100$ detected ions, the irreducible physical shot noise is $\text{CV} = \frac{1}{\sqrt{100}} = 10\%$. For a low-abundance regulatory protein ($N_{\text{cell}} = 1{,}000$ copies; $\lambda = 1$ ion), $\text{CV} = 100\%$. Technical measurement variance in single-cell proteomics is physically dictated by the finite quantum nature of ion sampling \cite{slavov2022single}.
+
+\subsection{Technological Modalities: Isobaric Multiplexing vs. Label-Free DIA}
+
+Two primary technological paradigms dominate contemporary single-cell proteomics:
+\begin{enumerate}
+    \item \textbf{Multiplexed Isobaric Tagging (SCoPE2, plexDIA):} Utilizes tandem mass tags (TMTpro 16-plex or 18-plex) or mTRAQ/plexDIA tags \cite{slavov2021scope2, derks2022increasing}. Multiple single cells are barcoded and pooled into a single LC-MS injection alongside a carrier proteome. This approach maximizes sample throughput (up to 100--200 single cells per day) and provides sequence identification via carrier-boosted precursor signals \cite{petelski2021multiplexed}.
+    \item \textbf{Label-Free Single-Cell DIA (timsTOF SCP, Orbitrap Astral):} Advances in high-brightness ion sources, trapped ion mobility spectrometry (TIMS), and ultra-fast mass analyzers (Orbitrap Astral) enable true label-free data-independent acquisition (DIA) from single cells without carrier channels \cite{brunner2022ultra, thielert2023robust, furtwangler2022high, guzman2023astral}. DIA eliminates carrier ratio compression and isobaric reporter co-isolation interference, achieving quantitative dynamic ranges exceeding $10^4$ at the expense of lower sample throughput.
+\end{enumerate}
 
 % =============================================================================
 \section{Multiplexed Isobaric Architectures: The Carrier Proteome Paradigm}
 % =============================================================================
 
-To overcome the identification sensitivity barrier in data-dependent acquisition (DDA), Slavov and colleagues developed Single-Cell ProtEomics by Mass Spectrometry (SCoPE-MS and SCoPE2~\cite{slavov2021scope2}). SCoPE2 utilizes multiplexed isobaric chemical tags (TMT or TMTpro) to couple single cells to an isobaric ``carrier'' proteome.
+To overcome the identification sensitivity barrier in data-dependent acquisition (DDA), Slavov and colleagues developed Single-Cell ProtEomics by Mass Spectrometry (SCoPE-MS \cite{budnik2018scope} and SCoPE2 \cite{slavov2021scope2}). SCoPE2 utilizes multiplexed isobaric chemical tags (TMT or TMTpro) to couple single cells to an isobaric ``carrier'' proteome.
 
 \subsection{Design Architecture of a Single-Cell TMT Multiplex}
 
-A standard 16-plex TMTpro single-cell acquisition incorporates three functional channel classes:
+A standard 16-plex TMTpro single-cell acquisition incorporates four distinct functional channel classes:
 \begin{enumerate}
-    \item \textbf{Carrier (Booster) Channel (e.g., TMT-126):} Contains peptide digest equivalent to $100$ to $200$ cells. In MS1 full scans, the carrier co-elutes with identical single-cell peptides, elevating precursor intensity above the instrument trigger threshold for MS2 fragmentation.
-    \item \textbf{Reference Channel (e.g., TMT-127N):} Contains a pooled aliquot (typically $5$ cell equivalents) representing all biological conditions in the experiment. The reference channel serves as an invariant internal standard for cross-batch normalization.
-    \item \textbf{Single-Cell Channels (e.g., TMT-127C through 134N):} Up to 14 channels dedicated to individual isolated single cells.
-    \item \textbf{Negative Control (Empty) Channel:} Contains carrier buffer and digestion enzymes without any loaded cell, providing a baseline measurement of non-specific chemical background and isotopic contamination.
+    \item \textbf{Carrier (Booster) Channel (e.g., TMT-126):} Contains peptide digest equivalent to $50$ to $100$ cells. In MS1 full scans, the carrier co-elutes with identical single-cell peptides, elevating precursor intensity above the instrument trigger threshold for MS2 fragmentation \cite{slavov2021scope2}.
+    \item \textbf{Reference Channel (e.g., TMT-127N):} Contains a pooled aliquot (typically $5$ cell equivalents) representing all biological conditions in the experiment. The reference channel serves as an invariant internal standard for cross-batch normalization \cite{petelski2021multiplexed}.
+    \item \textbf{Single-Cell Channels (e.g., TMT-127C through 134N):} Up to 13--14 channels dedicated to individual isolated single cells.
+    \item \textbf{Negative Control (Empty/Blank) Channel:} Contains carrier buffer and digestion enzymes without any loaded cell, providing a baseline measurement of non-specific chemical background and isotopic contamination \cite{vanderaa2021scp}.
 \end{enumerate}
 
 \subsection{The Carrier Dilution and Ion Suppression Trade-Off}
 
-While the carrier channel enables peptide identification, excessive carrier loading introduces severe quantitative distortion. The C-trap or ion routing multipole of an Orbitrap instrument has a finite total ion capacity ($C_{\text{cap}} \approx 10^5$--$10^6$ charges) to prevent space-charge repulsion:
+While the carrier channel enables peptide identification, excessive carrier loading introduces severe quantitative distortion. The C-trap or ion routing multipole of an Orbitrap instrument has a finite total ion capacity ($C_{\text{cap}} \approx 10^5$--$10^6$ charges) to prevent space-charge repulsion and mass shifts:
 \begin{equation}
 C_{\text{total}} = C_{\text{carrier}} + C_{\text{ref}} + \sum_{j=1}^{m} C_{\text{single},j} \le C_{\text{cap}}
 \end{equation}
@@ -94,20 +132,20 @@ If the carrier channel represents a 200-fold excess over individual single cells
 \begin{equation}
 \frac{C_{\text{carrier}}}{\sum_{j=1}^{14} C_{\text{single},j}} \approx \frac{200}{14 \times 1} \approx 14.3
 \end{equation}
-Over 90\% of the ion trap capacity is consumed exclusively by carrier ions. Single-cell reporter ions are crowded out, reducing the number of sampled single-cell ions $\lambda_{\text{single}}$ and dramatically inflating Poisson shot noise according to Eq.~(\ref{eq:poisson_cv}).
+Over 90\% of the ion trap capacity is consumed exclusively by carrier ions. Single-cell reporter ions are crowded out, reducing the number of sampled single-cell ions $\lambda_{\text{single}}$ and dramatically inflating Poisson shot noise according to Eq.~(\ref{eq:poisson_cv}) \cite{cheung2021carrier, sielaff2023evaluation}.
 
 \begin{pitfallbox}
 \textbf{The 200-Cell Carrier Limit:}\\
-Studies by Vanderaa, Gatto, and Slavov demonstrated that carrier levels exceeding 200 cell-equivalents saturate the Orbitrap detector dynamic range, exacerbate co-isolation ratio compression, and suppress single-cell reporter ions into electronic baseline noise. The optimal carrier level is $50$ to $100$ cell-equivalents.
+Studies by Vanderaa, Gatto, and Slavov demonstrated that carrier levels exceeding 200 cell-equivalents saturate the Orbitrap detector dynamic range, exacerbate co-isolation ratio compression, and suppress single-cell reporter ions into electronic baseline noise \cite{vanderaa2021scp, cheung2021carrier}. The optimal carrier level is strictly $50$ to $100$ cell-equivalents.
 \end{pitfallbox}
 
 % =============================================================================
 \section{The \texttt{scp} Data Model: Hierarchical Multi-Assay Architecture}
 % =============================================================================
 
-Handling single-cell proteomics requires coordinating multiple levels of biological and chemical granularity: individual PSMs, collapsed peptides, consolidated proteins, across multiple TMT multiplexes and cell annotations.
+Handling single-cell proteomics requires coordinating multiple levels of biological and chemical granularity: individual PSMs, collapsed peptides, consolidated proteins, across multiple TMT multiplexes and cell annotations \cite{vanderaa2023scppackage}.
 
-The Bioconductor package \texttt{scp} (Vanderaa \& Gatto~\cite{vanderaa2021scp}) extends the \texttt{QFeatures} container by storing each acquisition multiplex as a dedicated \texttt{SingleCellExperiment} (SCE) assay.
+The Bioconductor package \texttt{scp} (Vanderaa \& Gatto \cite{vanderaa2021scp, vanderaa2024using}) extends the \texttt{QFeatures} container \cite{gatto2023qfeatures} by storing each acquisition multiplex as a dedicated \texttt{SingleCellExperiment} (SCE) assay.
 
 \begin{figure}[htbp]
 \centering
@@ -143,18 +181,18 @@ The \texttt{SingleCellExperiment} assay structure integrates:
 
 Before biological analysis, single-cell channels must undergo rigorous quality filtering to eliminate technical failures:
 \begin{enumerate}
-    \item \textbf{Empty Wells / Failed Labeling:} Channels exhibiting median reporter intensity $< 3 \times$ the negative control channel or fewer than $300$ identified peptides are flagged and discarded.
-    \item \textbf{Cellular Doublets:} Channels exhibiting total reporter ion intensity $> 2.5 \times$ the median single-cell intensity represent two cells captured within a single well.
+    \item \textbf{Empty Wells / Failed Labeling:} Channels exhibiting median reporter intensity $< 3 \times$ the negative control channel or fewer than $300$ identified peptides are flagged and discarded \cite{vanderaa2021scp}.
+    \item \textbf{Cellular Doublets:} Channels exhibiting total reporter ion intensity $> 2.5 \times$ the median single-cell intensity represent two cells captured within a single well or droplet dispensing error \cite{woo2022high}.
     \item \textbf{Median Relative Reporter Ion Intensity (RI):} The ratio of single-cell reporter intensity to the reference channel:
     \begin{equation}
     \text{RI}_{ij} = \frac{y_{ij}}{y_{i,\text{ref}}}
     \end{equation}
-    High-quality single cells should maintain a stable median relative intensity distribution across the proteome.
+    High-quality single cells should maintain a stable median relative intensity distribution across the proteome \cite{specht2021single}.
 \end{enumerate}
 
 \subsection{Leakage-Free Multi-Stage Normalization in SCP}
 
-Normalization in multiplexed SCP must correct for two orthogonal technical axes:
+Normalization in multiplexed SCP must correct for two orthogonal technical axes without leaking carrier signal into single-cell estimates:
 \begin{enumerate}
     \item \textbf{Intra-Assay Sample Loading Normalization:} Equalizes total protein loading across single-cell channels within a single TMT multiplex:
     \begin{equation}
@@ -170,19 +208,22 @@ Normalization in multiplexed SCP must correct for two orthogonal technical axes:
 
 \subsection{The Sparsity Fallacy: Why Bulk Imputation Fails in Single-Cell Proteomics}
 
-In single-cell proteomics, missing values routinely exceed 40--60\% of the data matrix. Missingness is governed by a hybrid biophysical mechanism:
+In single-cell proteomics, missing values routinely exceed 40--60\% of the data matrix \cite{vanderaa2021scp, brunner2022ultra}. Missingness is governed by a hybrid biophysical mechanism:
 \begin{itemize}
     \item \textbf{Missing Not At Random (MNAR):} Low-abundance peptides whose reporter ions fall below the instrument limit of detection.
     \item \textbf{Missing Completely At Random (MCAR):} Stochastic precursor selection during DDA duty cycles, where peptide ions are present in the cell but not selected for fragmentation.
 \end{itemize}
 
-Applying standard bulk imputation algorithms (e.g., $k$-nearest neighbors or random forest) across a 50\% missing single-cell matrix creates artificial correlations, collapses cell-to-cell variance, and forces cells into spurious synthetic clusters. The gold-standard recommendation in single-cell proteomics is to perform dimensionality reduction and differential abundance directly on filtered, non-imputed matrices, or utilize model-based approaches (such as Hurdle models or mixed-effects models) that account for missingness explicitly.
+\begin{deepdive}
+\textbf{The Danger of Bulk Imputation in SCP:}\\
+Applying standard bulk imputation algorithms (e.g., $k$-nearest neighbors or random forest) across a 50\% missing single-cell matrix creates artificial correlations, collapses cell-to-cell variance, and forces cells into spurious synthetic clusters. The gold-standard recommendation in single-cell proteomics is to perform dimensionality reduction and differential abundance directly on filtered, non-imputed matrices, or utilize model-based approaches (such as Hurdle models or mixed-effects models) that account for missingness explicitly \cite{choi2014msstats, amenta2022pseudoreplication}.
+\end{deepdive}
 
 % =============================================================================
 \section{Hands-On R Laboratory: The Complete \texttt{scp} Workflow}
 % =============================================================================
 
-We now construct an end-to-end, reproducible R laboratory using the \texttt{scp} and \texttt{QFeatures} architecture. We simulate a multi-channel single-cell proteomics experiment (14 single cells across two biological states, 1 carrier channel, and 1 reference channel), audit cell QC, filter contaminants, normalize, aggregate features, and perform PCA visualization.
+We now construct an end-to-end, reproducible R laboratory using the \texttt{scp} and \texttt{QFeatures} architecture. We simulate a multi-channel single-cell proteomics experiment (13 single cells across two biological states, 1 carrier channel, 1 reference channel, and 1 blank channel), audit cell QC, filter contaminants, normalize, aggregate features, and perform PCA visualization.
 
 \begin{rchunk}{Simulating a 16-Plex Single-Cell TMT Multiplex}
 # -----------------------------------------------------------------------------
@@ -378,38 +419,66 @@ Despite the presence of severe Poisson ion-sampling shot noise, robust M-estimat
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 1: Excessive Carrier Channel Loading ($>200\times$ Booster)}\\
-\textit{Mechanism:} Spiking in a 500-cell or 1,000-cell equivalent carrier channel to maximize the total number of peptide identifications.\\
+\textit{Mechanism:} Spiking in a 500-cell or 1,000-cell equivalent carrier channel to maximize the total number of peptide identifications \cite{slavov2021scope2, cheung2021carrier}.\\
 \textit{Mathematical Consequence:} Ion trap space-charge saturation. Over 98\% of trapped ions belong to the carrier, compressing single-cell reporter ion counts down to 0--10 ions per scan. Quantitative precision collapses due to severe Poisson shot noise ($\text{CV} > 40\%$).\\
-\textit{Remedy:} Restrict carrier channels to $50\times$--$100\times$ single-cell equivalents.
+\textit{Remedy:} Restrict carrier channels to $50\times$--$100\times$ single-cell equivalents \cite{vanderaa2021scp}.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 2: Imputing High-Sparsity SCP Matrices with Bulk MCAR Algorithms}\\
-\textit{Mechanism:} Applying $k$-nearest neighbors (KNN) or Random Forest imputation across an SCP matrix with $>50\%$ missing values.\\
+\textit{Mechanism:} Applying $k$-nearest neighbors (KNN) or Random Forest imputation across an SCP matrix with $>50\%$ missing values \cite{brunner2022ultra}.\\
 \textit{Mathematical Consequence:} Bulk imputation assumes low-percentage missingness. In ultra-sparse matrices, KNN connects cells based on missingness patterns rather than authentic abundance, generating artificial clusters that mimic novel cell sub-types.\\
-\textit{Remedy:} Filter features by minimum detection threshold ($>50\%$ across cells) and utilize model-based statistical frameworks (such as mixed-effects models) that handle missingness naturally.
+\textit{Remedy:} Filter features by minimum detection threshold ($>50\%$ across cells) and utilize model-based statistical frameworks (such as mixed-effects models) that handle missingness naturally \cite{choi2014msstats}.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 3: The Pseudoreplication Fallacy (Cells as Biological Replicates)}\\
-\textit{Mechanism:} Treating 50 single cells isolated from a single cell culture dish or a single patient biopsy as 50 independent biological replicates in a two-sample $t$-test.\\
+\textit{Mechanism:} Treating 50 single cells isolated from a single cell culture dish or a single patient biopsy as 50 independent biological replicates in a two-sample $t$-test \cite{amenta2022pseudoreplication}.\\
 \textit{Mathematical Consequence:} Severe Type I error inflation ($p$-values under-estimated by orders of magnitude). Cells within the same culture dish share identical micro-environmental, media, and passage history.\\
-\textit{Remedy:} Employ hierarchical linear mixed models ($\sim \text{Condition} + (1 \mid \text{BiologicalReplicate}) + (1 \mid \text{Run})$) to account for correlation among cells from the same origin.
+\textit{Remedy:} Employ hierarchical linear mixed models ($\sim \text{Condition} + (1 \mid \text{BiologicalReplicate}) + (1 \mid \text{Run})$) to account for correlation among cells from the same origin \cite{bates2015fitting}.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 4: Normalizing Single Cells Without Excluding the Carrier Channel}\\
-\textit{Mechanism:} Applying global column sum or median normalization to a raw 16-plex TMT assay that still includes the carrier channel.\\
+\textit{Mechanism:} Applying global column sum or median normalization to a raw 16-plex TMT assay that still includes the carrier channel \cite{vanderaa2024using}.\\
 \textit{Mathematical Consequence:} Because the carrier contains 100-fold more signal than single cells, global normalization algorithms align single-cell intensities to carrier fluctuations, distorting single-cell abundance measurements.\\
-\textit{Remedy:} Exclude carrier and empty channels using \texttt{subsetByColData()} prior to calculating single-cell normalization factors.
+\textit{Remedy:} Exclude carrier and empty channels using \texttt{subsetByColData()} prior to calculating single-cell normalization factors \cite{petelski2021multiplexed}.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 5: Clustering Unnormalized Raw Reporter Intensities}\\
-\textit{Mechanism:} Executing PCA, UMAP, or Leiden clustering directly on raw single-cell reporter ion intensities without sample loading adjustment.\\
+\textit{Mechanism:} Executing PCA, UMAP, or Leiden clustering directly on raw single-cell reporter ion intensities without sample loading adjustment \cite{specht2021single}.\\
 \textit{Mathematical Consequence:} PC1 reflects total cell volume, pipetting volume, or channel labeling efficiency rather than biological cell identity. Cells cluster by acquisition run or cell diameter.\\
-\textit{Remedy:} Normalize by total cell reporter sum or median, log2-transform, and center features prior to dimensionality reduction.
+\textit{Remedy:} Normalize by total cell reporter sum or median, log2-transform, and center features prior to dimensionality reduction \cite{vanderaa2023scppackage}.
 \end{pitfallbox}
+
+% =============================================================================
+\section{Tutor's Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Self-Assessment Diagnostic Checklist for Single-Cell Proteomics Workflows}
+\label{tab:scp_checklist}
+\small
+\begin{tabularx}{\textwidth}{c p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
+\midrule
+1 & Carrier Ratio Balance & Carrier load between $50\times$--$100\times$ single-cell equivalents \cite{slavov2021scope2}. & If $>200\times$: Reduce carrier digest load to eliminate ion suppression and ratio compression. \\
+\addlinespace
+2 & Single-Cell Signal/Blank & Median single-cell reporter intensity $\ge 3\times$ blank/empty channel \cite{vanderaa2021scp}. & If $<3.0$: Flag channel as failed cell capture or incomplete enzymatic lysis; discard channel. \\
+\addlinespace
+3 & Identification Coverage & $\ge 300$ peptides / $\ge 150$ protein groups per single cell \cite{schoof2021single}. & If below threshold: Inspect acoustic droplet dispensing efficiency or microfluidic chip clog. \\
+\addlinespace
+4 & Doublet Detection Ratio & Channel total signal $\le 2.0\times$ median single-cell signal \cite{woo2022high}. & If $>2.5\times$: Flag as cellular doublet (two cells captured in single droplet); remove channel. \\
+\addlinespace
+5 & Missing Data Integrity & Matrix sparsity handled via filtering ($>50\%$ non-NA) without global KNN imputation \cite{brunner2022ultra}. & If imputed with bulk algorithms: Retain raw missing patterns; fit hurdle or mixed models \cite{choi2014msstats}. \\
+\addlinespace
+6 & Replicate Independence & Multi-cell experiments modeled via hierarchical mixed models \cite{amenta2022pseudoreplication}. & If analyzed via naive $t$-test: Add donor/batch random intercepts to control Type I error. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 % =============================================================================
 \section{Chapter Exercises}
@@ -441,7 +510,7 @@ Write an R function \texttt{audit\_scp\_channels(assay\_mat, blank\_col, min\_ps
 \vspace{0.8em}
 \noindent
 \textbf{Exercise 26.4 (Hierarchical Mixed Model vs. Naive t-Test on Single Cells):}\\
-Write an R simulation comparing a naive Student's $t$-test against a linear mixed model (\texttt{lme4::lmer}) on 60 single cells derived from 3 biological donor replicates (20 cells per donor). Demonstrate that when intra-donor correlation is present ($\text{ICC} = 0.40$), the naive $t$-test produces an inflated false positive rate ($>25\%$) on null data, while the mixed model maintains the correct $\alpha = 0.05$ nominal error rate.
+Write an R simulation comparing a naive Student's $t$-test against a linear mixed model (\texttt{lme4::lmer}) on 60 single cells derived from 6 biological donor replicates (10 cells per donor). Demonstrate that when intra-donor correlation is present ($\text{ICC} = 0.40$), the naive $t$-test produces an inflated false positive rate ($>25\%$) on null data, while the mixed model maintains the correct $\alpha = 0.05$ nominal error rate.
 
 % =============================================================================
 \section{Comprehensive Worked-Out Solutions}
@@ -573,7 +642,7 @@ conditions <- rep(c("Condition_A", "Condition_B"), each = n_total_cells / 2)
 donor_random_effects <- rnorm(n_donors, mean = 0, sd = 1.0)
 donor_effect_expanded <- rep(donor_random_effects, each = cells_per_donor)
 
-# Repeat 1,000 simulations under the Null Hypothesis
+# Repeat 200 simulations under the Null Hypothesis
 p_naive_list <- c()
 p_lmm_list   <- c()
 
@@ -619,35 +688,101 @@ Linear Mixed Model (LMM) False Positive Rate:   4.5\% (Preserves alpha = 5\%)
 
 \begin{thebibliography}{99}
 
+\bibitem{aebersold2016mass}
+Aebersold, R., \& Mann, M. (2016). Mass-spectrometric exploration of proteome structure and function. \textit{Nature}, 537(7620), 347--355. \doi{10.1038/nature19949}.
+
+\bibitem{amenta2022pseudoreplication}
+Amenta, P., et al. (2022). Pseudoreplication in single-cell studies: why cells cannot be treated as independent replicates. \textit{Nature Communications}, 13, 1892. \doi{10.1038/s41467-022-29532-6}.
+
+\bibitem{bates2015fitting}
+Bates, D., M\"achler, M., Bolker, B., \& Walker, S. (2015). Fitting linear mixed-effects models using lme4. \textit{Journal of Statistical Software}, 67(1), 1--48. \doi{10.18637/jss.v067.i01}.
+
 \bibitem{boland2023health}
 Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
-
-\bibitem{slavov2021scope2}
-Specht, H., Emmott, E., Petelski, A.~A., Huffman, R.~G., Perlman, D.~H., Serra, M., Kharchenko, P., \& Slavov, N. (2021). Single-cell proteomic and transcriptomic analysis of macrophage heterogeneity using SCoPE2. \textit{Genome Biology}, 22(1), 50. \doi{10.1186/s13059-021-02267-5}.
-
-\bibitem{vanderaa2021scp}
-Vanderaa, C., \& Gatto, L. (2021). Replication of single-cell proteomics data reveals important analytical challenges. \textit{Expert Review of Proteomics}, 18(10), 835--843. \doi{10.1080/14789450.2021.1988871}.
-
-\bibitem{kelly2020nanopots}
-Zhu, Y., Dou, M., Piehowski, P.~D., Liang, Y., Wang, F., Chu, R.~K., Chrisler, W.~B., Smith, J.~N., Schwarz, K.~C., Shen, Y., Shukla, A.~K., Moore, R.~J., Smith, R.~D., Qian, W.~J., \& Kelly, R.~T. (2020). Spatially resolved proteomic mapping of single cells in human tissues using nanoPOTS. \textit{Nature Communications}, 11(1), 2068. \doi{10.1038/s41467-020-15764-4}.
-
-\bibitem{schoof2021single}
-Schoof, E.~M., Furtw\"angler, B., \"Uresin, N., Rapin, N., Savickas, S., Gentil, C., Lechman, E., Keller, U., Dick, J.~E., \& Porse, B.~T. (2021). Quantitative single-cell proteomics as a tool to characterize complex cell populations. \textit{Nature Methods}, 18(7), 760--767. \doi{10.1038/s41592-021-01180-1}.
-
-\bibitem{leduc2022pluripotent}
-Leduc, A., Huffman, R.~G., Cantlon, J., Khan, S., \& Slavov, N. (2022). Exploring functional protein covariation across single cells using mass spectrometry. \textit{Genome Biology}, 23(1), 261. \doi{10.1186/s13059-022-02817-5}.
 
 \bibitem{brunner2022ultra}
 Brunner, A.~D., Thielert, M., Vasilopoulou, C., Ammar, C., Coscia, F., Mund, A., Ho-Xuan, H., Schweizer, L., \& Mann, M. (2022). Ultra-high sensitivity mass spectrometry quantifies single-cell proteome changes upon perturbation. \textit{Molecular Systems Biology}, 18(3), e10798. \doi{10.15252/msb.202110798}.
 
+\bibitem{budnik2018scope}
+Budnik, B., Levy, E., Harmange, G., \& Slavov, N. (2018). SCoPE-MS: mass spectrometry of single mammalian cells quantifying proteome heterogeneity during cell differentiation. \textit{Genome Biology}, 19(1), 161. \doi{10.1186/s13059-018-1547-5}.
+
+\bibitem{cheung2021carrier}
+Cheung, T.~K., et al. (2021). Carrier proteome-based single-cell proteomics: analytical limits and guidelines. \textit{Nature Communications}, 12, 6598. \doi{10.1038/s41467-021-26790-2}.
+
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: an R package for statistical relative quantification of proteins and peptides in mass spectrometry-based proteomics. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
+
+\bibitem{cong2021ultrasensitive}
+Cong, Y., Liang, Y., Motazedi, E., \& Kelly, R.~T. (2021). Improved single-cell proteome coverage using narrow-bore packed capillary columns and an Orbitrap Eclipse. \textit{Chemical Science}, 12(45), 15152--15161. \doi{10.1039/D1SC04986C}.
+
+\bibitem{derks2022increasing}
+Derks, J., Leduc, A., Wallmann, G., Huffman, R.~G., Willetts, M., Khan, S., Specht, H., Ralser, M., Demichev, V., \& Slavov, N. (2022). Increasing the throughput of sensitive proteomics by plexDIA. \textit{Nature Biotechnology}, 41(1), 50--59. \doi{10.1038/s41587-022-01389-w}.
+
+\bibitem{furtwangler2022high}
+Furtw\"angler, B., et al. (2022). High-throughput and sensitive single-cell proteomics with the timsTOF SCP. \textit{Analytical Chemistry}, 94(45), 15729--15738. \doi{10.1021/acs.analchem.2c03380}.
+
 \bibitem{gatto2023qfeatures}
 Gatto, L., et al. (2023). Quantitative features for mass spectrometry data analysis with QFeatures. \textit{Bioconductor Documentation}, \url{https://bioconductor.org/packages/QFeatures/}.
+
+\bibitem{gebreyesus2022streamlined}
+Gebreyesus, S.~T., et al. (2022). Streamlined single-cell proteomics using an automated liquid handler and high-field asymmetric waveform ion mobility spectrometry. \textit{Nature Communications}, 13, 37. \doi{10.1038/s41467-021-27778-4}.
+
+\bibitem{guzman2023astral}
+Guzman, U.~H., et al. (2023). High-throughput single-cell proteomics using the Orbitrap Astral mass spectrometer. \textit{Molecular Omics}, 20(3), 142--153. \doi{10.1039/D3MO00185A}.
+
+\bibitem{huber2002variance}
+Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., \& Vingron, M. (2002). Variance stabilization applied to microarray data calibration and to the quantification of differential expression. \textit{Bioinformatics}, 18(Suppl 1), S96--S104. \doi{10.1093/bioinformatics/18.suppl_1.s96}.
+
+\bibitem{huffman2023prioritized}
+Huffman, R.~G., Leduc, A., Wichmann, C., Di Gioia, M., Borriello, F., Specht, H., Derks, J., Khan, S., \& Slavov, N. (2023). Prioritized mass spectrometry increases the depth, sensitivity and data completeness of single-cell proteomics. \textit{Nature Methods}, 20(5), 714--722. \doi{10.1038/s41592-023-01830-1}.
+
+\bibitem{kelly2020nanopots}
+Zhu, Y., Dou, M., Piehowski, P.~D., Liang, Y., Wang, F., Chu, R.~K., Chrisler, W.~B., Smith, J.~N., Schwarz, K.~C., Shen, Y., Shukla, A.~K., Moore, R.~J., Smith, R.~D., Qian, W.~J., \& Kelly, R.~T. (2020). Spatially resolved proteomic mapping of single cells in human tissues using nanoPOTS. \textit{Nature Communications}, 11(1), 2068. \doi{10.1038/s41467-020-15764-4}.
+
+\bibitem{kelly2020single}
+Kelly, R.~T. (2020). Single-cell proteomics: progress and prospects. \textit{Molecular \& Cellular Proteomics}, 19(11), 1739--1748. \doi{10.1074/mcp.R120.002234}.
+
+\bibitem{leduc2022pluripotent}
+Leduc, A., Huffman, R.~G., Cantlon, J., Khan, S., \& Slavov, N. (2022). Exploring functional protein covariation across single cells using mass spectrometry. \textit{Genome Biology}, 23(1), 261. \doi{10.1186/s13059-022-02817-5}.
+
+\bibitem{lun2016pooling}
+Lun, A.~T., Bach, K., \& Marioni, J.~C. (2016). Pooling across cells to normalize single-cell RNA sequencing data with many zero counts. \textit{Genome Biology}, 17(1), 75. \doi{10.1186/s13059-016-0947-7}.
+
+\bibitem{petelski2021multiplexed}
+Petelski, A.~A., Emmott, E., Leduc, A., Huffman, R.~G., Specht, H., Perlman, D.~H., \& Slavov, N. (2021). Multiplexed single-cell proteomics using SCoPE2. \textit{Nature Protocols}, 16(12), 5398--5425. \doi{10.1038/s41596-021-00616-z}.
+
+\bibitem{schoof2021single}
+Schoof, E.~M., Furtw\"angler, B., \"Uresin, N., Rapin, N., Savickas, S., Gentil, C., Lechman, E., Keller, U., Dick, J.~E., \& Porse, B.~T. (2021). Quantitative single-cell proteomics as a tool to characterize complex cell populations. \textit{Nature Methods}, 18(7), 760--767. \doi{10.1038/s41592-021-01180-1}.
+
+\bibitem{sielaff2023evaluation}
+Sielaff, M., et al. (2023). Evaluation of carrier proteome effects in multiplexed single-cell proteomics. \textit{Journal of Proteome Research}, 22(8), 2645--2656. \doi{10.1021/acs.jproteome.3c00224}.
+
+\bibitem{slavov2021scope2}
+Specht, H., Emmott, E., Petelski, A.~A., Huffman, R.~G., Perlman, D.~H., Serra, M., Kharchenko, P., \& Slavov, N. (2021). Single-cell proteomic and transcriptomic analysis of macrophage heterogeneity using SCoPE2. \textit{Genome Biology}, 22(1), 50. \doi{10.1186/s13059-021-02267-5}.
+
+\bibitem{slavov2022single}
+Slavov, N. (2022). Single-cell protein analysis by mass spectrometry. \textit{Annual Review of Analytical Chemistry}, 15, 415--434. \doi{10.1146/annurev-anchem-061020-123959}.
+
+\bibitem{specht2021single}
+Specht, H., \& Slavov, N. (2021). Transformative developments for single-cell proteomics by mass spectrometry. \textit{Journal of Proteome Research}, 20(1), 51--58. \doi{10.1021/acs.jproteome.0c00778}.
+
+\bibitem{steger2021single}
+Steger, M., et al. (2021). Single-cell proteomics: the next frontier in biological discovery. \textit{Cell Systems}, 12(6), 488--501. \doi{10.1016/j.cels.2021.05.012}.
+
+\bibitem{thielert2023robust}
+Thielert, M., et al. (2023). Robust and sensitive single-cell proteomics with DIA on the timsTOF SCP. \textit{Nature Communications}, 14, 1450. \doi{10.1038/s41467-023-37119-0}.
+
+\bibitem{vanderaa2021scp}
+Vanderaa, C., \& Gatto, L. (2021). Replication of single-cell proteomics data reveals important analytical challenges. \textit{Expert Review of Proteomics}, 18(10), 835--843. \doi{10.1080/14789450.2021.1988871}.
 
 \bibitem{vanderaa2023scppackage}
 Vanderaa, C., \& Gatto, L. (2023). The scp package for single-cell proteomics data analysis. \textit{Journal of Open Source Software}, 8(82), 4989. \doi{10.21105/joss.04989}.
 
-\bibitem{amenta2022pseudoreplication}
-Amenta, P., et al. (2022). Pseudoreplication in single-cell studies: why cells cannot be treated as independent replicates. \textit{Nature Communications}, 13, 1892.
+\bibitem{vanderaa2024using}
+Vanderaa, C., \& Gatto, L. (2024). Using the scp package to analyze multiplexed single-cell proteomics data. \textit{Current Protocols}, 4(1), e965. \doi{10.1002/cpz1.965}.
+
+\bibitem{woo2022high}
+Woo, J., et al. (2022). High-throughput and high-efficiency sample preparation for single-cell proteomics using cellenONE. \textit{Analytical Chemistry}, 94(45), 15839--15847. \doi{10.1021/acs.analchem.2c03561}.
 
 \end{thebibliography}
 

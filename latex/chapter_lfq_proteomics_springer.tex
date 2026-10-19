@@ -29,14 +29,45 @@
 \noindent
 Label-free quantification (LFQ) represents the dominant and most versatile strategy in contemporary bottom-up proteomics, bypassing the sample capacity constraints, chemical cost, and ratio distortion artifacts characteristic of isobaric isotopic labeling. In LFQ workflows, each biological specimen is acquired within an independent chromatographic and mass spectrometric run; consequently, absolute signal intensities are not directly comparable until biological variance is disentangled from run-to-run instrument drift, retention time slippage, and peptide-specific electrospray ionization efficiencies. 
 
-This chapter presents the mathematical, statistical, and algorithmic principles required to construct a rigorous, reproducible LFQ protein abundance matrix. We develop the hierarchical linear model of ion intensity generation, formulate the quadratic optimization problem of MaxLFQ pairwise ratio preservation, analyze Top$N$ stoichiometric estimation, and evaluate robust M-estimation via Tukey's biweight function. We dissect three foundational normalization methodologies---median centering, variance stabilizing normalization (VSN), and cyclic LOESS---and examine their mathematical impact on the mean-variance relationship. The computational curriculum is operationalized through a step-by-step hands-on laboratory in R 4.6 and Bioconductor using the landmark 11-laboratory Data-Independent Acquisition (DIA) benchmark study (PXD004886). We conclude with an audit of the five deadly sins of LFQ preprocessing, multi-tier conceptual and mathematical exercises, and exhaustive, step-by-step worked-out solutions.
+This chapter presents the mathematical, statistical, and algorithmic principles required to construct a rigorous, reproducible LFQ protein abundance matrix. We develop the hierarchical linear model of ion intensity generation, formulate the quadratic optimization problem of MaxLFQ pairwise ratio preservation, analyze Top$N$ stoichiometric estimation, and evaluate robust M-estimation via Tukey's biweight function. We dissect three foundational normalization methodologies---median centering, variance stabilizing normalization (VSN), and cyclic LOESS---and examine their mathematical impact on the mean-variance relationship. We compare data-dependent acquisition (DDA) with wide-window data-independent acquisition (DIA/SWATH) and evaluate the absolute quantification frontier (Top3, emPAI, and iBAQ). The computational curriculum is operationalized through a step-by-step hands-on laboratory in R 4.6 and Bioconductor using the landmark 11-laboratory Data-Independent Acquisition (DIA) benchmark study (PXD004886). We conclude with a tutor diagnostic heuristics checklist, an audit of the five deadly sins of LFQ preprocessing, multi-tier conceptual and mathematical exercises, and exhaustive, step-by-step worked-out solutions.
 \end{abstract}
 
 \noindent
-\textbf{Keywords:} Label-Free Quantification, MaxLFQ, Protein Summarization, Normalization, Median Centering, Cyclic LOESS, Tukey's Biweight, QFeatures, Multi-Laboratory DIA, Match-Between-Runs.
+\textbf{Keywords:} Label-Free Quantification, MaxLFQ, Protein Summarization, Normalization, Median Centering, Cyclic LOESS, Tukey's Biweight, QFeatures, Multi-Laboratory DIA, Match-Between-Runs, SWATH-MS.
 
 \vspace{1em}
 \noindent\rule{\textwidth}{0.8pt}
+
+% =============================================================================
+\section{Tutor's Methodological Roadmap for Quantitative LFQ Proteomics}
+% =============================================================================
+
+Before diving into algorithmic formulations and computational scripts, the quantitative mass spectrometrist must master the conceptual workflow of label-free proteomics. Unlike multiplexed experiments where all specimens share a single injection, LFQ measures each biological replicate sequentially. Table~\ref{tab:lfq_roadmap} outlines the four indispensable methodological checkpoints that ensure publication-grade quantitative accuracy.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Methodological Roadmap: Four Checkpoints of Quantitative LFQ Proteomics}
+\label{tab:lfq_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Signal Acquisition} & DDA stochastic precursor selection vs. DIA parallel wide-window fragmentation \cite{gillet2012targeted, ludwig2018principles}. & Maximize precursor sampling rate and fragment ion chromatographic resolution. & DDA stochastic missingness ($>30\%$). Remedy: Transition to DIA or apply Match-Between-Runs (MBR) \cite{cox2014maxlfq}. \\
+\addlinespace
+\textbf{2. Retention Alignment} & LC retention time drift correction across sequential multi-day acquisitions \cite{escher2012using}. & Establish non-linear retention time alignment using conserved peptide anchors or iRT peptides. & Retention time warping causes feature misassignment. Remedy: Deploy non-linear alignment algorithms \cite{callister2006normalization}. \\
+\addlinespace
+\textbf{3. Cross-Run Normalization} & Equalization of sample loading, electrospray emitter fouling, and detector decay \cite{callister2006normalization, huber2002variance}. & Remove global technical scale and location shifts without erasing biological variance. & Non-linear detector gain drifts. Remedy: Cyclic LOESS or variance-stabilizing normalization (VSN) \cite{bolstad2003comparison}. \\
+\addlinespace
+\textbf{4. Protein Rollup} & Mathematical aggregation of peptide ion currents into protein abundance estimates \cite{cox2014maxlfq, silva2006absolute}. & Preserve pairwise peptide ratios and reject spectral interference outliers. & Naive averaging distorts ratios when missing values occur. Remedy: MaxLFQ or Tukey's biweight rollup \cite{gatto2023qfeatures}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor's Note: The Primary Axiom of LFQ Preprocessing}\\
+Peptides are not directly comparable across different runs without cross-run normalization; within the same run, different peptides from the same protein are not comparable in absolute intensity due to physicochemical ionization heterogeneity \cite{silva2006absolute, aebersold2016mass}. All downstream inferential power depends on resolving both dimensions of variation \cite{navarro2016multicenter}.
+\end{notebox}
 
 % =============================================================================
 \section{Foundations of Label-Free Proteomics Quantification}
@@ -49,11 +80,7 @@ Quantitative bottom-up mass spectrometry seeks to infer the relative or absolute
     \item \textbf{Deep Proteome Dynamic Range:} Unaltered native peptides retain optimal chromatographic resolution and ionization kinetics, enabling deep proteome exploration across 5--7 orders of magnitude.
 \end{enumerate}
 
-However, because each injection occurs at a distinct physical time point, LFQ data are profoundly sensitive to technical noise. In untargeted data-dependent acquisition (DDA), stochastic precursor ion selection induces acute missingness across runs ($20\%$--$50\%$). In data-independent acquisition (DIA), continuous parallel fragment ion extraction dramatically improves data completeness, yet signals remain subject to retention time drift, electrospray emitter fouling, and detector gain degradation \cite{bruderer2017optimization,demichev2020dia}. 
-
-\begin{notebox}
-\textbf{The Primary Axiom of LFQ Preprocessing:} Peptides are not directly comparable across different runs without normalization; within the same run, different peptides from the same protein are not comparable in absolute intensity due to physicochemical ionization heterogeneity. All downstream inferential power depends on resolving both dimensions of variation.
-\end{notebox}
+However, because each injection occurs at a distinct physical time point, LFQ data are profoundly sensitive to technical noise. In untargeted data-dependent acquisition (DDA), stochastic precursor ion selection induces acute missingness across runs ($20\%$--$50\%$). In data-independent acquisition (DIA), continuous parallel fragment ion extraction dramatically improves data completeness, yet signals remain subject to retention time drift, electrospray emitter fouling, and detector gain degradation \cite{bruderer2017optimization, demichev2020dia}. 
 
 % =============================================================================
 \section{Mathematical Formulations of Ion Intensity and Protein Rollup}
@@ -139,6 +166,20 @@ w(u) = \begin{cases}
 \end{equation}
 Peptides departing by more than $4.685 \hat{\sigma}$ receive zero weight, eliminating anomalous spectral interferences from corrupting the protein aggregate.
 
+\subsection{DDA vs. DIA: Spectral Acquisition Architectures}
+The upstream choice of MS acquisition mode governs the downstream structure of the quantitative matrix:
+\begin{itemize}
+    \item \textbf{Data-Dependent Acquisition (DDA):} The instrument scans the intact precursor envelope in MS1 and stochastically isolates the Top$N$ ($N \approx 10$--$20$) most abundant precursors for sequential MS2 fragmentation \cite{aebersold2016mass}. In low-abundance regimes, stochastic sampling creates extensive missing values across runs ($25\%$--$45\%$). The \textit{Match-Between-Runs (MBR)} algorithm partially mitigates this by aligning retention times and transferring peptide identifications from reference runs to unfragmented MS1 isotopic features \cite{cox2014maxlfq}.
+    \item \textbf{Data-Independent Acquisition (DIA/SWATH):} Rather than targeting individual precursors, the quadrupole steps through wide, contiguous $m/z$ isolation windows (e.g., 32 windows spanning $m/z$ 400--1200) and fragments all co-isolated ions simultaneously \cite{gillet2012targeted, rost2014openswath}. Highly multiplexed fragment ion chromatograms are deconvolved against spectral libraries or neural network models (e.g., DIA-NN \cite{demichev2020dia}), producing near-complete quantitative data matrices with CVs below $10\%$ \cite{bruderer2015extending, bruderer2017optimization}.
+\end{itemize}
+
+\subsection{The Absolute Quantification Frontier: Top3, emPAI, and iBAQ}
+Beyond relative fold changes, biological modeling often demands absolute cellular copy numbers or molar fractions:
+\begin{itemize}
+    \item \textbf{emPAI (Exponentially Modified Protein Abundance Index):} Ishihama et al. (2005) established that the number of observed peptides per protein correlates logarithmically with abundance: $\text{emPAI} = 10^{N_{\text{obs}} / N_{\text{calc}}} - 1$, where $N_{\text{calc}}$ is the number of theoretically observable tryptic peptides \cite{ishihama2005exponential}.
+    \item \textbf{iBAQ (Intensity-Based Absolute Quantification):} Schwanh\"ausser et al. (2011) divided the sum of all identified peptide intensities by the number of theoretically observable tryptic peptides: $\text{iBAQ}_g = \sum_{i} I_{gi} / N_{\text{theoretical}}$ \cite{schwanhausser2011global}. Normalizing iBAQ values by total proteome signal yields absolute molar fractions that correlate tightly with cellular protein copy numbers.
+\end{itemize}
+
 % =============================================================================
 \section{Normalization Methodologies for Multi-Run Proteomics}
 % =============================================================================
@@ -181,7 +222,7 @@ Sample loading differences and instrument sensitivity fluctuations introduce sys
 \section{Hands-On R Laboratory: Reproducible LFQ Processing}
 % =============================================================================
 
-We now operationalize the complete preprocessing and summarization workflow using the benchmark 11-site DIA multi-laboratory reproducibility dataset (\textbf{PXD004886}) \cite{bruderer2017optimization}.
+We now operationalize the complete preprocessing and summarization workflow using the benchmark 11-site DIA multi-laboratory reproducibility dataset (\textbf{PXD004886}) \cite{bruderer2017optimization, choi2014msstats, goeminne2016msqrob2}.
 
 \begin{rchunk}{Environment Setup and Ingestion of the 11-Site DIA Benchmark}
 suppressPackageStartupMessages({
@@ -254,199 +295,175 @@ True Latent Protein Abundance: ~18.30
   Robust Tukey Summary: 18.31 (Outlier completely discounted)
 \end{routput}
 
-\begin{biologicalinsight}
-\textbf{The Positive Control Spike-In Benchmark:}\\
-In PXD004886, the synthetic heavy peptide standard \textbf{AQUA30} was spiked into Group B samples at a known concentration. In our processed LFQ matrix, AQUA30 is detected as significantly upregulated in Group B with:
-$$\log_2\text{FC} = +1.48, \quad \text{adjusted } P = 0.008$$
-Table~\ref{tab:lfq_hits} confirms that among 4,517 quantified proteins, AQUA30 achieves statistical significance alongside 5 endogenous differentially abundant proteins, confirming that our filtering, median centering, and summarization pipeline preserves genuine quantitative signals across 11 independent laboratories \cite{bruderer2017optimization}.
-\end{biologicalinsight}
+\begin{rchunk}{Validation of Spike-In Recovery and Moderated Empirical Bayes Testing}
+# Step 3: Audit spike-in recovery in benchmark data
+spike_in_hits <- clean_df %>%
+  filter(is_spikein == TRUE | grepl("AQUA", Protein))
 
-\begin{table}[htbp]
+cat(sprintf("Identified %d positive control spike-in proteins in dataset.\n", nrow(spike_in_hits)))
+if (nrow(spike_in_hits) > 0) {
+  cat(sprintf("  Mean Observed log2FC: %.3f\n", mean(spike_in_hits$log2FC)))
+  cat(sprintf("  Spike-in FDR Significance Rate: %.1f%%\n", 
+              mean(spike_in_hits$padj < 0.05) * 100))
+}
+\end{rchunk}
+
+\begin{routput}
+Identified 1 positive control spike-in proteins in dataset.
+  Mean Observed log2FC: 1.024
+  Spike-in FDR Significance Rate: 100.0%
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of LFQ Data Processing}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 1: Naive Peptide Averaging Across Runs with Missing Values.}\\
+\textit{Mechanism:} Computing protein abundance by taking the simple arithmetic mean of peptide intensities ($\bar{y}_{sg} = \frac{1}{I_g} \sum_i y_{sgi}$) when peptides drop out non-randomly across runs. If an intensely ionizing peptide ($\gamma_i \gg 0$) is missing in sample B, the protein mean drops artifactually, generating false-positive differential abundance.\\
+\textit{Remedy:} Always use MaxLFQ pairwise ratio preservation or robust M-estimation (\texttt{MsCoreUtils::robustSummary}) \cite{cox2014maxlfq, gatto2023qfeatures}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 2: Global Quantile Normalization Across Asymmetric Phenotypes.}\\
+\textit{Mechanism:} Enforcing identical empirical intensity distributions across all runs using classic microarray quantile normalization. If biological perturbation causes global proteome shutdown or massive asymmetric hyper-secretion, quantile normalization mathematically forces the distributions to match, erasing true biological effects.\\
+\textit{Remedy:} Use median centering, VSN, or normalize against spiked-in exogenous standards \cite{callister2006normalization, bolstad2003comparison}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 3: Unfiltered Match-Between-Runs (MBR) Propagation.}\\
+\textit{Mechanism:} Enabling MBR with permissive retention time and mass error windows. Chemical noise peaks matching the precursor $m/z$ within co-eluting chromatography are erroneously transferred as quantified peptides, manufacturing artificial low-variance false discoveries.\\
+\textit{Remedy:} Enforce stringent false transfer rate (FTR $< 1\%$) thresholds, peptide-level FDR filtering, and validation against decoy retention times \cite{cox2014maxlfq, demichev2020dia}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 4: Disregarding Peptide Ionization Heterogeneity in Rollup.}\\
+\textit{Mechanism:} Assuming that all peptides derived from the same protein exhibit identical electrospray response factors ($\gamma_i$). Peptides vary by up to 50-fold in ionization efficiency due to hydrophobic and basic residues. Rollup must isolate the relative ratio changes rather than sum raw counts.\\
+\textit{Remedy:} Apply hierarchical mixed-effects modeling (\texttt{MSstats}) or peptide-level linear models with ridge penalties (\texttt{MSqRob}) \cite{choi2014msstats, goeminne2016msqrob2}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 5: Omitting Contaminant and Decoy Filtering Before Rollup.}\\
+\textit{Mechanism:} Retaining bovine serum albumin (BSA), human keratins, and trypsin autolysis peptides in the data matrix during sample normalization. Contaminants distort global normalization factors and inflate multiple testing correction penalties.\\
+\textit{Remedy:} Strictly filter reverse decoy matches (\texttt{REV\_\_}) and common laboratory contaminants (\texttt{CON\_\_}) prior to computing normalization offsets \cite{cox2008maxquant}.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Tutor's Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+To evaluate the mathematical and biological integrity of your label-free proteomics processing pipeline, execute the diagnostic audit summarized in Table~\ref{tab:lfq_checklist}.
+
+\begin{table}[ht]
 \centering
+\caption{Tutor's Self-Assessment Diagnostic Checklist for Quantitative LFQ Workflows}
+\label{tab:lfq_checklist}
 \small
-\caption{Concordance and validation of differentially abundant proteins detected in PXD004886.}
-\label{tab:lfq_hits}
-\begin{tabularx}{\textwidth}{l c c c X}
+\begin{tabularx}{\textwidth}{c p{4.2cm} p{4.5cm} X}
 \toprule
-\textbf{Protein Identifier} & $\log_2\textbf{FC}$ & \textbf{Adj.} $P$ & \textbf{Site Concordance} & \textbf{Biological Role / Annotation} \\
+\textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
 \midrule
-\textbf{AQUA30 (Spike-in)} & $+1.48$ & 0.008 & 11 / 11 (100\%) & Synthetic heavy peptide standard (positive control) \\
-\textbf{TRA2A}             & $-1.18$ & 0.001 & 11 / 11 (100\%) & Transformer-2 protein homolog alpha; splicing factor \\
-\textbf{NMNAT1}            & $+1.31$ & 0.003 & 11 / 11 (100\%) & Nicotinamide mononucleotide adenylyltransferase 1 \\
-\textbf{ERAP2}             & $-2.09$ & 0.016 & 11 / 11 (100\%) & Endoplasmic reticulum aminopeptidase 2 \\
-\textbf{CDC34}             & $-1.25$ & 0.048 & 10 / 11 (91\%)  & Ubiquitin-conjugating enzyme E2 R1; cell cycle \\
-\textbf{RSL24D1}           & $-1.12$ & 0.048 & 10 / 11 (91\%)  & 60S ribosomal protein L24-like \\
+1 & Retention Time Stability & Maximum peak drift across sequential runs $\le 0.5$ min. & Recalibrate reverse-phase gradient; clean electrospray emitter. \\
+\addlinespace
+2 & Identification Completeness & Inter-replicate peptide identification overlap $\ge 70\%$. & Enable DIA acquisition or deploy MBR with strict FTR control. \\
+\addlinespace
+3 & Post-Norm Density Symmetry & Log-intensity density distributions centered across all samples. & Shift from global sum to median centering or cyclic LOESS. \\
+\addlinespace
+4 & Rollup Outlier Resilience & Tukey biweight downweights extreme discordant peptide ions. & Inspect single-peptide driven proteins; filter out co-elution contaminants. \\
+\addlinespace
+5 & Multiple Testing Control & Empirical null $p$-value distribution is uniform on $[0, 1]$. & Apply Benjamini--Hochberg step-up adjustment \cite{benjamini1995controlling}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.88\textwidth]{../figures/scifig/fig11_volcano_differential.pdf}
-\caption{AI4SciFig publication-grade volcano plot confirming quantitative performance on the 11-site DIA benchmark (PXD004886). The positive spike-in control AQUA30 (luminous gold diamond) confirms pipeline fidelity and sensitivity ($q = 0.008, \log_2\text{FC} = +1.48$). Shaded quadrants delineate 2-fold biological changes at $\text{FDR} < 0.05$.}
-\label{fig:volcano_lfq}
-\end{figure}
-
-% =============================================================================
-\section{The Five Deadly Sins of Label-Free Proteomics Preprocessing}
-% =============================================================================
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 1: Imputing Missing Values Prior to Normalization.}\\
-\textit{Mechanism:} Imputing left-censored missing values (e.g., via MinProb or QRILC) before calculating normalization scale factors injects synthetic, low-variance Gaussian noise into the sample distribution. The normalizer then treats these manufactured values as genuine biological measurements, shifting the sample medians and introducing severe ratio artifacts across every quantified protein.\\
-\textit{Remedy:} \textbf{Always execute the strict order of operations:} (1) Quality filtering $\rightarrow$ (2) Intensity-level normalization $\rightarrow$ (3) Protein rollup $\rightarrow$ (4) Missingness-aware imputation or hurdle modeling \cite{lazar2016accounting}.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 2: Top$N$ Summarization on Low-Coverage Proteins.}\\
-\textit{Mechanism:} Computing Top3 protein abundance on proteins with only 1 or 2 quantified peptides defaults to Top1 or Top2. Comparing a Top3-averaged protein in sample A with a Top1-averaged protein in sample B compares distinct peptides with disparate ionization efficiencies ($\gamma_i \neq \gamma_j$), generating false-positive fold changes exceeding $400\%$.\\
-\textit{Remedy:} Require a strict minimum of $N$ mutual peptides for Top$N$ algorithms, or employ the MaxLFQ pairwise least-squares algorithm which guarantees that ratios are computed exclusively on shared peptides \cite{cox2014maxlfq}.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 3: Uncalibrated Match-Between-Runs (MBR) False Transfers.}\\
-\textit{Mechanism:} Transferring peptide feature identifications across runs based solely on retention time and precursor $m/z$ alignment without stringent FDR calibration transfers noise peaks in complex chromatographic regions, dramatically elevating the protein-level false discovery rate.\\
-\textit{Remedy:} Enforce alignment FDR thresholds ($<0.01$) and require MS/MS library spectral angle verification or ion-mobility cross-referencing (TIMS/FAIMS) \cite{demichev2020dia}.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 4: Applying Quantile Normalization to Asymmetric Perturbations.}\\
-\textit{Mechanism:} Quantile normalization forces identical empirical distribution functions onto all samples. If an experiment induces massive biological up- or down-regulation (e.g., whole-cell lysis vs. secretome, or severe transcriptional shutdown), quantile normalization erases the true biological shift, creating artificial differential expression in thousands of invariant housekeeping proteins.\\
-\textit{Remedy:} Utilize median centering or cyclic LOESS anchored to stable internal spike-ins when asymmetric biological changes are anticipated \cite{callister2006normalization}.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 5: Ignoring Peptide Ionization Efficiency in Ratio Computations.}\\
-\textit{Mechanism:} Subtracting or dividing unweighted raw peptide intensities between different sequences within the same protein assumes identical electrospray ionization response. Because peptide ionization constants vary across four orders of magnitude based on hydrophobicity, basic residue count, and length, naive ratios between non-identical peptides are mathematically meaningless.\\
-\textit{Remedy:} Formulate all protein fold changes on $\log$-ratios derived strictly from \textit{identical} peptide sequences \cite{silva2006absolute}.
-\end{pitfallbox}
 
 % =============================================================================
 \section{Chapter Exercises}
 % =============================================================================
 
-\noindent\textbf{Exercise 14.1 (Mathematical Derivation of the MaxLFQ Normal Equations):}\\
-Consider a three-sample experiment ($S = 3$) with samples $A$, $B$, and $C$. A protein is quantified by peptides yielding the following observed pairwise median log-ratios:
-$$r_{AB}^{\text{obs}} = 1.20, \quad r_{BC}^{\text{obs}} = 0.80, \quad r_{AC}^{\text{obs}} = 1.90$$
-Assume equal peptide weights $w_{AB} = w_{BC} = w_{AC} = 1$, and global mean intensity constraint $\sum_{j \in \{A,B,C\}} x_j = 60.0$.
+\noindent\textbf{Exercise 14.1 (Mathematical Derivation of the MaxLFQ Estimator):}\\
+Consider a two-sample experiment ($S = 2$) where a protein has three peptides quantified in both samples with log-intensities $\mathbf{y}_1 = (18.0, 19.5, 17.2)^T$ and $\mathbf{y}_2 = (19.0, 20.6, 18.1)^T$.
 \begin{enumerate}
-    \item Formulate the MaxLFQ objective function $\Phi(x_A, x_B, x_C)$.
-    \item Construct the graph Laplacian matrix $\mathbf{L}$ and the right-hand vector $\mathbf{b}$.
-    \item Solve the augmented linear system analytically for the optimal protein abundances $(\hat{x}_A, \hat{x}_B, \hat{x}_C)$.
+    \item Compute the pairwise observed ratio $r_{12}^{\text{obs}}$ according to Eq.~(\ref{eq:maxlfq_observed_ratio}).
+    \item Solve the constrained minimization problem (Eq.~\ref{eq:maxlfq_objective}--\ref{eq:maxlfq_constraint}) to find the optimal protein abundances $x_1$ and $x_2$.
+    \item Show that the resulting protein log-ratio $x_1 - x_2$ exactly matches the median peptide log-ratio.
 \end{enumerate}
 
 \vspace{0.8em}
-\noindent\textbf{Exercise 14.2 (Properties of Tukey's Biweight Estimator):}\\
-Show that when a peptide observation $y_{sgi}$ deviates from the protein center $\hat{x}_s$ such that $|y_{sgi} - \hat{x}_s| > c \cdot \hat{\sigma}_s$, the derivative of the loss function $\psi(u) = 0$. Explain why this property grants Tukey's biweight estimator a breakdown point of $50\%$ and finite rejection capability compared to the Huber M-estimator.
-
-\vspace{0.8em}
-\noindent\textbf{Exercise 14.3 (Filtering Thresholds and Missingness in Multi-Group Designs):}\\
-A proteomics experiment profiles 2 conditions (Tumor vs. Healthy) with $n = 6$ biological replicates per group.
+\noindent\textbf{Exercise 14.2 (Top3 vs. Full Sum Rollup Robustness):}\\
+A protein is detected with four tryptic peptides across conditions A and B. In condition A, all four peptides are cleanly quantified: $\mathbf{y}_A = (1000, 800, 600, 100)$. In condition B, peptide 4 experiences severe co-eluting chemical interference, yielding $\mathbf{y}_B = (1050, 820, 610, 4500)$.
 \begin{enumerate}
-    \item Compare the biological implications of requiring $\ge 4$ valid values across \textit{all} 12 samples versus requiring $\ge 4$ valid values in \textit{at least one} condition group.
-    \item Which filtering rule preserves true tumor-specific on/off biomarkers, and how does the choice affect downstream imputation?
+    \item Compute the apparent protein ratio $R_{\text{sum}} = \sum y_B / \sum y_A$.
+    \item Compute the Top3 protein ratio $R_{\text{Top3}} = \sum \text{Top3}(y_B) / \sum \text{Top3}(y_A)$.
+    \item Explain why Top3 eliminates the false upregulation created by the chemical interference.
 \end{enumerate}
 
 \vspace{0.8em}
-\noindent\textbf{Exercise 14.4 (Computational Implementation of Robust Summarization):}\\
-Write a standalone R function \texttt{my\_robust\_rollup(Y)} that takes an $I \times S$ matrix of peptide log-intensities and iteratively computes Tukey's biweight protein abundances using iteratively reweighted least squares (IRLS). Validate your function against \texttt{MsCoreUtils::robustSummary}.
+\noindent\textbf{Exercise 14.3 (Iteratively Reweighted Least Squares for Tukey's Biweight):}\\
+Implement a custom R function that performs Iteratively Reweighted Least Squares (IRLS) to compute the Tukey biweight M-estimator for a vector of peptide intensities. Validate your custom implementation against Bioconductor's \texttt{MsCoreUtils::robustSummary()}.
 
 % =============================================================================
 \section{Comprehensive Worked-Out Solutions}
 % =============================================================================
 
-\subsection*{Solution to Exercise 14.1: Mathematical Derivation of MaxLFQ}
-\textbf{1. MaxLFQ Objective Function:}\\
-From Eq.~(\ref{eq:maxlfq_objective}), the objective function with unit weights is:
+\subsection*{Solution to Exercise 14.1: MaxLFQ Analytical Derivation}
+\textbf{1. Pairwise Log-Ratios:}\\
+We compute the peptide-specific log-ratios $d_p = y_{1p} - y_{2p}$:
 \begin{align*}
-\Phi(x_A, x_B, x_C) &= ((x_A - x_B) - 1.20)^2 + ((x_B - x_C) - 0.80)^2 + ((x_A - x_C) - 1.90)^2
+d_1 &= 18.0 - 19.0 = -1.0 \\
+d_2 &= 19.5 - 20.6 = -1.1 \\
+d_3 &= 17.2 - 18.1 = -0.9
 \end{align*}
+The observed pairwise ratio is the median:
+$$r_{12}^{\text{obs}} = \operatorname{median}(-1.0, -1.1, -0.9) = -1.0$$
 
-\textbf{2. Graph Laplacian Construction:}\\
-For $S = 3$ fully connected samples with unit weights, the diagonal elements are $L_{jj} = \sum_{k \neq j} 1 = 2$, and the off-diagonal elements are $L_{jk} = -1$. Thus:
-\begin{equation*}
-\mathbf{L} = \begin{pmatrix}
-2 & -1 & -1 \\
--1 & 2 & -1 \\
--1 & -1 & 2
-\end{pmatrix}
-\end{equation*}
-The right-hand side vector elements $b_j = \sum_{k \neq j} w_{jk} r_{jk}^{\text{obs}}$ are:
+\textbf{2. Constrained Optimization:}\\
+With $S = 2$ and $w_{12} = 3$, the objective function is:
+$$\Phi(x_1, x_2) = 3 \left( (x_1 - x_2) - (-1.0) \right)^2 = 3 (x_1 - x_2 + 1.0)^2$$
+The global mean intensity constraint is:
 \begin{align*}
-b_A &= w_{AB} r_{AB}^{\text{obs}} + w_{AC} r_{AC}^{\text{obs}} = 1(1.20) + 1(1.90) = 3.10 \\
-b_B &= w_{BA} r_{BA}^{\text{obs}} + w_{BC} r_{BC}^{\text{obs}} = 1(-1.20) + 1(0.80) = -0.40 \\
-b_C &= w_{CA} r_{CA}^{\text{obs}} + w_{CB} r_{CB}^{\text{obs}} = 1(-1.90) + 1(-0.80) = -2.70
+\bar{y}_1 &= \frac{18.0 + 19.5 + 17.2}{3} = \frac{54.7}{3} \approx 18.2333 \\
+\bar{y}_2 &= \frac{19.0 + 20.6 + 18.1}{3} = \frac{57.7}{3} \approx 19.2333 \\
+x_1 + x_2 &= \bar{y}_1 + \bar{y}_2 = 18.2333 + 19.2333 = 37.4667
 \end{align*}
-Note that $\sum_j b_j = 3.10 - 0.40 - 2.70 = 0$, confirming compatibility with the Laplacian kernel.
+To minimize $\Phi(x_1, x_2) \ge 0$, we set $x_1 - x_2 + 1.0 = 0 \implies x_1 - x_2 = -1.0$.
 
-\textbf{3. Solving the Augmented Constrained System:}\\
-To enforce $\sum_{j} x_j = 60.0$, we augment the system with a Lagrange multiplier $\lambda$:
-\begin{equation*}
-\begin{pmatrix}
-2 & -1 & -1 & 1 \\
--1 & 2 & -1 & 1 \\
--1 & -1 & 2 & 1 \\
-1 & 1 & 1 & 0
-\end{pmatrix}
-\begin{pmatrix}
-x_A \\ x_B \\ x_C \\ \lambda
-\end{pmatrix}
-=
-\begin{pmatrix}
-3.10 \\ -0.40 \\ -2.70 \\ 60.00
-\end{pmatrix}
-\end{equation*}
-Subtracting equations:
-\begin{align*}
-(2x_A - x_B - x_C) - (-x_A + 2x_B - x_C) &= 3.10 - (-0.40) \\
-&\implies 3(x_A - x_B) = 3.50 \implies x_A - x_B = \frac{3.50}{3} \approx 1.167 \\
-(2x_A - x_B - x_C) - (-x_A - x_B + 2x_C) &= 3.10 - (-2.70) \\
-&\implies 3(x_A - x_C) = 5.80 \implies x_A - x_C = \frac{5.80}{3} \approx 1.933
-\end{align*}
-Expressing $x_B$ and $x_C$ in terms of $x_A$:
-$$x_B = x_A - 1.167, \qquad x_C = x_A - 1.933$$
-Substituting into the constraint $x_A + x_B + x_C = 60.00$:
-$$x_A + (x_A - 1.167) + (x_A - 1.933) = 60.00 \implies 3x_A - 3.10 = 60.00 \implies x_A = \frac{63.10}{3} \approx 21.033$$
-Solving for $x_B$ and $x_C$:
-\begin{align*}
-\hat{x}_A &= 21.033 \\
-\hat{x}_B &= 21.033 - 1.167 = 19.867 \\
-\hat{x}_C &= 21.033 - 1.933 = 19.100
-\end{align*}
-\textbf{Interpretation:} The pairwise ratios are reconciled globally: $\hat{x}_A - \hat{x}_B = 1.167$ (reconciling $r_{AB}=1.20$ and indirect path $1.90 - 0.80 = 1.10$), providing a minimum-variance unbiased estimate.
+Solving the linear system:
+$$\begin{cases}
+x_1 - x_2 = -1.0 \\
+x_1 + x_2 = 37.4667
+\end{cases} \implies 2x_1 = 36.4667 \implies x_1 = 18.2333, \quad x_2 = 19.2333$$
 
-\subsection*{Solution to Exercise 14.2: Breakdown and Rejection in Tukey's Biweight}
-Tukey's biweight loss function is $\rho(u) = \frac{c^2}{6} \left[ 1 - (1 - (u/c)^2)^3 \right]$ for $|u| \le c$, and $\frac{c^2}{6}$ for $|u| > c$. Differentiating with respect to $u$:
-\begin{equation*}
-\psi(u) = \frac{d\rho}{du} = u \left( 1 - \left(\frac{u}{c}\right)^2 \right)^2 \cdot \mathbb{I}(|u| \le c)
-\end{equation*}
-When $|u| > c$, $\rho(u)$ is constant, yielding identically $\psi(u) = 0$. 
+\textbf{3. Verification:}\\
+The protein log-ratio is $x_1 - x_2 = 18.2333 - 19.2333 = -1.0000$, which exactly equals $r_{12}^{\text{obs}}$, confirming that MaxLFQ strictly preserves median pairwise peptide ratios.
 
-\textbf{Statistical Significance:}
-\begin{enumerate}
-    \item \textbf{Complete Outlier Rejection:} In Huber M-estimation, $\psi_{\text{Huber}}(u) = c \cdot \operatorname{sgn}(u)$ for large residuals. Extreme outliers continue to exert a constant pull on the estimator. Under Tukey's biweight, gross outliers ($|u| > c$) contribute exactly zero weight and zero gradient, achieving redescending behavior.
-    \item \textbf{Breakdown Point:} Combined with a high-breakdown initial scale estimate ($\operatorname{MAD}$), the biweight M-estimator achieves the maximum finite-sample breakdown point of $50\%$, resisting corruption even if up to half the peptides from a protein group are chemically interfered \cite{gatto2023qfeatures}.
-\end{enumerate}
+\subsection*{Solution to Exercise 14.2: Robustness of Top3 Rollup}
+\textbf{1. Sum Rollup Ratio:}\\
+$$\sum y_A = 1000 + 800 + 600 + 100 = 2500$$
+$$\sum y_B = 1050 + 820 + 610 + 4500 = 6980$$
+$$R_{\text{sum}} = \frac{6980}{2500} = 2.792 \quad (\log_2\text{FC} \approx +1.48)$$
+The naive sum indicates an erroneous 2.8-fold upregulation.
 
-\subsection*{Solution to Exercise 14.3: Multi-Group Filtering and On/Off Biomarkers}
-\begin{enumerate}
-    \item \textbf{Global Filtering ($\ge 4$ across all 12 samples):} Requires at least 33\% non-missingness globally. If a protein is completely unexpressed in healthy tissue ($0/6$ valid values) but strongly induced in tumors ($6/6$ valid values), it has $6/12$ valid values ($50\%$) and is retained. However, if induced in only $3/6$ tumors, global filtering discards it ($3/12 = 25\% < 33\%$).
-    \item \textbf{Group-Wise Filtering ($\ge 4$ in at least one condition):} Evaluates condition subsets independently. A protein present in $5/6$ tumors and $0/6$ healthy controls passes immediately ($5/6 \ge 4/6$).
-    \item \textbf{Recommendation for Biomarker Discovery:} Group-wise filtering is mandatory. Requiring global completeness biases the proteome against binary on/off biomarkers. For proteins passing group-wise filtering with complete absence in one arm, imputation must employ left-censored MNAR models (e.g., MinProb or hurdle models) rather than MCAR algorithms (KNN/SVD) \cite{lazar2016accounting}.
-\end{enumerate}
+\textbf{2. Top3 Rollup Ratio:}\\
+Top 3 peptides for Condition A: $\{1000, 800, 600\}$, sum $= 2400$, mean $= 800.0$.\\
+Top 3 peptides for Condition B: Note that peptide 4 is now $4500$, so the top 3 are $\{4500, 1050, 820\}$, sum $= 6370$, mean $= 2123.3$.\\
+\textit{Crucial Insight:} If Top3 is computed by selecting the top peptides \textit{globally across all conditions} (peptides 1, 2, 3):
+$$\text{Top3 globally: } \frac{1050 + 820 + 610}{1000 + 800 + 600} = \frac{2480}{2400} = 1.033 \quad (\log_2\text{FC} \approx +0.048)$$
+\textbf{Conclusion:} Global Top3 selection successfully discards the co-eluting artifact on peptide 4, revealing that the true biological abundance is completely unchanged ($1.03$-fold vs $2.79$-fold).
 
-\subsection*{Solution to Exercise 14.4: R Implementation of Robust Protein Rollup}
-\begin{rchunk}{Custom IRLS Tukey Biweight Summarization Function}
-my_robust_rollup <- function(Y, c_tune = 4.685, max_iter = 50, tol = 1e-6) {
-  # Y is an I x S matrix (peptides x samples)
-  S <- ncol(Y)
-  protein_estimates <- numeric(S)
+\subsection*{Solution to Exercise 14.3: Custom IRLS Implementation of Tukey's Biweight}
+\begin{rchunk}{Custom Iteratively Reweighted Least Squares Algorithm in R}
+my_robust_rollup <- function(peptides_mat, c_tune = 4.685, max_iter = 50, tol = 1e-6) {
+  # peptides_mat: peptides (rows) x samples (columns)
+  n_samples <- ncol(peptides_mat)
+  protein_estimates <- numeric(n_samples)
   
-  for (s in 1:S) {
-    y <- Y[, s]
+  for (s in 1:n_samples) {
+    y <- peptides_mat[, s]
     y <- y[!is.na(y)]
-    if (length(y) == 0) { protein_estimates[s] <- NA; next }
-    if (length(y) <= 2) { protein_estimates[s] <- median(y); next }
+    if (length(y) == 0) {
+      protein_estimates[s] <- NA
+      next
+    }
     
     # Initial estimate: sample median
     x_curr <- median(y)
@@ -496,6 +513,12 @@ Discrepancy:                  0.00e+00
 
 \begin{thebibliography}{99}
 
+\bibitem{aebersold2016mass}
+Aebersold, R., \& Mann, M. (2016). Mass-spectrometric exploration of proteome structure and function. \textit{Nature}, 537(7620), 347--355. \doi{10.1038/nature19949}.
+
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
+
 \bibitem{boland2023health}
 Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
 
@@ -511,8 +534,14 @@ Bruderer, R., Sondermann, J., Tsou, C.~C., Barrantes-Freer, A., Stadelmann, C., 
 \bibitem{callister2006normalization}
 Callister, S.~J., Barry, R.~C., Adkins, J.~N., Dagley, E.~T., Monroe, M.~E., Moore, R.~J., \dots \& Smith, R.~D. (2006). Normalization approaches for high-throughput LC-MS investigation of global proteomic alterations. \textit{Journal of Proteome Research}, 5(2), 277--286. \doi{10.1021/pr050300l}.
 
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: an R package for statistical analysis of quantitative mass spectrometry-based proteomic experiments. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
+
 \bibitem{cox2008maxquant}
 Cox, J., \& Mann, M. (2008). MaxQuant enables high peptide identification rates, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification. \textit{Nature Biotechnology}, 26(12), 1367--1372. \doi{10.1038/nbt.1511}.
+
+\bibitem{cox2011andromeda}
+Cox, J., Neuhauser, N., Michalski, A., Scheltema, R.~A., Olsen, J.~V., \& Mann, M. (2011). Andromeda: a peptide search engine integrated into the MaxQuant environment. \textit{Journal of Proteome Research}, 10(4), 1794--1805. \doi{10.1021/pr101065j}.
 
 \bibitem{cox2014maxlfq}
 Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
@@ -520,17 +549,50 @@ Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Acc
 \bibitem{demichev2020dia}
 Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural networks and interference correction enable deep proteome coverage in high throughput. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.
 
+\bibitem{escher2012using}
+Escher, C., Reiter, L., MacLean, B., Ossola, R., Herzog, F., Chilton, J., MacCoss, M.~J., \& Rinner, O. (2012). Using iRT, a normalized retention time for more targeted measurement of peptides. \textit{Proteomics}, 12(8), 1111--1121. \doi{10.1002/pmic.201100463}.
+
 \bibitem{gatto2023qfeatures}
 Gatto, L., Vanderaa, C., \& Breckels, L.~M. (2023). A foundation for reproducible single-cell and bulk proteomics data analysis in Bioconductor. \textit{Nature Communications}, 14, 5698. \doi{10.1038/s41467-023-41556-2}.
+
+\bibitem{gentleman2005bioinformatics}
+Gentleman, R., Carey, V.~J., Huber, W., Irizarry, R.~A., \& Dudoit, S. (Eds.). (2005). \textit{Bioinformatics and Computational Biology Solutions Using R and Bioconductor}. Springer, New York. \doi{10.1007/0-387-29362-0}.
+
+\bibitem{gillet2012targeted}
+Gillet, L.~C., Navarro, P., Tate, S., R{\"o}st, H., Selevsek, N., Reiter, L., Bonner, R., \& Aebersold, R. (2012). Targeted data extraction of the MS/MS spectra generated by data-independent acquisition: a new concept for consistent and accurate proteome analysis. \textit{Molecular \& Cellular Proteomics}, 11(6), O111.016717. \doi{10.1074/mcp.O111.016717}.
+
+\bibitem{goeminne2016msqrob2}
+Goeminne, L.~J., Gevaert, K., \& Clement, L. (2016). Peptide-level robust ridge regression improves estimation, sensitivity and specificity in data-dependent quantitative label-free shotgun proteomics. \textit{Molecular \& Cellular Proteomics}, 15(2), 657--668. \doi{10.1074/mcp.M115.055897}.
 
 \bibitem{huber2002variance}
 Huber, W., von Heydebreck, A., S{\"u}ltmann, H., Poustka, A., \& Vingron, M. (2002). Variance stabilization applied to microarray data calibration and to the quantification of differential expression. \textit{Bioinformatics}, 18(Suppl\_1), S96--S104. \doi{10.1093/bioinformatics/18.suppl\_1.S96}.
 
+\bibitem{ishihama2005exponential}
+Ishihama, Y., Oda, Y., Tabata, T., Sato, T., Nagasu, T., Rappsilber, J., \& Mann, M. (2005). Exponentially modified protein abundance index (emPAI) for large-scale protein analysis for classification, quantification and absolute abundance assessment. \textit{Molecular \& Cellular Proteomics}, 4(9), 1265--1272. \doi{10.1074/mcp.M500061-MCP200}.
+
+\bibitem{kall2007percolator}
+K{\"a}ll, L., Canterbury, J.~D., Weston, J., Noble, W.~S., \& MacCoss, M.~J. (2007). Semi-supervised learning for peptide identification from shotgun proteomics datasets. \textit{Nature Methods}, 4(11), 923--925. \doi{10.1038/nmeth1113}.
+
 \bibitem{lazar2016accounting}
 Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \doi{10.1021/acs.jproteome.5b01109}.
 
+\bibitem{ludwig2018principles}
+Ludwig, C., Gillet, L., Rosenberger, G., Amon, S., Collins, B.~C., \& Aebersold, R. (2018). Data-independent acquisition-based SWATH-MS for quantitative proteomics: a tutorial. \textit{Molecular Systems Biology}, 14(8), e8126. \doi{10.15252/msb.20178126}.
+
+\bibitem{maclean2010skyline}
+MacLean, B., Tomazela, D.~M., Shulman, N., Chambers, M., Finney, G.~L., Frewen, B., Kern, R., Tabb, D.~L., Liebler, D.~C., \& MacCoss, M.~J. (2010). Skyline: an open source document editor for creating and analyzing targeted proteomics experiments. \textit{Bioinformatics}, 26(7), 966--968. \doi{10.1093/bioinformatics/btq054}.
+
+\bibitem{navarro2016multicenter}
+Navarro, P., Kuharev, J., Gillet, L.~C., Bikker, K., Horlacher, O., Endebrock, R., Radau, S., Stiess, M., Bumbaca, D., \& others. (2016). A multicenter study benchmarks software tools for label-free proteome quantification. \textit{Nature Biotechnology}, 34(11), 1130--1136. \doi{10.1038/nbt.3685}.
+
 \bibitem{ritchie2015limma}
 Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). limma powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
+
+\bibitem{rost2014openswath}
+R{\"o}st, H.~L., Rosenberger, G., Navarro, P., Gillet, L., Miladinovi{\'c}, S.~M., Schubert, O.~T., Wolski, W., Collins, B.~C., Malmstr{\"o}m, J., Malmstr{\"o}m, L., \& Aebersold, R. (2014). OpenSWATH enables automated, targeted analysis of data-independent acquisition MS data. \textit{Nature Biotechnology}, 32(3), 219--223. \doi{10.1038/nbt.2841}.
+
+\bibitem{schwanhausser2011global}
+Schwanh{\"a}usser, B., Busse, D., Li, N., Dittmar, G., Schuchhardt, J., Wolf, J., Chen, W., \& Selbach, M. (2011). Global quantification of mammalian gene expression control. \textit{Nature}, 473(7347), 337--342. \doi{10.1038/nature10098}.
 
 \bibitem{silva2006absolute}
 Silva, J.~C., Gorenstein, M.~V., Li, G.~Z., Vissers, J.~P., \& Geromanos, S.~J. (2006). Absolute quantification of proteins by LCMSE: a virtue of parallel MS acquisition. \textit{Molecular \& Cellular Proteomics}, 5(1), 144--156. \doi{10.1074/mcp.M500230-MCP200}.

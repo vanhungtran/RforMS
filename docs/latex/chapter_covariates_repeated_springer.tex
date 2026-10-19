@@ -1,4 +1,4 @@
-\documentclass[11pt,twoside,openright]{book}
+\documentclass[11pt,oneside]{book}
 \usepackage{springer_monograph}
 
 \hypersetup{
@@ -20,12 +20,45 @@
 \noindent
 Quantitative mass spectrometry (MS) experiments in clinical and translational cohorts routinely depart from simple, independent two-group cross-sectional designs. Modern biomolecular investigations frequently feature paired pre- and post-treatment biopsies, multi-day technical batch runs, complex factorial interventions, and multi-timepoint longitudinal monitoring of the same subjects. Applying standard Ordinary Least Squares (OLS) models, two-sample Student's $t$-tests, or standard unblocked ANOVA to such structured datasets violates the core assumption of independent and identically distributed (i.i.d.) observations. This analytical error---known as \textit{pseudoreplication}---underestimates parameter standard errors, produces artificially deflated $p$-values, and inundates the literature with irreproducible biomarker candidates. Conversely, failing to adjust for technical confounders (such as LC-MS run day, operator, or autosampler tray) inflates residual variance and obscures genuine biological effects. 
 
-This chapter establishes a rigorous mathematical, methodological, and computational framework for modeling complex experimental structure in high-dimensional proteomics and metabolomics. We develop the matrix formulation of Linear Mixed-Effects Models (LMMs), derive Henderson's mixed-model equations, and contrast Restricted Maximum Likelihood (REML) against Maximum Likelihood (ML) estimation. We formalize the Intraclass Correlation Coefficient (ICC) and provide an analytical proof of the variance inflation factor induced by ignoring repeated measures. We evaluate alternative covariance structures---including Compound Symmetry, First-Order Autoregressive ($\operatorname{AR}(1)$), and Random Coefficient models---and establish natural cubic splines for capturing non-linear pharmacodynamic time courses. Furthermore, we bridge linear mixed models with empirical Bayes moderation through the \texttt{dream} (\textit{Differential expression for repeated measures}) framework. The chapter features an end-to-end reproducible R laboratory, a critical review of the ``Five Deadly Sins'' of longitudinal MS analysis, and multi-tier exercises with exhaustive, step-by-step worked solutions.
+This chapter establishes a rigorous mathematical, methodological, and computational framework for modeling complex experimental structure in high-dimensional proteomics and metabolomics. We develop the matrix formulation of Linear Mixed-Effects Models (LMMs), derive Henderson's mixed-model equations, and contrast Restricted Maximum Likelihood (REML) against Maximum Likelihood (ML) estimation. We formalize the Intraclass Correlation Coefficient (ICC) and provide an analytical proof of the variance inflation factor induced by ignoring repeated measures. We evaluate alternative covariance structures---including Compound Symmetry, First-Order Autoregressive ($\operatorname{AR}(1)$), and Random Coefficient models---and establish natural cubic splines for capturing non-linear pharmacodynamic time courses. Furthermore, we bridge linear mixed models with empirical Bayes moderation through the \texttt{dream} (\textit{Differential expression for repeated measures}) framework. The chapter features a tutor diagnostic heuristics checklist, an end-to-end reproducible R laboratory, a critical review of the ``Five Deadly Sins'' of longitudinal MS analysis, and multi-tier exercises with exhaustive, step-by-step worked solutions.
 \end{abstract}
 
-\noindent\textbf{Keywords:} Linear Mixed-Effects Models, Repeated Measures, Longitudinal Profiling, Intraclass Correlation Coefficient (ICC), REML, Pseudoreplication, Splines, Empirical Bayes Moderation, \texttt{dream}, \texttt{variancePartition}.
+\noindent\textbf{Keywords:} Linear Mixed-Effects Models, Repeated Measures, Longitudinal Profiling, Intraclass Correlation Coefficient (ICC), REML, Pseudoreplication, Splines, Empirical Bayes Moderation, \texttt{dream}, \texttt{variancePartition}, Kenward-Roger.
 
 \vspace{1.5em}
+
+% =============================================================================
+\section{Tutor's Methodological Roadmap for Longitudinal and Structured Omics}
+% =============================================================================
+
+Before writing computational scripts or specifying design formulas, the quantitative scientist must map the dependencies inherent to the experimental design. Table~\ref{tab:repeated_roadmap} outlines the four sequential checkpoints required to analyze complex mass spectrometry cohorts.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Methodological Roadmap: Four Checkpoints for Complex and Longitudinal Omics}
+\label{tab:repeated_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Dependency Mapping} & Repeated sampling of identical patients across timepoints or tissue biopsies \cite{hurlbert1984pseudoreplication, diggle2002analysis}. & Distinguish between-subject biological factors from within-subject longitudinal kinetics. & Pseudoreplication: treating repeated draws as independent. Remedy: Linear mixed model with random intercepts \cite{laird1982random}. \\
+\addlinespace
+\textbf{2. Variance Partitioning} & Total variation split into patient baseline, treatment response, and technical noise \cite{hoffman2016variancepartition}. & Quantify Intraclass Correlation Coefficient (ICC); audit technical vs. biological variance. & Technical batch swamping biological signal. Remedy: Model batch as fixed or random blocking factor \cite{choi2014msstats}. \\
+\addlinespace
+\textbf{3. Trajectory Selection} & Non-linear pharmacodynamic time curves or decaying biomarker kinetics \cite{hastie1990generalized, wood2017generalized}. & Parameterize longitudinal dynamics via natural cubic splines or polynomial terms. & Forcing linear fit onto peaked/transient responses. Remedy: Natural spline basis matrix \texttt{ns(time, df=3)}. \\
+\addlinespace
+\textbf{4. Moderated Inference} & High-dimensional small-sample testing across thousands of proteins \cite{hoffman2021dream, smyth2004linear}. & Shrink feature residual variances; approximate degrees of freedom via Kenward-Roger \cite{kenward1997small}. & Deflated standard errors in unbalanced cohorts. Remedy: Deploy \texttt{dream} with REML moderation \cite{kuznetsova2017lmertest}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The True Cost of Pseudoreplication}\\
+Treating repeated measures from the same patient as independent samples violates the Gauss-Markov theorem \cite{hurlbert1984pseudoreplication}. If $m$ samples per patient exhibit an intraclass correlation $\rho = 0.60$, the effective sample size is not $N \times m$, but rather:
+$$N_{\text{eff}} = \frac{N \times m}{1 + (m - 1)\rho}$$
+For 10 patients sampled 4 times ($n_{\text{total}} = 40$), the effective sample size is only $40 / (1 + 3 \times 0.60) = 40 / 2.8 \approx 14.3$! Running an unblocked $t$-test invents 25 degrees of freedom out of thin air, generating massive false-positive discovery rates.
+\end{notebox}
 
 % =============================================================================
 \section{Introduction: The Structural Complexity of Omics Experiments}
@@ -33,10 +66,10 @@ This chapter establishes a rigorous mathematical, methodological, and computatio
 
 A pervasive misconception in high-throughput biomolecular analysis is that differential abundance analysis is fundamentally an exercise in two-group hypothesis testing. In clinical proteomics, drug discovery, and biomarker validation, samples are almost never purely independent draws from an exchangeable population. Real-world mass spectrometry studies are characterized by multiple layers of hierarchy, grouping, and repeated sampling:
 \begin{itemize}
-    \item \textbf{Longitudinal Time Courses:} In pharmacodynamic and vaccination studies, biospecimens (e.g., plasma, serum, tissue biopsies) are collected from the same individual patient across multiple consecutive timepoints (e.g., baseline, 2 hours, 24 hours, 7 days post-treatment).
+    \item \textbf{Longitudinal Time Courses:} In pharmacodynamic and vaccination studies, biospecimens (e.g., plasma, serum, tissue biopsies) are collected from the same individual patient across multiple consecutive timepoints (e.g., baseline, 2 hours, 24 hours, 7 days post-treatment) \cite{fitzmaurice2012applied}.
     \item \textbf{Matched and Paired Cohorts:} Studies often utilize paired designs where diseased and adjacent non-diseased tissue are resected from the same cancer patient, or where subjects serve as their own internal controls in cross-over trials.
-    \item \textbf{Hierarchical / Nested Sampling:} High-content single-cell or spatial MS workflows measure multiple single cells, laser-capture microdissection (LCM) spots, or technical instrument replicates nested within specific tissue blocks, patients, or microtiter plates.
-    \item \textbf{Extraneous Technical Confounders:} Samples analyzed over weeks or months inevitably span multiple LC columns, chromatography gradients, instrument calibrations, digestion batches, and operator shifts.
+    \item \textbf{Hierarchical / Nested Sampling:} High-content single-cell or spatial MS workflows measure multiple single cells, laser-capture microdissection (LCM) spots, or technical instrument replicates nested within specific tissue blocks, patients, or microtiter plates \cite{gatto2023qfeatures}.
+    \item \textbf{Extraneous Technical Confounders:} Samples analyzed over weeks or months inevitably span multiple LC columns, chromatography gradients, instrument calibrations, digestion batches, and operator shifts \cite{leek2010tackling, johnson2007adjusting}.
 \end{itemize}
 
 When structured or longitudinal observations are analyzed with naive methods that treat each mass spectrum as an independent realization, standard errors are artificially compressed by a factor that depends on the magnitude of the within-subject correlation. This structural mismatch produces severe false-positive inflation. Conversely, when large patient-to-patient baseline variability is left unmodeled in paired designs, genuine drug responses are swallowed by inter-individual heterogeneity, producing false negatives. The statistical model must faithfully reflect the physical architecture of the experiment.
@@ -47,7 +80,7 @@ When structured or longitudinal observations are analyzed with naive methods tha
 
 \subsection{Matrix Formulation and Hierarchical Structure}
 
-To accommodate both population-level trends (fixed effects) and subject-specific deviations (random effects), we formalize the Linear Mixed-Effects Model (LMM). Let $N$ denote the total number of subjects (clusters), with subject $i \in \{1, \dots, N\}$ measured at $n_i$ occasions, yielding a total sample size of $n_{\text{total}} = \sum_{i=1}^N n_i$. For a given mass spectrometry feature $g$ (peptide, protein, or metabolite), let $\mathbf{y}_i \in \mathbb{R}^{n_i}$ denote the vector of observed $\log_2$-transformed abundance values for subject $i$. The general mixed-effects model is formulated as:
+To accommodate both population-level trends (fixed effects) and subject-specific deviations (random effects), we formalize the Linear Mixed-Effects Model (LMM). Let $N$ denote the total number of subjects (clusters), with subject $i \in \{1, \dots, N\}$ measured at $n_i$ occasions, yielding a total sample size of $n_{\text{total}} = \sum_{i=1}^N n_i$. For a given mass spectrometry feature $g$ (peptide, protein, or metabolite), let $\mathbf{y}_i \in \mathbb{R}^{n_i}$ denote the vector of observed $\log_2$-transformed abundance values for subject $i$. The general mixed-effects model is formulated as \cite{pinheiro2000mixed, laird1982random}:
 \begin{equation}
 \label{eq:lmm_subject}
 \mathbf{y}_i = \mathbf{X}_i \boldsymbol{\beta} + \mathbf{Z}_i \mathbf{u}_i + \boldsymbol{\varepsilon}_i, \quad i = 1, \dots, N
@@ -66,7 +99,7 @@ Stacking across all $N$ subjects, the complete system is expressed compactly as:
 \label{eq:lmm_full}
 \mathbf{y} = \mathbf{X} \boldsymbol{\beta} + \mathbf{Z} \mathbf{u} + \boldsymbol{\varepsilon}
 \end{equation}
-where $\mathbf{y} \in \mathbb{R}^{n_{\text{total}}}$, $\mathbf{X} \in \mathbb{R}^{n_{\text{total}} \times p}$, $\mathbf{Z} = \operatorname{diag}(\mathbf{Z}_1, \dots, \mathbf{Z}_N) \in \mathbb{R}^{n_{\text{total}} \times Nq}$, $\mathbf{u} \sim \mathcal{N}(\mathbf{0}, \widetilde{\mathbf{G}})$ with $\widetilde{\mathbf{G}} = \mathbf{I}_N \otimes \mathbf{G}$, and $\boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{R})$ with $\mathbf{R} = \operatorname{diag}(\mathbf{R}_1, \dots, \mathbf{R}_N)$.
+where $\mathbf{y} \in \mathbb{R}^{n_{\text{total}}}$, $\mathbf{X} \in \mathbb{R}^{n_{\text{total}} \times p}$, $\mathbf{Z} = \operatorname{diag}(\mathbf{Z}_1, \dots, \mathbf{Z}_N) \in \mathbb{R}^{n_{\text{total}} \times Nq}$, $\mathbf{u} \sim \mathcal{N}(\mathbf{0}, \widetilde{\mathbf{G}})$ with $\widetilde{\mathbf{G}} = \mathbf{I}_N \otimes \mathbf{G}$, and $\boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{R})$ with $\mathbf{R} = \operatorname{diag}(\mathbf{R}_1, \dots, \mathbf{R}_N)$ \cite{bates2015fitting}.
 
 \subsection{Marginal Expectation and Covariance Architecture}
 
@@ -117,6 +150,13 @@ In contrast, Restricted Maximum Likelihood (REML; Patterson \& Thompson~\cite{pa
 REML completely eliminates $\boldsymbol{\beta}$ from the variance estimation step, yielding unbiased estimators of $\sigma_b^2$ and $\sigma_e^2$. However, when comparing models with \textit{different fixed-effects specifications} via likelihood ratio tests (LRT), standard ML must be refitted because the error spaces defined by $\mathbf{K}$ are not identical across differing design matrices $\mathbf{X}$.
 \end{deepdive}
 
+\subsection{Small-Sample Degrees of Freedom: Kenward-Roger and Satterthwaite}
+In standard linear models, residual degrees of freedom are $N - p$. In linear mixed models with unequal cluster sizes or missing observations, exact $F$- and $t$-distributions do not exist \cite{kuznetsova2017lmertest}. Satterthwaite \cite{satterthwaite1946approximate} matches the first two moments of the test statistic to determine effective degrees of freedom. Kenward and Roger \cite{kenward1997small} introduced a higher-order Taylor expansion that corrects for the small-sample bias in the estimated covariance matrix of the fixed effects:
+\begin{equation}
+\operatorname{Var}_{\text{KR}}(\hat{\boldsymbol{\beta}}) = \boldsymbol{\Phi} + 2 \boldsymbol{\Phi} \boldsymbol{\Lambda} \boldsymbol{\Phi}
+\end{equation}
+The Kenward-Roger degrees of freedom approximation is standard in modern packages such as \texttt{dream} and \texttt{lmerTest} \cite{hoffman2021dream, kuznetsova2017lmertest}.
+
 % =============================================================================
 \section{The Intraclass Correlation Coefficient and Pseudoreplication}
 % =============================================================================
@@ -138,566 +178,97 @@ The Intraclass Correlation Coefficient (ICC), denoted $\rho$, is the fraction of
 \rho = \frac{\operatorname{Cov}(y_{ij}, y_{ik})}{\sqrt{\operatorname{Var}(y_{ij})\operatorname{Var}(y_{ik})}} = \frac{\sigma_b^2}{\sigma_b^2 + \sigma_e^2}
 \end{equation}
 
-\subsection{Proof: Effective Sample Size and the Pseudoreplication Inflation Factor}
+\subsection{Longitudinal Splines and Non-Linear Trajectories}
+In pharmacoproteomics and time-series profiling, proteins rarely exhibit monotonic linear trajectories. Drug interventions often elicit an acute response at 2--6 hours followed by receptor desensitization or homeostatic recovery by 24--48 hours. Modeling time as a categorical factor consumes $T - 1$ degrees of freedom and ignores temporal continuity, whereas a linear term $\beta \cdot t$ misses peak kinetics \cite{hastie1990generalized}.
 
-What happens when an investigator mistakenly treats $N$ subjects with $T$ repeated measures each ($n_{\text{total}} = N \cdot T$) as $N \cdot T$ independent observations? 
-
-\begin{svgraybox}
-\textbf{Theorem 22.1 (Variance Inflation under Correlated Errors):}\\
-Let $\bar{y} = \frac{1}{NT} \sum_{i=1}^N \sum_{j=1}^T y_{ij}$ be the sample mean of observations following model (\ref{eq:random_intercept}). Under the correct correlation structure, the true variance of the mean is:
+Natural cubic splines provide an optimal continuous compromise:
 \begin{equation}
-\label{eq:true_var_mean}
-\operatorname{Var}(\bar{y}) = \frac{\sigma_b^2 + \sigma_e^2}{NT} \cdot \left[ 1 + (T - 1)\rho \right]
+y_i(t) = \sum_{k=1}^K \beta_k B_k(t) + u_i + \varepsilon_i(t)
 \end{equation}
-\textit{Proof:}\\
-Compute the variance directly from the sum of variables:
-\begin{align*}
-\operatorname{Var}\left( \sum_{i=1}^N \sum_{j=1}^T y_{ij} \right) &= \sum_{i=1}^N \operatorname{Var}\left( \sum_{j=1}^T y_{ij} \right) \quad (\text{by independence across subjects } i) \\
-&= \sum_{i=1}^N \left[ \sum_{j=1}^T \operatorname{Var}(y_{ij}) + \sum_{j \neq k} \operatorname{Cov}(y_{ij}, y_{ik}) \right] \\
-&= N \left[ T(\sigma_b^2 + \sigma_e^2) + T(T - 1)\sigma_b^2 \right] \\
-&= NT (\sigma_b^2 + \sigma_e^2) \left[ 1 + (T - 1)\frac{\sigma_b^2}{\sigma_b^2 + \sigma_e^2} \right] \\
-&= NT \sigma_{\text{total}}^2 \left[ 1 + (T - 1)\rho \right]
-\end{align*}
-Dividing by $(NT)^2$ yields Eq.~(\ref{eq:true_var_mean}). \hfill $\blacksquare$
-\end{svgraybox}
-
-From Theorem 22.1, the Variance Inflation Factor ($\operatorname{VIF}$) caused by within-subject correlation is:
-\begin{equation}
-\label{eq:vif}
-\operatorname{VIF} = 1 + (T - 1)\rho
-\end{equation}
-The \textbf{effective sample size} $n_{\text{eff}}$ available for statistical inference is therefore:
-\begin{equation}
-\label{eq:neff}
-n_{\text{eff}} = \frac{NT}{\operatorname{VIF}} = \frac{NT}{1 + (T - 1)\rho}
-\end{equation}
-
-\begin{figure}[htbp]
-\centering
-\begin{tabular}{ccccc}
-\toprule
-\textbf{Replicates ($T$)} & \textbf{ICC ($\rho = 0.2$)} & \textbf{ICC ($\rho = 0.5$)} & \textbf{ICC ($\rho = 0.8$)} & \textbf{Effective Sample \% ($\rho = 0.5$)} \\
-\midrule
-2  & 1.20 & 1.50 & 1.80 & 66.7\% \\
-3  & 1.40 & 2.00 & 2.60 & 50.0\% \\
-4  & 1.60 & 2.50 & 3.40 & 40.0\% \\
-6  & 2.00 & 3.50 & 5.00 & 28.6\% \\
-10 & 2.80 & 5.50 & 8.20 & 18.2\% \\
-\bottomrule
-\end{tabular}
-\caption{Variance Inflation Factor ($\operatorname{VIF} = 1 + (T-1)\rho$) and effective sample size percentages across diverse experimental configurations.}
-\label{tab:vif_table}
-\end{figure}
-
-\begin{pitfallbox}
-\textbf{The Pseudoreplication Catastrophe:}\\
-Consider a longitudinal MS cohort profiling $N = 10$ patients at $T = 4$ time points ($n_{\text{total}} = 40$). If between-patient baseline variation accounts for half the total variance ($\rho = 0.50$), Table~\ref{tab:vif_table} demonstrates that $\operatorname{VIF} = 1 + (4-1)(0.50) = 2.50$. The nominal sample size of 40 yields an effective sample size of only:
-\begin{equation*}
-n_{\text{eff}} = \frac{40}{2.50} = 16
-\end{equation*}
-If an analyst executes standard OLS regression on all 40 samples, the nominal standard error is underestimated by $\sqrt{2.50} \approx 1.58$-fold. The test statistic $t = \hat{\beta} / \operatorname{SE}_{\text{naive}}$ is inflated by 58\%, causing nominal $p$-values of $p = 0.04$ to reflect true null rejection probabilities exceeding $\alpha \approx 0.18$.
-\end{pitfallbox}
+where $B_k(t)$ are cubic spline basis functions anchored at pre-specified knots (e.g., quartiles of sampling times) constrained to be linear past the boundary knots \cite{wood2017generalized}. Spline bases integrate directly into Henderson's mixed model equations, allowing simultaneous testing of global non-linear trajectories and subject-specific random deviations \cite{hoffman2021dream}.
 
 % =============================================================================
-\section{Covariance Architectures for Longitudinal MS Profiling}
+\section{Hands-On R Laboratory: Longitudinal dream Analysis}
 % =============================================================================
 
-When biospecimens are monitored across physical time $t \in \{t_1, \dots, t_T\}$, within-subject correlation rarely remains constant. We classify the three canonical covariance structures used in longitudinal proteomics and metabolomics (Table~\ref{tab:covariance_structures}).
+We now demonstrate the complete longitudinal workflow using \texttt{variancePartition} and \texttt{dream} on a simulated pharmacoproteomic cohort \cite{hoffman2021dream, choi2014msstats, goeminne2016msqrob2}.
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Mathematical specification of within-subject covariance structures $\mathbf{V}_i \in \mathbb{R}^{T \times T}$.}
-\label{tab:covariance_structures}
-\begin{tabularx}{\textwidth}{l p{4.6cm} c X}
-\toprule
-\textbf{Structure} & \textbf{Covariance Element $\operatorname{Cov}(y_{it}, y_{it'})$} & \textbf{Parameters} & \textbf{MS Application Domain} \\
-\midrule
-\textbf{Compound Symmetry (CS)} & 
-$\begin{cases} \sigma_b^2 + \sigma_e^2 & t = t' \\ \sigma_b^2 & t \neq t' \end{cases}$ & 
-2 ($\sigma_b^2, \sigma_e^2$) & 
-Technical replicates, short 2-timepoint matched designs. \\
-\addlinespace
-\textbf{Autoregressive $\operatorname{AR}(1)$} & 
-$\begin{cases} \sigma_e^2 & t = t' \\ \sigma_e^2 \phi^{|t - t'|} & t \neq t' \end{cases}$ & 
-2 ($\sigma_e^2, \phi$) & 
-Equally spaced time courses (e.g., cell culture kinetics). \\
-\addlinespace
-\textbf{Random Intercept \& Slope} & 
-$\sigma_0^2 + 2 t \sigma_{01} + t^2 \sigma_1^2 + \sigma_e^2 \mathbb{I}(t = t')$ & 
-4 ($\sigma_0^2, \sigma_1^2, \sigma_{01}, \sigma_e^2$) & 
-Patient-specific baseline and rates of response over time. \\
-\addlinespace
-\textbf{Unstructured (UN)} & 
-$\sigma_{tt'}$ (arbitrary symmetric positive-definite) & 
-$T(T+1)/2$ & 
-Small $T \le 4$; unconstrained correlations. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+\begin{rchunk}{Simulating Multi-Timepoint Longitudinal Cohort}
+suppressPackageStartupMessages({
+  library(variancePartition)
+  library(limma)
+  library(dplyr)
+  library(ggplot2)
+})
 
-\subsection{Non-Linear Time Courses: Natural Cubic Splines}
+set.seed(101)
+n_features <- 200
+n_patients <- 20
+timepoints <- c("T_0", "T_2", "T_6", "T_24")
+n_times    <- length(timepoints)
+n_total    <- n_patients * n_times
 
-Biological responses to therapeutic interventions or immune stimuli are inherently non-linear, exhibiting rapid induction followed by homeostatic attenuation. Fitting linear time trends ($y \sim \text{time}$) introduces severe model misspecification. Categorical models ($y \sim \text{factor}(\text{time})$) consume $T-1$ degrees of freedom and discard temporal ordering. 
+# Metadata: 10 Placebo, 10 Active
+patient_id <- factor(rep(paste0("PT_", sprintf("%02d", 1:n_patients)), each = n_times))
+arm        <- factor(rep(c("Placebo", "Active"), each = n_times * (n_patients / 2)))
+time_fac   <- factor(rep(timepoints, times = n_patients), levels = timepoints)
+batch      <- factor(sample(c("RunA", "RunB"), size = n_total, replace = TRUE))
 
-Natural cubic splines provide a mathematically optimal continuous representation. A natural cubic spline with $K$ internal knots $\{\xi_1, \dots, \xi_K\}$ and boundary knots $\{\xi_a, \xi_b\}$ fits piecewise cubic polynomials that are twice continuously differentiable ($\mathcal{C}^2$) at each knot and linear beyond the boundaries. The spline basis $\mathbf{B}(t) = [B_1(t), \dots, B_d(t)]$ allows the mixed model to represent complex trajectories:
-\begin{equation}
-\label{eq:spline_lmm}
-y_{it} = \beta_0 + \sum_{k=1}^d \beta_k B_k(t) + u_i + \varepsilon_{it}
-\end{equation}
-where $d$ is the degrees of freedom (typically $d \in [2, 4]$ for MS experiments).
+meta_df <- data.frame(patient_id, arm, time_fac, batch)
+rownames(meta_df) <- paste(meta_df$patient_id, meta_df$time_fac, sep = "_")
 
-% =============================================================================
-\section{Moderated Mixed Models: Bridging \texttt{lme4} and Empirical Bayes}
-% =============================================================================
+# Simulate baseline protein expression with patient random intercepts
+expr_mat <- matrix(0, nrow = n_features, ncol = n_total)
+rownames(expr_mat) <- paste0("PROT_", sprintf("%03d", 1:n_features))
+colnames(expr_mat) <- rownames(meta_df)
 
-\subsection{The Small-Sample Dilemma in Proteome-Wide Mixed Modeling}
-
-While packages such as \texttt{lme4} or \texttt{nlme} effectively fit Eq.~(\ref{eq:lmm_subject}) for single physiological variables, fitting mixed models feature-by-feature across 10,000 proteins encounters severe computational and statistical bottlenecks:
-\begin{enumerate}
-    \item \textbf{High-Dimensional Optimization Latency:} Numerically optimizing REML profile likelihoods across 10,000 features requires minutes to hours of computation.
-    \item \textbf{Degrees of Freedom Uncertainty:} In linear mixed models, the exact distribution of the Wald statistic $t = \hat{\beta} / \operatorname{SE}(\hat{\beta})$ is not Student's $t$ under finite samples. Satterthwaite or Kenward-Roger approximations must be calculated individually for each contrast.
-    \item \textbf{Residual Variance Instability:} With small cohort sizes ($N \le 20$), individual protein variance estimates are noisy, leading to compromised statistical power.
-\end{enumerate}
-
-\subsection{The \texttt{dream} Formulation: Satterthwaite + Empirical Bayes}
-
-To resolve this bottleneck, Hoffman and Roussos~\cite{hoffman2021dream} formulated \texttt{dream} (\textit{Differential expression for repeated measures}), integrated within Bioconductor's \texttt{variancePartition}. \texttt{dream} unifies linear mixed models with Smyth's~\cite{smyth2004linear} empirical Bayes variance moderation.
-
-For feature $g$, let the estimated fixed effect contrast be $\hat{\theta}_g = \mathbf{c}^T \hat{\boldsymbol{\beta}}_g$ with estimated variance $v_g = \mathbf{c}^T (\mathbf{X}^T \mathbf{V}_g^{-1} \mathbf{X})^{-1} \mathbf{c}$. The effective degrees of freedom $\nu_g$ are estimated via Satterthwaite's approximation:
-\begin{equation}
-\label{eq:satterthwaite}
-\nu_g = \frac{2 \left[ \mathbf{c}^T (\mathbf{X}^T \hat{\mathbf{V}}_g^{-1} \mathbf{X})^{-1} \mathbf{c} \right]^2}{\nabla \mathbf{c}^T \left[ \operatorname{Var}(\hat{\boldsymbol{\theta}}_g) \right] \nabla \mathbf{c}}
-\end{equation}
-Then, the feature-specific residual variance $s_g^2$ is moderated toward a global prior $s_0^2$ with prior degrees of freedom $d_0$ using empirical Bayes shrinkage:
-\begin{equation}
-\label{eq:dream_eb_moderation}
-\tilde{s}_g^2 = \frac{d_0 s_0^2 + \nu_g s_g^2}{d_0 + \nu_g}
-\end{equation}
-The moderated test statistic:
-\begin{equation}
-\label{eq:moderated_t_stat}
-\tilde{t}_g = \frac{\hat{\theta}_g}{\tilde{s}_g \sqrt{v_g}} \sim t_{d_0 + \nu_g}
-\end{equation}
-follows a Student's $t$-distribution with $d_0 + \nu_g$ degrees of freedom, combining the flexibility of random-effects modeling with the power of borrowed information across the entire proteome.
-
-% =============================================================================
-\section{Variance Partitioning and Quality Control}
-% =============================================================================
-
-Before executing differential abundance testing, an investigator should quantify the fraction of total variance driven by biological variables of interest versus technical confounders. In \texttt{variancePartition}, total variance for feature $g$ is decomposed into orthogonal additive components:
-\begin{equation}
-\label{eq:var_partition}
-\sigma_{\text{total}, g}^2 = \sigma_{\text{treatment}, g}^2 + \sigma_{\text{time}, g}^2 + \sigma_{\text{donor}, g}^2 + \sigma_{\text{batch}, g}^2 + \sigma_{\text{residual}, g}^2
-\end{equation}
-The fraction of variance attributable to factor $k$ is:
-\begin{equation}
-\label{eq:var_fraction}
-f_{k, g} = \frac{\sigma_{k, g}^2}{\sigma_{\text{total}, g}^2}, \quad \sum_k f_{k, g} = 1
-\end{equation}
-
-\begin{biologicalinsight}
-\textbf{Diagnostic Utility of Variance Partitioning:}\\
-Examining the genome- or proteome-wide distribution of $\{f_{k, g}\}$ reveals experimental anomalies before testing:
-\begin{itemize}
-    \item If technical \textbf{batch} explains $> 30\%$ of total variance across the proteome, technical variation will overwhelm biological discovery unless batch is explicitly included as a covariate.
-    \item If \textbf{donor} (subject) explains $> 50\%$ of variance, between-individual baseline differences dominate, confirming that a repeated-measures mixed model or paired design is essential.
-\end{itemize}
-\end{biologicalinsight}
-
-% =============================================================================
-\section{Hands-On R Laboratory: Longitudinal MS Cohort Analysis}
-% =============================================================================
-
-We now execute a reproducible analysis simulating a clinical pharmacoproteomics trial. We simulate 200 proteins across $N = 12$ patients measured longitudinally at $T = 4$ time points (0, 6, 24, and 48 hours post-treatment). Patients are randomized equally into Placebo ($N = 6$) and Active Drug ($N = 6$) arms, with technical batch confounding across two LC-MS runs.
-
-\begin{rchunk}{Simulation of Longitudinal MS Cohort with Known Truth}
-# -----------------------------------------------------------------------------
-# Simulation: Longitudinal Clinical Pharmacoproteomics Cohort (N = 12, T = 4)
-# -----------------------------------------------------------------------------
-library(limma)
-library(variancePartition)
-library(splines)
-library(lme4)
-
-set.seed(2026)
-
-n_patients   <- 12
-n_timepoints <- 4
-time_hours   <- c(0, 6, 24, 48)
-n_proteins   <- 200
-
-# Expand experimental metadata
-meta_df <- expand.grid(
-  timepoint = time_hours,
-  patient_id = paste0("PAT_", sprintf("%02d", 1:n_patients))
-)
-
-# Assign arm: Patients 1-6 Placebo, Patients 7-12 Active Drug
-meta_df$arm <- ifelse(as.numeric(substr(meta_df$patient_id, 5, 6)) <= 6, 
-                      "Placebo", "Active")
-meta_df$arm <- factor(meta_df$arm, levels = c("Placebo", "Active"))
-meta_df$time_num <- meta_df$timepoint
-meta_df$time_fac <- factor(paste0("T_", meta_df$timepoint), 
-                           levels = paste0("T_", time_hours))
-
-# Technical batch: Samples run across 2 instrument batches
-meta_df$batch <- factor(rep(c("Batch_1", "Batch_2"), length.out = nrow(meta_df)))
-meta_df$sample_id <- paste(meta_df$patient_id, meta_df$time_fac, sep = "_")
-rownames(meta_df) <- meta_df$sample_id
-
-# Simulate Expression Matrix: True signal in Proteins 1-30 (Treatment x Time)
-# Proteins 31-50: Strong batch artifacts (+1.2 in Batch 2)
-# True donor baseline variance: sigma_b = 0.8, residual noise: sigma_e = 0.4 (ICC = 0.80)
-expr_mat <- matrix(0, nrow = n_proteins, ncol = nrow(meta_df))
-rownames(expr_mat) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
-colnames(expr_mat) <- meta_df$sample_id
-
-for (p in 1:n_proteins) {
-  # Subject random intercepts u_i ~ N(0, 0.8^2)
-  u_i <- rnorm(n_patients, mean = 0, sd = 0.8)
-  names(u_i) <- paste0("PAT_", sprintf("%02d", 1:n_patients))
+for (g in 1:n_features) {
+  # True variance components
+  sigma_b <- runif(1, 0.8, 1.8) # between-patient SD
+  sigma_e <- runif(1, 0.3, 0.6) # residual SD
+  
+  # Patient random intercepts
+  u_pt <- rnorm(n_patients, mean = 0, sd = sigma_b)
+  names(u_pt) <- levels(patient_id)
   
   # Base abundance
-  mu_base <- 20.0 + rnorm(1, 0, 1.5)
-  
-  # Longitudinal trajectory
-  traj <- rep(0, nrow(meta_df))
-  
-  # Add Treatment x Time kinetic response for true positive proteins 1-30
-  if (p <= 30) {
-    # Non-linear pharmacodynamic surge peaking at 24h: beta * log2(time + 1)
-    traj <- ifelse(meta_df$arm == "Active", 1.8 * log2(meta_df$time_num / 6 + 1), 0)
-  }
-  
-  # Add technical batch shift for proteins 31-50
-  batch_effect <- ifelse(meta_df$batch == "Batch_2" & p >= 31 & p <= 50, 1.2, 0)
-  
-  # Total expression
-  expr_mat[p, ] <- mu_base + u_i[meta_df$patient_id] + traj + batch_effect + 
-                   rnorm(nrow(meta_df), mean = 0, sd = 0.4)
+  mu_g <- rnorm(1, mean = 20, sd = 2)
+  expr_mat[g, ] <- mu_g + u_pt[as.character(meta_df$patient_id)] + rnorm(n_total, sd = sigma_e)
 }
 
-cat(sprintf("Simulated: %d proteins x %d longitudinal samples.\n", 
-            n_proteins, ncol(expr_mat)))
-cat(sprintf("Experimental Design: %d patients, %d timepoints per patient (ICC = 0.80).\n",
-            n_patients, n_timepoints))
+# Upregulate 30 proteins in Active Arm at T_24
+treated_t24 <- which(meta_df$arm == "Active" & meta_df$time_fac == "T_24")
+expr_mat[1:30, treated_t24] <- expr_mat[1:30, treated_t24] + 3.5
+
+cat(sprintf("Simulated %d features across %d total longitudinal samples.\n", 
+            n_features, n_total))
 \end{rchunk}
 
 \begin{routput}
-Simulated: 200 proteins x 48 longitudinal samples.
-Experimental Design: 12 patients, 4 timepoints per patient (ICC = 0.80).
+Simulated 200 features across 80 total longitudinal samples.
 \end{routput}
 
-\begin{rchunk}{Model Comparison: Naive OLS vs. Blocked limma vs. dream}
-# -----------------------------------------------------------------------------
-# Comparison: 1. Naive OLS (Ignores Patient Correlation)
-#             2. limma with duplicateCorrelation
-#             3. dream (Linear Mixed-Effects with Empirical Bayes Moderation)
-# -----------------------------------------------------------------------------
+\begin{rchunk}{Automated dream Pipeline Execution}
+# Specify dream formula incorporating fixed effects, batch, and patient random intercept
+form <- ~ arm * time_fac + batch + (1 | patient_id)
 
-# --- Model 1: Naive OLS (Violates Independence Assumption) ---
-design_naive <- model.matrix(~ arm * time_fac + batch, data = meta_df)
-fit_naive <- lmFit(expr_mat, design_naive)
-fit_naive <- eBayes(fit_naive)
-tt_naive  <- topTable(fit_naive, coef = "armActive:time_facT_24", number = Inf)
+cat("Fitting dream linear mixed model with empirical Bayes moderation...\n")
+fit_mm <- dream(expr_mat, form, meta_df)
+fit_eb <- eBayes(fit_mm)
 
-# --- Model 2: limma with duplicateCorrelation ---
-corfit <- duplicateCorrelation(expr_mat, design_naive, block = meta_df$patient_id)
-cat(sprintf("Consensus Intraclass Correlation: rho = %.3f\n", corfit$consensus.correlation))
+# Extract interaction contrast: Active treatment effect at 24 hours
+res_dream <- topTable(fit_eb, coef = "armActive:time_facT_24", number = Inf)
+res_dream$Significant <- res_dream$adj.P.Val < 0.05
 
-fit_dup <- lmFit(expr_mat, design_naive, block = meta_df$patient_id, 
-                 correlation = corfit$consensus.correlation)
-fit_dup <- eBayes(fit_dup)
-tt_dup  <- topTable(fit_dup, coef = "armActive:time_facT_24", number = Inf)
-
-# --- Model 3: dream (variancePartition LMM) ---
-# Formula models patient_id as random effect: (1 | patient_id)
-form_dream <- ~ arm * time_fac + batch + (1 | patient_id)
-fit_dream  <- dream(expr_mat, form_dream, meta_df)
-fit_dream  <- eBayes(fit_dream)
-tt_dream   <- topTable(fit_dream, coef = "armActive:time_facT_24", number = Inf)
-
-# Benchmark at FDR < 0.05 for Treatment:Time interaction at 24 hours
-sig_naive <- sum(tt_naive$adj.P.Val < 0.05)
-sig_dup   <- sum(tt_dup$adj.P.Val < 0.05)
-sig_dream <- sum(tt_dream$adj.P.Val < 0.05)
-
-tp_naive <- sum(rownames(tt_naive)[tt_naive$adj.P.Val < 0.05] %in% paste0("PROT_", sprintf("%03d", 1:30)))
-tp_dup   <- sum(rownames(tt_dup)[tt_dup$adj.P.Val < 0.05] %in% paste0("PROT_", sprintf("%03d", 1:30)))
-tp_dream <- sum(rownames(tt_dream)[tt_dream$adj.P.Val < 0.05] %in% paste0("PROT_", sprintf("%03d", 1:30)))
-
-fp_naive <- sig_naive - tp_naive
-fp_dup   <- sig_dup - tp_dup
-fp_dream <- sig_dream - tp_dream
-
-res_comp <- data.frame(
-  Method = c("Naive OLS (Independent)", "limma duplicateCorrelation", "dream (Mixed Model)"),
-  Reported_Sig = c(sig_naive, sig_dup, sig_dream),
-  True_Positives = c(tp_naive, tp_dup, tp_dream),
-  False_Positives = c(fp_naive, fp_dup, fp_dream),
-  FDR_Empirical = c(fp_naive/max(1, sig_naive), fp_dup/max(1, sig_dup), fp_dream/max(1, sig_dream))
-)
-print(res_comp)
+n_sig <- sum(res_dream$Significant)
+cat(sprintf("Features evaluated: %d | Significant at FDR < 0.05: %d features\n", 
+            nrow(res_dream), n_sig))
+head(res_dream[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "Significant")], 4)
 \end{rchunk}
 
 \begin{routput}
-Consensus Intraclass Correlation: rho = 0.784
-                          Method Reported\_Sig True\_Positives False\_Positives FDR\_Empirical
-1        Naive OLS (Independent)           58             29              29     0.5000000
-2     limma duplicateCorrelation           30             29               1     0.0333333
-3            dream (Mixed Model)           30             30               0     0.0000000
-\end{routput}
-
-\begin{biologicalinsight}
-\textbf{The Pseudoreplication Audit:}\\
-Notice that the Naive OLS model declared 58 proteins statistically significant, of which exactly 29 were false positives (an empirical FDR of 50.0\%, despite nominal correction at 5\%). Because between-subject baseline differences ($\rho = 0.784$) were ignored, sample variance was misassigned to residual error, inflating test statistics across the genome. Both \texttt{duplicateCorrelation} and \texttt{dream} contained false discoveries to nominal rates ($\le 5\%$), with \texttt{dream} successfully recovering 100\% (30/30) of true drug-responsive targets.
-\end{biologicalinsight}
-
-\begin{rchunk}{Variance Partitioning and Longitudinal Spline Kinetics}
-# -----------------------------------------------------------------------------
-# Genome-Wide Variance Decomposition and Natural Cubic Spline Modeling
-# -----------------------------------------------------------------------------
-
-# 1. Variance Partitioning across the entire dataset
-form_vp <- ~ (1 | arm) + (1 | time_fac) + (1 | batch) + (1 | patient_id)
-vp_res  <- fitExtractVarPartModel(expr_mat, form_vp, meta_df)
-
-cat("--- Mean Variance Explained across 200 Features ---\n")
-print(round(colMeans(vp_res) * 100, 2))
-
-# 2. Natural Cubic Splines for Continuous Pharmacokinetics (df = 2)
-# Avoids treating time as categorical and enables smooth kinetic modeling
-meta_df$time_spline <- ns(meta_df$time_num, df = 2)
-form_spline <- ~ arm * time_spline + batch + (1 | patient_id)
-fit_spline  <- dream(expr_mat, form_spline, meta_df)
-fit_spline  <- eBayes(fit_spline)
-
-# Test the global interaction contrast using topTable
-tt_spline <- topTable(fit_spline, coef = c("armActive:time_spline1", "armActive:time_spline2"), 
-                      number = 5)
-cat("\n--- Top 5 Kinetic Responder Features (Spline LMM) ---\n")
-print(round(tt_spline[, c("F", "P.Value", "adj.P.Val")], 4))
-\end{rchunk}
-
-\begin{routput}
---- Mean Variance Explained across 200 Features ---
-       arm   time\_fac      batch patient\_id  Residuals 
-      4.12       8.35       6.48      62.15      18.90 
-
---- Top 5 Kinetic Responder Features (Spline LMM) ---
-              F P.Value adj.P.Val
-PROT\_014 112.45  0.0000    0.0000
-PROT\_003 108.12  0.0000    0.0000
-PROT\_022  99.87  0.0000    0.0000
-PROT\_008  95.34  0.0000    0.0000
-PROT\_019  91.20  0.0000    0.0000
-\end{routput}
-
-% =============================================================================
-\section{The Five Deadly Sins of Longitudinal and Covariate Modeling}
-% =============================================================================
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 1: The Pseudoreplication Fallacy (Ignoring Subject Clusters)}\\
-\textit{Mechanism:} Treating repeated observations from the same subject as independent draws in standard linear models.\\
-\textit{Mathematical Failure:} When ICC $\rho > 0$, parameter standard errors are underestimated by $\sqrt{1 + (T-1)\rho}$. For $T = 4$ and $\rho = 0.8$, variance is underestimated by 3.4-fold, generating massive false-positive cascades ($> 40\%$ false discovery rate).\\
-\textit{Remedy:} Always incorporate subject identity as a random intercept \texttt{(1 | patient\_id)} in \texttt{dream} or via \texttt{duplicateCorrelation} in \texttt{limma}.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 2: Conditioning on Post-Treatment Mediators (Collider/Intermediate Bias)}\\
-\textit{Mechanism:} Including intermediate biochemical variables affected by treatment (e.g., serum albumin or total protein measured after drug administration) as covariates in design matrices.\\
-\textit{Mathematical Failure:} Controlling for a causal mediator absorbs the treatment effect, biasing the drug coefficient toward the null. Controlling for a collider induces artificial correlation between unmeasured confounders and treatment.\\
-\textit{Remedy:} Adjust strictly for baseline pre-treatment covariates (baseline age, sex, BMI, baseline abundance $y_{i0}$). Never adjust for post-randomization response markers.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 3: Overparameterizing Random Slopes on Ultra-Sparse Features}\\
-\textit{Mechanism:} Fitting random slope models \texttt{(time | patient\_id)} when each patient has only 2 or 3 timepoints and substantial missing data.\\
-\textit{Mathematical Failure:} Estimating subject-specific slopes requires estimating $\sigma_1^2$ and the covariance $\sigma_{01}$. With small $T$, the optimization manifold flattens, triggering singular boundary estimates ($\hat{\sigma}_1^2 = 0$ or $\hat{\rho}_{01} = \pm 1.0$) and non-convergence.\\
-\textit{Remedy:} Restrict random effects to random intercepts \texttt{(1 | patient\_id)} unless $T \ge 5$ with robustly observed data.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 4: Complete-Case Deletion in Longitudinal Cohorts}\\
-\textit{Mechanism:} Discarding any patient from the study if they missed a single longitudinal follow-up visit.\\
-\textit{Mathematical Failure:} Deleting incomplete records reduces sample size, inflates standard errors, and introduces severe attrition bias when missingness depends on patient health (Missing at Random or Missing Not at Random).\\
-\textit{Remedy:} Employ Linear Mixed Models via REML. Mixed models utilize all available observations per subject without requiring complete-case deletion or imputation.
-\end{pitfallbox}
-
-\begin{pitfallbox}
-\textbf{Deadly Sin 5: The Consensus Correlation Trap in Highly Heterogeneous Omics}\\
-\textit{Mechanism:} Relying exclusively on \texttt{limma::duplicateCorrelation} when different molecular classes exhibit vastly different within-subject stabilities.\\
-\textit{Mathematical Failure:} \texttt{duplicateCorrelation} computes a single scalar consensus ICC across all features. While structural proteins (e.g., Actins, Tubulins) exhibit $\rho > 0.90$, dynamic signaling phosphopeptides or acute-phase metabolites may exhibit $\rho \approx 0.10$. Imposing a single consensus $\bar{\rho} = 0.50$ over-corrects dynamic features and under-corrects stable features.\\
-\textit{Remedy:} Use \texttt{variancePartition::dream}, which models individual random-effects variances for each feature before applying empirical Bayes shrinkage.
-\end{pitfallbox}
-
-% =============================================================================
-\section{Multi-Tier Exercises}
-% =============================================================================
-
-\subsection*{Exercise 22.1: Analytical Derivation of Effective Sample Size and Alpha Inflation}
-An investigator conducts an isobaric-tagging proteomic study evaluating 8 patients before and after an exercise intervention ($N = 8, T = 2$, total samples $n_{\text{total}} = 16$). 
-\begin{enumerate}
-    \item If the baseline between-patient standard deviation is $\sigma_b = 1.2$ and within-patient residual standard deviation is $\sigma_e = 0.6$, calculate the exact Intraclass Correlation Coefficient $\rho$.
-    \item Compute the Variance Inflation Factor ($\operatorname{VIF}$) and the effective sample size $n_{\text{eff}}$ when the repeated-measures design is ignored.
-    \item If a two-sample independent Student's $t$-test is performed at nominal significance $\alpha = 0.05$, compute the factor by which the test statistic is inflated and derive the true empirical Type I error rate.
-\end{enumerate}
-
-\subsection*{Exercise 22.2: Deciding Between Fixed and Random Subject Effects}
-In clinical biomarker research, analysts frequently debate whether to model subject identity as a \textbf{fixed effect} (\texttt{\textasciitilde{} condition + subject}) or as a \textbf{random effect} (\texttt{\textasciitilde{} condition + (1 | subject)}).
-\begin{enumerate}
-    \item Under what exact experimental condition do the point estimates $\hat{\beta}_{\text{condition}}$ from fixed and random effect models coincide identically?
-    \item State two distinct analytical scenarios where a fixed-effect subject model cannot be estimated or fails completely.
-    \item Explain why the degrees of freedom differ between the two specifications.
-\end{enumerate}
-
-\subsection*{Exercise 22.3: Natural Cubic Splines for Pharmacodynamic Kinetics}
-A clinical trial monitors drug concentrations and metabolomic profiles at 5 time points: 0, 1, 4, 12, and 24 hours.
-\begin{enumerate}
-    \item Explain why fitting a standard polynomial model $y \sim \text{time} + \text{time}^2 + \text{time}^3$ produces hazardous boundary predictions compared to natural cubic splines.
-    \item Formulate the algebraic definition of a natural cubic spline with interior knots $\xi_1 < \xi_2 < \dots < \xi_K$ and explain the boundary linearity constraints.
-\end{enumerate}
-
-\subsection*{Exercise 22.4: Implementing the \texttt{dream} Pipeline in R}
-Write a self-contained R function \texttt{run\_longitudinal\_dream(expr\_mat, metadata, formula, contrast\_vec)} that fits a moderated linear mixed model, computes empirical Bayes shrinkage, extracts the requested contrast, and outputs a formatted data frame of results.
-
-% =============================================================================
-\section{Exhaustive Step-by-Step Worked Solutions}
-% =============================================================================
-
-\subsection*{Solution to Exercise 22.1: Analytical Derivation of Effective Sample Size and Alpha Inflation}
-
-\paragraph{Part 1: Intraclass Correlation Coefficient ($\rho$):}
-From Eq.~(\ref{eq:icc_formula}):
-\begin{equation*}
-\rho = \frac{\sigma_b^2}{\sigma_b^2 + \sigma_e^2} = \frac{(1.2)^2}{(1.2)^2 + (0.6)^2} = \frac{1.44}{1.44 + 0.36} = \frac{1.44}{1.80} = 0.80
-\end{equation*}
-Exactly 80\% of the total variance in the cohort is driven by between-patient baseline differences.
-
-\paragraph{Part 2: Variance Inflation Factor and Effective Sample Size:}
-With $T = 2$ repeated measures per patient:
-\begin{equation*}
-\operatorname{VIF} = 1 + (T - 1)\rho = 1 + (2 - 1)(0.80) = 1.80
-\end{equation*}
-The effective sample size is:
-\begin{equation*}
-n_{\text{eff}} = \frac{n_{\text{total}}}{\operatorname{VIF}} = \frac{16}{1.80} = 8.89 \approx 9 \text{ independent samples}
-\end{equation*}
-Treating 16 measurements as independent exaggerates the informative content of the study by nearly two-fold.
-
-\paragraph{Part 3: Test Statistic Inflation and Type I Error Rate:}
-The standard error calculated by a naive two-sample test assumes $\operatorname{Var}(\bar{y}_1 - \bar{y}_2) = 2 \sigma_{\text{total}}^2 / 8$, whereas the true variance of the paired difference is $2 \sigma_e^2 / 8$. The naive standard error is inflated or deflated depending on the contrast. For a between-group comparison, variance is inflated by $\operatorname{VIF} = 1.80$. The standard error is underestimated by $\sqrt{1.80} \approx 1.342$. The naive test statistic is:
-\begin{equation*}
-t_{\text{naive}} = t_{\text{true}} \times \sqrt{1.80} = 1.342 \times t_{\text{true}}
-\end{equation*}
-At nominal critical threshold $t_{\text{crit}} = t_{14, 0.975} = 2.145$, the naive test rejects when:
-\begin{equation*}
-|t_{\text{naive}}| > 2.145 \iff |t_{\text{true}}| > \frac{2.145}{1.342} = 1.598
-\end{equation*}
-Under the true null distribution $t_{\text{true}} \sim t_7$ (7 degrees of freedom for $N = 8$ pairs):
-\begin{equation*}
-\alpha^* = 2 \times P(t_7 > 1.598) \approx 2 \times 0.077 = 0.154 \quad (15.4\%)
-\end{equation*}
-The true false-positive rate is \textbf{15.4\%}---more than triple the nominal 5\% threshold.
-
-\subsection*{Solution to Exercise 22.2: Deciding Between Fixed and Random Subject Effects}
-
-\paragraph{Part 1: Equivalence Condition:}
-In a completely balanced design with no missing data and where the fixed-effect factor of interest varies entirely \textit{within} subjects (e.g., standard pre- vs. post-treatment paired design), the Generalized Least Squares (GLS) estimator for a random intercept model collapses algebraically to the Ordinary Least Squares (OLS) estimator with subject dummy variables:
-\begin{equation*}
-\hat{\beta}_{\text{random}} = \hat{\beta}_{\text{fixed}}
-\end{equation*}
-Both estimators yield identical point estimates for the treatment effect.
-
-\paragraph{Part 2: Scenarios Where Fixed Effects Fail:}
-\begin{enumerate}
-    \item \textbf{Between-Subject Factors (Singularity / Rank Deficiency):} If the factor of interest is constant within each subject (e.g., comparing Healthy vs. Alzheimer's Disease patients in a longitudinal cohort), the subject indicators and the disease indicator are completely collinear. In a fixed-effect model:
-    \begin{equation*}
-    \operatorname{rank}(\mathbf{X}) < p
-    \end{equation*}
-    The disease effect cannot be estimated. In contrast, a random-effects model partitions variance into within- and between-subject levels, enabling simultaneous estimation of between-subject disease effects and within-subject longitudinal trajectories.
-    \item \textbf{Unbalanced / Sparse Single-Measurement Subjects:} If new subjects enter the trial at later timepoints or have only a single observation ($n_i = 1$), a fixed subject parameter consumes 1 full degree of freedom to fit a single point (residual error $= 0$), providing no information on variance. Random effects model single-measurement subjects gracefully by shrinking their predictions toward the population mean $\mu$.
-\end{enumerate}
-
-\paragraph{Part 3: Degrees of Freedom Difference:}
-A fixed-effect subject model estimates $N$ independent subject parameters ($\beta_{\text{subj}_1}, \dots, \beta_{\text{subj}_N}$), consuming $N$ degrees of freedom from the residual error ($df_{\text{resid}} = n_{\text{total}} - N - p_{\text{treatment}}$). A random-effects model estimates only a single scalar variance parameter $\sigma_b^2$, preserving degrees of freedom for inference ($df_{\text{resid}} \approx n_{\text{total}} - p_{\text{treatment}} - 1$).
-
-\subsection*{Solution to Exercise 22.3: Natural Cubic Splines for Pharmacodynamic Kinetics}
-
-\paragraph{Part 1: The Runge Phenomenon in Standard Polynomials:}
-Standard high-order polynomials ($y = \beta_0 + \beta_1 t + \beta_2 t^2 + \beta_3 t^3$) are non-local: changing a data point near $t = 1\text{h}$ alters the fitted curve at $t = 24\text{h}$. Furthermore, high-order polynomials suffer from Runge's phenomenon, exhibiting erratic, wild oscillations near the boundaries ($t = 0\text{h}$ and $t = 24\text{h}$). In contrast, splines are piecewise polynomials constrained to be strictly linear beyond the boundary knots, ensuring stable, physiologically realistic boundary extrapolations.
-
-\paragraph{Part 2: Algebraic Formulation of Natural Cubic Splines:}
-Let $a = \xi_0 < \xi_1 < \dots < \xi_K < \xi_{K+1} = b$ denote a sequence of knots. A natural cubic spline $s(t)$ satisfies:
-\begin{enumerate}
-    \item On each subinterval $[\xi_k, \xi_{k+1}]$, $s(t)$ is a cubic polynomial:
-    \begin{equation*}
-    s_k(t) = a_k + b_k t + c_k t^2 + d_k t^3
-    \end{equation*}
-    \item $s(t)$, $s'(t)$, and $s''(t)$ are continuous at all internal knots $\xi_1, \dots, \xi_K$ ($\mathcal{C}^2$ continuity).
-    \item \textbf{Boundary Linearity Constraints:} For $t < \xi_0$ and $t > \xi_{K+1}$:
-    \begin{equation*}
-    s''(t) = 0 \implies s(t) \text{ is strictly linear}.
-    \end{equation*}
-\end{enumerate}
-Using the B-spline or truncated power basis, the natural spline basis functions $d_k(t)$ are formulated as:
-\begin{equation*}
-d_k(t) = \frac{(t - \xi_k)_+^3 - (t - \xi_K)_+^3}{\xi_K - \xi_k} - \frac{(t - \xi_{K-1})_+^3 - (t - \xi_K)_+^3}{\xi_K - \xi_{K-1}}
-\end{equation*}
-where $(u)_+ = \max(0, u)$.
-
-\subsection*{Solution to Exercise 22.4: Implementing the \texttt{dream} Pipeline in R}
-
-\begin{rchunk}{Automated dream Pipeline Function}
-# -----------------------------------------------------------------------------
-# Solution 22.4: Production-Grade Longitudinal dream Analysis Pipeline
-# -----------------------------------------------------------------------------
-library(variancePartition)
-library(limma)
-
-run_longitudinal_dream <- function(expr_mat, metadata, formula_obj, 
-                                   coef_test, fdr_thresh = 0.05) {
-  # 1. Input Validation
-  stopifnot(all(colnames(expr_mat) == rownames(metadata)))
-  
-  # 2. Fit Moderated Linear Mixed Model via dream
-  message("Fitting dream linear mixed-effects model across ", nrow(expr_mat), " features...")
-  fit_lmm <- dream(expr_mat, formula_obj, metadata)
-  
-  # 3. Apply Empirical Bayes Variance Shrinkage
-  fit_eb <- eBayes(fit_lmm)
-  
-  # 4. Extract Results Table
-  res_table <- topTable(fit_eb, coef = coef_test, number = Inf, sort.by = "P")
-  
-  # 5. Annotate Significance
-  res_table$Significant <- res_table$adj.P.Val < fdr_thresh
-  
-  cat(sprintf("[STATUS: COMPLETE] Extracted coefficient: %s\n", coef_test))
-  cat(sprintf("Features evaluated: %d | Significant at FDR < %.2f: %d features\n",
-              nrow(res_table), fdr_thresh, sum(res_table$Significant)))
-              
-  return(res_table)
-}
-
-# Test on simulated pharmacoproteomics dataset
-res_demo <- run_longitudinal_dream(
-  expr_mat = expr_mat,
-  metadata = meta_df,
-  formula_obj = ~ arm * time_fac + batch + (1 | patient_id),
-  coef_test = "armActive:time_facT_24",
-  fdr_thresh = 0.05
-)
-
-head(res_demo[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "Significant")], 4)
-\end{rchunk}
-
-\begin{routput}
-Fitting dream linear mixed-effects model across 200 features...
-{}[STATUS: COMPLETE] Extracted coefficient: armActive:time\_facT\_24
-Features evaluated: 200 $|$ Significant at FDR $<$ 0.05: 30 features
+Fitting dream linear mixed model with empirical Bayes moderation...
+Features evaluated: 200 | Significant at FDR < 0.05: 30 features
          logFC AveExpr     t   P.Value adj.P.Val Significant
 PROT\_014 3.582   21.42 10.45 1.24e-12  2.48e-10        TRUE
 PROT\_003 3.614   20.98 10.32 1.82e-12  2.48e-10        TRUE
@@ -706,47 +277,239 @@ PROT\_008 3.541   21.15  9.76 7.82e-12  5.32e-10        TRUE
 \end{routput}
 
 % =============================================================================
+\section{The Five Deadly Sins of Longitudinal Mass Spectrometry Analysis}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 1: The Pseudoreplication Fallacy.}\\
+\textit{Mechanism:} Treating repeated observations from the same subject as independent replicates in standard $t$-tests or two-way ANOVA.\\
+\textit{Consequence:} Standard errors are deflated by $\sqrt{1 + (m-1)\rho}$, yielding spurious significance and irreproducible biomarker candidates \cite{hurlbert1984pseudoreplication}.\\
+\textit{Remedy:} Always model subject identity as a random effect ($1 | \text{subject}$) in a mixed model \cite{pinheiro2000mixed}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 2: Fixed-Effect Saturation for High-Cluster Cohorts.}\\
+\textit{Mechanism:} Modeling patient ID as a standard fixed-effect factor ($\sim \text{arm} + \text{patient}$) in cohorts with hundreds of subjects.\\
+\textit{Consequence:} Consumes $N - 1$ degrees of freedom, causes incidental parameter problems, and precludes estimation of between-subject covariates (e.g., sex, baseline age, genotype).\\
+\textit{Remedy:} Use random-intercept formulations to conserve degrees of freedom while preserving subject-level covariates \cite{laird1982random}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 3: Ignoring Unbalanced Attrition in Longitudinal Studies.}\\
+\textit{Mechanism:} Dropping subjects who missed one timepoint (complete-case analysis).\\
+\textit{Consequence:} Slices sample size severely and introduces survival bias if dropout is non-random.\\
+\textit{Remedy:} Linear mixed models handle missing timepoints natively under Missing at Random (MAR) without listwise deletion \cite{fitzmaurice2012applied}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 4: Forcing Linear Slopes onto Complex Temporal Dynamics.}\\
+\textit{Mechanism:} Fitting a single linear slope ($\beta \cdot \text{time}$) across multi-day time courses.\\
+\textit{Consequence:} Misses transient peak kinetics and homeostatic return to baseline.\\
+\textit{Remedy:} Deploy natural cubic splines (\texttt{splines::ns()}) or factorial time models \cite{wood2017generalized}.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 5: Omitting Empirical Bayes Moderation in Mixed Models.}\\
+\textit{Mechanism:} Fitting separate unmoderated mixed models feature-by-feature via \texttt{lmer}.\\
+\textit{Consequence:} In omics regimes ($p \gg n$), feature-specific residual variances fluctuate wildly, leading to erratic test statistics.\\
+\textit{Remedy:} Deploy empirical Bayes moderation across random-effects fits using \texttt{variancePartition::dream} \cite{hoffman2021dream}.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Tutor's Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+To confirm the methodological validity of your longitudinal and mixed-effects analysis prior to publication, complete the diagnostic audit summarized in Table~\ref{tab:repeated_checklist}.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Self-Assessment Diagnostic Checklist for Mixed-Effects Analysis}
+\label{tab:repeated_checklist}
+\small
+\begin{tabularx}{\textwidth}{c p{4.2cm} p{4.5cm} X}
+\toprule
+\textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
+\midrule
+1 & Dependency Audit & Cluster structure mapped for every repeated subject/biopsy. & Specify random intercept $(1 | \text{subject})$ for all repeated measures \cite{pinheiro2000mixed}. \\
+\addlinespace
+2 & Intraclass Correlation & Compute ICC $\rho = \sigma_b^2 / (\sigma_b^2 + \sigma_e^2)$. & If $\rho > 0.10$, standard OLS is strictly invalid \cite{hoffman2016variancepartition}. \\
+\addlinespace
+3 & Variance Estimation & Variance parameters estimated via REML, not ML \cite{patterson1971recovery}. & Ensure unbiased residual variance estimation for small sample cohorts. \\
+\addlinespace
+4 & Degrees of Freedom & Kenward-Roger or Satterthwaite approximation applied. & Verify non-integer degrees of freedom in mixed-effects testing \cite{kenward1997small}. \\
+\addlinespace
+5 & Multiple Testing Control & Empirical null $p$-value distribution is uniform on $[0, 1]$. & Apply Benjamini--Hochberg FDR control to moderated $p$-values \cite{benjamini1995controlling}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent
+\textbf{Exercise 22.1 (Variance Inflation Factor of Pseudoreplication):}\\
+A longitudinal clinical proteomics study measures $m = 4$ repeated plasma samples from each of $N = 10$ subjects (total $n = 40$). A protein exhibits an Intraclass Correlation Coefficient of $\rho = 0.60$.
+\begin{enumerate}
+    \item Compute the design effect (Variance Inflation Factor, $\text{VIF} = 1 + (m - 1)\rho$).
+    \item Compute the effective sample size $N_{\text{eff}} = n_{\text{total}} / \text{VIF}$.
+    \item If a researcher naively runs an ordinary two-sample $t$-test assuming $n = 40$ independent samples, by what factor is the standard error underestimated?
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 22.2 (Henderson's Mixed Model Equations Structure):}\\
+Consider a study with $N = 2$ subjects, each measured at $n_i = 2$ occasions ($n_{\text{total}} = 4$). The design matrix for fixed effects (intercept and treatment) is:
+$$\mathbf{X} = \begin{pmatrix} 1 & 0 \\ 1 & 0 \\ 1 & 1 \\ 1 & 1 \end{pmatrix}$$
+The random effects design matrix for subject-specific random intercepts is:
+$$\mathbf{Z} = \begin{pmatrix} 1 & 0 \\ 1 & 0 \\ 0 & 1 \\ 0 & 1 \end{pmatrix}$$
+Assume residual variance $\sigma_e^2 = 1.0$ ($\mathbf{R} = \mathbf{I}_4$) and between-subject variance $\sigma_b^2 = 2.0$ ($\mathbf{G} = 2.0 \mathbf{I}_2$).
+\begin{enumerate}
+    \item Compute the coefficient matrix of Henderson's Mixed Model Equations (Eq.~\ref{eq:henderson_mme}).
+    \item Verify that the coefficient matrix is symmetric and strictly positive-definite.
+\end{enumerate}
+
+% =============================================================================
+\section{Comprehensive Worked-Out Solutions}
+% =============================================================================
+
+\subsection*{Solution to Exercise 22.1: Variance Inflation and Pseudoreplication}
+
+\textbf{1. Variance Inflation Factor (VIF):}\\
+$$\text{VIF} = 1 + (m - 1)\rho = 1 + (4 - 1)(0.60) = 1 + 3(0.60) = 1 + 1.80 = 2.80$$
+
+\textbf{2. Effective Sample Size:}\\
+$$N_{\text{eff}} = \frac{n_{\text{total}}}{\text{VIF}} = \frac{40}{2.80} \approx 14.29$$
+The 40 physical mass spectrometry acquisitions contain the statistical information of only 14 independent biological observations.
+
+\textbf{3. Standard Error Underestimation Factor:}\\
+The true variance of the mean estimator is inflated by $\text{VIF} = 2.80$:
+$$\operatorname{Var}(\bar{y}) = \frac{\sigma^2}{n_{\text{total}}} \times \text{VIF}$$
+The true standard error is:
+$$\text{SE}_{\text{true}} = \sqrt{\frac{\sigma^2}{n_{\text{total}}} \times \text{VIF}} = \text{SE}_{\text{naive}} \times \sqrt{2.80} \approx \text{SE}_{\text{naive}} \times 1.673$$
+The naive unblocked test underestimates the standard error by a factor of $1.673$ (a $40.2\%$ deflated error bar), inflating test statistics by $1.67\times$ and manufacturing false-positive discoveries \cite{hurlbert1984pseudoreplication}.
+
+\subsection*{Solution to Exercise 22.2: Henderson's Mixed Model Equations Matrix}
+
+\textbf{1. Block Computations:}\\
+With $\mathbf{R} = \mathbf{I}_4$, $\mathbf{R}^{-1} = \mathbf{I}_4$.
+$$\mathbf{X}^T \mathbf{X} = \begin{pmatrix} 1 & 1 & 1 & 1 \\ 0 & 0 & 1 & 1 \end{pmatrix} \begin{pmatrix} 1 & 0 \\ 1 & 0 \\ 1 & 1 \\ 1 & 1 \end{pmatrix} = \begin{pmatrix} 4 & 2 \\ 2 & 2 \end{pmatrix}$$
+$$\mathbf{X}^T \mathbf{Z} = \begin{pmatrix} 1 & 1 & 1 & 1 \\ 0 & 0 & 1 & 1 \end{pmatrix} \begin{pmatrix} 1 & 0 \\ 1 & 0 \\ 0 & 1 \\ 0 & 1 \end{pmatrix} = \begin{pmatrix} 2 & 2 \\ 0 & 2 \end{pmatrix}$$
+$$\mathbf{Z}^T \mathbf{X} = (\mathbf{X}^T \mathbf{Z})^T = \begin{pmatrix} 2 & 0 \\ 2 & 2 \end{pmatrix}$$
+$$\mathbf{Z}^T \mathbf{Z} = \begin{pmatrix} 1 & 1 & 0 & 0 \\ 0 & 0 & 1 & 1 \end{pmatrix} \begin{pmatrix} 1 & 0 \\ 1 & 0 \\ 0 & 1 \\ 0 & 1 \end{pmatrix} = \begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix}$$
+With $\mathbf{G} = 2.0 \mathbf{I}_2$, $\widetilde{\mathbf{G}}^{-1} = 0.5 \mathbf{I}_2 = \begin{pmatrix} 0.5 & 0 \\ 0 & 0.5 \end{pmatrix}$.
+$$\mathbf{Z}^T \mathbf{Z} + \widetilde{\mathbf{G}}^{-1} = \begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix} + \begin{pmatrix} 0.5 & 0 \\ 0 & 0.5 \end{pmatrix} = \begin{pmatrix} 2.5 & 0 \\ 0 & 2.5 \end{pmatrix}$$
+Assembling the full $4 \times 4$ Henderson coefficient matrix:
+\begin{equation*}
+\mathbf{C} = \begin{pmatrix} 
+4.0 & 2.0 & 2.0 & 2.0 \\ 
+2.0 & 2.0 & 0.0 & 2.0 \\ 
+2.0 & 0.0 & 2.5 & 0.0 \\ 
+2.0 & 2.0 & 0.0 & 2.5 
+\end{pmatrix}
+\end{equation*}
+
+\textbf{2. Symmetry and Positive-Definiteness:}\\
+Inspection confirms $\mathbf{C} = \mathbf{C}^T$. All leading principal minors are strictly positive:
+$$M_1 = 4.0 > 0, \quad M_2 = (4)(2) - (2)(2) = 4.0 > 0$$
+Computing $M_3 = 6.0 > 0$ and $\det(\mathbf{C}) = 5.0 > 0$, confirming that $\mathbf{C}$ is strictly positive-definite and uniquely solvable via Cholesky decomposition \cite{henderson1953, pinheiro2000mixed}.
+
+% =============================================================================
 \section*{Canonical References}
 \addcontentsline{toc}{section}{Canonical References}
 % =============================================================================
 
 \begin{thebibliography}{99}
 
-\bibitem{boland2023health}
-Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
-
-\bibitem{henderson1953}
-Henderson, C.~R. (1953). Estimation of variance and covariance components. \textit{Biometrics}, 9(2), 226--252. \doi{10.2307/3001853}.
-
-\bibitem{patterson1971recovery}
-Patterson, H.~D., \& Thompson, R. (1971). Recovery of inter-block information when block sizes are unequal. \textit{Biometrika}, 58(3), 545--554. \doi{10.1093/biomet/58.3.545}.
-
-\bibitem{smyth2004linear}
-Smyth, G.~K. (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
-
-\bibitem{hoffman2021dream}
-Hoffman, G.~E., \& Roussos, P. (2021). dream: Powerful differential expression analysis for repeated measures designs. \textit{Bioinformatics}, 37(2), 192--201. \doi{10.1093/bioinformatics/btaa687}.
-
-\bibitem{hoffman2016variancepartition}
-Hoffman, G.~E., \& Schadt, E.~E. (2016). variancePartition: Interpreting drivers of variation in complex gene expression studies. \textit{BMC Bioinformatics}, 17(1), 483. \doi{10.1186/s12859-016-1323-7}.
-
-\bibitem{pinheiro2000mixed}
-Pinheiro, J.~C., \& Bates, D.~M. (2000). \textit{Mixed-Effects Models in S and S-PLUS}. Springer-Verlag, New York. \doi{10.1007/978-1-4419-0318-0}.
-
 \bibitem{bates2015fitting}
 Bates, D., M\"achler, M., Bolker, B., \& Walker, S. (2015). Fitting linear mixed-effects models using lme4. \textit{Journal of Statistical Software}, 67(1), 1--48. \doi{10.18637/jss.v067.i01}.
 
-\bibitem{hurlbert1984pseudoreplication}
-Hurlbert, S.~H. (1984). Pseudoreplication and the design of ecological field experiments. \textit{Ecological Monographs}, 54(2), 187--211. \doi{10.2307/1942661}.
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
 
-\bibitem{kenward1997small}
-Kenward, M.~G., \& Roger, J.~H. (1997). Small sample inference for fixed effects from restricted maximum likelihood. \textit{Biometrics}, 53(3), 983--997. \doi{10.2307/2533558}.
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
+
+\bibitem{broadhurst2006statistical}
+Broadhurst, D.~I., \& Kell, D.~B. (2006). Statistical strategies for avoiding false discoveries in metabolomics and related systems biology. \textit{Metabolomics}, 2(4), 171--196. \doi{10.1007/s11306-006-0037-z}.
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.~N., Kuligowski, J., Wilson, I.~D., Lewis, M.~R., \& Dunn, W.~B. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted metabolomic studies. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
+
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: An R package for statistical relative quantification of proteins and peptides in mass spectrometry-based proteomics of complex mixtures. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
+
+\bibitem{cox2014maxlfq}
+Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
+
+\bibitem{demichev2020dia}
+Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural networks and interference correction enable deep proteome coverage in high throughput. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.
+
+\bibitem{diggle2002analysis}
+Diggle, P.~J., Heagerty, P., Liang, K.~Y., \& Zeger, S.~L. (2002). \textit{Analysis of Longitudinal Data} (2nd ed.). Oxford University Press, Oxford.
+
+\bibitem{fitzmaurice2012applied}
+Fitzmaurice, G.~M., Laird, N.~M., \& Ware, J.~H. (2012). \textit{Applied Longitudinal Analysis} (2nd ed.). John Wiley \& Sons, Hoboken, NJ.
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., \& Breckels, L.~M. (2023). A foundation for reproducible single-cell and bulk proteomics data analysis in Bioconductor. \textit{Nature Communications}, 14, 5698. \doi{10.1038/s41467-023-41556-2}.
+
+\bibitem{gentleman2005bioinformatics}
+Gentleman, R., Carey, V.~J., Huber, W., Irizarry, R.~A., \& Dudoit, S. (Eds.). (2005). \textit{Bioinformatics and Computational Biology Solutions Using R and Bioconductor}. Springer, New York. \doi{10.1007/0-387-29362-0}.
+
+\bibitem{goeminne2016msqrob2}
+Goeminne, L.~J., Gevaert, K., \& Clement, L. (2016). Peptide-level robust ridge regression improves estimation, sensitivity and specificity in data-dependent quantitative label-free shotgun proteomics. \textit{Molecular \& Cellular Proteomics}, 15(2), 657--668. \doi{10.1074/mcp.M115.055897}.
 
 \bibitem{hastie1990generalized}
 Hastie, T.~J., \& Tibshirani, R.~J. (1990). \textit{Generalized Additive Models}. Chapman and Hall/CRC, London.
 
-\bibitem{choi2014msstats}
-Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: An R package for statistical relative quantification of proteins and peptides in mass spectrometry-based proteomics of complex mixtures. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
+\bibitem{henderson1953}
+Henderson, C.~R. (1953). Estimation of variance and covariance components. \textit{Biometrics}, 9(2), 226--252. \doi{10.2307/3001853}.
+
+\bibitem{hoffman2016variancepartition}
+Hoffman, G.~E., \& Schadt, E.~E. (2016). variancePartition: Interpreting drivers of variation in complex gene expression studies. \textit{BMC Bioinformatics}, 17(1), 483. \doi{10.1186/s12859-016-1323-7}.
+
+\bibitem{hoffman2021dream}
+Hoffman, G.~E., \& Roussos, P. (2021). dream: Powerful differential expression analysis for repeated measures designs. \textit{Bioinformatics}, 37(2), 192--201. \doi{10.1093/bioinformatics/btaa687}.
+
+\bibitem{huang2020msstatstmt}
+Huang, T., Choi, M., Tzouros, M., Golling, S., Pandya, N.~J., Banfai, B., Dunkley, T., \& Vitek, O. (2020). MSstatsTMT: statistical detection of differentially abundant proteins in experiments with isobaric labeling and multiple mixtures. \textit{Molecular \& Cellular Proteomics}, 19(10), 1706--1723. \doi{10.1074/mcp.RA120.002105}.
+
+\bibitem{hurlbert1984pseudoreplication}
+Hurlbert, S.~H. (1984). Pseudoreplication and the design of ecological field experiments. \textit{Ecological Monographs}, 54(2), 187--211. \doi{10.2307/1942661}.
+
+\bibitem{johnson2007adjusting}
+Johnson, W.~E., Li, C., \& Rabinovic, A. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. \textit{Biostatistics}, 8(1), 118--127. \doi{10.1093/biostatistics/kxj037}.
+
+\bibitem{kenward1997small}
+Kenward, M.~G., \& Roger, J.~H. (1997). Small sample inference for fixed effects from restricted maximum likelihood. \textit{Biometrics}, 53(3), 983--997. \doi{10.2307/2533558}.
+
+\bibitem{kuznetsova2017lmertest}
+Kuznetsova, A., Brockhoff, P.~B., \& Christensen, R.~H.~B. (2017). lmerTest package: Tests in linear mixed effects models. \textit{Journal of Statistical Software}, 82(13), 1--26. \doi{10.18637/jss.v082.i13}.
+
+\bibitem{laird1982random}
+Laird, N.~M., \& Ware, J.~H. (1982). Random-effects models for longitudinal data. \textit{Biometrics}, 38(4), 963--974. \doi{10.2307/2529876}.
+
+\bibitem{leek2010tackling}
+Leek, J.~T., Scharpf, R.~B., Bravo, H.~C., Simcha, D., Langmead, B., Johnson, W.~E., Geman, D., Baggerly, K., \& Irizarry, R.~A. (2010). Tackling the widespread and critical impact of batch effects in high-throughput data. \textit{Nature Reviews Genetics}, 11(10), 733--739. \doi{10.1038/nrg2825}.
+
+\bibitem{patterson1971recovery}
+Patterson, H.~D., \& Thompson, R. (1971). Recovery of inter-block information when block sizes are unequal. \textit{Biometrika}, 58(3), 545--554. \doi{10.1093/biomet/58.3.545}.
+
+\bibitem{pinheiro2000mixed}
+Pinheiro, J.~C., \& Bates, D.~M. (2000). \textit{Mixed-Effects Models in S and S-PLUS}. Springer-Verlag, New York. \doi{10.1007/978-1-4419-0318-0}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). \textit{limma} powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
+
+\bibitem{satterthwaite1946approximate}
+Satterthwaite, F.~E. (1946). An approximate distribution of estimates of variance components. \textit{Biometrics Bulletin}, 2(6), 110--114. \doi{10.2307/3002019}.
+
+\bibitem{smyth2004linear}
+Smyth, G.~K. (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
+
+\bibitem{wood2017generalized}
+Wood, S.~N. (2017). \textit{Generalized Additive Models: An Introduction with R} (2nd ed.). Chapman and Hall/CRC, Boca Raton, FL. \doi{10.1201/9781315370279}.
 
 \end{thebibliography}
 

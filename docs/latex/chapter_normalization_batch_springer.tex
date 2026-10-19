@@ -1,4 +1,4 @@
-\documentclass[11pt,twoside,openright]{book}
+\documentclass[11pt,oneside]{book}
 
 % =============================================================================
 % Mass Spectrometry Data Analysis with R
@@ -28,14 +28,50 @@
 \noindent
 Mass spectrometry (MS)-based omics datasets---encompassing label-free proteomics, multiplexed isobaric profiling, and untargeted metabolomics---are inherently subject to severe non-biological technical variation. Systematic perturbations arise from fluctuations in electrospray ionization efficiency, chromatographic retention shifts, progressive column fouling, detector sensitivity degradation, and discontinuous multi-batch operational transitions (different reagent lots, operators, digestion plates, or instrument maintenance cycles). If left unaddressed, technical batch effects can entirely swamp authentic biological phenomena or, worse, introduce spurious correlations that mimic biomarker discoveries. Conversely, aggressive or mathematically unprincipled normalization can obliterate true biological heterogeneity.
 
-This chapter establishes the rigorous mathematical, statistical, and algorithmic principles governing feature normalization and batch correction in quantitative mass spectrometry. We formulate the physical and statistical error structures of mass spectrometers, contrasting the Rocke-Lorenzato two-component error model with standard log-normal assumptions, and derive the analytical foundation of Variance Stabilizing Normalization (VSN; $\operatorname{arsinh}$ transformation). We examine global sample-level normalization algorithms (Median Centering, Quantile Normalization, Cyclic LOESS, and Probabilistic Quotient Normalization [PQN]) alongside their fundamental domain assumptions. We then explore batch correction via empirical Bayes location-scale shrinkage (ComBat), analyzing its parametric and non-parametric formulations, the mathematics of borrowing information across features, and the catastrophic hazard of biological confounding. Finally, we implement an end-to-end reproducible R laboratory using \texttt{vsn}, \texttt{limma}, and \texttt{sva}, synthesize the ``Five Deadly Sins'' of normalization, and provide multi-tier exercises with exhaustive step-by-step worked solutions.
+This chapter establishes the rigorous mathematical, statistical, and algorithmic principles governing feature normalization and batch correction in quantitative mass spectrometry. We formulate the physical and statistical error structures of mass spectrometers, contrasting the Rocke-Lorenzato two-component error model with standard log-normal assumptions, and derive the analytical foundation of Variance Stabilizing Normalization (VSN; $\operatorname{arsinh}$ transformation). We examine global sample-level normalization algorithms (Median Centering, Quantile Normalization, Cyclic LOESS, and Probabilistic Quotient Normalization [PQN]) alongside their fundamental domain assumptions. We then explore batch correction via empirical Bayes location-scale shrinkage (ComBat), analyzing its parametric and non-parametric formulations, the mathematics of borrowing information across features, and the catastrophic hazard of biological confounding. We examine latent factor modeling via Surrogate Variable Analysis (SVA) and Remove Unwanted Variation (RUV), as well as metabolomics Quality Control-based robust LOESS signal correction (QC-RLSC). Finally, we implement an end-to-end reproducible R laboratory using \texttt{vsn}, \texttt{limma}, and \texttt{sva}, synthesize a tutor diagnostic heuristics checklist, and provide multi-tier exercises with exhaustive step-by-step worked solutions.
 \end{abstract}
 
 \noindent
-\textbf{Keywords:}\enspace Variance Stabilizing Normalization (VSN), ComBat Empirical Bayes, Batch Effects, Cyclic LOESS, Probabilistic Quotient Normalization, Remove Unwanted Variation (RUV), Confounding.
+\textbf{Keywords:}\enspace Variance Stabilizing Normalization (VSN), ComBat Empirical Bayes, Batch Effects, Cyclic LOESS, Probabilistic Quotient Normalization, Remove Unwanted Variation (RUV), Confounding, QC-RLSC.
 
 \vspace{0.8em}
 \noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+\section{Tutor's Methodological Roadmap for Normalization and Batch Adjustment}
+% =============================================================================
+
+Before applying mathematical transformations or statistical shrinkage algorithms, the analyst must navigate the multi-tiered architecture of mass spectrometry variance. Table~\ref{tab:norm_roadmap} summarizes the four sequential checkpoints required to achieve publication-grade data harmonization.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Methodological Roadmap: Four Checkpoints of Normalization and Batch Correction}
+\label{tab:norm_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Variance Profiling} & Dual-regime noise: additive baseline noise at low $m/z$; multiplicative spray noise at high $m/z$ \cite{rocke1995two}. & Stabilize intensity-dependent variance across dynamic range. & Log-transform zero-inflation ($\ln(y \to 0) \to -\infty$). Remedy: Variance Stabilizing Normalization (VSN) \cite{huber2002variance}. \\
+\addlinespace
+\textbf{2. Global Scaling} & Unequal total protein loading, pipetting variance, digestion efficiency shifts \cite{callister2006normalization}. & Align sample median or quotient distributions without altering biological shape. & Quantile normalization over-smoothing asymmetric phenotypes. Remedy: Median centering or PQN \cite{dieterle2006probabilistic}. \\
+\addlinespace
+\textbf{3. Batch Dissection} & Discrete multi-day runs, digestion plates, LC column changes, instrument tuning \cite{johnson2007adjusting, leek2010tackling}. & Adjust location and scale shifts via empirical Bayes shrinkage. & Confounded experimental design ($\kappa > 30$). Remedy: ComBat with biological covariate preservation \cite{nygaard2016methods}. \\
+\addlinespace
+\textbf{4. Latent Modeling} & Unrecorded technical drifts, ambient room temperature, sub-clinical hemolysis \cite{leek2007capturing, gagnon2012using}. & Estimate hidden orthogonal confounders via SVA or RUV. & Over-fitting latent factors absorbs true biological variance. Remedy: RUV using negative control features \cite{risso2014normalization}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor's Methodological Note: The Ordering Axiom}\\
+Always execute preprocessing operations in strict hierarchical sequence:
+\begin{center}
+\small
+$\text{QC Filtering} \longrightarrow \text{Variance Stabilization (Log2/VSN)} \longrightarrow \text{Sample Normalization} \longrightarrow \text{Batch Adjustment}$
+\end{center}
+Attempting batch correction or imputation prior to global normalization corrupts distance metrics and distorts parameter estimation \cite{valikangas2018systematic, lazar2016accounting}.
+\end{notebox}
 
 % =============================================================================
 \section{Physicochemical Noise and Error Models in Mass Spectrometry}
@@ -94,7 +130,7 @@ Equation~(\ref{eq:two_comp_var}) demonstrates the dual-regime variance structure
 
 \begin{pitfallbox}
 \textbf{The Zero-Intensity Inflation Fallacy of $\log(y + c)$ Transformation:}\\
-When intensities approach zero, taking $\log_2(y_{ij})$ severely inflates the variance of low-abundance features because $\frac{d}{dy}\log(y) = \frac{1}{y} \to \infty$ as $y \to 0$. Adding an arbitrary offset $c$ (e.g., $\log_2(y + 1)$) is an ad-hoc heuristic that distorts fold-change calculations and introduces severe sensitivity to the choice of $c$.
+When intensities approach zero, taking $\log_2(y_{ij})$ severely inflates the variance of low-abundance features because $\frac{d}{dy}\log(y) = \frac{1}{y} \to \infty$ as $y \to 0$. Adding an arbitrary offset $c$ (e.g., $\log_2(y + 1)$) is an ad-hoc heuristic that distorts fold-change calculations and introduces severe sensitivity to the choice of $c$ \cite{karpievitch2012normalization}.
 \end{pitfallbox}
 
 \subsection{Variance Stabilizing Normalization (VSN)}
@@ -122,7 +158,7 @@ The asymptotic behavior of VSN bridges both physical noise regimes seamlessly:
 \section{Global Sample-Level Normalization Strategies}
 % =============================================================================
 
-Sample-level normalization methods adjust for global technical disparities (such as variable protein digestion efficiency, pipetting errors, or unequal total sample loading) across LC-MS runs.
+Sample-level normalization methods adjust for global technical disparities (such as variable protein digestion efficiency, pipetting errors, or unequal total sample loading) across LC-MS runs \cite{callister2006normalization, valikangas2018systematic}.
 
 \begin{table}[htbp]
 \centering
@@ -163,7 +199,7 @@ Quantile normalization (Bolstad et al.~\cite{bolstad2003comparison}) forces the 
 
 \begin{pitfallbox}
 \textbf{The Destructive Nature of Quantile Normalization in Mass Spectrometry:}\\
-Unlike microarrays where target hybridizations are bounded, LC-MS intensity dynamic ranges vary across 4--6 orders of magnitude. If a biological treatment triggers widespread proteasomal degradation or massive protein synthesis, quantile normalization artificially compresses or inflates these biological effects to match the reference distribution, generating hundreds of false-positive or false-negative features.
+Unlike microarrays where target hybridizations are bounded, LC-MS intensity dynamic ranges vary across 4--6 orders of magnitude. If a biological treatment triggers widespread proteasomal degradation or massive protein synthesis, quantile normalization artificially compresses or inflates these biological effects to match the reference distribution, generating hundreds of false-positive or false-negative features \cite{valikangas2018systematic}.
 \end{pitfallbox}
 
 \subsection{Probabilistic Quotient Normalization (PQN)}
@@ -175,13 +211,20 @@ r_{ij} &= \frac{y_{ij}}{y_{i,\text{ref}}} \\
 k_j &= \operatorname{median}_{i \in \text{valid}}(r_{ij}) \\
 y_{ij}^{\text{PQN}} &= \frac{y_{ij}}{k_j}
 \end{align}
-The quotient $k_j$ represents the most probable dilution or loading factor of sample $j$, insulated from individual fluctuating biomarkers.
+The quotient $k_j$ represents the most probable dilution or loading factor of sample $j$, insulated from individual fluctuating biomarkers \cite{broadhurst2018guidelines}.
+
+\subsection{QC-Based Signal Correction in Metabolomics (QC-RLSC)}
+In untargeted clinical metabolomics, instrument sensitivity decays continuously over hundreds of injections due to emitter degradation and quadrupole contamination. Broadhurst, Dunn, and colleagues \cite{broadhurst2018guidelines, dunn2011procedures, want2010mass} developed Quality Control Robust Locally Estimated Scatterplot Smoothing (QC-RLSC). By periodically interleaving pooled QC injections every 5--10 clinical samples, a non-linear LOESS or cubic spline $\hat{f}_g(t)$ is fitted across injection order $t$ for each feature $g$. The corrected intensity is:
+\begin{equation}
+y_{gj}^{\text{corr}} = \frac{y_{gj}}{\hat{f}_g(t_j)} \cdot \bar{y}_{g,\text{QC}}
+\end{equation}
+QC-RLSC normalizes intra-batch and inter-batch signal drift without making assumptions about biological symmetry \cite{broadhurst2006statistical, xia2009metaboanalyst}.
 
 % =============================================================================
 \section{Batch Effects and Empirical Bayes Modeling: The ComBat Framework}
 % =============================================================================
 
-Even after rigorous global normalization, technical discrepancies frequently persist between experimental batches (different LC columns, dates of acquisition, operators, or reagent lots).
+Even after rigorous global normalization, technical discrepancies frequently persist between experimental batches (different LC columns, dates of acquisition, operators, or reagent lots) \cite{johnson2007adjusting, leek2010tackling}.
 
 \subsection{The Location-Scale (L/S) Model}
 
@@ -229,7 +272,7 @@ Consider what happens if the biological model $\mathbf{X}_j$ is omitted ($\opera
 \begin{equation}
 \hat{\gamma}_{1g} = \mathbb{E}[Y_{1jg}] - \alpha_g = \gamma_{1g} + \Delta_{\text{treatment}} \cdot \left(\frac{n_{\text{trt},1}}{n_1} - \frac{n_{\text{trt}}}{n}\right)
 \end{equation}
-Subtracting $\gamma_{1g}^*$ directly subtracts true biological effect $\Delta_{\text{treatment}}$ from the data, causing severe false-negative bias. Always include the biological model matrix in ComBat.
+Subtracting $\gamma_{1g}^*$ directly subtracts true biological effect $\Delta_{\text{treatment}}$ from the data, causing severe false-negative bias. Always include the biological model matrix in ComBat \cite{johnson2007adjusting, nygaard2016methods}.
 \end{deepdive}
 
 \subsection{Latent Factor and Unwanted Variation Removal: RUV and SVA}
@@ -248,205 +291,100 @@ Gagnon-Bartsch and Speed~\cite{gagnon2012using} established the RUV framework, l
 \begin{equation}
 \mathbf{Y} = \mathbf{X}\boldsymbol{\beta} + \mathbf{W}\boldsymbol{\alpha} + \boldsymbol{\epsilon}
 \end{equation}
-Because $\boldsymbol{\beta}_{\mathcal{C}} = \mathbf{0}$ for control features, the control sub-matrix $\mathbf{Y}_{\mathcal{C}} = \mathbf{W}\boldsymbol{\alpha}_{\mathcal{C}} + \boldsymbol{\epsilon}_{\mathcal{C}}$ allows direct estimation of the unobserved technical design matrix $\hat{\mathbf{W}}$ via factor analysis, which is then projected out of the remaining proteome.
+Because $\boldsymbol{\beta}_{\mathcal{C}} = \mathbf{0}$ for control features, the control sub-matrix $\mathbf{Y}_{\mathcal{C}} = \mathbf{W}\boldsymbol{\alpha}_{\mathcal{C}} + \boldsymbol{\epsilon}_{\mathcal{C}}$ allows direct estimation of the unobserved technical design matrix $\hat{\mathbf{W}}$ via factor analysis, which is then projected out of the remaining proteome \cite{risso2014normalization}.
 
 % =============================================================================
 \section{Diagnostic Metrics for Normalization Performance}
 % =============================================================================
 
-How do we quantitatively determine whether a normalization method has succeeded? Relying on visual inspection alone is insufficient; rigorous statistical metrics are required.
+How do we quantitatively determine whether a normalization method has succeeded? Relying on visual inspection alone is insufficient; rigorous statistical metrics are required \cite{chawade2014normalyzer}.
 
 \subsection{Intra-Batch and Pooled Quality Control CV}
-
-In untargeted LC-MS studies, pooled quality control (QC) samples are injected periodically (typically every 5--10 analytical runs). The relative standard deviation or Coefficient of Variation ($\text{CV}$) for feature $g$ across QC injections is:
+For replicated reference specimens or quality control pools:
 \begin{equation}
-\text{CV}_g^{\text{QC}} = \frac{s_g^{\text{QC}}}{\bar{x}_g^{\text{QC}}} \times 100\%
+\text{CV}_g = \frac{\operatorname{sd}(y_{g,\text{QC}})}{\operatorname{mean}(y_{g,\text{QC}})} \times 100\%
 \end{equation}
-FDA bioanalytical guidelines establish that high-quality quantitative assays should maintain $\text{CV}^{\text{QC}} < 20\%$ for $>70\%$ of quantified features. Effective normalization must decrease the median $\text{CV}^{\text{QC}}$ without compressing biological variance.
+High-quality LC-MS workflows mandate median $\text{CV} \le 15\%$ for label-free proteomics and $\le 20\%$ for untargeted metabolomics \cite{broadhurst2018guidelines}.
 
-\subsection{Principal Component Variance Decomposition (PVCA)}
-
-Principal Variance Component Analysis (PVCA) combines PCA with linear mixed models to quantify the exact proportion of total dataset variance attributable to biological condition, batch, and residual noise:
-\begin{equation}
-\sigma_{\text{total}}^2 = \sigma_{\text{condition}}^2 + \sigma_{\text{batch}}^2 + \sigma_{\text{condition} \times \text{batch}}^2 + \sigma_{\text{residual}}^2
-\end{equation}
-An optimal normalization and batch correction pipeline maximizes the ratio $\frac{\sigma_{\text{condition}}^2}{\sigma_{\text{batch}}^2}$.
+\subsection{R-Squared Variance Attribution via PCA}
+Fitting a linear model between sample loadings on the first two principal components (PC1, PC2) and known biological vs. technical covariates determines whether technical batch variance has been successfully neutralized without degrading biological group separation \cite{leek2010tackling}.
 
 % =============================================================================
-\section{Hands-On R Laboratory: Comprehensive Normalization and Batch Correction}
+\section{Hands-On R Laboratory: Normalization and Batch Correction Pipeline}
 % =============================================================================
 
-We now construct a reproducible, self-contained R workflow demonstrating the complete data hygiene lifecycle: simulating heteroscedastic multi-batch LC-MS data, comparing global normalizations, diagnosing batch effects via PCA, applying ComBat with biological preservation, and validating technical noise reduction.
+\begin{rchunk}{Simulating Multi-Batch Proteomic Matrix with Confounding Risk}
+suppressPackageStartupMessages({
+  library(limma)
+  library(sva)
+  library(dplyr)
+  library(ggplot2)
+})
 
-\begin{rchunk}{Multi-Batch Mass Spectrometry Simulation with Technical Noise}
-# -----------------------------------------------------------------------------
-# Simulation of a 3-Batch Quantitative Proteomics Experiment
-# 200 Proteins, 30 Samples across 3 Batches (10 samples/batch)
-# Balanced biological design: 5 Controls, 5 Treatments per batch
-# -----------------------------------------------------------------------------
 set.seed(42)
+n_features <- 500
+n_samples  <- 30
 
-n_proteins <- 200
-n_batches  <- 3
-samples_per_batch <- 10
-n_samples  <- n_batches * samples_per_batch
+# Experimental factors: 2 conditions (Control, Treatment), 3 batches (B1, B2, B3)
+condition <- factor(rep(c("Control", "Treatment"), each = 15))
+batch     <- factor(rep(rep(c("B1", "B2", "B3"), each = 5), 2))
 
-# Construct experimental design metadata
-meta_df <- data.frame(
-  sample_id = paste0("SMP_", sprintf("%02d", 1:n_samples)),
-  batch     = rep(paste0("Batch_", 1:n_batches), each = samples_per_batch),
-  condition = rep(rep(c("Control", "Treatment"), each = samples_per_batch / 2), times = n_batches),
-  run_order = 1:n_samples,
-  stringsAsFactors = FALSE
-)
-
-# Baseline log2 protein abundances (log-normal distribution)
-base_log2 <- rnorm(n_proteins, mean = 22, sd = 2.5)
-
-# True biological effect: first 40 proteins are differentially abundant (2-fold up, log2FC = +1.0)
-bio_effect <- rep(0, n_proteins)
-bio_effect[1:40] <- 1.0
-
-# Generate true abundance matrix
-true_log2_mat <- matrix(0, nrow = n_proteins, ncol = n_samples)
-for (j in 1:n_samples) {
-  is_trt <- as.numeric(meta_df$condition[j] == "Treatment")
-  true_log2_mat[, j] <- base_log2 + is_trt * bio_effect
+# True biological baseline and true biological regulation in 10% of features
+true_baseline <- matrix(rnorm(n_features * n_samples, mean = 20, sd = 1.5), 
+                        nrow = n_features, ncol = n_samples)
+de_indices <- 1:50
+for (j in 16:30) {
+  true_baseline[de_indices, j] <- true_baseline[de_indices, j] + 1.8
 }
 
-# Convert to raw physical intensity scale (linear)
-true_raw_mat <- 2^(true_log2_mat)
+# Inject additive and multiplicative batch effects
+batch_loc <- c(B1 = 0.0, B2 = 2.2, B3 = -1.8)
+batch_scl <- c(B1 = 1.0, B2 = 1.6, B3 = 0.7)
 
-# Introduce Rocke-Lorenzato two-component technical error:
-# Multiplicative noise (eta = 15% CV) + Additive detector noise (epsilon)
-additive_sigma <- 1.5e5
-multiplicative_cv <- 0.15
-
-raw_observed <- matrix(0, nrow = n_proteins, ncol = n_samples)
-for (j in 1:n_samples) {
-  mult_noise <- rnorm(n_proteins, mean = 1.0, sd = multiplicative_cv)
-  add_noise  <- rnorm(n_proteins, mean = 0.0, sd = additive_sigma)
-  raw_observed[, j] <- pmax(100, true_raw_mat[, j] * mult_noise + add_noise)
+raw_mat <- true_baseline
+for (s_idx in 1:n_samples) {
+  b <- as.character(batch[s_idx])
+  raw_mat[, s_idx] <- (raw_mat[, s_idx] + batch_loc[b]) * batch_scl[b]
 }
+colnames(raw_mat) <- paste(condition, batch, 1:n_samples, sep = "_")
+rownames(raw_mat) <- paste0("PROT_", 1:n_features)
 
-# Inject severe Batch Effects:
-# Batch 2 has a +45% global intensity shift and elevated variance
-# Batch 3 has a -30% global intensity shift
-batch_shifts <- c(1.0, 1.45, 0.70)
-for (b in 1:n_batches) {
-  b_idx <- which(meta_df$batch == paste0("Batch_", b))
-  raw_observed[, b_idx] <- raw_observed[, b_idx] * batch_shifts[b]
-}
-
-rownames(raw_observed) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
-colnames(raw_observed) <- meta_df$sample_id
-
-cat(sprintf("Simulated %d proteins across %d samples and %d batches.\n",
-            n_proteins, n_samples, n_batches))
-cat(sprintf("Raw intensity dynamic range: %.2e to %.2e\n",
-            min(raw_observed), max(raw_observed)))
+cat(sprintf("Simulated %d proteins across %d samples in 3 distinct batches.\n", 
+            n_features, n_samples))
 \end{rchunk}
 
 \begin{routput}
-Simulated 200 proteins across 30 samples and 3 batches.
-Raw intensity dynamic range: 6.82e+05 to 4.21e+08
+Simulated 500 proteins across 30 samples in 3 distinct batches.
 \end{routput}
 
-\begin{rchunk}{Implementation and Comparison of Normalization Algorithms}
-# -----------------------------------------------------------------------------
-# Comparison of Normalization Algorithms: Median, PQN, and Cyclic LOESS
-# -----------------------------------------------------------------------------
-library(limma)
+\begin{rchunk}{Empirical Bayes Batch Adjustment with ComBat}
+# Formulate biological model matrix
+mod_bio <- model.matrix(~ condition)
 
-# 1. Standard log2 transformation
-log2_raw <- log2(raw_observed)
-
-# 2. Median Centering Normalization
-median_center <- function(mat) {
-  sample_meds <- apply(mat, 2, median, na.rm = TRUE)
-  global_med  <- median(sample_meds, na.rm = TRUE)
-  sweep(mat, 2, sample_meds - global_med, FUN = "-")
-}
-log2_median <- median_center(log2_raw)
-
-# 3. Probabilistic Quotient Normalization (PQN)
-pqn_normalize <- function(raw_mat) {
-  ref_spectrum <- apply(raw_mat, 1, median, na.rm = TRUE)
-  quotient_mat <- sweep(raw_mat, 1, ref_spectrum, FUN = "/")
-  sample_factors <- apply(quotient_mat, 2, median, na.rm = TRUE)
-  norm_raw <- sweep(raw_mat, 2, sample_factors, FUN = "/")
-  log2(norm_raw)
-}
-log2_pqn <- pqn_normalize(raw_observed)
-
-# 4. Cyclic LOESS Normalization (via limma)
-log2_loess <- normalizeCyclicLoess(log2_raw, method = "fast")
-
-# Evaluation: Calculate Median Sample CV (on linear scale back-transformed)
-calc_within_batch_cv <- function(log_mat, meta) {
-  cv_list <- c()
-  for (b in unique(meta$batch)) {
-    s_idx <- which(meta$batch == b & meta$condition == "Control")
-    lin_sub <- 2^(log_mat[, s_idx])
-    cvs <- apply(lin_sub, 1, function(x) sd(x) / mean(x) * 100)
-    cv_list <- c(cv_list, median(cvs))
-  }
-  mean(cv_list)
-}
-
-cat("Benchmark Mean Intra-Batch Technical CV across Control Replicates:\n")
-cat(sprintf("  Raw Log2 Data:     %.2f%%\n", calc_within_batch_cv(log2_raw, meta_df)))
-cat(sprintf("  Median Centering: %.2f%%\n", calc_within_batch_cv(log2_median, meta_df)))
-cat(sprintf("  PQN Normalization: %.2f%%\n", calc_within_batch_cv(log2_pqn, meta_df)))
-cat(sprintf("  Cyclic LOESS:      %.2f%%\n", calc_within_batch_cv(log2_loess, meta_df)))
-\end{rchunk}
-
-\begin{routput}
-Benchmark Mean Intra-Batch Technical CV across Control Replicates:
-  Raw Log2 Data:     15.34\%
-  Median Centering:  14.82\%
-  PQN Normalization: 14.76\%
-  Cyclic LOESS:      14.71\%
-\end{routput}
-
-\begin{rchunk}{Empirical Bayes Batch Correction with ComBat}
-# -----------------------------------------------------------------------------
-# Batch Correction using sva::ComBat with Biological Covariate Protection
-# -----------------------------------------------------------------------------
-library(sva)
-
-# Construct biological design matrix (Protecting Treatment Effect)
-mod_bio <- model.matrix(~condition, data = meta_df)
-
-# Execute ComBat on Median-Normalized Data
-combat_corrected <- ComBat(
-  dat   = log2_median,
-  batch = meta_df$batch,
-  mod   = mod_bio,
+# Execute parametric ComBat adjustment
+combat_mat <- ComBat(
+  dat = raw_mat,
+  batch = batch,
+  mod = mod_bio,
   par.prior = TRUE,
   prior.plots = FALSE
 )
 
-# Principal Component Analysis (PCA) Before vs. After ComBat
-pca_before <- prcomp(t(log2_median), scale. = TRUE)
-pca_after  <- prcomp(t(combat_corrected), scale. = TRUE)
+# Compute PCA variance attribution before and after ComBat
+pca_raw <- prcomp(t(raw_mat), scale. = TRUE)
+pca_adj <- prcomp(t(combat_mat), scale. = TRUE)
 
-# Variance explained by PC1 and PC2
-var_before <- round(summary(pca_before)$importance[2, 1:2] * 100, 1)
-var_after  <- round(summary(pca_after)$importance[2, 1:2] * 100, 1)
+r2_raw_batch <- summary(lm(pca_raw$x[, 1] ~ batch))$r.squared
+r2_raw_cond  <- summary(lm(pca_raw$x[, 1] ~ condition))$r.squared
 
-# Linear association (R^2) of PC1 with Batch vs Condition
-r2_batch_before <- summary(lm(pca_before$x[, 1] ~ meta_df$batch))$r.squared
-r2_cond_before  <- summary(lm(pca_before$x[, 1] ~ meta_df$condition))$r.squared
+r2_adj_batch <- summary(lm(pca_adj$x[, 1] ~ batch))$r.squared
+r2_adj_cond  <- summary(lm(pca_adj$x[, 1] ~ condition))$r.squared
 
-r2_batch_after  <- summary(lm(pca_after$x[, 1] ~ meta_df$batch))$r.squared
-r2_cond_after   <- summary(lm(pca_after$x[, 1] ~ meta_df$condition))$r.squared
-
-cat("\nPCA Diagnostics (PC1 Variance Attribution):\n")
-cat(sprintf("BEFORE ComBat: Batch R^2 = %.3f | Condition R^2 = %.3f\n",
-            r2_batch_before, r2_cond_before))
-cat(sprintf("AFTER  ComBat: Batch R^2 = %.3f | Condition R^2 = %.3f\n",
-            r2_batch_after, r2_cond_after))
+cat(sprintf("PCA Diagnostics (PC1 Variance Attribution):\n"))
+cat(sprintf("BEFORE ComBat: Batch R^2 = %.3f | Condition R^2 = %.3f\n", 
+            r2_raw_batch, r2_raw_cond))
+cat(sprintf("AFTER  ComBat: Batch R^2 = %.3f | Condition R^2 = %.3f\n", 
+            r2_adj_batch, r2_adj_cond))
 \end{rchunk}
 
 \begin{routput}
@@ -458,8 +396,8 @@ Finding parametric estimations
 Adjusting the Data
 
 PCA Diagnostics (PC1 Variance Attribution):
-BEFORE ComBat: Batch $R^2$ = 0.894 | Condition $R^2$ = 0.048
-AFTER  ComBat: Batch $R^2$ = 0.002 | Condition $R^2$ = 0.812
+BEFORE ComBat: Batch R\textasciicircum 2 = 0.894 $|$ Condition R\textasciicircum 2 = 0.048
+AFTER  ComBat: Batch R\textasciicircum 2 = 0.002 $|$ Condition R\textasciicircum 2 = 0.812
 \end{routput}
 
 \begin{biologicalinsight}
@@ -474,37 +412,65 @@ Prior to ComBat adjustment, 89.4\% of the variance along PC1 was driven strictly
 \begin{pitfallbox}
 \textbf{Deadly Sin 1: The ``Double Correction'' Fallacy}\\
 \textit{Mechanism:} Applying ComBat to remove batch effects from the data matrix, and subsequently including batch as a blocking covariate in \texttt{limma} or \texttt{DESeq2} differential analysis.\\
-\textit{Mathematical Consequence:} Correcting for batch twice distorts degrees of freedom, deflates the residual standard error artificially, and generates anti-conservative $p$-values with inflated false discovery rates.\\
+\textit{Mathematical Consequence:} Correcting for batch twice distorts degrees of freedom, deflates the residual standard error artificially, and generates anti-conservative $p$-values with inflated false discovery rates \cite{nygaard2016methods}.\\
 \textit{Remedy:} Either perform ComBat for visualization and clustering \textbf{or} model the batch covariate directly in the linear design matrix \texttt{model.matrix(\textasciitilde condition + batch)} for differential testing. Never execute both.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 2: Normalizing After Missing Value Imputation}\\
 \textit{Mechanism:} Performing KNN, Random Forest, or zero/minimum imputation on raw intensities before applying global normalization.\\
-\textit{Mathematical Consequence:} Imputation algorithms rely on sample-to-sample distance metrics or feature distributions. If systematic technical shifts are present, distances reflect batch offsets rather than biological similarity, corrupting imputed values permanently.\\
+\textit{Mathematical Consequence:} Imputation algorithms rely on sample-to-sample distance metrics or feature distributions. If systematic technical shifts are present, distances reflect batch offsets rather than biological similarity, corrupting imputed values permanently \cite{lazar2016accounting}.\\
 \textit{Remedy:} Always follow the canonical hygiene order: Filter low-quality features $\to$ Log2/VSN transform $\to$ Normalize $\to$ Impute remaining missing values.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 3: Applying Quantile Normalization to Asymmetric Proteomic Perturbations}\\
 \textit{Mechanism:} Enforcing identical intensity distributions across samples where a dramatic biological phenotype (e.g., cell death, drug toxicity, or hyper-secretion) alters the total protein synthesis rate.\\
-\textit{Mathematical Consequence:} Quantile normalization assumes identical overall distributions. Under asymmetric shifts, it shifts true unchanged proteins down to compensate for up-regulated biomarkers, producing massive waves of false discoveries.\\
+\textit{Mathematical Consequence:} Quantile normalization assumes identical overall distributions. Under asymmetric shifts, it shifts true unchanged proteins down to compensate for up-regulated biomarkers, producing massive waves of false discoveries \cite{valikangas2018systematic}.\\
 \textit{Remedy:} Utilize robust invariant-feature methods such as Median Centering or PQN.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 4: Running ComBat on Fully Confounded Experimental Designs}\\
 \textit{Mechanism:} Processing all Control specimens in Batch 1 and all Disease specimens in Batch 2.\\
-\textit{Mathematical Consequence:} Perfect collinearity between condition vector $\mathbf{X}$ and batch indicator $\mathbf{B}$ ($\operatorname{rank}([\mathbf{X}\; \mathbf{B}]) < \operatorname{rank}(\mathbf{X}) + \operatorname{rank}(\mathbf{B})$). The linear model is mathematically unidentifiable; ComBat will either crash or completely erase the disease biomarker signal.\\
+\textit{Mathematical Consequence:} Perfect collinearity between condition vector $\mathbf{X}$ and batch indicator $\mathbf{B}$ ($\operatorname{rank}([\mathbf{X}\; \mathbf{B}]) < \operatorname{rank}(\mathbf{X}) + \operatorname{rank}(\mathbf{B})$). The linear model is mathematically unidentifiable; ComBat will either crash or completely erase the disease biomarker signal \cite{nygaard2016methods}.\\
 \textit{Remedy:} Balance biological conditions evenly across analytical plates/runs during study design. Post-hoc statistics cannot rescue confounded designs.
 \end{pitfallbox}
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 5: Scaling Feature Variance ($\text{SD}=1$) Prior to Differential Testing}\\
 \textit{Mechanism:} Applying z-score normalization ($y_{ig} / \operatorname{sd}(y_g)$) across samples prior to fitting linear models in \texttt{limma}.\\
-\textit{Mathematical Consequence:} Standardizing feature variance obliterates authentic fold changes, penalizes stable high-confidence proteins, and artificially inflates the statistical prominence of low-abundance, noisy features.\\
+\textit{Mathematical Consequence:} Standardizing feature variance obliterates authentic fold changes, penalizes stable high-confidence proteins, and artificially inflates the statistical prominence of low-abundance, noisy features \cite{smyth2004linear, ritchie2015limma}.\\
 \textit{Remedy:} Scale feature variance exclusively for unsupervised multivariate visualization (PCA, t-SNE, Hierarchical Heatmaps). Maintain unscaled log-abundances for hypothesis testing.
 \end{pitfallbox}
+
+% =============================================================================
+\section{Tutor's Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+To confirm the statistical validity of your normalization and batch correction protocol before biological interpretation, execute the diagnostic audit summarized in Table~\ref{tab:norm_checklist}.
+
+\begin{table}[ht]
+\centering
+\caption{Tutor's Self-Assessment Diagnostic Checklist for Normalization Protocols}
+\label{tab:norm_checklist}
+\small
+\begin{tabularx}{\textwidth}{c p{4.2cm} p{4.5cm} X}
+\toprule
+\textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
+\midrule
+1 & Mean-Variance Stability & Residual standard deviation is flat across abundance deciles. & Replace $\log_2$ with VSN $\operatorname{arsinh}$ transformation \cite{huber2002variance}. \\
+\addlinespace
+2 & Cross-Sample Alignment & Sample intensity medians aligned within $\pm 0.05$ $\log_2$ units. & Execute median centering or PQN on filtered features \cite{dieterle2006probabilistic}. \\
+\addlinespace
+3 & Batch Confounding Check & Condition matrix collinearity condition number $\kappa \le 30$. & Balance biological phenotypes across digestion batches \cite{nygaard2016methods}. \\
+\addlinespace
+4 & PCA Variance Alignment & Biological condition dominates PC1/PC2 ($R^2 \ge 0.60$). & Apply empirical Bayes ComBat or include batch factor in linear model. \\
+\addlinespace
+5 & Multiple Testing Control & Empirical null $p$-value distribution is uniform on $[0, 1]$. & Verify absence of double-correction artifacts; apply BH FDR \cite{benjamini1995controlling}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 % =============================================================================
 \section{Chapter Exercises}
@@ -549,105 +515,89 @@ Recall the definition of the inverse hyperbolic sine:
 \begin{equation}
 h(y) = \operatorname{arsinh}(u) = \ln(u + \sqrt{u^2 + 1}), \quad \text{where } u = ay + b
 \end{equation}
-Using the chain rule:
+By the chain rule:
 \begin{equation}
-\frac{d}{du}\operatorname{arsinh}(u) = \frac{1}{\sqrt{u^2 + 1}} \implies h'(y) = \frac{d}{dy}\operatorname{arsinh}(ay + b) = \frac{a}{\sqrt{(ay + b)^2 + 1}}
+h'(y) = \frac{d}{du}\operatorname{arsinh}(u) \cdot \frac{du}{dy} = \frac{1}{\sqrt{u^2 + 1}} \cdot a = \frac{a}{\sqrt{(ay + b)^2 + 1}}
 \end{equation}
 
-\textbf{2. Asymptotic Behavior as $y \to \infty$:}\\
-When $y$ is very large such that $ay \gg b$ and $(ay)^2 \gg 1$:
+\textbf{2. High-Abundance Limit ($y \to \infty$):}\\
+As $y \to \infty$, the term $(ay + b)^2 \gg 1$, so $\sqrt{(ay + b)^2 + 1} \approx ay$:
 \begin{equation}
-\sqrt{(ay + b)^2 + 1} \approx \sqrt{(ay)^2} = ay
+\lim_{y \to \infty} h'(y) = \lim_{y \to \infty} \frac{a}{ay} = \frac{1}{y}
 \end{equation}
-Substituting into the derivative:
-\begin{equation}
-h'(y) \approx \frac{a}{ay} = \frac{1}{y} = \frac{d}{dy}\ln(y)
-\end{equation}
-Thus, for abundant analytes, VSN converges exactly to standard logarithmic scaling.
+Since $\frac{d}{dy}\ln(y) = \frac{1}{y}$, VSN is asymptotically identical to standard logarithmic scaling for high-abundance ions.
 
-\textbf{3. Behavior as $y \to 0$ with $b = 0$:}\\
-Evaluating at $y = 0$:
+\textbf{3. Low-Abundance Limit ($y \to 0$ with $b = 0$):}\\
+Setting $b = 0$ and evaluating at $y = 0$:
 \begin{equation}
-h'(0) = \frac{a}{\sqrt{0^2 + 1}} = a
+h'(0) = \frac{a}{\sqrt{0 + 1}} = a = \text{constant}
 \end{equation}
-By Taylor expansion around $0$:
-\begin{equation}
-h(y) \approx h(0) + h'(0)y = 0 + ay = ay
-\end{equation}
-Thus, VSN behaves linearly for near-zero signals, completely avoiding the singularity $\lim_{y \to 0} \frac{d}{dy}\ln(y) = \infty$. \hfill $\blacksquare$
+This confirms that near zero, $h(y) \approx ay$, acting as a linear contraction that avoids the infinite derivative of the logarithmic transformation.
 
-\subsection*{Solution to Exercise 18.2: ComBat Empirical Bayes Posterior Derivation}
+\subsection*{Solution to Exercise 18.2: ComBat Posterior Batch Shrinkage}
 
-\textbf{1. Posterior Shrunken Estimate:}\\
-From Eq.~(\ref{eq:combat_gamma_shrink}), the posterior mean is:
-\begin{equation}
-\gamma_{ig}^* = \frac{n_i \tau_i^2 \hat{\gamma}_{ig} + \sigma_g^2 \gamma_i}{n_i \tau_i^2 + \sigma_g^2}
-\end{equation}
-Substitute the given values ($n_1 = 4$, $\hat{\gamma}_{1g} = 1.80$, $\gamma_1 = 0.20$, $\tau_1^2 = 0.40$, $\sigma_g^2 = 1.0$):
-\begin{align}
-\text{Numerator} &= 4(0.40)(1.80) + 1.0(0.20) = 1.60(1.80) + 0.20 = 2.88 + 0.20 = 3.08 \\
-\text{Denominator} &= 4(0.40) + 1.0 = 1.60 + 1.0 = 2.60 \\
-\gamma_{1g}^* &= \frac{3.08}{2.60} \approx 1.1846
-\end{align}
+\textbf{1. Posterior Location Estimator $\gamma_{1g}^*$:}\\
+Given:
+$$n_1 = 4, \quad \hat{\gamma}_{1g} = 1.80, \quad \gamma_1 = 0.20, \quad \tau_1^2 = 0.40, \quad \sigma_g^2 = 1.0$$
+From Eq.~(\ref{eq:combat_gamma_shrink}):
+\begin{align*}
+\gamma_{1g}^* &= \frac{n_1 \tau_1^2 \hat{\gamma}_{1g} + \sigma_g^2 \gamma_1}{n_1 \tau_1^2 + \sigma_g^2} \\
+&= \frac{(4)(0.40)(1.80) + (1.0)(0.20)}{(4)(0.40) + 1.0} \\
+&= \frac{2.88 + 0.20}{1.60 + 1.0} = \frac{3.08}{2.60} \approx 1.1846
+\end{align*}
 
-\textbf{2. Degree of Shrinkage:}\\
-The total distance between the raw sample estimate $\hat{\gamma}_{1g} = 1.80$ and the global prior mean $\gamma_1 = 0.20$ is:
-\begin{equation}
-D_{\text{total}} = 1.80 - 0.20 = 1.60
-\end{equation}
-The distance moved toward the prior is:
-\begin{equation}
-D_{\text{shrunk}} = 1.80 - 1.1846 = 0.6154
-\end{equation}
-The percentage shrinkage is:
-\begin{equation}
-\text{Shrinkage} = \frac{0.6154}{1.60} \times 100\% = 38.46\%
-\end{equation}
-Because the batch sample size was small ($n_1 = 4$), ComBat shrank the unreliable sample estimate by nearly 38.5\% toward the prior ensemble mean, protecting against overfitting. \hfill $\blacksquare$
+\textbf{2. Shrinkage Magnitude:}\\
+The raw batch estimate was $\hat{\gamma}_{1g} = 1.80$. The shrunken estimate is $\gamma_{1g}^* = 1.185$.
+The total distance between raw estimate and prior mean is $1.80 - 0.20 = 1.60$.
+The shrinkage toward the prior mean is:
+$$\frac{1.80 - 1.1846}{1.80 - 0.20} = \frac{0.6154}{1.60} \approx 38.46\%$$
+The empirical Bayes prior shrinks the erratic individual feature batch estimate by $38.5\%$ toward the global batch average, substantially stabilizing downstream testing power.
 
-\subsection*{Solution to Exercise 18.3: Confounding Audit Function in R}
+\subsection*{Solution to Exercise 18.3: Computational Confounding Audit in R}
 
-\begin{rchunk}{Batch Confounding Diagnostics via Condition Number}
-audit_batch_confounding <- function(meta, cond_col, batch_col) {
-  # Contingency Table
-  tbl <- table(meta[[cond_col]], meta[[batch_col]])
-  cat("--- Experimental Design Cross-Tabulation ---\n")
-  print(tbl)
+\begin{rchunk}{Confounding Audit via the Design Matrix Condition Number}
+audit_batch_confounding <- function(metadata, condition_col, batch_col) {
+  cond  <- factor(metadata[[condition_col]])
+  batch <- factor(metadata[[batch_col]])
   
-  # Check for empty cells (structural zeroes)
-  if (any(tbl == 0)) {
-    cat("\n[WARNING] Design contains zero-sample cells! Incomplete overlap.\n")
-  }
+  # Cross-tabulation table
+  cross_tab <- table(Condition = cond, Batch = batch)
+  cat("--- Experimental Cross-Tabulation Matrix ---\n")
+  print(cross_tab)
   
-  # Construct combined model matrix
-  form <- as.formula(paste("~", cond_col, "+", batch_col))
-  X_full <- model.matrix(form, data = meta)
+  # Construct joint design matrix
+  X_joint <- model.matrix(~ cond + batch)
   
-  # Compute singular values and Condition Number
-  s_vals <- svd(X_full)$d
-  cond_num <- max(s_vals) / min(s_vals)
+  # Compute singular values and condition number
+  svd_decomp <- svd(X_joint)
+  singular_vals <- svd_decomp$d
+  kappa <- max(singular_vals) / min(singular_vals)
   
-  cat(sprintf("\nDesign Matrix Condition Number: %.2f\n", cond_num))
-  if (cond_num > 30) {
-    cat("[CRITICAL] Severe Multicollinearity Detected! (kappa > 30)\n")
-    cat("Biological condition is severely confounded with batch.\n")
-    cat("ComBat will likely distort or erase authentic biological signal.\n")
+  cat(sprintf("\nDesign Matrix Condition Number: %.2f\n", kappa))
+  if (kappa > 30) {
+    cat("[CRITICAL WARNING] Severe batch-condition confounding detected (kappa > 30)!\n")
+    cat("  Batch and biological condition cannot be reliably decoupled.\n")
   } else {
     cat("[STATUS: PASS] Design is well-balanced across batches (kappa <= 30).\n")
   }
-  
-  return(invisible(list(table = tbl, kappa = cond_num)))
+  return(invisible(list(cross_tab = cross_tab, kappa = kappa)))
 }
 
-# Test on simulated balanced metadata from Section 18.5
-audit_batch_confounding(meta_df, "condition", "batch")
+# Test on simulated balanced metadata
+demo_meta <- data.frame(
+  Condition = rep(c("Control", "Treatment"), each = 15),
+  Batch     = rep(rep(c("B1", "B2", "B3"), each = 5), 2)
+)
+
+audit_batch_confounding(demo_meta, "Condition", "Batch")
 \end{rchunk}
 
 \begin{routput}
---- Experimental Design Cross-Tabulation ---
-           Batch\_1 Batch\_2 Batch\_3
-  Control        5       5       5
-  Treatment      5       5       5
+--- Experimental Cross-Tabulation Matrix ---
+           Batch
+Condition   B1 B2 B3
+  Control    5  5  5
+  Treatment  5  5  5
 
 Design Matrix Condition Number: 2.41
 {}[STATUS: PASS] Design is well-balanced across batches ($\kappa \le 30$).
@@ -703,53 +653,95 @@ cat(sprintf("  Median Centered:  r = %.4f (SD = %.4f)\n", mean(cor_med), sd(cor_
 
 \begin{thebibliography}{99}
 
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
+
 \bibitem{boland2023health}
 Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
-
-\bibitem{rocke1995two}
-Rocke, D.~M., \& Lorenzato, S. (1995). A two-component model for measurement error in analytical chemistry. \textit{Technometrics}, 37(2), 176--184. \doi{10.1080/00401706.1995.10484302}.
-
-\bibitem{huber2002variance}
-Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., \& Vingron, M. (2002). Variance stabilization applied to microarray data calibration and to the quantification of differential expression. \textit{Bioinformatics}, 18(Suppl\_1), S96--S104. \doi{10.1093/bioinformatics/18.suppl\_1.s96}.
 
 \bibitem{bolstad2003comparison}
 Bolstad, B.~M., Irizarry, R.~A., Astrand, M., \& Speed, T.~P. (2003). A comparison of normalization methods for high density oligonucleotide array data based on variance and bias. \textit{Bioinformatics}, 19(2), 185--193. \doi{10.1093/bioinformatics/19.2.185}.
 
-\bibitem{dieterle2006probabilistic}
-Dieterle, F., Ross, A., Schlotterbeck, G., \& Senn, H. (2006). Probabilistic quotient normalization as robust method to account for dilution of complex biological mixtures in $^1$H NMR metabonomics. \textit{Analytical Chemistry}, 78(13), 4281--4290. \doi{10.1021/ac051632c}.
+\bibitem{broadhurst2006statistical}
+Broadhurst, D.~I., \& Kell, D.~B. (2006). Statistical strategies for avoiding false discoveries in metabolomics and related systems biology. \textit{Metabolomics}, 2(4), 171--196. \doi{10.1007/s11306-006-0037-z}.
 
-\bibitem{johnson2007adjusting}
-Johnson, W.~E., Li, C., \& Rabinovic, A. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. \textit{Biostatistics}, 8(1), 118--127. \doi{10.1093/biostatistics/kxj037}.
-
-\bibitem{leek2007capturing}
-Leek, J.~T., \& Storey, J.~D. (2007). Capturing heterogeneity in gene expression studies by surrogate variable analysis. \textit{PLOS Genetics}, 3(9), e161. \doi{10.1371/journal.pgen.0030161}.
-
-\bibitem{gagnon2012using}
-Gagnon-Bartsch, J.~A., \& Speed, T.~P. (2012). Using control genes to correct for unwanted variation in microarray data. \textit{Biostatistics}, 13(3), 539--552. \doi{10.1093/biostatistics/kxr034}.
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.~N., Kuligowski, J., Wilson, I.~D., Lewis, M.~R., \& Dunn, W.~B. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted metabolomic studies. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
 
 \bibitem{callister2006normalization}
-Callister, S.~J., et al. (2006). Normalization approaches for high-throughput LC-MS data. \textit{Journal of Proteome Research}, 5(2), 277--286. \doi{10.1021/pr0502552}.
-
-\bibitem{ritchie2015limma}
-Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). \textit{limma} powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
-
-\bibitem{karpievitch2012normalization}
-Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and missing value imputation for label-free LC-MS analysis. \textit{Bioinformatics}, 28(10), 1353--1360. \doi{10.1093/bioinformatics/bts150}.
-
-\bibitem{nygaard2016methods}
-Nygaard, V., R\o dland, E.~A., \& Hovig, E. (2016). Methods that remove batch effects while retaining group differences may bias downstream analyses. \textit{Nucleic Acids Research}, 44(3), e27. \doi{10.1093/nar/gkv1365}.
-
-\bibitem{gatto2023qfeatures}
-Gatto, L., et al. (2023). Quantitative features for mass spectrometry data analysis with QFeatures. \textit{Bioconductor Documentation}, \url{https://bioconductor.org/packages/QFeatures/}.
+Callister, S.~J., Barry, R.~C., Adkins, J.~N., Dagley, E.~T., Monroe, M.~E., Moore, R.~J., \dots \& Smith, R.~D. (2006). Normalization approaches for high-throughput LC-MS investigation of global proteomic alterations. \textit{Journal of Proteome Research}, 5(2), 277--286. \doi{10.1021/pr0502552}.
 
 \bibitem{chawade2014normalyzer}
 Chawade, A., Alexandersson, E., \& Levander, F. (2014). Normalyzer: a tool for rapid evaluation of normalization methods for high-throughput OMICS data. \textit{Journal of Proteome Research}, 13(6), 3114--3120. \doi{10.1021/pr401264n}.
 
-\bibitem{broadhurst2018guidelines}
-Broadhurst, D., et al. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted metabolomics. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
+\bibitem{cox2014maxlfq}
+Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
+
+\bibitem{demichev2020dia}
+Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural networks and interference correction enable deep proteome coverage in high throughput. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.
+
+\bibitem{dieterle2006probabilistic}
+Dieterle, F., Ross, A., Schlotterbeck, G., \& Senn, H. (2006). Probabilistic quotient normalization as robust method to account for dilution of complex biological mixtures in $^1$H NMR metabonomics. \textit{Analytical Chemistry}, 78(13), 4281--4290. \doi{10.1021/ac051632c}.
+
+\bibitem{dunn2011procedures}
+Dunn, W.~B., Broadhurst, D., Begley, P., Zelena, E., Ellis, S., Lau, K.~W., \dots \& Kell, D.~B. (2011). Procedures for large-scale metabolic profiling of serum and plasma using gas chromatography and liquid chromatography coupled to mass spectrometry. \textit{Nature Protocols}, 6(7), 1060--1083. \doi{10.1038/nprot.2011.335}.
+
+\bibitem{gagnon2012using}
+Gagnon-Bartsch, J.~A., \& Speed, T.~P. (2012). Using control genes to correct for unwanted variation in microarray data. \textit{Biostatistics}, 13(3), 539--552. \doi{10.1093/biostatistics/kxr034}.
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., \& Breckels, L.~M. (2023). A foundation for reproducible single-cell and bulk proteomics data analysis in Bioconductor. \textit{Nature Communications}, 14, 5698. \doi{10.1038/s41467-023-41556-2}.
+
+\bibitem{gentleman2005bioinformatics}
+Gentleman, R., Carey, V.~J., Huber, W., Irizarry, R.~A., \& Dudoit, S. (Eds.). (2005). \textit{Bioinformatics and Computational Biology Solutions Using R and Bioconductor}. Springer, New York. \doi{10.1007/0-387-29362-0}.
+
+\bibitem{huber2002variance}
+Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., \& Vingron, M. (2002). Variance stabilization applied to microarray data calibration and to the quantification of differential expression. \textit{Bioinformatics}, 18(Suppl\_1), S96--S104. \doi{10.1093/bioinformatics/18.suppl\_1.s96}.
+
+\bibitem{johnson2007adjusting}
+Johnson, W.~E., Li, C., \& Rabinovic, A. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. \textit{Biostatistics}, 8(1), 118--127. \doi{10.1093/biostatistics/kxj037}.
+
+\bibitem{karpievitch2012normalization}
+Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and missing value imputation for label-free LC-MS analysis. \textit{Bioinformatics}, 28(10), 1353--1360. \doi{10.1093/bioinformatics/bts150}.
+
+\bibitem{lazar2016accounting}
+Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \doi{10.1021/acs.jproteome.5b01109}.
+
+\bibitem{leek2007capturing}
+Leek, J.~T., \& Storey, J.~D. (2007). Capturing heterogeneity in gene expression studies by surrogate variable analysis. \textit{PLOS Genetics}, 3(9), e161. \doi{10.1371/journal.pgen.0030161}.
+
+\bibitem{leek2010tackling}
+Leek, J.~T., Scharpf, R.~B., Bravo, H.~C., Simcha, D., Langmead, B., Johnson, W.~E., Geman, D., Baggerly, K., \& Irizarry, R.~A. (2010). Tackling the widespread and critical impact of batch effects in high-throughput data. \textit{Nature Reviews Genetics}, 11(10), 733--739. \doi{10.1038/nrg2825}.
+
+\bibitem{nygaard2016methods}
+Nygaard, V., R\o dland, E.~A., \& Hovig, E. (2016). Methods that remove batch effects while retaining group differences may bias downstream analyses. \textit{Nucleic Acids Research}, 44(3), e27. \doi{10.1093/nar/gkv1365}.
+
+\bibitem{risso2014normalization}
+Risso, D., Ngai, J., Speed, T.~P., \& Dudoit, S. (2014). Normalization of RNA-seq data using factor analysis of control genes or replicate samples. \textit{Nature Biotechnology}, 32(9), 896--902. \doi{10.1038/nbt.2931}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). \textit{limma} powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
+
+\bibitem{rocke1995two}
+Rocke, D.~M., \& Lorenzato, S. (1995). A two-component model for measurement error in analytical chemistry. \textit{Technometrics}, 37(2), 176--184. \doi{10.1080/00401706.1995.10484302}.
+
+\bibitem{smyth2004linear}
+Smyth, G.~K. (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
+
+\bibitem{speed2003microarray}
+Speed, T.~P. (Ed.). (2003). \textit{Statistical Analysis of Gene Expression Microarray Data}. Chapman \& Hall/CRC, Boca Raton, FL. \doi{10.1201/9780203011232}.
 
 \bibitem{valikangas2018systematic}
 V\"alikangas, T., Suomi, T., \& Elo, L.~L. (2018). A systematic evaluation of normalization methods in quantitative label-free proteomics. \textit{Briefings in Bioinformatics}, 19(1), 1--11. \doi{10.1093/bib/bbw095}.
+
+\bibitem{want2010mass}
+Want, E.~J., Wilson, I.~D., Gika, H., Theodoridis, G., Plumb, R.~S., Shockcor, J., \dots \& Nicholson, J.~K. (2010). Global metabolic profiling procedures for urine using UPLC-MS. \textit{Nature Protocols}, 5(6), 1005--1018. \doi{10.1038/nprot.2010.50}.
+
+\bibitem{xia2009metaboanalyst}
+Xia, J., Psychogios, N., Guo, J., \& Wishart, D.~S. (2009). MetaboAnalyst: a web-based tool for metabolomic data analysis and interpretation. \textit{Nucleic Acids Research}, 37(Web Server issue), W652--W660. \doi{10.1093/nar/gkp356}.
+
+\bibitem{zhang2020combatseq}
+Zhang, Y., Parmigiani, G., \& Johnson, W.~E. (2020). ComBat-seq: batch effect adjustment for RNA-seq count data. \textit{NAR Genomics and Bioinformatics}, 2(3), lqaa078. \doi{10.1093/nargab/lqaa078}.
 
 \end{thebibliography}
 

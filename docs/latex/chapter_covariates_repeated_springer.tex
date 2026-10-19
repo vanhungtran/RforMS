@@ -28,7 +28,7 @@
 \noindent
 Quantitative mass spectrometry (MS) experiments in clinical and translational cohorts routinely depart from simple, independent two-group cross-sectional designs. Modern biomolecular investigations frequently feature paired pre- and post-treatment biopsies, multi-day technical batch runs, complex factorial interventions, and multi-timepoint longitudinal monitoring of the same subjects. Applying standard Ordinary Least Squares (OLS) models, two-sample Student's $t$-tests, or standard unblocked ANOVA to such structured datasets violates the core assumption of independent and identically distributed (i.i.d.) observations. This analytical error---known as \textit{pseudoreplication}---underestimates parameter standard errors, produces artificially deflated $p$-values, and inundates the literature with irreproducible biomarker candidates. Conversely, failing to adjust for technical confounders (such as LC-MS run day, operator, or autosampler tray) inflates residual variance and obscures genuine biological effects.
 
-This chapter establishes a rigorous mathematical, methodological, and computational framework for modeling complex experimental structure in high-dimensional proteomics and metabolomics. We develop the matrix formulation of Linear Mixed-Effects Models (LMMs), provide an algebraic derivation of Henderson's mixed-model equations from joint log-densities, and contrast Restricted Maximum Likelihood (REML) against Maximum Likelihood (ML) estimation. We formalize the Intraclass Correlation Coefficient (ICC) and provide an analytical proof of the variance inflation factor induced by ignoring repeated measures. We evaluate alternative covariance structures---including Compound Symmetry (CS), First-Order Autoregressive ($\operatorname{AR}(1)$), and Random Coefficient models---and establish natural cubic splines for capturing non-linear pharmacodynamic time courses. Furthermore, we bridge linear mixed models with empirical Bayes moderation and variance partitioning through the \texttt{dream} and \texttt{variancePartition} frameworks. The chapter features a tutorial diagnostic heuristics checklist, an end-to-end reproducible R laboratory, a critical review of the ``Five Deadly Sins'' of longitudinal MS analysis, and multi-tier exercises with exhaustive, step-by-step worked solutions.
+This chapter establishes a rigorous mathematical, methodological, and computational framework for modeling complex experimental structure in high-dimensional proteomics and metabolomics. We develop the matrix formulation of Linear Mixed-Effects Models (LMMs), provide an algebraic derivation of Henderson's mixed-model equations from joint log-densities, and contrast Restricted Maximum Likelihood (REML) against Maximum Likelihood (ML) estimation. We formalize the Intraclass Correlation Coefficient (ICC) and provide an analytical proof of the variance inflation factor induced by ignoring repeated measures. We evaluate alternative covariance structures---including Compound Symmetry (CS), First-Order Autoregressive ($\operatorname{AR}(1)$), and Random Coefficient models---and establish natural cubic splines for capturing non-linear kinetic time courses. Furthermore, we bridge linear mixed models with empirical Bayes moderation and variance partitioning through the \texttt{dream} and \texttt{variancePartition} frameworks. The chapter features a tutorial diagnostic heuristics checklist, an end-to-end reproducible R laboratory on a published targeted mass spectrometry longitudinal time-course, a critical review of the ``Five Deadly Sins'' of longitudinal MS analysis, and multi-tier exercises with exhaustive, step-by-step worked solutions.
 \end{abstract}
 
 \noindent\textbf{Keywords:} Linear Mixed-Effects Models, Repeated Measures, Longitudinal Profiling, Intraclass Correlation Coefficient (ICC), REML, Pseudoreplication, Splines, Empirical Bayes Moderation, \texttt{dream}, \texttt{variancePartition}, Kenward-Roger.
@@ -269,174 +269,151 @@ For instance, in a cohort of $N = 10$ patients sampled at $m = 4$ timepoints ($n
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=\textwidth]{figures/fig_22_1_pseudoreplication_ci.pdf}
-\caption{The Statistical Consequence of Pseudoreplication in Longitudinal Mass Spectrometry Profiling. \textbf{(a)} Naive Ordinary Least Squares (OLS) treats repeated observations across four timepoints (0, 2, 6, 24 hours) as independent draws ($n_{\text{total}} = 40$), constructing artificially narrow 95\% confidence intervals (light red ribbon) that underestimate true sampling variability. \textbf{(b)} Linear Mixed-Effects Model (LMM with subject-specific random intercepts and Kenward-Roger degrees of freedom) correctly models intra-patient correlation ($\rho = 0.68$), yielding appropriate biological confidence intervals (navy ribbon). Thin gray trajectories show individual patient profiles ($N = 10$); solid bold curves show population-averaged fitted trajectories.}
+\caption{The Statistical Consequence of Non-Linear Trajectory Modeling and Pseudoreplication in Longitudinal Targeted Proteomics. \textbf{(a)} Naive Ordinary Least Squares (OLS) fits a forced linear slope across ten longitudinal time points ($T_1\text{--}T_{10}$, $n_{\text{total}} = 30$) in yeast metabolic diauxic shift profiling (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}). The linear model completely misses the sigmoidal diauxic shift transition and yields an artificially narrow, misspecified confidence interval (light red ribbon). \textbf{(b)} Linear Mixed-Effects Model combining biological replicate random intercepts (\texttt{SUBJECT}; dashed lines) with natural cubic splines ($\operatorname{ns}(\text{Time}, \text{df}=3)$; navy curve and ribbon). The spline LMM faithfully reconstructs the non-linear plateau kinetics of isocitrate dehydrogenase (\texttt{IDHC}), providing rigorous biological confidence intervals and statistically outperforming the linear slope ($\chi^2 = 38.76, p = 3.84 \times 10^{-9}$).}
 \label{fig:pseudoreplication_ci}
 \end{figure}
 
 % =============================================================================
-\section{Hands-On R Laboratory: Longitudinal dream Analysis}
+\section{Hands-On R Laboratory: Longitudinal Analysis on Real Targeted Proteomics}
 % =============================================================================
 
-We now demonstrate the complete longitudinal workflow using \texttt{variancePartition} and \texttt{dream} within the Bioconductor statistical computing environment \cite{gentleman2005bioinformatics} on a simulated pharmacoproteomic cohort \cite{hoffman2021dream, choi2014msstats, goeminne2016msqrob2}.
+We now demonstrate the complete longitudinal workflow using \texttt{variancePartition} and \texttt{dream} within the Bioconductor statistical computing environment \cite{gentleman2005bioinformatics, hoffman2021dream, goeminne2016msqrob2} on a published, real-world targeted mass spectrometry time-course study (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}; Chang et al., 2012 \cite{chang2012protein}; Choi et al., 2014 \cite{choi2014msstats}). The study profiles yeast (\textit{Saccharomyces cerevisiae}) central metabolic enzymes across a 10-timepoint longitudinal transition ($T_1\text{--}T_{10}$) through glucose exhaustion, diauxic shift, and stationary phase, with three biological replicates profiled across 30 LC-MS runs.
 
-\begin{rchunk}{Simulating Multi-Timepoint Longitudinal Cohort with Technical Batch Shift}
+\begin{rchunk}{Loading and Preprocessing Real Longitudinal SRM Mass Spectrometry Data}
 suppressPackageStartupMessages({
+  library(MSstats)
   library(variancePartition)
   library(limma)
   library(splines)
 })
 
-set.seed(101)
-n_features <- 200
-n_patients <- 20
-timepoints <- c("T_0", "T_2", "T_6", "T_24")
-n_times    <- length(timepoints)
-n_total    <- n_patients * n_times
+# Load published 10-timepoint SRM longitudinal proteomics dataset (Picotti et al., 2009)
+data(SRMRawData)
 
-# Metadata: 10 Placebo, 10 Active (explicit level ordering ensures Placebo is reference)
-patient_id <- factor(rep(paste0("PT_", sprintf("%02d", 1:n_patients)), each = n_times))
-arm        <- factor(rep(c("Placebo", "Active"), each = n_times * (n_patients / 2)),
-                     levels = c("Placebo", "Active"))
-time_fac   <- factor(rep(timepoints, times = n_patients), levels = timepoints)
-time_num   <- rep(c(0, 2, 6, 24), times = n_patients)
-batch      <- factor(sample(c("RunA", "RunB"), size = n_total, replace = TRUE))
+# Process transition-level intensities into protein-level summaries
+proc <- dataProcess(SRMRawData, use_log_file = FALSE, verbose = FALSE)
+df_prot <- proc$ProteinLevelData
 
-meta_df <- data.frame(patient_id, arm, time_fac, time_num, batch)
-rownames(meta_df) <- paste(meta_df$patient_id, meta_df$time_fac, sep = "_")
+# Construct wide abundance matrix (proteins x longitudinal samples)
+df_wide <- reshape2::dcast(df_prot, Protein ~ SUBJECT + GROUP, value.var = "LogIntensities")
+expr_mat <- as.matrix(df_wide[, -1])
+rownames(expr_mat) <- df_wide$Protein
 
-# Simulate baseline protein expression with patient random intercepts
-expr_mat <- matrix(0, nrow = n_features, ncol = n_total)
-rownames(expr_mat) <- paste0("PROT_", sprintf("%03d", 1:n_features))
-colnames(expr_mat) <- rownames(meta_df)
+# Metadata: 3 biological replicates across 10 longitudinal transition points (30 runs)
+meta_df <- data.frame(
+  Sample   = colnames(expr_mat),
+  SUBJECT  = factor(sub("_.*", "", colnames(expr_mat))),
+  Time_fac = factor(sub(".*_", "", colnames(expr_mat)), levels = as.character(1:10)),
+  Time_num = as.numeric(sub(".*_", "", colnames(expr_mat)))
+)
+rownames(meta_df) <- colnames(expr_mat)
 
-# Systematic technical batch shift across features
-batch_shift <- rnorm(n_features, mean = 0.75, sd = 0.25)
-
-for (g in 1:n_features) {
-  # True variance components: sigma_b in [0.8, 1.8], sigma_e in [0.3, 0.6] -> ICC in [0.64, 0.97]
-  sigma_b <- runif(1, 0.8, 1.8)
-  sigma_e <- runif(1, 0.3, 0.6)
-  
-  # Patient random intercepts
-  u_pt <- rnorm(n_patients, mean = 0, sd = sigma_b)
-  names(u_pt) <- levels(patient_id)
-  
-  # Base abundance
-  mu_g <- rnorm(1, mean = 20, sd = 2)
-  expr_mat[g, ] <- mu_g + u_pt[as.character(meta_df$patient_id)] + rnorm(n_total, sd = sigma_e)
-  
-  # Inject technical batch effect for RunB samples
-  expr_mat[g, meta_df$batch == "RunB"] <- expr_mat[g, meta_df$batch == "RunB"] + batch_shift[g]
-}
-
-# Upregulate 30 proteins in Active Arm at T_24 (treatment effect)
-treated_t24 <- which(meta_df$arm == "Active" & meta_df$time_fac == "T_24")
-expr_mat[1:30, treated_t24] <- expr_mat[1:30, treated_t24] + 3.5
-
-cat(sprintf("Simulated %d features across %d total longitudinal samples.\n", 
-            n_features, n_total))
+cat(sprintf("Loaded real SRM cohort: %d proteins across %d runs (%d timepoints x %d replicates).\n",
+            nrow(expr_mat), ncol(expr_mat), length(unique(meta_df$Time_num)), length(unique(meta_df$SUBJECT))))
+head(meta_df, 4)
 \end{rchunk}
 
 \begin{routput}
-Simulated 200 features across 80 total longitudinal samples.
+Loaded real SRM cohort: 2 proteins across 30 runs (10 timepoints x 3 replicates).
+              Sample SUBJECT Time\_fac Time\_num
+ReplA\_1      ReplA\_1   ReplA        1        1
+ReplA\_2      ReplA\_2   ReplA        2        2
+ReplA\_3      ReplA\_3   ReplA        3        3
+ReplA\_4      ReplA\_4   ReplA        4        4
 \end{routput}
 
-\begin{rchunk}{Automated dream Pipeline Execution with Kenward-Roger ddf}
-# Specify dream formula with fixed effects, batch, and patient random intercept
-form <- ~ arm * time_fac + batch + (1 | patient_id)
+\begin{rchunk}{Automated dream Pipeline Execution with Kenward-Roger DDF}
+# Specify dream formula with fixed timepoint factors and subject random intercepts
+form <- ~ 0 + Time_fac + (1 | SUBJECT)
 
-cat("Fitting dream linear mixed model with empirical Bayes moderation...\n")
-fit_mm <- dream(expr_mat, form, meta_df, ddf = "Kenward-Roger")
+# Construct contrast matrix for key metabolic transitions:
+# Diauxic Shift (T7 vs T1) and Stationary Phase (T10 vs T1)
+L <- makeContrastsDream(form, meta_df, 
+                        contrasts = c(Diauxic_T7_vs_T1     = "Time_fac7 - Time_fac1",
+                                      Stationary_T10_vs_T1 = "Time_fac10 - Time_fac1"))
+
+cat("Fitting dream linear mixed model with Kenward-Roger DDF...\n")
+fit_mm <- dream(expr_mat, form, meta_df, L = L, ddf = "Kenward-Roger")
 fit_eb <- eBayes(fit_mm)
 
-# Sanity check: confirm available model coefficients
-cat("Fitted model coefficients:\n")
-print(colnames(coef(fit_eb)))
-
-# Extract difference-in-differences interaction contrast:
-# (Active_T24 - Active_T0) - (Placebo_T24 - Placebo_T0)
-res_dream <- topTable(fit_eb, coef = "armActive:time_facT_24", number = Inf, sort.by = "P")
-res_dream$Significant <- res_dream$adj.P.Val < 0.05
-
-n_sig <- sum(res_dream$Significant)
-cat(sprintf("Features evaluated: %d | Significant at FDR < 0.05: %d features\n", 
-            nrow(res_dream), n_sig))
-head(res_dream[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "Significant")], 4)
+# Differential abundance results across diauxic shift
+res_diauxic <- variancePartition::topTable(fit_eb, coef = "Diauxic_T7_vs_T1", number = Inf)
+res_diauxic$Significant <- res_diauxic$adj.P.Val < 0.05
+cat("\nDifferential Abundance: Diauxic Shift (T7 vs T1):\n")
+res_diauxic[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "Significant")]
 \end{rchunk}
 
 \begin{routput}
-Fitting dream linear mixed model with empirical Bayes moderation...
-Fitted model coefficients:
-{}[1] "(Intercept)"             "armActive"               "time\_facT\_2"           
-{}[4] "time\_facT\_6"             "time\_facT\_24"            "batchRunB"             
-{}[7] "armActive:time\_facT\_2"   "armActive:time\_facT\_6"   "armActive:time\_facT\_24"
-Features evaluated: 200 | Significant at FDR $<$ 0.05: 30 features
-            logFC  AveExpr        t      P.Value    adj.P.Val Significant
-PROT\_017 3.504723 18.24382 18.24633 1.429768e-27 2.859536e-25        TRUE
-PROT\_028 3.802824 21.42070 17.84436 4.887392e-27 4.023573e-25        TRUE
-PROT\_025 3.625096 19.11291 17.77693 6.035360e-27 4.023573e-25        TRUE
-PROT\_020 3.637582 20.24557 17.16076 4.159010e-26 2.079505e-24        TRUE
+Fitting dream linear mixed model with Kenward-Roger DDF...
+
+Differential Abundance: Diauxic Shift (T7 vs T1):
+           logFC   AveExpr          t      P.Value    adj.P.Val Significant
+IDHC  6.15438359   9.35840 21.0981084 3.820619e-14 7.641237e-14        TRUE
+PMG2 -0.09032809  10.50882 -0.5947831 5.593918e-01 5.593918e-01       FALSE
 \end{routput}
 
 \begin{notebox}
-\textbf{Methodological Detail: Difference-in-Differences Formulation}\\
-The coefficient \texttt{armActive:time\_facT\_24} represents a classical difference-in-differences estimator:
-\begin{equation}
-\label{eq:did_estimator}
-\hat{\delta} = \left( \bar{y}_{\text{Active}, T_{24}} - \bar{y}_{\text{Active}, T_0} \right) - \left( \bar{y}_{\text{Placebo}, T_{24}} - \bar{y}_{\text{Placebo}, T_0} \right)
-\end{equation}
-By contrasting changes from baseline between treatment groups, the model automatically cancels out baseline subject heterogeneity as well as non-specific instrument drift or placebo effects occurring across the 24-hour study window.
+\textbf{Methodological Detail: Contrast Formulations in Longitudinal dream}\\
+The contrast \texttt{Time\_fac7 - Time\_fac1} represents the exact log2 fold-change induced during the metabolic diauxic shift ($T_7$ vs. $T_1$), while \texttt{(1 | SUBJECT)} accounts for intra-replicate baseline correlation across repeated MS runs. Notice that isocitrate dehydrogenase (\texttt{IDHC}, gene \textit{IDP2}) exhibits massive upregulation ($\log_2\text{FC} = +6.15, t = 21.10, p = 3.82 \times 10^{-14}$) as cells switch from glycolysis to ethanol respiration in the TCA and glyoxylate cycles. In contrast, phosphoglycerate mutase 2 (\texttt{PMG2}, gene \textit{GPM2}) remains unaffected ($\log_2\text{FC} = -0.09, p = 0.559$), confirming known biological ground truth without false-positive inflation.
 \end{notebox}
 
-\begin{rchunk}{Variance Partitioning Analysis}
-# Decompose total phenotypic variance across experimental factors
-form_vp <- ~ (1 | arm) + (1 | time_fac) + (1 | batch) + (1 | patient_id)
-varPart <- fitExtractVarPartModel(expr_mat[1:10, ], form_vp, meta_df)
+\begin{rchunk}{Variance Partitioning on Real Mass Spectrometry Time-Course}
+# Decompose phenotypic variance into temporal progression vs replicate batch heterogeneity
+form_vp <- ~ (1 | Time_fac) + (1 | SUBJECT)
+varPart <- fitExtractVarPartModel(expr_mat, form_vp, meta_df)
 
-cat("Variance Partitioning Summary (First 3 Features):\n")
-print(round(head(varPart, 3), 3))
+cat("Variance Partitioning on Real SRM Time-Course Data:\n")
+print(round(varPart, 3))
 \end{rchunk}
 
 \begin{routput}
-Variance Partitioning Summary (First 3 Features):
-           arm batch patient\_id time\_fac Residuals
-PROT\_001 0.114 0.073      0.326    0.184     0.303
-PROT\_002 0.062 0.068      0.259    0.269     0.342
-PROT\_003 0.058 0.000      0.435    0.230     0.277
+Variance Partitioning on Real SRM Time-Course Data:
+     SUBJECT Time\_fac Residuals
+IDHC   0.000    0.985     0.015
+PMG2   0.094    0.077     0.829
 \end{routput}
 
 \begin{notebox}
 \textbf{Tutor's Diagnostic Advice: Interpreting Variance Partitioning}\\
-In \texttt{variancePartition}, all factors are specified as random effects so that their variance contributions are mapped to a standardized fraction $f_k \in [0, 1]$ summing to 1. Because each patient belongs to a single treatment arm, \texttt{(1 | patient\_id)} is structurally nested within \texttt{(1 | arm)}. Furthermore, with only two arm levels, the treatment variance component is estimated with low statistical precision. Consequently, variance partitioning serves strictly as an \textit{exploratory diagnostic audit} to verify whether technical batch noise ($0.0\%\text{--}7.3\%$) is contained relative to patient baseline heterogeneity ($25.9\%\text{--}43.5\%$) and temporal dynamics ($18.4\%\text{--}26.9\%$). Formal hypothesis testing is appropriately reserved for fixed-effects contrasts within \texttt{dream}.
+Variance partitioning decomposes total variation into normalized fractions $f_k \in [0, 1]$. On this real mass spectrometry dataset, variance partitioning reveals striking biological divergence: for \texttt{IDHC}, \textbf{98.5\%} of the total variance is driven by longitudinal time progression (\texttt{Time\_fac}), with less than $1.5\%$ residual noise. Conversely, \texttt{PMG2} exhibits minimal temporal variance ($7.7\%$) and is dominated by residual variation ($82.9\%$) and slight replicate variation ($9.4\%$). Variance partitioning thus functions as an indispensable diagnostic audit, identifying genuine kinetic responders before downstream statistical contrasts.
 \end{notebox}
 
-\begin{rchunk}{Continuous Longitudinal Modeling via Natural Cubic Splines}
-# Step 4: Model continuous non-linear trajectory via natural cubic splines (df = 2)
-form_spline <- ~ arm * ns(time_num, df = 2) + batch + (1 | patient_id)
-fit_spline <- dream(expr_mat[1:10, ], form_spline, meta_df, ddf = "Kenward-Roger")
+\begin{rchunk}{Continuous Non-Linear Trajectory Modeling via Natural Cubic Splines}
+# Model continuous longitudinal trajectory via natural cubic splines (df = 3)
+form_spline <- ~ ns(Time_num, df = 3) + (1 | SUBJECT)
+fit_spline <- dream(expr_mat, form_spline, meta_df, ddf = "Kenward-Roger")
 fit_spline_eb <- eBayes(fit_spline)
 
-cat("Spline Model Fitted Coefficients:\n")
-print(colnames(coef(fit_spline_eb)))
+# Extract joint moderated F-test across spline basis coefficients
+spline_terms <- grep("ns\\(Time_num", colnames(coef(fit_spline_eb)), value = TRUE)
+res_spline <- variancePartition::topTable(fit_spline_eb, coef = spline_terms)
 
-# Extract non-linear treatment x time interaction contrast
-res_spline <- topTable(fit_spline_eb, coef = "armActive:ns(time_num, df = 2)2", number = 3, sort.by = "P")
-cat("\nTop Features for Non-Linear Spline Interaction:\n")
-head(res_spline[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 3)
+cat("Joint Moderated F-Test for Non-Linear Spline Trajectories:\n")
+print(round(res_spline[, c("AveExpr", "F", "P.Value", "adj.P.Val")], 4))
+
+# Formal likelihood-ratio test: Linear slope vs Natural cubic spline (df = 3) in lme4
+df_idhc <- df_prot[df_prot$Protein == "IDHC", ]
+df_idhc$Time <- as.numeric(as.character(df_idhc$GROUP))
+m_linear <- lme4::lmer(LogIntensities ~ Time + (1 | SUBJECT), data = df_idhc, REML = FALSE)
+m_spline <- lme4::lmer(LogIntensities ~ ns(Time, df = 3) + (1 | SUBJECT), data = df_idhc, REML = FALSE)
+cat("\nLikelihood Ratio Test (Linear vs. Natural Cubic Spline):\n")
+print(anova(m_linear, m_spline))
 \end{rchunk}
 
 \begin{routput}
-Spline Model Fitted Coefficients:
-{}[1] "(Intercept)"                     "armActive"                      
-{}[3] "ns(time\_num, df = 2)1"           "ns(time\_num, df = 2)2"          
-{}[5] "batchRunB"                       "armActive:ns(time\_num, df = 2)1"
-{}[7] "armActive:ns(time\_num, df = 2)2"
+Joint Moderated F-Test for Non-Linear Spline Trajectories:
+     AveExpr        F P.Value adj.P.Val
+IDHC   9.358 191.0300       0         0
+PMG2  10.509   1.2055  0.3290    0.3290
 
-Top Features for Non-Linear Spline Interaction:
-            logFC  AveExpr        t      P.Value    adj.P.Val
-PROT\_001 3.758080 17.49220 20.19106 1.103618e-30 1.103618e-29
-PROT\_009 3.606614 18.75416 17.19980 1.156422e-26 5.782111e-26
-PROT\_010 3.398209 20.09713 14.73900 5.179534e-23 1.726511e-22
+Likelihood Ratio Test (Linear vs. Natural Cubic Spline):
+Data: df\_idhc
+Models:
+m\_linear: LogIntensities ~ Time + (1 | SUBJECT)
+m\_spline: LogIntensities ~ ns(Time, df = 3) + (1 | SUBJECT)
+         npar     AIC    logLik  Chisq Df Pr(>Chisq)    
+m\_linear    4 101.090   -46.545                         
+m\_spline    6  66.335   -27.167 38.755  2  3.841e-09 ***
 \end{routput}
 
 % =============================================================================
@@ -616,6 +593,9 @@ Broadhurst, D.~I., \& Kell, D.~B. (2006). Statistical strategies for avoiding fa
 \bibitem{broadhurst2018guidelines}
 Broadhurst, D., Goodacre, R., Reinke, S.~N., Kuligowski, J., Wilson, I.~D., Lewis, M.~R., \& Dunn, W.~B. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted metabolomic studies. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
 
+\bibitem{chang2012protein}
+Chang, C.~Y., Picotti, P., H\"uttenhain, R., Heinzelmann-Schwarz, V., Jovanovic, M., Aebersold, R., \& Vitek, O. (2012). Protein significance analysis in selected reaction monitoring (SRM) measurements. \textit{Molecular \& Cellular Proteomics}, 11(4), M111--014662. \doi{10.1074/mcp.M111.014662}.
+
 \bibitem{choi2014msstats}
 Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: An R package for statistical relative quantification of proteins and peptides in mass spectrometry-based proteomics of complex mixtures. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
 
@@ -675,6 +655,9 @@ Leek, J.~T., Scharpf, R.~B., Bravo, H.~C., Simcha, D., Langmead, B., Johnson, W.
 
 \bibitem{patterson1971recovery}
 Patterson, H.~D., \& Thompson, R. (1971). Recovery of inter-block information when block sizes are unequal. \textit{Biometrika}, 58(3), 545--554. \doi{10.1093/biomet/58.3.545}.
+
+\bibitem{picotti2009high}
+Picotti, P., Bodenmiller, B., Mueller, L.~N., Domon, B., \& Aebersold, R. (2009). Full dynamic range proteome analysis of \textit{S. cerevisiae} by targeted proteomics. \textit{Cell}, 138(4), 795--806. \doi{10.1016/j.cell.2009.05.051}.
 
 \bibitem{pinheiro2000mixed}
 Pinheiro, J.~C., \& Bates, D.~M. (2000). \textit{Mixed-Effects Models in S and S-PLUS}. Springer-Verlag, New York. \doi{10.1007/978-1-4419-0318-0}.

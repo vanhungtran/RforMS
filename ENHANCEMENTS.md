@@ -382,7 +382,8 @@ tryCatch({
 ## Contact & Contribution
 
 **Author:** Lucas VHH TRAN  
-**Email:** tranhungydhcm@gmail.com  
+**Affiliation:** CK-CARE Davos, Switzerland  
+**Email:** lucas.tran@ck-care.ch  
 **Repository:** https://github.com/vanhungtran/RforMS  
 **Website:** https://vanhungtran.github.io/RforMS/
 
@@ -397,7 +398,26 @@ tryCatch({
 
 ## Version History
 
-**Current Version:** 2.1 (Refined Edition)
+**Current Version:** 3.0 (Springer Nature Textbook Monograph Edition)
+**Date:** 2026-10-19
+**Major Enhancements:**
+- **Authored 10 Standalone Publication-Grade Springer Nature Textbook Monographs (162 Pages Total):**
+  - Encapsulated within unified `springer_monograph.sty` package (Palatino/Times Roman typography, `[R 4.6 / Bioconductor]` code chunks, `routput` console terminal blocks, and semantic callouts: `pitfallbox`, `biologicalinsight`, `deepdive`, `svgraybox`).
+  - Strict Boland (*Health Data Analytics with R*) pedagogy: formal mathematical definitions, analytical proofs, end-to-end reproducible R laboratories, *Five Deadly Sins*, multi-tier exercises, and exhaustive step-by-step worked solutions.
+  - Full suite of 10 compiled PDFs deployed to `docs/latex/` and `latex/`:
+    1. **Chapter 08:** *Chromatographic Feature Detection & Alignment with xcms* (15 pages, CWT, Mexican hat wavelets, Obiwarp, Peak Density correspondence, gap-filling).
+    2. **Chapter 14:** *Quantitative Label-Free Proteomics (LFQ)* (15 pages, MaxLFQ Laplacian graph optimization, Top$N$ / iBAQ, Tukey's biweight).
+    3. **Chapter 15:** *Multiplexed Isobaric Labeling (TMT / iTRAQ)* (11 pages, co-isolation ratio compression proof, delta-method variance inflation, SPS-MS3/FAIMS, IRS multi-batch algebra).
+    4. **Chapter 18:** *Feature Normalization & Batch Correction* (18 pages, Rocke-Lorenzato two-component error model, Huber VSN $\operatorname{arsinh}$ derivation, Cyclic LOESS, PQN, ComBat empirical Bayes location-scale shrinkage, RUV).
+    5. **Chapter 19:** *Missing Data in Mass Spectrometry* (17 pages, Rubin's MCAR/MAR/MNAR taxonomy, logistic diagnostic model, left-censored Gaussian Perseus/QRILC, $k$-NN, Rubin's pooling rules, 4-strategy sensitivity audit).
+    6. **Chapter 21:** *Differential Abundance Analysis* (19 pages, Smyth's empirical Bayes variance moderation, linear models, limma-trend vs. voom, Benjamini-Hochberg FDR, volcano geometry).
+    7. **Chapter 22:** *Covariates, Longitudinal Profiling, and Repeated Measures* (17 pages, Linear Mixed-Effects Models, Henderson's MME, REML derivation, Intraclass Correlation Coefficient, pseudoreplication variance inflation proof, `dream` empirical Bayes moderation, natural cubic splines).
+    8. **Chapter 23:** *Machine Learning in Mass Spectrometry* (18 pages, $p \gg n$ geometry, Cover's theorem on linear separability, Elastic Net grouping bound proof, Random Forest variance reduction, XGBoost, leakage taxonomy, Brier score).
+    9. **Chapter 25:** *Pathway Enrichment & Molecular Network Analysis* (17 pages, Hypergeometric ORA, background universe selection bias proof, GSEA weighted Kolmogorov-Smirnov running sums, NES, betweenness centrality, bipartite cross-omics networks).
+    10. **Chapter 26:** *Single-Cell Proteomics with `scp` and `QFeatures`* (15 pages, Poisson ion shot noise limit $\text{CV} = 1/\sqrt{\lambda}$, SCoPE2 carrier ion suppression, multi-assay DAG hierarchy, pseudoreplication mixed modeling).
+- **Author Attribution:** Lucas VHH TRAN, CK-CARE Davos, Switzerland (`lucas.tran@ck-care.ch`).
+
+**Previous Version:** 2.1 (Refined Edition)
 **Date:** 2026-05-18
 **Major Changes:**
 - Fixed "burned-in" mojibake encoding issues across all 23 chapters.

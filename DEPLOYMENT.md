@@ -132,5 +132,5 @@ git push origin master
 
 ## Contact
 
-For issues or questions, contact: tranhungydhcm@gmail.com
+For issues or questions, contact: Lucas VHH TRAN (CK-CARE Davos) <lucas.tran@ck-care.ch>
 

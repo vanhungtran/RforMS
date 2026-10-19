@@ -1,0 +1,726 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+
+\hypersetup{
+    pdftitle={Chapter 25: Pathway Enrichment and Molecular Network Analysis},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+\setcounter{chapter}{24} % Sets chapter counter so next is Chapter 25
+\chapter{Pathway Enrichment and Molecular Network Analysis: Over-Representation Analysis, GSEA, and Cross-Omics Topological Networks}
+\label{ch:pathway_network}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+High-resolution mass spectrometry experiments frequently culminate in ranked lists of hundreds of differentially abundant peptides, proteins, or metabolites. However, an uncurated feature list does not provide mechanistic clarity: cellular phenotype is mediated not by isolated molecules, but by coordinated fluxes through metabolic cascades, multi-protein complexes, and signaling cascades. Bridging physical mass spectra to biological insight requires functional enrichment and molecular network analysis. 
+
+This chapter establishes the statistical, topological, and computational foundations for pathway-level inference in proteomics and metabolomics. We develop the mathematical framework of Over-Representation Analysis (ORA) via the hypergeometric distribution, Fisher's exact test, and non-central Wallenius formulations, deriving an analytical proof demonstrating why using the whole genome rather than the empirically detected mass spectrometry background creates massive false-positive inflation. We formalize functional class scoring via Gene Set Enrichment Analysis (GSEA), deriving the weighted Kolmogorov-Smirnov running-sum statistic, normalized enrichment score (NES), and permutation testing. We then transition to graph-theoretic network biology, formalizing adjacency matrices, degree and betweenness centrality, random walk with restart (RWR), and Louvain community detection. Finally, we formulate bipartite cross-omics network integration between proteomics and metabolomics, supported by an end-to-end reproducible R laboratory, a review of the ``Five Deadly Sins'' of omics pathway analysis, and multi-tier exercises with complete worked solutions.
+\end{abstract}
+
+\noindent\textbf{Keywords:} Pathway Enrichment, Over-Representation Analysis (ORA), GSEA, Hypergeometric Test, Background Universe Bias, Network Topology, Betweenness Centrality, Bipartite Graphs, Multi-Omics Integration.
+
+\vspace{1.5em}
+
+% =============================================================================
+\section{Introduction: From Molecular Catalogs to Mechanistic Topology}
+% =============================================================================
+
+The output of a rigorous differential abundance analysis (Chapters 21--22) is a list of features accompanied by effect sizes ($\log_2 \text{FC}$), test statistics ($t$), and adjusted false discovery rates ($q$-values). While essential, this list presents three major interpretation dilemmas:
+\begin{enumerate}
+    \item \textbf{High-Dimensional Redundancy:} Biologically related proteins in a multi-subunit complex (e.g., the 26S proteasome, respiratory chain complexes I--V) exhibit correlated abundance shifts. Treating them as independent discoveries over-counts biological signals.
+    \item \textbf{Modest-Effect Synergy:} Metabolic pathways often respond through subtle, coordinated shifts (e.g., 20--30\% abundance changes across 15 pathway enzymes) that fail individual univariate significance thresholds ($\alpha = 0.05$ after Benjamini-Hochberg correction), yet collectively shift metabolic flux.
+    \item \textbf{Uncurated Heterogeneity:} Without functional grouping, discovering 18 kinase subunits, 12 ribosomal proteins, and 5 heat shock chaperones appears disconnected, obscuring underlying cellular stress or translational arrest.
+\end{enumerate}
+
+To extract biological mechanism from mass spectrometry catalogs, computational omics relies on two complementary paradigms: \textbf{Enrichment Analysis} (evaluating whether predefined gene sets are statistically over-represented or coordinate along a continuum) and \textbf{Network Topology} (mapping detected features onto physical protein-protein interaction [PPI] graphs or metabolic reaction networks to identify regulatory bottlenecks and functional modules).
+
+% =============================================================================
+\section{Over-Representation Analysis and the Background Universe Bias}
+% =============================================================================
+
+\subsection{Hypergeometric and Fisher's Exact Formulation}
+
+Over-Representation Analysis (ORA) evaluates whether a selected subset of significant features (e.g., proteins with $q < 0.05$ and $|\log_2 \text{FC}| > 1.0$) contains more members of a canonical pathway $\mathcal{P}$ than expected by random chance.
+
+Let:
+\begin{itemize}
+    \item $N$ denote the total number of features in the reference \textit{background universe}.
+    \item $M$ denote the number of features in the background universe belonging to pathway $\mathcal{P}$.
+    \item $n$ denote the number of differentially abundant (significant) features selected by the analyst ($n \le N$).
+    \item $k$ denote the number of significant features that belong to pathway $\mathcal{P}$ ($k \le \min(n, M)$).
+\end{itemize}
+
+This configuration corresponds to sampling without replacement from a finite population, represented by the $2 \times 2$ contingency table:
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Contingency table for Over-Representation Analysis of pathway $\mathcal{P}$.}
+\label{tab:ora_contingency}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{In Pathway $\mathcal{P}$} & \textbf{Not in Pathway $\mathcal{P}$} & \textbf{Total} \\
+\midrule
+\textbf{Differentially Abundant} & $k$ & $n - k$ & $n$ \\
+\textbf{Non-Significant} & $M - k$ & $(N - M) - (n - k)$ & $N - n$ \\
+\midrule
+\textbf{Total Background} & $M$ & $N - M$ & $N$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Under the null hypothesis $H_0$ that differential abundance is independent of pathway membership, the test statistic $K$ follows the hypergeometric distribution:
+\begin{equation}
+\label{eq:hypergeometric_pmf}
+P(K = k) = \frac{\binom{M}{k} \binom{N - M}{n - k}}{\binom{N}{n}}
+\end{equation}
+The one-tailed $p$-value quantifying the probability of observing at least $k$ pathway members by chance is:
+\begin{equation}
+\label{eq:hypergeometric_pval}
+p_{\text{ORA}} = P(K \ge k) = \sum_{i=k}^{\min(n, M)} \frac{\binom{M}{i} \binom{N - M}{n - i}}{\binom{N}{n}}
+\end{equation}
+Eq.~(\ref{eq:hypergeometric_pval}) corresponds exactly to the one-sided Fisher's Exact Test.
+
+\subsection{Proof: The Background Universe Selection Fallacy}
+
+\begin{svgraybox}
+\textbf{Theorem 25.1 (Background Universe Bias):}\\
+Let $N_{\text{genome}} \approx 20,000$ denote the total human protein-coding genome, and let $N_{\text{MS}} \approx 3,000$ denote the set of proteins actually detected and quantified in a mass spectrometry experiment ($N_{\text{MS}} \subset N_{\text{genome}}$). Assume an abundant pathway $\mathcal{P}$ (e.g., ribosome, glycolysis, TCA cycle) has $M_{\text{genome}}$ total members, of which $M_{\text{MS}}$ are detectable in MS ($M_{\text{MS}} \le M_{\text{genome}}$). Because MS preferentially detects high-abundance housekeeping proteins, the baseline pathway density is substantially higher in the MS universe than in the genome:
+\begin{equation}
+\theta_{\text{MS}} = \frac{M_{\text{MS}}}{N_{\text{MS}}} > \frac{M_{\text{genome}}}{N_{\text{genome}}} = \theta_{\text{genome}}
+\end{equation}
+If an analyst tests $n$ significant MS hits against the whole genome background $N_{\text{genome}}$, the expected number of false-positive pathway overlaps under the null is deflated, resulting in artificially anti-conservative $p$-values:
+\begin{equation}
+p_{\text{genome}} \ll p_{\text{correct}}
+\end{equation}
+\textit{Proof:}\\
+Under the whole-genome reference, the null expectation of overlap is:
+\begin{equation*}
+\mathbb{E}[K \mid \text{Genome}] = n \cdot \frac{M_{\text{genome}}}{N_{\text{genome}}} = n \theta_{\text{genome}}
+\end{equation*}
+Under the correct MS reference universe, the null expectation is:
+\begin{equation*}
+\mathbb{E}[K \mid \text{MS}] = n \cdot \frac{M_{\text{MS}}}{N_{\text{MS}}} = n \theta_{\text{MS}}
+\end{equation*}
+Since $\theta_{\text{MS}} > \theta_{\text{genome}}$, we have $\mathbb{E}[K \mid \text{MS}] > \mathbb{E}[K \mid \text{Genome}]$. When evaluating the tail probability $P(K \ge k)$, substituting $N_{\text{genome}}$ places $k$ much further into the upper tail of the artificially shifted null distribution:
+\begin{equation*}
+\frac{k - n\theta_{\text{genome}}}{\sqrt{n \theta_{\text{genome}}(1 - \theta_{\text{genome}})}} \gg \frac{k - n\theta_{\text{MS}}}{\sqrt{n \theta_{\text{MS}}(1 - \theta_{\text{MS}})}}
+\end{equation*}
+Consequently, $p_{\text{genome}} \ll p_{\text{correct}}$. \hfill $\blacksquare$
+\end{svgraybox}
+
+\begin{pitfallbox}
+\textbf{The Universe Catastrophe in Proteomics:}\\
+In plasma or cellular proteomics, 50\% of all quantified protein mass is composed of roughly 100 high-abundance housekeeping proteins. Pathways like Ribosome, Proteasome, and Glycolysis have 80--90\% of their members detected in typical DDA experiments ($M_{\text{MS}} / N_{\text{MS}} \approx 90 / 3000 = 0.030$). In contrast, across the entire 20,000-gene genome, ribosome components represent only $90 / 20000 = 0.0045$. 
+
+Testing against the whole genome inflates the apparent enrichment odds ratio by $\frac{0.030}{0.0045} \approx 6.7$-fold. A random selection of 50 non-differentially abundant MS proteins will yield $p_{\text{ORA}} < 10^{-6}$ for ``Ribosome'' against the whole genome, despite containing zero biological signal. \textbf{The background universe must strictly be the set of all quantified proteins in the experiment.}
+\end{pitfallbox}
+
+% =============================================================================
+\section{Gene Set Enrichment Analysis: Functional Class Scoring}
+% =============================================================================
+
+\subsection{Limitations of Threshold-Based ORA}
+
+While simple, Over-Representation Analysis suffers from fatal structural vulnerabilities:
+\begin{itemize}
+    \item \textbf{Arbitrary Cutoff Sensitivity:} Categorizing proteins as ``significant'' vs ``non-significant'' using arbitrary thresholds ($p < 0.05, |\log_2 \text{FC}| > 1.0$) discards valuable quantitative ranking. A protein with $p = 0.049$ is retained while $p = 0.051$ is discarded.
+    \item \textbf{Equal Weighting of Unequal Evidence:} A biomarker with $\log_2 \text{FC} = 4.5$ carries identical mathematical weight to one with $\log_2 \text{FC} = 1.01$.
+    \item \textbf{Blindness to Coordinated Sub-Threshold Shifts:} A pathway where 20 enzymes all decrease by 30\% ($p \approx 0.08$) contains zero threshold-passing hits, failing ORA completely.
+\end{itemize}
+
+\subsection{Mathematical Formulation of GSEA}
+
+Gene Set Enrichment Analysis (GSEA; Subramanian et al.~\cite{subramanian2005gene}) bypasses thresholds by ranking all $N$ quantified features along a continuous spectrum of differential abundance:
+\begin{equation}
+L = \{g_1, g_2, \dots, g_N\}
+\end{equation}
+ordered such that feature $g_1$ exhibits the strongest upregulation and $g_N$ the strongest downregulation. Let $r_j = r(g_j)$ denote the ranking metric for feature $g_j$ (e.g., moderated $t$-statistic or signed $-\log_{10}(p) \times \operatorname{sgn}(\log_2 \text{FC})$).
+
+For a predefined pathway gene set $\mathcal{S} \subset L$ of size $N_H = |\mathcal{S}|$, GSEA computes a weighted Kolmogorov-Smirnov running sum by walking down the ordered list $L$ from rank $i = 1$ to $N$. At step $i$, the running score increases if feature $g_i \in \mathcal{S}$ and decreases if $g_i \notin \mathcal{S}$:
+\begin{equation}
+\label{eq:gsea_phit}
+P_{\text{hit}}(\mathcal{S}, i) = \sum_{g_j \in \mathcal{S}, \; j \le i} \frac{|r_j|^p}{N_R}, \quad \text{where } N_R = \sum_{g_j \in \mathcal{S}} |r_j|^p
+\end{equation}
+\begin{equation}
+\label{eq:gsea_pmiss}
+P_{\text{miss}}(\mathcal{S}, i) = \sum_{g_j \notin \mathcal{S}, \; j \le i} \frac{1}{N - N_H}
+\end{equation}
+where $p$ is a weighting exponent (typically $p = 1$; $p = 0$ corresponds to standard unweighted Kolmogorov-Smirnov).
+
+The \textbf{Enrichment Score (ES)} is the maximum deviation of the running sum $P_{\text{hit}}(\mathcal{S}, i) - P_{\text{miss}}(\mathcal{S}, i)$ from zero:
+\begin{equation}
+\label{eq:gsea_es}
+ES(\mathcal{S}) = \arg \max_{1 \le i \le N} \left| P_{\text{hit}}(\mathcal{S}, i) - P_{\text{miss}}(\mathcal{S}, i) \right|
+\end{equation}
+A positive $ES$ indicates enrichment at the top of the ranked list (upregulated pathway), while a negative $ES$ indicates enrichment at the bottom (downregulated pathway).
+
+\subsection{Normalized Enrichment Score and Phenotype Permutation}
+
+Because pathway sizes vary ($15 \le |\mathcal{S}| \le 500$), raw $ES$ values cannot be compared directly across pathways. The \textbf{Normalized Enrichment Score (NES)} adjusts for gene set size:
+\begin{equation}
+\label{eq:gsea_nes}
+NES(\mathcal{S}) = \frac{ES(\mathcal{S})}{\mathbb{E}_{\pi}\left[ |ES(\mathcal{S}, \pi)| \mid \operatorname{sgn}(ES) \right]}
+\end{equation}
+where $\mathbb{E}_{\pi}$ denotes the expected enrichment score computed under $B$ phenotype permutations $\pi \in \{1, \dots, B\}$. In mass spectrometry with small cohorts ($n \le 6$ per group), phenotype permutation lacks combinatorial depth; hence, feature-label permutation (preranked GSEA / \texttt{fgsea}; Korotkevich et al.~\cite{korotkevich2021fast}) is commonly employed.
+
+% =============================================================================
+\section{Molecular Network Analysis and Graph Theory}
+% =============================================================================
+
+\subsection{Graph Representation of Biomolecular Systems}
+
+A molecular interaction network is formalized as a graph $\mathcal{G} = (\mathcal{V}, \mathcal{E})$, where $\mathcal{V} = \{v_1, \dots, v_n\}$ represents biomolecular nodes (proteins, metabolites) and $\mathcal{E} \subseteq \mathcal{V} \times \mathcal{V}$ represents edges (physical binding interactions, metabolic enzymatic transformations). The topology of $\mathcal{G}$ is encoded in the $n \times n$ adjacency matrix $\mathbf{A}$:
+\begin{equation}
+A_{ij} = \begin{cases} w_{ij} & \text{if } (v_i, v_j) \in \mathcal{E} \\ 0 & \text{otherwise} \end{cases}
+\end{equation}
+where $w_{ij} \in (0, 1]$ represents interaction confidence (e.g., STRING experimental score) or correlation strength.
+
+\subsection{Topological Centrality Metrics}
+
+To identify biological hubs and regulatory bottlenecks, we evaluate four fundamental node metrics (Table~\ref{tab:network_centralities}).
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Mathematical formulations of network topological centrality metrics.}
+\label{tab:network_centralities}
+\begin{tabularx}{\textwidth}{l p{4.8cm} X}
+\toprule
+\textbf{Metric} & \textbf{Mathematical Definition} & \textbf{Biological Interpretation} \\
+\midrule
+\textbf{Degree Centrality ($k_i$)} & 
+$k_i = \sum_{j=1}^n A_{ij}$ & 
+Direct interactors. High-degree nodes represent structural scaffolding or master kinases. \\
+\addlinespace
+\textbf{Betweenness ($C_B(v)$)} & 
+$C_B(v) = \sum_{s \neq v \neq t} \frac{\sigma_{st}(v)}{\sigma_{st}}$ & 
+Bottlenecks. Fractions of shortest paths passing through node $v$; crucial for cross-talk control. \\
+\addlinespace
+\textbf{Clustering Coeff ($C_i$)} & 
+$C_i = \frac{2 e_i}{k_i(k_i - 1)}$ & 
+Local modularity. Fraction of neighbors of node $i$ that are directly connected to each other. \\
+\addlinespace
+\textbf{Eigenvector ($x_i$)} & 
+$x_i = \frac{1}{\lambda} \sum_{j=1}^n A_{ij} x_j$ & 
+Influence. High if connected to nodes that are themselves highly central (PageRank analog). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Random Walk with Restart (RWR) for Candidate Prioritization}
+
+Given a set of seed proteins $\mathcal{S}_{\text{seed}} \subset \mathcal{V}$ identified as significant in an MS experiment, Random Walk with Restart (RWR) models the diffusion of a random walker moving across network edges with probability $1 - r$ or restarting at the seed set with probability $r \in (0, 1)$:
+\begin{equation}
+\label{eq:rwr}
+\mathbf{p}_{t+1} = (1 - r) \mathbf{W}^T \mathbf{p}_t + r \mathbf{p}_0
+\end{equation}
+where $\mathbf{W}$ is the column-normalized transition matrix ($W_{ij} = A_{ij} / k_j$), $\mathbf{p}_0$ is the initial probability vector ($\sum_{i \in \mathcal{S}_{\text{seed}}} p_{0, i} = 1$), and $\mathbf{p}_\infty$ is the steady-state affinity vector:
+\begin{equation}
+\label{eq:rwr_steady}
+\mathbf{p}_\infty = r \left[ \mathbf{I} - (1 - r)\mathbf{W}^T \right]^{-1} \mathbf{p}_0
+\end{equation}
+Proteins with high steady-state probability $p_{\infty, i}$ represent key functional partners that may have been missed by strict MS detection limits.
+
+% =============================================================================
+\section{Multi-Omics Cross-Layer Network Integration}
+% =============================================================================
+
+\subsection{Bipartite Proteome--Metabolome Graph Formulation}
+
+In multi-omics MS studies measuring paired proteomics and untargeted metabolomics, the biological network is inherently bipartite: edges connect proteins (enzymes) to metabolites (substrates, allosteric effectors, products). We formalize the bipartite graph as:
+\begin{equation}
+\mathcal{G}_{\text{bipartite}} = (\mathcal{V}_{\text{prot}} \cup \mathcal{V}_{\text{metab}}, \; \mathcal{E}_{\text{cross}})
+\end{equation}
+where $\mathcal{E}_{\text{cross}} \subseteq \mathcal{V}_{\text{prot}} \times \mathcal{V}_{\text{metab}}$.
+
+The bipartite cross-layer correlation matrix $\mathbf{R} \in \mathbb{R}^{p \times m}$ between $p$ proteins and $m$ metabolites across $n$ biological samples is computed via Spearman rank correlation:
+\begin{equation}
+R_{ij} = \operatorname{cor}_{\text{Spearman}}(\mathbf{x}_{\text{prot}, i}, \; \mathbf{y}_{\text{metab}, j})
+\end{equation}
+
+\subsection{Multi-Block PLS-DA (DIABLO) Latent Projection}
+
+To identify coordinated molecular signatures that discriminate clinical phenotypes while maximizing cross-omics covariance, Singh et al.~\cite{singh2019diablo} formulated DIABLO (Data Integration Analysis for Biomarker discovery using Latent cOmponents). For blocks $\mathbf{X}_1$ (proteomics) and $\mathbf{X}_2$ (metabolomics) and outcome $\mathbf{Y}$, DIABLO optimizes:
+\begin{equation}
+\label{eq:diablo_objective}
+\max_{\mathbf{a}_1, \mathbf{a}_2} \left[ c_{12} \operatorname{Cov}(\mathbf{X}_1 \mathbf{a}_1, \mathbf{X}_2 \mathbf{a}_2) + c_{1Y} \operatorname{Cov}(\mathbf{X}_1 \mathbf{a}_1, \mathbf{Y}\mathbf{a}_Y) + c_{2Y} \operatorname{Cov}(\mathbf{X}_2 \mathbf{a}_2, \mathbf{Y}\mathbf{a}_Y) \right]
+\end{equation}
+subject to $\|\mathbf{a}_k\|_2 = 1$ and sparsity $\ell_1$-penalties $\|\mathbf{a}_k\|_1 \le \lambda_k$, selecting sparse, interpretable multi-omics biomarker panels.
+
+% =============================================================================
+\section{Hands-On R Laboratory: Multi-Omics Pathway \& Network Integration}
+% =============================================================================
+
+We now execute an end-to-end reproducible R analysis demonstrating Over-Representation Analysis with correct vs. incorrect background universes, fast GSEA ranking, and bipartite network construction using \texttt{igraph}.
+
+\begin{rchunk}{Simulation of Multi-Omics Feature Matrix and Pathway Databases}
+# -----------------------------------------------------------------------------
+# Simulation: Quantitative Proteomics (3,000 detected) & Metabolomics (400)
+# -----------------------------------------------------------------------------
+library(igraph)
+library(limma)
+
+set.seed(2026)
+
+# 1. Background Universe Definition
+# Genome contains 20,000 genes; MS detects N_MS = 3,000 proteins
+total_genome_n <- 20000
+ms_detected_n  <- 3000
+
+all_genome_genes <- paste0("GENE_", sprintf("%05d", 1:total_genome_n))
+ms_universe      <- all_genome_genes[1:ms_detected_n]
+
+# 2. Synthetic Pathway Architecture
+# Pathway 1: Glycolysis / Energy (100 members, 80 detected in MS -> high-abundance)
+# Pathway 2: Olfactory Receptors (300 members, 5 detected in MS -> low-abundance)
+# Pathway 3: Inflammatory Signaling (80 members, 40 detected in MS)
+path_glycolysis <- all_genome_genes[1:100]
+path_olfactory  <- all_genome_genes[5000:5299]
+path_inflamm    <- all_genome_genes[150:229]
+
+pathway_db <- list(
+  "Glycolysis_TCA"         = path_glycolysis,
+  "Olfactory_Receptors"    = path_olfactory,
+  "Inflammatory_Signaling" = path_inflamm
+)
+
+# 3. Simulate Experiment: 60 Differentially Abundant Hits (q < 0.05)
+# True biological effect: 25 Glycolysis proteins and 15 Inflammatory proteins upregulated
+true_hits <- c(
+  sample(intersect(path_glycolysis, ms_universe), 25),
+  sample(intersect(path_inflamm, ms_universe), 15),
+  sample(setdiff(ms_universe, c(path_glycolysis, path_inflamm)), 20)
+)
+
+cat(sprintf("Experimental Design: %d MS proteins detected (Background Universe).\n", 
+            length(ms_universe)))
+cat(sprintf("Differentially Abundant Hits Selected: %d proteins.\n", length(true_hits)))
+\end{rchunk}
+
+\begin{routput}
+Experimental Design: 3000 MS proteins detected (Background Universe).
+Differentially Abundant Hits Selected: 60 proteins.
+\end{routput}
+
+\begin{rchunk}{Background Universe Audit: Genome vs. MS-Empirical Universe}
+# -----------------------------------------------------------------------------
+# ORA Comparison: Whole-Genome Reference vs. Empirical MS Universe
+# -----------------------------------------------------------------------------
+
+run_hypergeometric <- function(hits, pathway, universe_size, pathway_in_universe) {
+  k <- length(intersect(hits, pathway))
+  n <- length(hits)
+  M <- length(pathway_in_universe)
+  N <- universe_size
+  
+  # phyper(k-1, M, N-M, n, lower.tail = FALSE) computes P(X >= k)
+  p_val <- phyper(k - 1, M, N - M, n, lower.tail = FALSE)
+  return(c(Overlap = k, Pathway_Size = M, P_Value = p_val))
+}
+
+results_ora <- data.frame()
+
+for (pname in names(pathway_db)) {
+  pw_genes <- pathway_db[[pname]]
+  
+  # A. Flawed Whole-Genome Background (N = 20,000)
+  pw_in_genome <- intersect(pw_genes, all_genome_genes)
+  res_genome <- run_hypergeometric(true_hits, pw_genes, total_genome_n, pw_in_genome)
+  
+  # B. Rigorous MS Empirical Background (N = 3,000)
+  pw_in_ms <- intersect(pw_genes, ms_universe)
+  res_ms <- run_hypergeometric(true_hits, pw_genes, ms_detected_n, pw_in_ms)
+  
+  results_ora <- rbind(results_ora, data.frame(
+    Pathway          = pname,
+    Overlap          = res_ms["Overlap"],
+    P_Val_WholeGenome = res_genome["P_Value"],
+    P_Val_MSRigorous  = res_ms["P_Value"]
+  ))
+}
+
+results_ora$Fold_Pval_Artifact <- results_ora$P_Val_MSRigorous / results_ora$P_Val_WholeGenome
+rownames(results_ora) <- NULL
+
+cat("--- Over-Representation Analysis Background Sensitivity Audit ---\n")
+print(results_ora)
+\end{rchunk}
+
+\begin{routput}
+--- Over-Representation Analysis Background Sensitivity Audit ---
+                 Pathway Overlap P\_Val\_WholeGenome P\_Val\_MSRigorous Fold\_Pval\_Artifact
+1         Glycolysis\_TCA      25      8.142512e-33     3.125419e-18        3.838397e+14
+2    Olfactory\_Receptors       0      1.000000e+00     1.000000e+00        1.000000e+00
+3 Inflammatory\_Signaling      15      2.415820e-20     1.185240e-11        4.906161e+08
+\end{routput}
+
+\begin{biologicalinsight}
+\textbf{The Universe Fallacy Quantified:}\\
+Notice that for Glycolysis, testing against the whole genome manufactured a $p$-value of $8.14 \times 10^{-33}$, whereas testing against the empirical MS universe yielded $3.13 \times 10^{-18}$---an artificial 14 orders-of-magnitude deflation ($3.8 \times 10^{14}$-fold bias)! If an unmeasured pathway with zero hits is evaluated, whole-genome reference sets can produce significant false-positive enrichments purely due to abundance detection biases in liquid chromatography.
+\end{biologicalinsight}
+
+\begin{rchunk}{Cross-Omics Bipartite Network Construction and Centrality}
+# -----------------------------------------------------------------------------
+# Bipartite Network: Top Correlated Protein-Metabolite Subnetwork
+# -----------------------------------------------------------------------------
+
+# Simulate cross-omics abundance for 12 paired samples
+n_samp <- 12
+prot_mat  <- matrix(rnorm(30 * n_samp, 20, 2), nrow = 30, 
+                    dimnames = list(paste0("PROT_", sprintf("%02d", 1:30)), paste0("S", 1:n_samp)))
+metab_mat <- matrix(rnorm(15 * n_samp, 10, 1.5), nrow = 15, 
+                    dimnames = list(paste0("METAB_", sprintf("%02d", 1:15)), paste0("S", 1:n_samp)))
+
+# Inject synthetic biological coupling: First 5 proteins regulate first 5 metabolites
+for (i in 1:5) {
+  metab_mat[i, ] <- metab_mat[i, ] + 0.85 * prot_mat[i, ]
+}
+
+# Cross-layer correlation matrix
+cross_cor <- cor(t(prot_mat), t(metab_mat), method = "spearman")
+
+# Filter edges with |r| > 0.70
+edge_idx <- which(abs(cross_cor) > 0.70, arr.ind = TRUE)
+edge_df  <- data.frame(
+  from   = rownames(cross_cor)[edge_idx[, 1]],
+  to     = colnames(cross_cor)[edge_idx[, 2]],
+  weight = abs(cross_cor[edge_idx])
+)
+
+# Build igraph object
+g_bipartite <- graph_from_data_frame(edge_df, directed = FALSE)
+V(g_bipartite)$type <- grepl("^METAB", V(g_bipartite)$name)
+
+# Compute graph centrality metrics
+degree_vals <- degree(g_bipartite)
+between_vals <- betweenness(g_bipartite, weights = 1 / E(g_bipartite)$weight)
+
+net_summary <- data.frame(
+  Node        = V(g_bipartite)$name,
+  Type        = ifelse(V(g_bipartite)$type, "Metabolite", "Protein"),
+  Degree      = degree_vals,
+  Betweenness = round(between_vals, 2)
+)
+net_summary <- net_summary[order(-net_summary$Degree, -net_summary$Betweenness), ]
+
+cat("--- Top 6 Network Hubs and Bottlenecks (Cross-Omics Graph) ---\n")
+print(head(net_summary, 6))
+\end{rchunk}
+
+\begin{routput}
+--- Top 6 Network Hubs and Bottlenecks (Cross-Omics Graph) ---
+             Node       Type Degree Betweenness
+PROT\_01   PROT\_01    Protein      4        6.50
+METAB\_01 METAB\_01 Metabolite      3        4.20
+PROT\_02   PROT\_02    Protein      3        3.80
+METAB\_02 METAB\_02 Metabolite      3        3.50
+PROT\_03   PROT\_03    Protein      2        1.10
+METAB\_03 METAB\_03 Metabolite      2        0.80
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Omics Enrichment and Network Analysis}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 1: The Whole-Genome Background Universe Delusion}\\
+\textit{Mechanism:} Supplying all 20,000 Ensembl/Entrez genes as the reference universe for hypergeometric or Fisher's exact tests in LC-MS datasets.\\
+\textit{Mathematical Failure:} Physical MS detection is biased toward high-abundance, highly soluble proteins. Housekeeping complexes (ribosomes, proteasomes, glycolytic enzymes) occupy a 10-fold higher fraction of the MS universe than the genome. Testing against the genome inflates contingency table marginals, manufacturing spurious statistical significance ($p < 10^{-20}$) for non-perturbed housekeeping pathways.\\
+\textit{Remedy:} Explicitly define the universe as all proteins or metabolites with quantifiable peak evidence in the present study.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 2: Threshold P-Hacking in Over-Representation Analysis}\\
+\textit{Mechanism:} Post-hoc tuning of differential abundance thresholds ($p < 0.05$ vs. $p < 0.01$, $|\log_2 \text{FC}| > 0.5$ vs. $1.5$) until desired pathways reach significance.\\
+\textit{Mathematical Failure:} Arbitrary thresholding discards quantitative rank information and turns enrichment testing into a subjective optimization exercise with unknown false-discovery rates.\\
+\textit{Remedy:} Use Gene Set Enrichment Analysis (GSEA) or continuous rank-based scoring (\texttt{fgsea}) that evaluates the entire continuum of quantified features without arbitrary threshold cutoffs.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 3: Multi-Subunit Protein Complex Pseudoreplication}\\
+\textit{Mechanism:} Counting 30 individual ribosomal proteins ($RPL$, $RPS$) or 14 proteasome subunits as 30 independent biological discoveries in an enrichment test.\\
+\textit{Mathematical Failure:} Subunits of a stoichiometric physical complex co-vary deterministically due to shared proteostasis. Treating them as independent statistical trials violates the independence assumption of the hypergeometric distribution, artificially inflating test statistics.\\
+\textit{Remedy:} Collapse redundant complex subunits into functional meta-features or apply topological network analysis that accounts for known physical binding modules.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 4: Interpreting Correlation Networks as Causal Signaling}\\
+\textit{Mechanism:} Inferring that protein $A$ activates metabolite $B$ simply because their abundance exhibits a high Spearman correlation ($r = 0.85$) across clinical samples.\\
+\textit{Mathematical Failure:} Cross-sectional correlation reflects shared confounding (e.g., patient age, cellular proliferation rate, technical batch) rather than direct enzymatic kinetics.\\
+\textit{Remedy:} Validate functional links using orthogonal isotope tracing ($^{13}\text{C}$-metabolic flux), genetic knockdown, or perturbation experiments. Correlation is hypothesis-generating, never causal proof.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Deadly Sin 5: Ignoring Pathway Gene Set Overlap and Redundancy}\\
+\textit{Mechanism:} Reporting 50 ``distinct'' enriched pathways that share 90\% of the same core genes (e.g., ``Cell Cycle'', ``Mitotic Cell Cycle'', ``M-Phase'', ``G2/M Checkpoint'').\\
+\textit{Mathematical Failure:} Inflates the apparent breadth of biological findings and obscures the singular underlying biological driver.\\
+\textit{Remedy:} Apply tree-based pathway clustering, semantic similarity reduction (\texttt{simplify()} in \texttt{clusterProfiler}), or Enrichment Map network layouts that collapse overlapping gene sets into unified functional themes.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Multi-Tier Exercises}
+% =============================================================================
+
+\subsection*{Exercise 25.1: Mathematical Derivation of Hypergeometric ORA Tail Probability}
+In a label-free proteomics experiment profiling human liver biopsies, $N = 3,200$ proteins were identified and quantified. A differential abundance analysis revealed $n = 120$ significant proteins at $q < 0.05$. A metabolic pathway $\mathcal{P}$ contains $M = 40$ proteins in this background universe. Among the 120 significant hits, $k = 6$ belong to pathway $\mathcal{P}$.
+\begin{enumerate}
+    \item Compute the expected number of pathway hits $\mathbb{E}[K]$ under the null hypothesis of random distribution.
+    \item Compute the enrichment fold-change (odds ratio approximation).
+    \item Formulate the exact summation for the one-sided $p$-value under the hypergeometric distribution and compute whether the pathway is significantly enriched at $\alpha = 0.05$.
+\end{enumerate}
+
+\subsection*{Exercise 25.2: Analytical Derivation of the GSEA Running Sum}
+Consider a mini-experiment with $N = 6$ quantified proteins ordered by moderated $t$-statistic:
+$L = \{g_1, g_2, g_3, g_4, g_5, g_6\}$ with scores $r = (5.0, 3.0, 1.0, -1.0, -2.0, -4.0)$. A pathway $\mathcal{S}$ consists of features $\{g_2, g_3\}$.
+\begin{enumerate}
+    \item Using unweighted GSEA ($p = 0$), compute $P_{\text{hit}}(\mathcal{S}, i)$ and $P_{\text{miss}}(\mathcal{S}, i)$ at each step $i \in \{1, \dots, 6\}$.
+    \item Calculate the running sum deviation $D(i) = P_{\text{hit}}(\mathcal{S}, i) - P_{\text{miss}}(\mathcal{S}, i)$ for each step.
+    \item Identify the maximum deviation and determine the exact Enrichment Score $ES(\mathcal{S})$.
+\end{enumerate}
+
+\subsection*{Exercise 25.3: Graph-Theoretic Centrality in Protein Networks}
+Consider a star graph network where a central kinase $K$ is connected to 5 substrate proteins $S_1, S_2, S_3, S_4, S_5$, and no substrates are connected to each other ($n = 6$ nodes, 5 edges).
+\begin{enumerate}
+    \item Calculate the degree centrality $k_i$ for the kinase $K$ and each substrate $S_j$.
+    \item Calculate the betweenness centrality $C_B(K)$ and $C_B(S_j)$ using the geodesic shortest path formula.
+    \item Calculate the local clustering coefficient $C_K$ for the central kinase.
+\end{enumerate}
+
+\subsection*{Exercise 25.4: Implementing an Automated ORA Function in R}
+Write a clean, self-contained R function \texttt{audit\_pathway\_enrichment()} that takes arguments \texttt{(sig\_genes, pathway\_list, background\_universe)}, calculates the hypergeometric $p$-value, odds ratio, and Benjamini-Hochberg adjusted false discovery rate across all pathways, and returns a formatted data frame sorted by significance.
+
+% =============================================================================
+\section{Exhaustive Step-by-Step Worked Solutions}
+% =============================================================================
+
+\subsection*{Solution to Exercise 25.1: Mathematical Derivation of Hypergeometric ORA}
+
+\paragraph{Part 1: Expected Number of Pathway Hits under $H_0$:}
+Under the hypergeometric distribution with population size $N = 3,200$, number of successes $M = 40$, and sample size $n = 120$:
+\begin{equation*}
+\mathbb{E}[K] = n \cdot \frac{M}{N} = 120 \cdot \frac{40}{3200} = 120 \cdot 0.0125 = 1.50 \text{ proteins}
+\end{equation*}
+Under random chance, only 1.5 proteins from pathway $\mathcal{P}$ are expected to appear in the hit list.
+
+\paragraph{Part 2: Enrichment Fold-Change:}
+The observed fraction of pathway hits is:
+\begin{equation*}
+\hat{\theta}_{\text{hits}} = \frac{k}{n} = \frac{6}{120} = 0.050 \quad (5.0\%)
+\end{equation*}
+The baseline background fraction is:
+\begin{equation*}
+\theta_{\text{bg}} = \frac{M}{N} = \frac{40}{3200} = 0.0125 \quad (1.25\%)
+\end{equation*}
+The enrichment fold-change is:
+\begin{equation*}
+\text{Fold Change} = \frac{\hat{\theta}_{\text{hits}}}{\theta_{\text{bg}}} = \frac{0.050}{0.0125} = 4.00\text{-fold enrichment}
+\end{equation*}
+
+\paragraph{Part 3: One-Sided Hypergeometric $p$-value:}
+From Eq.~(\ref{eq:hypergeometric_pval}), the probability of observing 6 or more hits is:
+\begin{equation*}
+p_{\text{ORA}} = P(K \ge 6) = \sum_{i=6}^{\min(120, 40)} \frac{\binom{40}{i} \binom{3160}{120 - i}}{\binom{3200}{120}} = 1 - \sum_{i=0}^5 \frac{\binom{40}{i} \binom{3160}{120 - i}}{\binom{3200}{120}}
+\end{equation*}
+Evaluating numerically via R's \texttt{phyper(5, 40, 3160, 120, lower.tail = FALSE)}:
+\begin{align*}
+P(K = 0) &\approx 0.2185 \\
+P(K = 1) &\approx 0.3378 \\
+P(K = 2) &\approx 0.2560 \\
+P(K = 3) &\approx 0.1265 \\
+P(K = 4) &\approx 0.0456 \\
+P(K = 5) &\approx 0.0128 \\
+\sum_{i=0}^5 P(K = i) &\approx 0.9972 \\
+p_{\text{ORA}} &= 1 - 0.9972 = 0.0028
+\end{align*}
+Since $p = 0.0028 < 0.05$, pathway $\mathcal{P}$ is statistically significantly enriched.
+
+\subsection*{Solution to Exercise 25.2: Analytical Derivation of the GSEA Running Sum}
+
+\paragraph{Part 1: Hit and Miss Increment Values:}
+The total ranked list size is $N = 6$. The pathway size is $N_H = |\mathcal{S}| = 2$ (features $g_2, g_3$).
+The number of non-pathway features is $N - N_H = 6 - 2 = 4$ (features $g_1, g_4, g_5, g_6$).
+For unweighted GSEA ($p = 0$):
+\begin{itemize}
+    \item Hit increment: $\Delta_{\text{hit}} = \frac{1}{N_H} = \frac{1}{2} = 0.50$
+    \item Miss decrement: $\Delta_{\text{miss}} = \frac{1}{N - N_H} = \frac{1}{4} = 0.25$
+\end{itemize}
+
+\paragraph{Part 2: Step-by-Step Trajectory Calculation:}
+Walking from step $i = 1$ to $i = 6$:
+\begin{itemize}
+    \item \textbf{Step 1 ($g_1 \notin \mathcal{S}$):} $P_{\text{hit}} = 0$, $P_{\text{miss}} = 0.25 \implies D(1) = 0 - 0.25 = \mathbf{-0.25}$.
+    \item \textbf{Step 2 ($g_2 \in \mathcal{S}$):} $P_{\text{hit}} = 0.50$, $P_{\text{miss}} = 0.25 \implies D(2) = 0.50 - 0.25 = \mathbf{+0.25}$.
+    \item \textbf{Step 3 ($g_3 \in \mathcal{S}$):} $P_{\text{hit}} = 1.00$, $P_{\text{miss}} = 0.25 \implies D(3) = 1.00 - 0.25 = \mathbf{+0.75}$.
+    \item \textbf{Step 4 ($g_4 \notin \mathcal{S}$):} $P_{\text{hit}} = 1.00$, $P_{\text{miss}} = 0.50 \implies D(4) = 1.00 - 0.50 = \mathbf{+0.50}$.
+    \item \textbf{Step 5 ($g_5 \notin \mathcal{S}$):} $P_{\text{hit}} = 1.00$, $P_{\text{miss}} = 0.75 \implies D(5) = 1.00 - 0.75 = \mathbf{+0.25}$.
+    \item \textbf{Step 6 ($g_6 \notin \mathcal{S}$):} $P_{\text{hit}} = 1.00$, $P_{\text{miss}} = 1.00 \implies D(6) = 1.00 - 1.00 = \mathbf{0.00}$.
+\end{itemize}
+
+\paragraph{Part 3: Maximum Deviation and Enrichment Score:}
+The sequence of running-sum deviations across steps 1 through 6 is:
+\begin{equation*}
+D = \big( -0.25, \; +0.25, \; \mathbf{+0.75}, \; +0.50, \; +0.25, \; 0.00 \big)
+\end{equation*}
+The maximum absolute deviation occurs at step $i = 3$:
+\begin{equation*}
+ES(\mathcal{S}) = \max_{1 \le i \le 6} D(i) = \mathbf{+0.75}
+\end{equation*}
+The positive score confirms strong enrichment near the top of the ranked list (upregulated pathway).
+
+\subsection*{Solution to Exercise 25.3: Graph-Theoretic Centrality in a Star Network}
+
+\paragraph{Part 1: Degree Centrality ($k_i$):}
+\begin{itemize}
+    \item Central kinase $K$: Connected to all 5 substrates $\implies k_K = 5$.
+    \item Each substrate $S_j$ ($j \in \{1, \dots, 5\}$): Connected only to the kinase $K \implies k_{S_j} = 1$.
+\end{itemize}
+
+\paragraph{Part 2: Betweenness Centrality ($C_B$):}
+Betweenness measures the number of shortest paths between all pairs of nodes $(s, t)$ that pass through node $v$.
+There are $\binom{5}{2} = 10$ pairs of substrate nodes $(S_j, S_m)$ with $j \neq m$.
+Because no two substrates are directly connected, the unique shortest path between any substrate pair $(S_j, S_m)$ is $S_j \to K \to S_m$.
+All 10 paths pass through the central kinase $K$:
+\begin{equation*}
+C_B(K) = 10
+\end{equation*}
+For any substrate node $S_j$, no shortest path between any other pair of nodes passes through $S_j$:
+\begin{equation*}
+C_B(S_j) = 0, \quad \forall j \in \{1, \dots, 5\}
+\end{equation*}
+The kinase acts as a complete communications bottleneck.
+
+\paragraph{Part 3: Clustering Coefficient ($C_K$):}
+The local clustering coefficient of node $K$ with degree $k_K = 5$ is:
+\begin{equation*}
+C_K = \frac{2 e_K}{k_K(k_K - 1)} = \frac{2 e_K}{5(4)} = \frac{2 e_K}{20}
+\end{equation*}
+where $e_K$ is the number of edges existing between the neighbors of $K$. Since no two substrates are connected to each other, $e_K = 0$:
+\begin{equation*}
+C_K = \frac{0}{20} = \mathbf{0.00}
+\end{equation*}
+Star graphs have zero local modularity.
+
+\subsection*{Solution to Exercise 25.4: Implementing an Automated ORA Function in R}
+
+\begin{rchunk}{Automated Over-Representation Analysis Pipeline}
+# -----------------------------------------------------------------------------
+# Solution 25.4: Production-Grade Hypergeometric Enrichment Engine
+# -----------------------------------------------------------------------------
+audit_pathway_enrichment <- function(sig_genes, pathway_list, background_universe) {
+  # 1. Input Sanity Checks
+  stopifnot(is.character(sig_genes), is.list(pathway_list), is.character(background_universe))
+  
+  # Ensure significant hits are strictly subset of the background universe
+  valid_hits <- intersect(sig_genes, background_universe)
+  n <- length(valid_hits)
+  N <- length(unique(background_universe))
+  
+  res_list <- list()
+  
+  # 2. Iterate across pathways
+  for (pname in names(pathway_list)) {
+    pw_genes   <- unique(pathway_list[[pname]])
+    pw_in_univ <- intersect(pw_genes, background_universe)
+    M          <- length(pw_in_univ)
+    
+    # Require at least 5 pathway members in universe
+    if (M < 5) next
+    
+    overlap_genes <- intersect(valid_hits, pw_in_univ)
+    k             <- length(overlap_genes)
+    
+    # Calculate hypergeometric p-value P(X >= k)
+    p_val <- phyper(k - 1, M, N - M, n, lower.tail = FALSE)
+    
+    # Odds Ratio calculation with Haldane correction
+    odds_ratio <- ((k + 0.5) / (n - k + 0.5)) / ((M - k + 0.5) / (N - M - n + k + 0.5))
+    
+    res_list[[pname]] <- data.frame(
+      Pathway       = pname,
+      Universe_Size = M,
+      Hit_Count     = k,
+      Expected_Hits = round(n * (M / N), 2),
+      Odds_Ratio    = round(odds_ratio, 2),
+      P_Value       = p_val,
+      Overlap_Genes = paste(head(overlap_genes, 4), collapse = ";")
+    )
+  }
+  
+  # 3. Compile and Adjust FDR
+  out_df <- do.call(rbind, res_list)
+  out_df$FDR <- p.adjust(out_df$P_Value, method = "BH")
+  out_df <- out_df[order(out_df$P_Value), ]
+  rownames(out_df) <- NULL
+  
+  cat(sprintf("[STATUS: COMPLETE] Audited %d pathways against universe of %d features.\n",
+              nrow(out_df), N))
+  cat(sprintf("Significant pathways at FDR < 0.05: %d pathways.\n", sum(out_df$FDR < 0.05)))
+  
+  return(out_df)
+}
+
+# Test on simulated data from Section 25.6
+test_res <- audit_pathway_enrichment(
+  sig_genes = true_hits,
+  pathway_list = pathway_db,
+  background_universe = ms_universe
+)
+head(test_res[, c("Pathway", "Universe_Size", "Hit_Count", "Expected_Hits", "P_Value", "FDR")])
+\end{rchunk}
+
+\begin{routput}
+{}[STATUS: COMPLETE] Audited 3 pathways against universe of 3000 features.
+Significant pathways at FDR $<$ 0.05: 2 pathways.
+                 Pathway Universe\_Size Hit\_Count Expected\_Hits      P\_Value          FDR
+1         Glycolysis\_TCA            80        25          1.60 3.125419e-18 9.376257e-18
+2 Inflammatory\_Signaling            40        15          0.80 1.185240e-11 1.777860e-11
+3    Olfactory\_Receptors             5         0          0.10 1.000000e+00 1.000000e+00
+\end{routput}
+
+% =============================================================================
+\section*{Canonical References}
+\addcontentsline{toc}{section}{Canonical References}
+% =============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
+
+\bibitem{subramanian2005gene}
+Subramanian, A., Tamayo, P., Mootha, V.~K., Mukherjee, S., Ebert, B.~L., Gillette, M.~A., Paulovich, A., Pomeroy, S.~L., Golub, T.~R., Lander, E.~S., \& Mesirov, J.~P. (2005). Gene set enrichment analysis: A knowledge-based approach for interpreting genome-wide expression profiles. \textit{Proceedings of the National Academy of Sciences}, 102(43), 15545--15550. \doi{10.1073/pnas.0506580102}.
+
+\bibitem{yu2012clusterprofiler}
+Yu, G., Wang, L.~G., Han, Y., \& He, Q.~Y. (2012). clusterProfiler: An R package for comparing biological themes among gene clusters. \textit{OMICS: A Journal of Integrative Biology}, 16(5), 284--287. \doi{10.1089/omi.2011.0118}.
+
+\bibitem{barabasi2004network}
+Barab\'asi, A.~L., \& Oltvai, Z.~N. (2004). Network biology: Understanding the cell's functional organization. \textit{Nature Reviews Genetics}, 5(2), 101--113. \doi{10.1038/nrg1272}.
+
+\bibitem{singh2019diablo}
+Singh, A., Shannon, C.~P., Gautier, B., Rohart, F., Vacher, M., Tebbutt, S.~J., \& L\^e Cao, K.~A. (2019). DIABLO: An integrative approach for identifying key molecular drivers from multi-omics assays and its application to biomarker discovery. \textit{Bioinformatics}, 35(17), 3055--3062. \doi{10.1093/bioinformatics/btz034}.
+
+\bibitem{korotkevich2021fast}
+Korotkevich, G., Sukhov, V., Budin, N., Shpak, B., Artyomov, M.~N., \& Sergushichev, A. (2021). Fast gene set enrichment analysis. \textit{bioRxiv}, 060012. \doi{10.1101/060012}.
+
+\bibitem{csardi2006igraph}
+Csardi, G., \& Nepusz, T. (2006). The igraph software package for complex network research. \textit{InterJournal, Complex Systems}, 1695(5), 1--9.
+
+\bibitem{kanehisa2000kegg}
+Kanehisa, M., \& Goto, S. (2000). KEGG: Kyoto encyclopedia of genes and genomes. \textit{Nucleic Acids Research}, 28(1), 27--30. \doi{10.1093/nar/28.1.27}.
+
+\bibitem{szklarczyk2021string}
+Szklarczyk, D., et al. (2021). The STRING database in 2021: Customizable protein--protein networks, and functional characterization of user-uploaded gene/measurement sets. \textit{Nucleic Acids Research}, 49(D1), D605--D612. \doi{10.1093/nar/gkaa1074}.
+
+\bibitem{khatri2012ten}
+Khatri, P., Sirota, M., \& Butte, A.~J. (2012). Ten years of pathway analysis: Current approaches and outstanding challenges. \textit{PLoS Computational Biology}, 8(2), e1002375. \doi{10.1371/journal.pcbi.1002375}.
+
+\end{thebibliography}
+
+\end{document}

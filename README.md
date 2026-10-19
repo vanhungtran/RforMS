@@ -131,6 +131,25 @@ quarto render
 
 The book is available online at: <https://vanhungtran.github.io/RforMS/>
 
+### Standalone Springer Nature Textbook Monograph PDFs
+
+Each flagship chapter has been authored as an independent, publication-grade Springer Nature textbook monograph matching the rigorous pedagogy of Mary Regina Boland's *Health Data Analytics with R*. Each monograph includes formal mathematical definitions, analytical proofs, pedagogical callout boxes (*Methodological Pitfall*, *Biological Discovery*, *Takeaway Summary*, *Deep Dive*), full hands-on R laboratories with console outputs, a critical review of the *Five Deadly Sins*, multi-tier exercises, and exhaustive step-by-step worked solutions.
+
+| Chapter | Monograph Title | Pages | Key Mathematical & Methodological Coverage | PDF Download |
+|:---:|:---|:---:|:---|:---:|
+| **08** | Chromatographic Feature Detection & Alignment with xcms | 15 | Continuous Wavelet Transform (Mexican Hat Ricker wavelet), ppm tolerance derivation, dynamic ROI tracking, Obiwarp dynamic time warping, Peak Density correspondence, gap-filling mechanics | [PDF](docs/latex/chapter_feature_detection_springer.pdf) |
+| **14** | Quantitative Label-Free Proteomics (LFQ) | 15 | MaxLFQ Laplacian graph optimization, Top$N$ / iBAQ, Tukey's biweight loss, dynamic range compression | [PDF](docs/latex/chapter_lfq_proteomics_springer.pdf) |
+| **15** | Multiplexed Isobaric Labeling (TMT / iTRAQ) | 11 | Co-isolation ratio compression proof, delta-method variance inflation, SPS-MS3/FAIMS filtering, IRS multi-batch scaling algebra | [PDF](docs/latex/chapter_tmt_labeling_springer.pdf) |
+| **18** | Feature Normalization & Batch Correction | 18 | Rocke-Lorenzato two-component error model, Huber VSN $\operatorname{arsinh}$ derivation, Cyclic LOESS, PQN, ComBat empirical Bayes location-scale shrinkage, RUV | [PDF](docs/latex/chapter_normalization_batch_springer.pdf) |
+| **19** | Missing Data in Mass Spectrometry | 17 | Rubin's MCAR/MAR/MNAR taxonomy, logistic diagnostic model, left-censored Gaussian Perseus/QRILC, $k$-NN, Rubin's pooling rules for multiple imputation, 4-strategy sensitivity audit | [PDF](docs/latex/chapter_missing_data_springer.pdf) |
+| **21** | Differential Abundance Analysis | 19 | Smyth's empirical Bayes variance moderation, linear models, limma-trend vs. voom, Benjamini-Hochberg FDR, volcano geometry | [PDF](docs/latex/chapter_differential_abundance_springer.pdf) |
+| **22** | Covariates, Longitudinal Profiling, and Repeated Measures | 17 | Linear Mixed-Effects Models (LMMs), Henderson's MME, REML derivation, Intraclass Correlation Coefficient (ICC), pseudoreplication variance inflation proof, `dream` empirical Bayes moderation, natural cubic splines | [PDF](docs/latex/chapter_covariates_repeated_springer.pdf) |
+| **23** | Machine Learning in Mass Spectrometry | 18 | $p \gg n$ geometry, Cover's theorem on linear separability, Elastic Net grouping bound proof, Random Forest variance reduction, XGBoost, leakage taxonomy, Brier score | [PDF](docs/latex/chapter_machine_learning_springer.pdf) |
+| **25** | Pathway Enrichment & Molecular Network Analysis | 17 | Hypergeometric ORA, background universe selection bias proof, GSEA weighted Kolmogorov-Smirnov running sums, NES, betweenness centrality, bipartite cross-omics networks | [PDF](docs/latex/chapter_pathway_network_springer.pdf) |
+| **26** | Single-Cell Proteomics with `scp` and `QFeatures` | 15 | Poisson ion shot noise limit ($\text{CV} = 1/\sqrt{\lambda}$), SCoPE2 carrier ion suppression, multi-assay DAG hierarchy, pseudoreplication mixed modeling | [PDF](docs/latex/chapter_single_cell_springer.pdf) |
+
+*Total: 10 flagship monographs, 162 publication-grade Springer textbook pages.*
+
 ## Reproducibility
 
 All runnable examples use bundled or versioned example data from Bioconductor
@@ -167,5 +186,6 @@ This work is licensed under
 ## Contact
 
 - **Author:** Lucas VHH TRAN
-- **Email:** <tranhungydhcm@gmail.com>
+- **Affiliation:** CK-CARE Davos, Switzerland
+- **Email:** <lucas.tran@ck-care.ch>
 - **Repository:** <https://github.com/vanhungtran/RforMS>

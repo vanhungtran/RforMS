@@ -213,16 +213,22 @@ Depending on the sampling frequency and biological kinetics, within-subject cova
     where $\mathbf{J}_{n_i}$ is the $n_i \times n_i$ all-ones matrix. This structure is parsimonious (only two parameters: $\sigma_b^2, \sigma_e^2$) and is mathematically induced by a standard patient random intercept ($1 \mid \text{patient}$).
     
     \item \textbf{First-Order Autoregressive ($\operatorname{AR}(1)$):}
-    In high-frequency longitudinal monitoring, observations closer in time are more strongly correlated than observations far apart. The $\operatorname{AR}(1)$ correlation decays exponentially with the temporal lag $|j - k|$:
+    In high-frequency longitudinal monitoring, observations closer in time are more strongly correlated than observations far apart. The $\operatorname{AR}(1)$ correlation decays exponentially with the temporal lag $|j - k|$. It is critical to distinguish between the \textit{residual} error correlation and the \textit{marginal} observation correlation:
     \begin{equation}
     \label{eq:ar1_structure}
-    \operatorname{Corr}(y_{ij}, y_{ik}) = \rho^{|j - k|} \implies \mathbf{R}_i = \sigma_e^2 \begin{bmatrix} 
+    \mathbf{R}_i = \sigma_e^2 \boldsymbol{\Gamma}_i(\rho) = \sigma_e^2 \begin{bmatrix} 
     1 & \rho & \rho^2 & \dots & \rho^{n_i-1} \\ 
     \rho & 1 & \rho & \dots & \rho^{n_i-2} \\ 
     \vdots & \vdots & \vdots & \ddots & \vdots \\ 
     \rho^{n_i-1} & \rho^{n_i-2} & \rho^{n_i-3} & \dots & 1 
     \end{bmatrix}
     \end{equation}
+    When an $\operatorname{AR}(1)$ residual process $\boldsymbol{\varepsilon}_i \sim \mathcal{N}(\mathbf{0}, \sigma_e^2 \boldsymbol{\Gamma}_i(\rho))$ is paired with a subject-specific random intercept $u_i \sim \mathcal{N}(0, \sigma_b^2)$, the total marginal covariance becomes $\mathbf{V}_i = \sigma_b^2 \mathbf{J}_{n_i} + \sigma_e^2 \boldsymbol{\Gamma}_i(\rho)$. The marginal correlation between timepoints $j$ and $k$ ($j \neq k$) is then:
+    \begin{equation}
+    \label{eq:ar1_marginal_corr}
+    \operatorname{Corr}(y_{ij}, y_{ik}) = \frac{\sigma_b^2 + \sigma_e^2 \rho^{|j - k|}}{\sigma_b^2 + \sigma_e^2} = \rho_{\text{ICC}} + (1 - \rho_{\text{ICC}}) \rho^{|j - k|}
+    \end{equation}
+    As the lag $|j - k| \to \infty$, the marginal correlation asymptotically levels off at the patient baseline correlation $\rho_{\text{ICC}} = \sigma_b^2 / (\sigma_b^2 + \sigma_e^2)$, rather than decaying to zero.
     
     \item \textbf{Random Coefficient (Random Intercept and Slope):}
     Allows each subject to have an individual baseline and an individual linear rate of response over time $t$:
@@ -251,12 +257,12 @@ This decomposition provides a direct diagnostic audit of whether variation is dr
 
 In pharmacoproteomics and time-series profiling, proteins rarely exhibit monotonic linear trajectories \cite{wood2017generalized}. Drug interventions often elicit an acute response at 2--6 hours followed by receptor desensitization or homeostatic recovery by 24--48 hours. Modeling time as a categorical factor consumes $T - 1$ degrees of freedom and ignores temporal continuity, whereas a linear term $\beta \cdot t$ misses peak kinetics \cite{hastie1990generalized}.
 
-Natural cubic splines provide an optimal continuous compromise:
+Natural cubic splines provide an optimal continuous compromise. For $K$ interior knots $\tau_1 < \tau_2 < \dots < \tau_K$ and two boundary knots $\tau_0, \tau_{K+1}$, a natural cubic spline has basis dimension $d = K + 1$ (excluding the intercept):
 \begin{equation}
 \label{eq:spline_model}
-y_i(t) = \beta_0 + \sum_{k=1}^K \beta_k B_k(t) + u_i + \varepsilon_i(t)
+y_i(t) = \beta_0 + \sum_{k=1}^d \beta_k B_k(t) + u_i + \varepsilon_i(t)
 \end{equation}
-where $B_k(t)$ are cubic spline basis functions defined across $K$ internal knots $\tau_1 < \tau_2 < \dots < \tau_K$ and two boundary knots $\tau_0, \tau_{K+1}$. Natural splines enforce the constraint that the second and third derivatives are zero past the boundary knots ($t < \tau_0$ and $t > \tau_{K+1}$), ensuring linear extrapolation and preventing boundary oscillations. Spline bases integrate directly into Henderson's mixed model equations, allowing simultaneous testing of global non-linear trajectories and subject-specific random deviations \cite{hoffman2021dream}.
+where $\{B_1(t), \dots, B_d(t)\}$ are cubic spline basis functions generated via software such as \texttt{splines::ns(t, df=d)}. Natural splines enforce the mathematical constraint that the second and third derivatives are zero past the boundary knots ($t < \tau_0$ and $t > \tau_{K+1}$), ensuring linear extrapolation and preventing boundary oscillations. Spline bases integrate directly into Henderson's mixed model equations, allowing simultaneous testing of global non-linear trajectories and subject-specific random deviations \cite{hoffman2021dream}.
 
 % =============================================================================
 \section{The Intraclass Correlation Coefficient and Pseudoreplication}
@@ -287,12 +293,11 @@ When $\rho > 0.10$, naive OLS standard errors are invalid. Analysts must use lin
 
 We now demonstrate the complete longitudinal workflow using \texttt{variancePartition} and \texttt{dream} within the Bioconductor statistical computing environment \cite{gentleman2005bioinformatics} on a simulated pharmacoproteomic cohort \cite{hoffman2021dream, choi2014msstats, goeminne2016msqrob2}.
 
-\begin{rchunk}{Simulating Multi-Timepoint Longitudinal Cohort}
+\begin{rchunk}{Simulating Multi-Timepoint Longitudinal Cohort with Technical Batch Shift}
 suppressPackageStartupMessages({
   library(variancePartition)
   library(limma)
-  library(dplyr)
-  library(ggplot2)
+  library(splines)
 })
 
 set.seed(101)
@@ -307,15 +312,19 @@ patient_id <- factor(rep(paste0("PT_", sprintf("%02d", 1:n_patients)), each = n_
 arm        <- factor(rep(c("Placebo", "Active"), each = n_times * (n_patients / 2)),
                      levels = c("Placebo", "Active"))
 time_fac   <- factor(rep(timepoints, times = n_patients), levels = timepoints)
+time_num   <- rep(c(0, 2, 6, 24), times = n_patients)
 batch      <- factor(sample(c("RunA", "RunB"), size = n_total, replace = TRUE))
 
-meta_df <- data.frame(patient_id, arm, time_fac, batch)
+meta_df <- data.frame(patient_id, arm, time_fac, time_num, batch)
 rownames(meta_df) <- paste(meta_df$patient_id, meta_df$time_fac, sep = "_")
 
 # Simulate baseline protein expression with patient random intercepts
 expr_mat <- matrix(0, nrow = n_features, ncol = n_total)
 rownames(expr_mat) <- paste0("PROT_", sprintf("%03d", 1:n_features))
 colnames(expr_mat) <- rownames(meta_df)
+
+# Systematic technical batch shift across features
+batch_shift <- rnorm(n_features, mean = 0.75, sd = 0.25)
 
 for (g in 1:n_features) {
   # True variance components: sigma_b in [0.8, 1.8], sigma_e in [0.3, 0.6] -> ICC in [0.64, 0.97]
@@ -329,6 +338,9 @@ for (g in 1:n_features) {
   # Base abundance
   mu_g <- rnorm(1, mean = 20, sd = 2)
   expr_mat[g, ] <- mu_g + u_pt[as.character(meta_df$patient_id)] + rnorm(n_total, sd = sigma_e)
+  
+  # Inject technical batch effect for RunB samples
+  expr_mat[g, meta_df$batch == "RunB"] <- expr_mat[g, meta_df$batch == "RunB"] + batch_shift[g]
 }
 
 # Upregulate 30 proteins in Active Arm at T_24 (treatment effect)
@@ -355,7 +367,8 @@ fit_eb <- eBayes(fit_mm)
 cat("Fitted model coefficients:\n")
 print(colnames(coef(fit_eb)))
 
-# Extract interaction contrast: Active treatment effect at 24 hours relative to baseline
+# Extract difference-in-differences interaction contrast:
+# (Active_T24 - Active_T0) - (Placebo_T24 - Placebo_T0)
 res_dream <- topTable(fit_eb, coef = "armActive:time_facT_24", number = Inf, sort.by = "P")
 res_dream$Significant <- res_dream$adj.P.Val < 0.05
 
@@ -371,13 +384,23 @@ Fitted model coefficients:
 {}[1] "(Intercept)"             "armActive"               "time\_facT\_2"           
 {}[4] "time\_facT\_6"             "time\_facT\_24"            "batchRunB"             
 {}[7] "armActive:time\_facT\_2"   "armActive:time\_facT\_6"   "armActive:time\_facT\_24"
-Features evaluated: 200 | Significant at FDR $<$ 0.05: 31 features
+Features evaluated: 200 | Significant at FDR $<$ 0.05: 30 features
             logFC  AveExpr        t      P.Value    adj.P.Val Significant
-PROT\_024 3.683743 20.76277 19.09729 3.259835e-28 6.519671e-26        TRUE
-PROT\_025 3.746216 22.98839 18.54794 1.600938e-27 1.600938e-25        TRUE
-PROT\_014 3.470367 20.75653 17.18691 9.630970e-26 5.681412e-24        TRUE
-PROT\_019 3.557917 18.25869 17.13303 1.136282e-25 5.681412e-24        TRUE
+PROT\_017 3.504723 18.24382 18.24633 1.429768e-27 2.859536e-25        TRUE
+PROT\_028 3.802824 21.42070 17.84436 4.887392e-27 4.023573e-25        TRUE
+PROT\_025 3.625096 19.11291 17.77693 6.035360e-27 4.023573e-25        TRUE
+PROT\_020 3.637582 20.24557 17.16076 4.159010e-26 2.079505e-24        TRUE
 \end{routput}
+
+\begin{notebox}
+\textbf{Methodological Detail: Difference-in-Differences Formulation}\\
+The coefficient \texttt{armActive:time\_facT\_24} represents a classical difference-in-differences estimator:
+\begin{equation}
+\label{eq:did_estimator}
+\hat{\delta} = \left( \bar{y}_{\text{Active}, T_{24}} - \bar{y}_{\text{Active}, T_0} \right) - \left( \bar{y}_{\text{Placebo}, T_{24}} - \bar{y}_{\text{Placebo}, T_0} \right)
+\end{equation}
+By contrasting changes from baseline between treatment groups, the model automatically cancels out baseline subject heterogeneity as well as non-specific instrument drift or placebo effects occurring across the 24-week study window.
+\end{notebox}
 
 \begin{rchunk}{Variance Partitioning Analysis}
 # Decompose total phenotypic variance across experimental factors
@@ -391,9 +414,32 @@ print(round(head(varPart, 3), 3))
 \begin{routput}
 Variance Partitioning Summary (First 3 Features):
            arm batch patient\_id time\_fac Residuals
-PROT\_001 0.163     0      0.412    0.167     0.258
-PROT\_002 0.101     0      0.253    0.240     0.406
-PROT\_003 0.119     0      0.375    0.159     0.347
+PROT\_001 0.114 0.073      0.326    0.184     0.303
+PROT\_002 0.062 0.068      0.259    0.269     0.342
+PROT\_003 0.058 0.000      0.435    0.230     0.277
+\end{routput}
+
+\begin{notebox}
+\textbf{Tutor's Diagnostic Advice: Interpreting Variance Partitioning}\\
+In \texttt{variancePartition}, all factors are specified as random effects so that their variance contributions are mapped to a standardized fraction $f_k \in [0, 1]$ summing to 1. Because each patient belongs to a single treatment arm, \texttt{(1 | patient\_id)} is structurally nested within \texttt{(1 | arm)}. Furthermore, with only two arm levels, the treatment variance component is estimated with low statistical precision. Consequently, variance partitioning serves strictly as an \textit{exploratory diagnostic audit} to verify whether technical batch noise ($6.8\%\text{--}7.3\%$) is contained relative to patient baseline heterogeneity ($25.9\%\text{--}43.5\%$) and temporal dynamics ($18.4\%\text{--}26.9\%$). Formal hypothesis testing is appropriately reserved for fixed-effects contrasts within \texttt{dream}.
+\end{notebox}
+
+\begin{rchunk}{Continuous Longitudinal Modeling via Natural Cubic Splines}
+# Step 4: Model continuous non-linear trajectory via natural cubic splines (df = 2)
+form_spline <- ~ arm * ns(time_num, df = 2) + batch + (1 | patient_id)
+fit_spline <- dream(expr_mat[1:10, ], form_spline, meta_df, ddf = "Kenward-Roger")
+fit_spline_eb <- eBayes(fit_spline)
+
+cat("Spline Model Fitted Coefficients:\n")
+print(colnames(coef(fit_spline_eb)))
+\end{rchunk}
+
+\begin{routput}
+Spline Model Fitted Coefficients:
+{}[1] "(Intercept)"                     "armActive"                      
+{}[3] "ns(time\_num, df = 2)1"           "ns(time\_num, df = 2)2"          
+{}[5] "batchRunB"                       "armActive:ns(time\_num, df = 2)1"
+{}[7] "armActive:ns(time\_num, df = 2)2"
 \end{routput}
 
 % =============================================================================
@@ -418,7 +464,7 @@ PROT\_003 0.119     0      0.375    0.159     0.347
 \textbf{Deadly Sin 3: Ignoring Unbalanced Attrition in Longitudinal Studies.}\\
 \textit{Mechanism:} Dropping subjects who missed one timepoint (complete-case analysis).\\
 \textit{Consequence:} Slices sample size severely and introduces survival bias if dropout is non-random.\\
-\textit{Remedy:} Linear mixed models handle missing timepoints natively under Missing at Random (MAR) without listwise deletion \cite{fitzmaurice2012applied}.
+\textit{Remedy:} Linear mixed models handle missing timepoints natively under Missing at Random (MAR) without listwise deletion \cite{fitzmaurice2012applied}. When missingness is non-random or driven by instrumental detection limits (Missing Not At Random, MNAR), targeted left-censored imputation or hurdle/selection models must be employed (see Chapter 19).
 \end{pitfallbox}
 
 \begin{pitfallbox}
@@ -429,9 +475,9 @@ PROT\_003 0.119     0      0.375    0.159     0.347
 \end{pitfallbox}
 
 \begin{pitfallbox}
-\textbf{Deadly Sin 5: Omitting Empirical Bayes Moderation in Mixed Models.}\\
-\textit{Mechanism:} Fitting separate unmoderated mixed models feature-by-feature via \texttt{lmer}.\\
-\textit{Consequence:} In omics regimes ($p \gg n$), feature-specific residual variances fluctuate wildly, leading to erratic test statistics.\\
+\textbf{Deadly Sin 5: Omitting Empirical Bayes Moderation in High-Dimensional Omics.}\\
+\textit{Mechanism:} Fitting separate unmoderated mixed models feature-by-feature via \texttt{lmer} when testing thousands of biomolecules simultaneously.\\
+\textit{Consequence:} In high-dimensional omics regimes ($p \gg n$), feature-specific residual variances fluctuate erratically due to small sample sizes, leading to unstable test statistics and false discoveries. (In contrast, in low-dimensional clinical studies with $p < 20$, standard unmoderated REML mixed models are fully sufficient).\\
 \textit{Remedy:} Deploy empirical Bayes moderation across random-effects fits using \texttt{variancePartition::dream} \cite{hoffman2021dream, ritchie2015limma}.
 \end{pitfallbox}
 
@@ -441,20 +487,20 @@ PROT\_003 0.119     0      0.375    0.159     0.347
 
 To confirm the methodological validity of your longitudinal and mixed-effects analysis prior to publication, complete the diagnostic audit summarized in Table~\ref{tab:repeated_checklist}.
 
-\begin{table}[ht]
+\begin{table}[!ht]
 \centering
 \caption{Tutor's Self-Assessment Diagnostic Checklist for Mixed-Effects Analysis}
 \label{tab:repeated_checklist}
 \small
-\begin{tabularx}{\textwidth}{c p{4.2cm} p{4.5cm} X}
+\begin{tabularx}{\textwidth}{c p{3.8cm} p{4.6cm} X}
 \toprule
 \textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
 \midrule
 1 & Dependency Audit & Cluster structure mapped for every repeated subject/biopsy. & Specify random intercept $(1 | \text{subject})$ for all repeated measures \cite{pinheiro2000mixed}. \\
 \addlinespace
-2 & Intraclass Correlation & Compute ICC $\rho = \sigma_b^2 / (\sigma_b^2 + \sigma_e^2)$. & If $\rho > 0.10$, naive OLS inference is invalid; deploy mixed models \cite{hoffman2016variancepartition}. \\
+2 & Intraclass Correlation & Compute ICC $\rho = \sigma_b^2 / (\sigma_b^2 + \sigma_e^2)$. & If $\rho > 0.10$, naive OLS standard errors are substantially anti-conservative; deploy LMM, GEE, or cluster-robust standard errors \cite{hoffman2016variancepartition}. \\
 \addlinespace
-3 & Variance Estimation & Variance parameters estimated via REML, not ML \cite{patterson1971recovery}. & Ensure unbiased residual variance estimation for small sample cohorts. \\
+3 & Variance Estimation & Variance parameters estimated via REML, not ML \cite{patterson1971recovery}. & Ensure substantially less biased / preferred residual variance estimation for small sample cohorts. \\
 \addlinespace
 4 & Degrees of Freedom & Kenward-Roger or Satterthwaite approximation applied \cite{kenward1997small}. & Verify non-integer degrees of freedom in mixed-effects testing \cite{kuznetsova2017lmertest}. \\
 \addlinespace
@@ -462,6 +508,8 @@ To confirm the methodological validity of your longitudinal and mixed-effects an
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\clearpage
 
 % =============================================================================
 \section{Chapter Exercises}
@@ -536,8 +584,14 @@ Inspection confirms $\mathbf{C} = \mathbf{C}^T$. All leading principal minors ar
 \begin{align*}
 M_1 &= 4.0 > 0 \\
 M_2 &= (4)(2) - (2)(2) = 8.0 - 4.0 = 4.0 > 0 \\
-M_3 &= \det \begin{pmatrix} 4 & 2 & 2 \\ 2 & 2 & 0 \\ 2 & 0 & 2.5 \end{pmatrix} = 2 \cdot (0 - 4) + 2.5 \cdot (8 - 4) = -8.0 + 10.0 = \mathbf{2.0} > 0 \\
-M_4 &= \det(\mathbf{C}) = \mathbf{1.0} > 0
+M_3 &= \det \begin{pmatrix} 4 & 2 & 2 \\ 2 & 2 & 0 \\ 2 & 0 & 2.5 \end{pmatrix} = 2 \cdot (0 - 4) + 2.5 \cdot (8 - 4) = -8.0 + 10.0 = \mathbf{2.0} > 0
+\end{align*}
+The fourth leading principal minor is the determinant $\det(\mathbf{C})$. Utilizing the block determinant formula (Schur complement) with $\mathbf{D} = \mathbf{Z}^T\mathbf{Z} + \widetilde{\mathbf{G}}^{-1} = 2.5\mathbf{I}_2$:
+\begin{align*}
+\det(\mathbf{C}) &= \det(\mathbf{D}) \cdot \det\left( \mathbf{X}^T\mathbf{X} - (\mathbf{X}^T\mathbf{Z})\mathbf{D}^{-1}(\mathbf{Z}^T\mathbf{X}) \right) \\
+&= (2.5)^2 \cdot \det\left( \begin{pmatrix} 4 & 2 \\ 2 & 2 \end{pmatrix} - \begin{pmatrix} 2 & 2 \\ 0 & 2 \end{pmatrix} \begin{pmatrix} 0.4 & 0 \\ 0 & 0.4 \end{pmatrix} \begin{pmatrix} 2 & 0 \\ 2 & 2 \end{pmatrix} \right) \\
+&= 6.25 \cdot \det\left( \begin{pmatrix} 4 & 2 \\ 2 & 2 \end{pmatrix} - \begin{pmatrix} 3.2 & 1.6 \\ 1.6 & 1.6 \end{pmatrix} \right) \\
+&= 6.25 \cdot \det\begin{pmatrix} 0.8 & 0.4 \\ 0.4 & 0.4 \end{pmatrix} = 6.25 \cdot \left[ (0.8)(0.4) - (0.4)^2 \right] = 6.25 \cdot 0.16 = \mathbf{1.0} > 0
 \end{align*}
 The eigenvalues of $\mathbf{C}$ are:
 $$\lambda(\mathbf{C}) \approx \{0.122, \ 0.355, \ 3.142, \ 7.381\}, \quad \prod_{i=1}^4 \lambda_i = 1.000$$
@@ -614,7 +668,7 @@ Johnson, W.~E., Li, C., \& Rabinovic, A. (2007). Adjusting batch effects in micr
 Kenward, M.~G., \& Roger, J.~H. (1997). Small sample inference for fixed effects from restricted maximum likelihood. \textit{Biometrics}, 53(3), 983--997. \doi{10.2307/2533558}.
 
 \bibitem{kuznetsova2017lmertest}
-Kuznetsova, A., Brockhoff, P.~B., \& Christensen, R.~H.~B. (2017). lmerTest package: Tests in linear mixed effects models. \textit{Journal of Statistical Software}, 82(13), 1--26. \doi{10.18637/jss.v082.i13}.
+Kuznetsova, A., Brockhoff, P.~B., \& Christensen, R.~H.~B. (2017). \texttt{lmerTest} package: Tests in linear mixed effects models. \textit{Journal of Statistical Software}, 82(13), 1--26. \doi{10.18637/jss.v082.i13}.
 
 \bibitem{laird1982random}
 Laird, N.~M., \& Ware, J.~H. (1982). Random-effects models for longitudinal data. \textit{Biometrics}, 38(4), 963--974. \doi{10.2307/2529876}.

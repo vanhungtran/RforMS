@@ -189,8 +189,8 @@ git add _quarto.yml
 git add cover.png docs/cover.png 2>/dev/null || true
 
 # Add R companion package files and pipeline updates
-git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R 2>/dev/null || true
-git add R/ man/ tests/ scripts/ code/ 2>/dev/null || true
+git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R references.bib 2>/dev/null || true
+git add R/ man/ tests/ scripts/ code/ latex/ 2>/dev/null || true
 git add data/figures/ figures/scifig/ 2>/dev/null || true
 git add docs/ 2>/dev/null || true
 git add deploy.sh deploy.ps1 .gitignore 2>/dev/null || true

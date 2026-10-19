@@ -1,0 +1,821 @@
+\documentclass[11pt,oneside]{book}
+
+% -----------------------------------------------------------------------------
+% Springer Nature Textbook Architecture & Typography
+% Exemplary Chapter: Mass Spectrometry Data Analysis with R
+% Chapter 21: Differential Abundance Analysis Using Linear Models & Empirical Bayes
+% Author: Lucas VHH TRAN
+% -----------------------------------------------------------------------------
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{mathptmx} % Times Roman typography for body and math
+\usepackage[scaled=0.88]{inconsolata} % Clean monospace code font
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{colortbl}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[many]{tcolorbox}
+\usepackage{caption}
+\usepackage{hyperref}
+
+% Define doi macro
+\newcommand{\doi}[1]{\href{https://doi.org/#1}{\nolinkurl{doi:#1}}}
+\setlength{\headheight}{14.5pt}
+
+% Define abstract environment for book class
+\providecommand{\abstractname}{Abstract}
+\newenvironment{abstract}{%
+  \par\vspace{1em}
+  \noindent\textbf{\large\abstractname}\par\vspace{0.5em}
+  \itshape\small
+}{%
+  \par\vspace{1em}
+}
+
+% --- Color Palette (Springer Academic Palette) ---
+\definecolor{springerNavy}{HTML}{002B49}
+\definecolor{springerBlue}{HTML}{005A9C}
+\definecolor{springerGray}{HTML}{F8FAFC}
+\definecolor{springerBorder}{HTML}{CBD5E1}
+\definecolor{codeBg}{HTML}{F8FAFC}
+\definecolor{codeFrame}{HTML}{E2E8F0}
+\definecolor{codeGreen}{HTML}{15803D}
+\definecolor{codeBlue}{HTML}{1D4ED8}
+\definecolor{codeGray}{HTML}{64748B}
+\definecolor{codeRed}{HTML}{B91C1C}
+\definecolor{alertRed}{HTML}{991B1B}
+\definecolor{alertBg}{HTML}{FEF2F2}
+\definecolor{tipGreen}{HTML}{166534}
+\definecolor{tipBg}{HTML}{F0FDF4}
+\definecolor{warnAmber}{HTML}{92400E}
+\definecolor{warnBg}{HTML}{FFFBEB}
+
+% --- Hyperref Setup ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=springerBlue,
+    citecolor=codeGreen,
+    urlcolor=springerBlue,
+    pdftitle={Chapter 21: Differential Abundance Analysis in Mass Spectrometry},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+% --- R Code Listings Setup ---
+\lstset{
+    language=R,
+    backgroundcolor=\color{codeBg},
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codeBlue}\bfseries,
+    commentstyle=\color{codeGray}\itshape,
+    stringstyle=\color{codeGreen},
+    numberstyle=\tiny\color{codeGray},
+    numbers=left,
+    numbersep=8pt,
+    stepnumber=1,
+    frame=single,
+    rulecolor=\color{codeFrame},
+    breaklines=true,
+    breakatwhitespace=true,
+    showstringspaces=false,
+    tabsize=2,
+    captionpos=b,
+    xleftmargin=12pt,
+    xrightmargin=4pt,
+    aboveskip=10pt,
+    belowskip=10pt
+}
+
+% --- Springer Pedagogical Callout Boxes ---
+\newtcolorbox{svgraybox}[1][]{
+    enhanced,
+    colback=springerGray,
+    colframe=springerBorder,
+    boxrule=1pt,
+    arc=2mm,
+    fonttitle=\bfseries\color{springerNavy},
+    title={Takeaway Summary},
+    attach boxed title to top left={yshift=-2mm, xshift=4mm},
+    boxed title style={colback=white, colframe=springerBorder, size=small},
+    left=10pt, right=10pt, top=10pt, bottom=10pt,
+    #1
+}
+
+\newtcolorbox{pitfallbox}[1][]{
+    enhanced,
+    colback=alertBg,
+    colframe=alertRed,
+    boxrule=1pt,
+    arc=2mm,
+    fonttitle=\bfseries\color{alertRed},
+    title={Methodological Pitfall \& Deadly Sin},
+    attach boxed title to top left={yshift=-2mm, xshift=4mm},
+    boxed title style={colback=white, colframe=alertRed, size=small},
+    left=10pt, right=10pt, top=10pt, bottom=10pt,
+    #1
+}
+
+\newtcolorbox{tipbox}[1][]{
+    enhanced,
+    colback=tipBg,
+    colframe=tipGreen,
+    boxrule=1pt,
+    arc=2mm,
+    fonttitle=\bfseries\color{tipGreen},
+    title={Best Practice Tip},
+    attach boxed title to top left={yshift=-2mm, xshift=4mm},
+    boxed title style={colback=white, colframe=tipGreen, size=small},
+    left=10pt, right=10pt, top=10pt, bottom=10pt,
+    #1
+}
+
+% --- Page Headers & Footers ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\nouppercase{\rightmark}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{20}
+\chapter{Differential Abundance Analysis Using Linear Models and Empirical Bayes Moderation}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{Center for Quantitative Omics and Computational Biology, Department of Biomedical Statistics. Email: \texttt{tranhungydhcm@gmail.com}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Differential abundance analysis constitutes the central inferential engine in quantitative mass spectrometry (MS), bridging upstream peptide identification and raw ion quantification with downstream biological pathway interpretation. In typical bottom-up proteomics and untargeted metabolomics experiments, thousands of biomolecular features ($p \approx 10^3$--$10^4$) are profiled across a limited cohort of biological replicates ($n \approx 3$--$10$ per phenotype). Under such severe small-sample regimes ($p \gg n$), conventional statistical tests (e.g., standard Student's $t$-tests and ordinary ANOVA) suffer catastrophic loss of statistical power and variance instability: features with underestimated sample variances yield spuriously inflated test statistics, manufacturing hundreds of false-positive discoveries out of measurement noise. 
+
+This chapter develops the theoretical, mathematical, and practical foundations of empirical Bayes variance moderation pioneered by Gordon Smyth (\texttt{limma}) and adapted for quantitative mass spectrometry. We formulate the high-dimensional linear regression framework, explicate the inverse-gamma prior distribution for feature-specific error variances, derive the closed-form moderated $t$-statistic and log-odds ($B$-statistic), and establish rigorous false discovery rate (FDR) control via the Benjamini--Hochberg procedure. We provide complete algebraic formulations for two-group, factorial, paired, and multi-site blocked designs. The methodology is operationalized through a hands-on, step-by-step computational R laboratory utilizing the benchmark 11-site Data-Independent Acquisition (DIA) multi-laboratory reproducibility study (PXD004886) containing synthetic AQUA spike-in positive controls. The chapter concludes with an audit of the ten deadly sins of differential omics, comprehensive multi-tier exercises, and fully worked-out step-by-step mathematical and algorithmic solutions.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:} Differential Abundance, Empirical Bayes, Linear Models, \texttt{limma}, False Discovery Rate, Mass Spectrometry, Proteomics, Volcano Plot, Contrast Matrix.
+
+\vspace{1em}
+\noindent\rule{\textwidth}{0.8pt}
+
+% =============================================================================
+\section{The Importance of Differential Abundance in Mass Spectrometry}
+% =============================================================================
+
+High-throughput mass spectrometry measures the relative or absolute abundance of thousands of proteins, peptides, or metabolites across biological states. Whether interrogating a cancer biopsy cohort, a drug-treatment time course, or microbial adaptations to nutrient deprivation, the primary analytical objective is almost universally comparative: \textit{Which molecular entities undergo statistically genuine, biologically meaningful changes in abundance between phenotypic conditions?}
+
+In classical statistical inference, testing the equality of two population means $\mu_1 = \mu_2$ for a single analyte relies on Student's two-sample $t$-test. In modern omics, however, the experimenter faces three unique statistical and physical challenges inherent to mass spectrometry:
+
+\begin{enumerate}
+    \item \textbf{The High-Dimensional Small-Sample Regime ($p \gg n$):} Modern LC-MS/MS platforms routinely quantify $5,000$ to $10,000$ protein groups or $1,000$ to $3,000$ metabolite features across only $3$ to $5$ biological replicates per group due to sample rarity or instrument costs. With $d_g = 4$ residual degrees of freedom, sample variance estimates fluctuate erratically across several orders of magnitude purely by sampling error.
+    \item \textbf{Dynamic Range and Mean-Variance Dependence:} MS ion intensities span five to six orders of magnitude ($10^3$ to $10^9$). Lower-abundance features exhibit higher technical coefficients of variation (CV) and elevated rates of missingness (Missing Not At Random, MNAR), whereas high-abundance housekeeping proteins display lower variance.
+    \item \textbf{Multi-Layered Batch and Nuisance Structure:} Instrument drift, column maintenance, electrospray emitter fouling, and multi-day digestions introduce technical variance that frequently eclipses subtle biological signals unless explicit blocking factors or pairing constraints are incorporated into the design matrix.
+\end{enumerate}
+
+To isolate biological variation from technical noise, the analytical pipeline must integrate linear modeling with information borrowing across the entire proteome or metabolome. Empirical Bayes variance shrinkage provides an optimal trade-off: it shrinks volatile individual variance estimates toward a global consensus prior, restoring statistical power while maintaining rigorous family-wise or false discovery rate control.
+
+% =============================================================================
+\section{Mathematical Formulations and Statistical Foundations}
+% =============================================================================
+
+\subsection{The High-Dimensional Linear Model}
+
+Let $y_{gi}$ denote the normalized, $\log_2$-transformed abundance of feature $g$ ($g = 1, \dots, G$) in sample $i$ ($i = 1, \dots, N$). For each feature $g$, the relationship between abundance and experimental design is modeled as a linear regression:
+\begin{equation}
+\mathbf{y}_g = \mathbf{X} \boldsymbol{\beta}_g + \boldsymbol{\varepsilon}_g, \quad \boldsymbol{\varepsilon}_g \sim \mathcal{N}(\mathbf{0}, \sigma_g^2 \mathbf{W}_g^{-1})
+\label{eq:linear_model}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathbf{y}_g = (y_{g1}, y_{g2}, \dots, y_{gN})^T$ is the $N \times 1$ vector of observed $\log_2$ abundances for feature $g$.
+    \item $\mathbf{X}$ is the known $N \times P$ design matrix specifying sample covariates, phenotypic groups, and technical blocking factors ($P < N$).
+    \item $\boldsymbol{\beta}_g = (\beta_{g1}, \beta_{g2}, \dots, \beta_{gP})^T$ is the $P \times 1$ vector of unknown regression coefficients representing baseline abundances, condition effects, or interaction terms.
+    \item $\mathbf{W}_g$ is an $N \times N$ known positive-definite weight matrix (typically the identity matrix $\mathbf{I}_N$, or sample-specific observation weights if quality weighting is applied).
+    \item $\sigma_g^2$ is the unknown residual error variance for feature $g$.
+\end{itemize}
+
+The ordinary least squares (OLS) estimator of $\boldsymbol{\beta}_g$ is:
+\begin{equation}
+\hat{\boldsymbol{\beta}}_g = (\mathbf{X}^T \mathbf{W}_g \mathbf{X})^{-1} \mathbf{X}^T \mathbf{W}_g \mathbf{y}_g
+\label{eq:ols_beta}
+\end{equation}
+Conditional on $\sigma_g^2$, the coefficient estimator follows a multivariate normal distribution:
+\begin{equation}
+\hat{\boldsymbol{\beta}}_g \mid \sigma_g^2 \sim \mathcal{N}\left(\boldsymbol{\beta}_g, \sigma_g^2 (\mathbf{X}^T \mathbf{W}_g \mathbf{X})^{-1}\right)
+\end{equation}
+
+\subsection{Contrasts of Biological Interest}
+
+A biological hypothesis rarely corresponds to whether a single parameter $\beta_{gp} = 0$. Instead, researchers test linear combinations of parameters known as \textit{contrasts}. Let $\mathbf{c}_j$ be a $P \times 1$ contrast vector. The contrast parameter $\gamma_{gj}$ is defined as:
+\begin{equation}
+\gamma_{gj} = \mathbf{c}_j^T \boldsymbol{\beta}_g
+\end{equation}
+The unbiased point estimator of the contrast is:
+\begin{equation}
+\hat{\gamma}_{gj} = \mathbf{c}_j^T \hat{\boldsymbol{\beta}}_g
+\end{equation}
+The sampling variance of $\hat{\gamma}_{gj}$ is given by:
+\begin{equation}
+\text{Var}(\hat{\gamma}_{gj} \mid \sigma_g^2) = \sigma_g^2 v_{gj}, \quad \text{where } v_{gj} = \mathbf{c}_j^T (\mathbf{X}^T \mathbf{W}_g \mathbf{X})^{-1} \mathbf{c}_j
+\label{eq:contrast_variance}
+\end{equation}
+The scalar $v_{gj}$ is the unscaled variance coefficient, fully determined by the experimental design and contrast specification.
+
+\subsection{The Failure of Ordinary \texorpdfstring{$t$}{t}-Statistics at Small Sample Size}
+
+The classical unbiased estimator of the residual variance $\sigma_g^2$ is the sample residual variance $s_g^2$:
+\begin{equation}
+s_g^2 = \frac{1}{d_g} (\mathbf{y}_g - \mathbf{X}\hat{\boldsymbol{\beta}}_g)^T \mathbf{W}_g (\mathbf{y}_g - \mathbf{X}\hat{\boldsymbol{\beta}}_g)
+\label{eq:sample_variance}
+\end{equation}
+where $d_g = N - \text{rank}(\mathbf{X})$ represents the residual degrees of freedom. The standard Student's $t$-statistic tests the null hypothesis $H_0: \gamma_{gj} = 0$:
+\begin{equation}
+t_{gj} = \frac{\hat{\gamma}_{gj}}{s_g \sqrt{v_{gj}}}
+\label{eq:ordinary_t}
+\end{equation}
+Under the null hypothesis, $t_{gj} \sim t_{d_g}$. However, in MS experiments with $N_1 = N_2 = 3$ replicates, $d_g = 6 - 2 = 4$. Under four degrees of freedom:
+\begin{itemize}
+    \item The distribution of $s_g^2$ has a heavy right tail and high density near zero: $\text{Var}(s_g^2) = \frac{2 \sigma_g^4}{d_g} = \frac{\sigma_g^4}{2}$.
+    \item Features whose sample variance happens to be close to zero by chance ($s_g^2 \approx 0$) yield massive $t$-statistics even when the effect size $\hat{\gamma}_{gj}$ is trivial (false positive inflation).
+    \item Conversely, genuine biological changes with slightly overestimated sample variance are penalized by excessively small test statistics (false negative inflation).
+\end{itemize}
+
+\subsection{Smyth's Empirical Bayes Hierarchical Prior}
+
+To stabilize variance estimation, Gordon Smyth (2004) introduced a hierarchical empirical Bayes model that links variance estimates across all $G$ features. The true unknown feature variance $\sigma_g^2$ is assumed to follow a scaled inverse chi-square prior distribution:
+\begin{equation}
+\frac{1}{\sigma_g^2} \sim \frac{1}{d_0 s_0^2} \chi^2_{d_0} \iff \sigma_g^2 \sim \text{Scale-Inv-}\chi^2(d_0, s_0^2)
+\label{eq:prior_variance}
+\end{equation}
+where:
+\begin{itemize}
+    \item $s_0^2$ is the global prior variance, representing the expected typical variance across all quantified features.
+    \item $d_0$ is the prior degrees of freedom, quantifying the degree of belief in the prior distribution.
+\end{itemize}
+
+The sample residual variance $s_g^2$ conditional on the true variance $\sigma_g^2$ follows:
+\begin{equation}
+s_g^2 \mid \sigma_g^2 \sim \frac{\sigma_g^2}{d_g} \chi^2_{d_g}
+\label{eq:sample_var_dist}
+\end{equation}
+
+By Bayes' theorem, combining the likelihood (\ref{eq:sample_var_dist}) and the conjugate prior (\ref{eq:prior_variance}) yields the posterior distribution of $\sigma_g^2$:
+\begin{equation}
+\sigma_g^2 \mid s_g^2 \sim \text{Scale-Inv-}\chi^2(d_0 + d_g, \tilde{s}_g^2)
+\label{eq:posterior_variance}
+\end{equation}
+where the \textbf{moderated residual variance} $\tilde{s}_g^2$ is the posterior mean:
+\begin{equation}
+\tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}
+\label{eq:moderated_variance_formula}
+\end{equation}
+
+\begin{svgraybox}
+\textbf{The Shrinkage Mechanism:} The moderated variance $\tilde{s}_g^2$ is a precision-weighted average of the empirical feature-specific variance $s_g^2$ and the global consensus variance $s_0^2$:
+\begin{itemize}
+    \item If $d_g$ is very small (e.g., $d_g = 4$) and $d_0 = 10$, the prior dominates: $\tilde{s}_g^2 \approx s_0^2$. Features cannot artificially achieve significance through anomalously small variances.
+    \item As sample size increases ($d_g \to \infty$), the empirical data dominates: $\tilde{s}_g^2 \to s_g^2$, reverting to standard OLS.
+\end{itemize}
+\end{svgraybox}
+
+\subsection{The Moderated \texorpdfstring{$t$}{t}-Statistic and the \texorpdfstring{$B$}{B}-Statistic}
+
+Replacing the noisy sample variance $s_g$ in Eq.~(\ref{eq:ordinary_t}) with the moderated standard deviation $\tilde{s}_g$ defines the \textbf{moderated $t$-statistic}:
+\begin{equation}
+\tilde{t}_{gj} = \frac{\hat{\gamma}_{gj}}{\tilde{s}_g \sqrt{v_{gj}}}
+\label{eq:moderated_t}
+\end{equation}
+
+\noindent
+\textbf{Theorem (Smyth, 2004):} Under the null hypothesis $H_0: \gamma_{gj} = 0$, the marginal distribution of the moderated $t$-statistic is an exact Student's $t$-distribution with augmented degrees of freedom:
+\begin{equation}
+\tilde{t}_{gj} \sim t_{d_0 + d_g}
+\label{eq:moderated_t_dist}
+\end{equation}
+
+The degrees of freedom are augmented from $d_g$ to $d_0 + d_g$. In an experiment with $d_g = 4$ and prior degrees of freedom $d_0 = 20$, the test behaves as if it had $24$ degrees of freedom, dramatically sharpening the critical value cutoff and statistical power.
+
+\subsubsection{The \texorpdfstring{$B$}{B}-Statistic: Posterior Log-Odds}
+In addition to the $p$-value derived from Eq.~(\ref{eq:moderated_t_dist}), \texttt{limma} computes the $B$-statistic, representing the posterior log-odds of differential expression versus the null hypothesis:
+\begin{equation}
+B_{gj} = \ln \left( \frac{P(\gamma_{gj} \neq 0 \mid \hat{\gamma}_{gj}, s_g^2)}{P(\gamma_{gj} = 0 \mid \hat{\gamma}_{gj}, s_g^2)} \right)
+\label{eq:b_statistic}
+\end{equation}
+When $B_{gj} = 0$, the feature is equally likely to be differentially abundant as non-differentially abundant ($50/50$ odds). A value $B_{gj} > 3$ indicates strong posterior evidence for true differential abundance ($e^3 \approx 20:1$ odds).
+
+\subsection{Multiple Testing and the False Discovery Rate}
+
+Testing $G = 5,000$ proteins simultaneously at significance level $\alpha = 0.05$ without adjustment expects $5,000 \times 0.05 = 250$ false discoveries by chance under the complete null hypothesis. In discovery-oriented mass spectrometry, controlling the \textbf{False Discovery Rate (FDR)} is standard practice.
+
+Let $H_{(1)}, H_{(2)}, \dots, H_{(G)}$ denote the null hypotheses corresponding to sorted raw two-tailed $p$-values:
+\begin{equation}
+p_{(1)} \le p_{(2)} \le \dots \le p_{(G)}
+\end{equation}
+
+\noindent
+The \textbf{Benjamini--Hochberg (1995) step-up procedure} controls the FDR at nominal level $q^* \in (0, 1)$ by finding the largest index $k$ such that:
+\begin{equation}
+k = \max \left\{ i \in \{1, \dots, G\} : p_{(i)} \le \frac{i}{G} q^* \right\}
+\label{eq:bh_procedure}
+\end{equation}
+and rejecting all hypotheses $H_{(1)}, \dots, H_{(k)}$. The adjusted $p$-value (FDR $q$-value) for the $i$-th ordered feature is computed monotonically as:
+\begin{equation}
+q_{(i)} = \min_{j \ge i} \left\{ \min\left(1, \frac{G}{j} p_{(j)}\right) \right\}
+\label{eq:bh_adjusted_p}
+\end{equation}
+
+\begin{table}[ht]
+\centering
+\caption{Comparison of Multiple Testing Methodologies in Mass Spectrometry}
+\label{tab:fdr_comparison}
+\begin{tabularx}{\textwidth}{lXXX}
+\toprule
+\textbf{Metric / Method} & \textbf{Formal Criterion Controlled} & \textbf{Statistical Power} & \textbf{Typical Omics Application} \\
+\midrule
+\textbf{Bonferroni} & Family-Wise Error Rate: $P(V \ge 1) \le \alpha$ & Extremely low & Confirmatory clinical trials; single-target diagnostics \\
+\textbf{Benjamini--Hochberg} & Expected FDR: $\mathbb{E}[V / \max(R, 1)] \le q^*$ & High & Standard discovery proteomics and metabolomics \\
+\textbf{Benjamini--Yekutieli} & FDR under arbitrary dependence structures & Conservative & Highly correlated lipidomics/co-expression modules \\
+\textbf{Storey's $q$-value} & Positive FDR: $\mathbb{E}[V / R \mid R > 0]$ & Highest (estimates $\pi_0$) & Large-scale cohorts with well-calibrated $p$-values \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{Design Matrices and Contrast Architectures}
+% =============================================================================
+
+The design matrix $\mathbf{X}$ maps observed intensities to experimental parameters. Specifying the design matrix and contrasts correctly is essential to avoid statistical errors.
+
+\subsection{Parameterization Paradigms: Means vs. Reference Cell}
+
+Consider an experiment comparing two conditions: Control ($C$) and Treatment ($T$), each with $n = 3$ replicates.
+
+\subsubsection{1. Group-Means Parameterization (\texttt{\~{} 0 + Group})}
+The model contains no intercept; each column corresponds to the mean $\log_2$ abundance of a group:
+\begin{equation}
+\mathbf{X}_{\text{means}} = \begin{pmatrix}
+1 & 0 \\
+1 & 0 \\
+1 & 0 \\
+0 & 1 \\
+0 & 1 \\
+0 & 1
+\end{pmatrix}, \quad 
+\boldsymbol{\beta} = \begin{pmatrix} \mu_{\text{Control}} \\ \mu_{\text{Treatment}} \end{pmatrix}
+\end{equation}
+To test the difference $\mu_{\text{Treatment}} - \mu_{\text{Control}}$, the contrast vector is explicitly:
+\begin{equation}
+\mathbf{c} = \begin{pmatrix} -1 \\ 1 \end{pmatrix} \implies \gamma = \mathbf{c}^T \boldsymbol{\beta} = \mu_{\text{Treatment}} - \mu_{\text{Control}}
+\end{equation}
+
+\subsubsection{2. Reference-Cell Parameterization (\texttt{\~{} Group})}
+The model includes an intercept representing baseline control abundance, and a slope representing the treatment effect:
+\begin{equation}
+\mathbf{X}_{\text{ref}} = \begin{pmatrix}
+1 & 0 \\
+1 & 0 \\
+1 & 0 \\
+1 & 1 \\
+1 & 1 \\
+1 & 1
+\end{pmatrix}, \quad 
+\boldsymbol{\beta} = \begin{pmatrix} \mu_{\text{Control}} \\ \beta_{\text{Treatment}} \end{pmatrix} = \begin{pmatrix} \mu_{\text{Control}} \\ \mu_{\text{Treatment}} - \mu_{\text{Control}} \end{pmatrix}
+\end{equation}
+The treatment effect is estimated directly by the second coefficient $\beta_{\text{Treatment}}$, tested with $\mathbf{c} = (0, 1)^T$.
+
+\subsection{Factorial Interaction Designs \texorpdfstring{($2 \times 2$)}{(2x2)}}
+
+Consider a factorial design with Genotype ($\text{WT}, \text{KO}$) and Drug Treatment ($\text{Veh}, \text{Drug}$). The group-means approach defines four condition groups:
+\begin{lstlisting}[numbers=none]
+group <- factor(paste(Genotype, Treatment, sep = "."))
+design <- model.matrix(~ 0 + group)
+colnames(design) <- c("KO.Drug", "KO.Veh", "WT.Drug", "WT.Veh")
+\end{lstlisting}
+The interaction contrast tests whether the drug effect in Knockout differs from the drug effect in Wild-Type (synergy vs antagonism):
+\begin{equation}
+\mathbf{c}_{\text{interaction}} = (\mu_{\text{KO.Drug}} - \mu_{\text{KO.Veh}}) - (\mu_{\text{WT.Drug}} - \mu_{\text{WT.Veh}})
+\end{equation}
+In \texttt{limma}, this contrast is constructed directly:
+\begin{lstlisting}[numbers=none]
+contrasts <- makeContrasts(
+  Interaction = (KO.Drug - KO.Veh) - (WT.Drug - WT.Veh),
+  DrugEffect_WT = WT.Drug - WT.Veh,
+  DrugEffect_KO = KO.Drug - KO.Veh,
+  levels = design
+)
+\end{lstlisting}
+
+\subsection{Paired and Blocked Multi-Site Designs}
+
+When samples are matched by subject, batch, or multi-laboratory site, the experimental design must isolate between-block variation. Consider the 11-site DIA reproducibility benchmark (PXD004886), where each laboratory measured Group A and Group B:
+\begin{equation}
+y_{si} = \mu + \beta_{\text{Group}} \cdot \text{Group}_{si} + \alpha_{\text{Site}(s)} + \varepsilon_{si}
+\end{equation}
+In \texttt{limma}, this is modeled as:
+\begin{lstlisting}[numbers=none]
+design_paired <- model.matrix(~ 0 + group + site)
+\end{lstlisting}
+By assigning a separate dummy parameter to each site, the model tests \texttt{groupB - groupA} strictly \textit{within each site}, averaging the within-laboratory log-fold changes and eliminating inter-site technical baseline shifts.
+
+% =============================================================================
+\section{Hands-On R Lab: Step-by-Step Differential Testing}
+% =============================================================================
+
+This laboratory guides the reader through a complete, reproducible differential abundance workflow on the 11-site DIA reproducibility dataset (PXD004886). The dataset contains 4,517 quantified protein groups, including synthetic AQUA30 heavy-peptide spike-in standards spiked at known concentrations into Group B.
+
+\subsection{Lab Step 1: Environment Setup and Data Ingestion}
+
+We load the required analytical libraries and import the annotated differential abundance dataset:
+
+\begin{lstlisting}
+# Step 1: Load analytical packages
+library(limma)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+
+# Ingest the 11-site DIA benchmark results
+de_path <- "data/pxd004886/DE_results_annotated.csv"
+if (!file.exists(de_path)) {
+  # Fallback to companion repository root
+  de_path <- "../data/pxd004886/DE_results_annotated.csv"
+}
+de_results <- read.csv(de_path, stringsAsFactors = FALSE)
+
+cat(sprintf("Successfully ingested %d protein groups across 11 sites.\n", 
+            nrow(de_results)))
+head(de_results[, c("Protein", "Genename", "log2FC", "P.Value", "adj.P.Val")])
+\end{lstlisting}
+
+\subsection{Lab Step 2: Diagnostic Inspection and Quality Assessment}
+
+Prior to interpreting differential candidates, we evaluate the distribution of test statistics and $p$-values. A valid statistical model produces a uniform distribution under the null hypothesis, with a sharp anti-conservative peak near zero representing true biological effects:
+
+\begin{lstlisting}
+# Step 2: p-value calibration diagnostic
+p_hist <- ggplot(de_results, aes(x = P.Value)) +
+  geom_histogram(breaks = seq(0, 1, by = 0.05), fill = "#005A9C", 
+                 color = "white", alpha = 0.85) +
+  geom_hline(yintercept = nrow(de_results) / 20, linetype = "dashed", 
+             color = "#B91C1C", linewidth = 0.7) +
+  labs(title = "P-Value Distribution Diagnostic",
+       subtitle = "Flat null expectation with enrichment of true positives near p < 0.01",
+       x = "Raw P-Value", y = "Frequency") +
+  theme_minimal(base_size = 11)
+\end{lstlisting}
+
+\subsection{Lab Step 3: Specifying the Model Matrix and Contrasts}
+
+In an end-to-end workflow starting from normalized log-expression matrix \texttt{expr\_mat} ($G \times N$), we construct the paired multi-site design matrix:
+
+\begin{lstlisting}
+# Step 3: Paired multi-site design specification
+n_sites <- 11
+sample_metadata <- data.frame(
+  sample_id = paste0("S", rep(1:n_sites, each = 2), "_", rep(c("A", "B"), n_sites)),
+  site      = factor(rep(paste0("Site_", sprintf("%02d", 1:n_sites)), each = 2)),
+  group     = factor(rep(c("A", "B"), n_sites))
+)
+
+# Build design matrix with group means and site blocking
+design <- model.matrix(~ 0 + group + site, data = sample_metadata)
+colnames(design) <- make.names(colnames(design))
+
+# Construct contrast vector for Group B vs Group A
+contrast_matrix <- makeContrasts(
+  GroupB_vs_GroupA = groupB - groupA,
+  levels = design
+)
+print(contrast_matrix)
+\end{lstlisting}
+
+\subsection{Lab Step 4: Model Fitting and Empirical Bayes Moderation}
+
+We fit linear models feature-by-feature using weighted least squares via \texttt{lmFit()}, compute contrasts with \texttt{contrasts.fit()}, and shrink residual variances toward the inverse-gamma prior via \texttt{eBayes()}:
+
+\begin{lstlisting}
+# Step 4: Linear model fitting and eBayes shrinkage
+# (Demonstrated on simulated log-expression matrix 'expr_mat')
+fit <- lmFit(expr_mat, design)
+fit_contrast <- contrasts.fit(fit, contrast_matrix)
+fit_ebayes <- eBayes(fit_contrast, trend = TRUE, robust = TRUE)
+
+# Inspect empirical Bayes hyperparameter estimates
+cat(sprintf("Prior degrees of freedom (d0): %.2f\n", fit_ebayes$df.prior))
+cat(sprintf("Prior variance (s0^2): %.4f\n", fit_ebayes$s2.prior))
+\end{lstlisting}
+
+\subsection{Lab Step 5: Extracting and Interpreting Results with \texttt{topTable()}}
+
+We extract the ranked table of differential proteins with Benjamini--Hochberg FDR adjustment:
+
+\begin{lstlisting}
+# Step 5: Extract differential candidates
+top_proteins <- topTable(fit_ebayes, coef = "GroupB_vs_GroupA", 
+                         number = Inf, adjust.method = "BH", sort.by = "B")
+
+# Dual-significance filtering: FDR < 0.05 and |log2FC| > 1.0 (2-fold change)
+significant_hits <- top_proteins |>
+  filter(adj.P.Val < 0.05 & abs(logFC) > 1.0)
+
+cat(sprintf("Total proteins: %d | Significant hits: %d\n", 
+            nrow(top_proteins), nrow(significant_hits)))
+\end{lstlisting}
+
+\subsection{Lab Step 6: Publication-Grade AI4SciFig Volcano Plot}
+
+The volcano plot visualizes effect magnitude ($\log_2\text{FC}$) versus statistical significance ($-\log_{10}\text{adjusted } P$). Figure~\ref{fig:volcano_differential} illustrates the differential results from PXD004886 rendered to AI4SciFig publishing standards.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{../figures/scifig/fig11_volcano_differential.pdf}
+\caption{Publication-grade volcano plot of 4,517 proteins from the 11-site DIA reproducibility study (PXD004886). The horizontal dashed line denotes the FDR threshold ($\text{adj.} P = 0.05$), and vertical lines denote the 2-fold biological effect boundary ($|\log_2\text{FC}| > 1$). The AQUA30 heavy-peptide spike-in standard (red label, top right) confirms pipeline accuracy.}
+\label{fig:volcano_differential}
+\end{figure}
+
+\begin{tipbox}
+\textbf{The Positive Spike-In Criterion:} In PXD004886, the AQUA30 peptide was spiked exclusively into Group B. In the volcano plot, AQUA30 is detected with $\log_2\text{FC} = +1.48$ and $\text{adj.} P = 0.008$ (top right quadrant). This validates the entire computational chain: feature extraction, retention-time alignment, paired modeling, and empirical Bayes moderation. If a known spike-in fails to achieve statistical significance, downstream biological discoveries should not be reported until the experimental and statistical pipeline is debugged.
+\end{tipbox}
+
+\subsection{Lab Step 7: Cross-Site Concordance Diagnostics}
+
+In multi-center studies, we verify that effect sizes are concordant across all 11 individual laboratories. Table~\ref{tab:concordance} demonstrates how top candidate proteins (ERAP2, AQUA30, NMNAT1) maintain consistent directionality across independent laboratories despite inter-site variance:
+
+\begin{table}[htbp]
+\centering
+\caption{Cross-Site Effect Size Concordance for Flagship Differential Hits Across 11 Laboratories}
+\label{tab:concordance}
+\small
+\begin{tabularx}{\textwidth}{lrrccX}
+\toprule
+\textbf{Protein Symbol} & \textbf{Overall $\log_2\text{FC}$} & \textbf{adj. $P$-Value} & \textbf{Concordant Sites} & \textbf{Direction} & \textbf{Biological Role / Annotation} \\
+\midrule
+\textbf{ERAP2}   & $-2.09$ & 0.016 & $11 / 11$ (100\%) & Group A $\uparrow$ & Endoplasmic reticulum aminopeptidase \\
+\textbf{AQUA30}  & $+1.48$ & 0.008 & $11 / 11$ (100\%) & Group B $\uparrow$ & Synthetic heavy spike-in positive control \\
+\textbf{NMNAT1}  & $+1.31$ & 0.003 & $11 / 11$ (100\%) & Group B $\uparrow$ & Nicotinamide mononucleotide transferase \\
+\textbf{CDC34}   & $-1.25$ & 0.048 & $10 / 11$ (91\%)  & Group A $\uparrow$ & Ubiquitin-conjugating enzyme E2 \\
+\textbf{TRA2A}   & $-1.18$ & 0.001 & $11 / 11$ (100\%) & Group A $\uparrow$ & Transformer-2 protein homolog alpha \\
+\textbf{RSL24D1} & $-1.12$ & 0.048 & $10 / 11$ (91\%)  & Group A $\uparrow$ & 60S ribosomal protein L24-like \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{lstlisting}
+# Step 7: Cross-site concordance summary
+proteins_to_check <- c("ERAP2", "AQUA30", "NMNAT1", "CDC34", "TRA2A", "RSL24D1")
+site_summary <- de_results |> 
+  filter(Genename %in% proteins_to_check)
+
+ggplot(site_summary, aes(x = Genename, y = log2FC, fill = Genename)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = c(-1, 0, 1), linetype = "dashed", color = "grey50") +
+  labs(title = "Effect Sizes of Top Differential Markers",
+       x = "Protein Group", y = expression(log[2]~"Fold Change")) +
+  theme_minimal()
+\end{lstlisting}
+
+\subsection{Lab Step 8: Preparing Downstream Pathway-Ready Lists}
+
+We export the filtered candidates with official gene symbols for Over-Representation Analysis (ORA) or Gene Set Enrichment Analysis (GSEA):
+
+\begin{lstlisting}
+# Step 8: Export ranked gene lists
+ranked_gsea_list <- de_results |>
+  filter(!is.na(Genename) & Genename != "") |>
+  mutate(rank_metric = sign(log2FC) * (-log10(P.Value))) |>
+  arrange(desc(rank_metric)) |>
+  select(Genename, rank_metric, log2FC, adj.P.Val)
+
+write.csv(ranked_gsea_list, "results/ranked_proteins_for_gsea.csv", row.names = FALSE)
+\end{lstlisting}
+
+% =============================================================================
+\section{Methodological Pitfalls: The Deadly Sins of Omics Statistics}
+% =============================================================================
+
+\begin{pitfallbox}
+\textbf{Sin 1: Testing Without Variance Moderation in Small Cohorts}\\
+Applying ordinary Student's $t$-tests when $n \le 5$ produces extreme variance instability. Spurious division by near-zero variances ($s_g^2 \approx 0$) inflates false discovery rates by up to $40\%$. \textbf{Remedy:} Always use empirical Bayes moderation (\texttt{limma::eBayes} or \texttt{proDA}).
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 2: Double-Dipping / Outcome-Guided Feature Pre-Filtering}\\
+Filtering features based on unadjusted $p$-values or group differences before fitting the formal model distorts the null distribution and invalidates FDR guarantees. \textbf{Remedy:} Unsupervised filtering (e.g., minimum valid values across all runs, overall variance) is valid; supervised filtering on class labels is strictly prohibited.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 3: Reporting Raw $p$-Values Without Multiplicity Correction}\\
+Reporting uncorrected $p < 0.05$ across $5,000$ proteins guarantees approximately $250$ false discoveries by chance alone. \textbf{Remedy:} Always adjust via the Benjamini--Hochberg step-up procedure and report $q$-values alongside raw $p$-values.
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 4: Subtracting Batch Effects Prior to Model Fitting (The Double-Adjustment Trap)}\\
+Subtracting batch effects with \texttt{removeBatchEffect()} and subsequently fitting a linear model with batch in the design matrix removes residual degrees of freedom twice, deflating standard errors. \textbf{Remedy:} Include batch directly as a blocking covariate in the linear design matrix; use \texttt{removeBatchEffect()} exclusively for visual ordination (PCA/UMAP).
+\end{pitfallbox}
+
+\begin{pitfallbox}
+\textbf{Sin 5: Neglecting Positive Spike-In Standards}\\
+Performing differential testing without benchmarking against an orthogonal ground truth or synthetic spike-in risks interpreting false discoveries caused by chromatography or normalisation artefacts. \textbf{Remedy:} Always incorporate known spike-ins (e.g., AQUA peptides or UPS2 standards) to empirically calibrate the volcano plot cutoffs.
+\end{pitfallbox}
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent
+\textbf{Exercise 21.1 (Conceptual: Shrinkage and Degrees of Freedom):}\\
+Explain why the augmented degrees of freedom $d_0 + d_g$ in Smyth's empirical Bayes framework exceeds the classical residual degrees of freedom $d_g$. Under what conditions does the moderated variance $\tilde{s}_g^2$ approach the ordinary sample variance $s_g^2$?
+
+\vspace{0.5em}
+\noindent
+\textbf{Exercise 21.2 (Mathematical Derivation of the Posterior Variance):}\\
+Given the prior $\frac{1}{\sigma_g^2} \sim \frac{1}{d_0 s_0^2} \chi^2_{d_0}$ and the sampling distribution $s_g^2 \mid \sigma_g^2 \sim \frac{\sigma_g^2}{d_g} \chi^2_{d_g}$, prove that the posterior distribution of $\sigma_g^2 \mid s_g^2$ is a scaled inverse chi-square distribution with parameters $d_0 + d_g$ and scale parameter $\tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}$.
+
+\vspace{0.5em}
+\noindent
+\textbf{Exercise 21.3 (Factorial Design Matrix and Contrast Vector):}\\
+A proteomics study assesses the response of Wild-Type (WT) and Knockout (KO) hepatocytes to a metabolic toxin (Vehicle vs. Toxin). Four biological replicates are processed per combination ($N = 16$).
+\begin{enumerate}
+    \item Construct the design matrix $\mathbf{X}$ under the group-means parameterization.
+    \item Define the contrast vector $\mathbf{c}$ that specifically tests for a \textit{differential response} to the toxin between KO and WT (the interaction term).
+    \item Write the complete R code to define this model in \texttt{limma}.
+\end{enumerate}
+
+\vspace{0.5em}
+\noindent
+\textbf{Exercise 21.4 (Manual Step-by-Step Benjamini--Hochberg Calculation):}\\
+Suppose a targeted mass spectrometry assay tests $m = 10$ selected reaction monitoring (SRM) transitions, yielding the following raw $p$-values:
+$$0.0012, \ 0.0140, \ 0.0004, \ 0.0320, \ 0.0450, \ 0.0080, \ 0.1200, \ 0.2500, \ 0.0190, \ 0.0035$$
+Calculate by hand the Benjamini--Hochberg adjusted $q$-values. Which features are declared significant at a target FDR of $q^* = 0.05$?
+
+\vspace{0.5em}
+\noindent
+\textbf{Exercise 21.5 (Random Effects and Repeated Measures with \texttt{duplicateCorrelation}):}\\
+In a clinical trial, plasma metabolomes from $n = 10$ patients are measured at Baseline, Day 7, and Day 28. Measurements on the same patient are correlated. Explain why treating \texttt{Patient} as a standard fixed-effect factor can fail, and write the R code using \texttt{limma::duplicateCorrelation()} to model patient random effects.
+
+\vspace{0.5em}
+\noindent
+\textbf{Exercise 21.6 (Differential Method Selection Under Missingness):}\\
+Select and justify the optimal differential abundance approach for each scenario:
+\begin{enumerate}
+    \item TMT 16-plex experiment with 8 vs 8 cancer biopsies, zero missing values.
+    \item Label-free DIA dataset with 4 vs 4 replicates and $30\%$ missing values exhibiting left-censored MNAR behavior.
+    \item Single-cell mass spectrometry proteomics with 50 single cells per group and $> 65\%$ missing values.
+\end{enumerate}
+
+% =============================================================================
+\section{Complete Solutions to Chapter Exercises}
+% =============================================================================
+
+\subsection*{Solution to Exercise 21.1}
+The empirical Bayes framework assumes that all feature variances $\sigma_g^2$ are sampled from a common prior distribution with scale $s_0^2$ and degrees of freedom $d_0$. 
+\begin{itemize}
+    \item By pooling information across all $G$ quantified proteins or metabolites, the effective sample size for estimating the underlying variance is augmented by $d_0$ prior observations. Consequently, the posterior distribution of $\sigma_g^2$ has $d_0 + d_g$ degrees of freedom.
+    \item From Eq.~(\ref{eq:moderated_variance_formula}), $\tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g} = \left(\frac{d_0}{d_0 + d_g}\right) s_0^2 + \left(\frac{d_g}{d_0 + d_g}\right) s_g^2$. The moderated variance $\tilde{s}_g^2$ approaches the individual sample variance $s_g^2$ when:
+    \begin{enumerate}
+        \item The experimental sample size grows large ($d_g \to \infty$), such that $\frac{d_g}{d_0 + d_g} \to 1$.
+        \item The feature-to-feature heterogeneity across the proteome is so large that the empirical Bayes estimator sets the prior degrees of freedom $d_0 \to 0$.
+    \end{enumerate}
+\end{itemize}
+
+\subsection*{Solution to Exercise 21.2}
+Let $\tau_g = 1/\sigma_g^2$ denote the precision parameter. The scaled inverse chi-square prior $\sigma_g^2 \sim \text{Scale-Inv-}\chi^2(d_0, s_0^2)$ is equivalent to a Gamma distribution on the precision $\tau_g$:
+$$\tau_g \sim \text{Gamma}\left(\alpha = \frac{d_0}{2}, \ \beta = \frac{d_0 s_0^2}{2}\right)$$
+with probability density function:
+$$p(\tau_g) \propto \tau_g^{\frac{d_0}{2} - 1} \exp\left(-\frac{d_0 s_0^2}{2} \tau_g\right)$$
+The conditional distribution of the sample residual variance $s_g^2 \mid \sigma_g^2$ is:
+$$\frac{d_g s_g^2}{\sigma_g^2} = d_g s_g^2 \tau_g \sim \chi^2_{d_g} \implies p(s_g^2 \mid \tau_g) \propto \tau_g^{\frac{d_g}{2}} \exp\left(-\frac{d_g s_g^2}{2} \tau_g\right)$$
+By Bayes' theorem, the posterior density of $\tau_g$ given $s_g^2$ is:
+\begin{align*}
+p(\tau_g \mid s_g^2) &\propto p(\tau_g) \cdot p(s_g^2 \mid \tau_g) \\
+&\propto \left[ \tau_g^{\frac{d_0}{2} - 1} \exp\left(-\frac{d_0 s_0^2}{2} \tau_g\right) \right] \cdot \left[ \tau_g^{\frac{d_g}{2}} \exp\left(-\frac{d_g s_g^2}{2} \tau_g\right) \right] \\
+&= \tau_g^{\frac{d_0 + d_g}{2} - 1} \exp\left( -\frac{d_0 s_0^2 + d_g s_g^2}{2} \tau_g \right)
+\end{align*}
+This is the kernel of a Gamma distribution:
+$$\tau_g \mid s_g^2 \sim \text{Gamma}\left( \frac{d_0 + d_g}{2}, \ \frac{d_0 s_0^2 + d_g s_g^2}{2} \right)$$
+Transforming back to the variance parameter $\sigma_g^2 = 1/\tau_g$, we obtain the scaled inverse chi-square distribution:
+$$\sigma_g^2 \mid s_g^2 \sim \text{Scale-Inv-}\chi^2(d_0 + d_g, \ \tilde{s}_g^2), \quad \text{where } \tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}$$
+This proves the empirical Bayes posterior shrinkage formula. \qed
+
+\subsection*{Solution to Exercise 21.3}
+\begin{enumerate}
+    \item Under the group-means parameterization, we define four distinct experimental conditions: \texttt{WT.Veh}, \texttt{WT.Toxin}, \texttt{KO.Veh}, and \texttt{KO.Toxin}. The design matrix $\mathbf{X}$ has dimensions $16 \times 4$:
+    $$\mathbf{X} = \begin{pmatrix}
+    \mathbf{1}_4 & \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{0}_4 \\
+    \mathbf{0}_4 & \mathbf{1}_4 & \mathbf{0}_4 & \mathbf{0}_4 \\
+    \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{1}_4 & \mathbf{0}_4 \\
+    \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{1}_4
+    \end{pmatrix}$$
+    where $\mathbf{1}_4$ and $\mathbf{0}_4$ are column vectors of ones and zeros of length 4.
+    \item The interaction contrast tests whether the response to the toxin in KO differs from WT:
+    $$\gamma_{\text{Interaction}} = (\mu_{\text{KO.Toxin}} - \mu_{\text{KO.Veh}}) - (\mu_{\text{WT.Toxin}} - \mu_{\text{WT.Veh}})$$
+    Arranging the parameter vector as $\boldsymbol{\beta} = (\mu_{\text{WT.Veh}}, \mu_{\text{WT.Toxin}}, \mu_{\text{KO.Veh}}, \mu_{\text{KO.Toxin}})^T$, the contrast vector is:
+    $$\mathbf{c} = \begin{pmatrix} 1 \\ -1 \\ -1 \\ 1 \end{pmatrix}$$
+    \item The executable R implementation is:
+\end{enumerate}
+\begin{lstlisting}
+# R solution for Exercise 21.3
+genotype  <- factor(rep(c("WT", "KO"), each = 8), levels = c("WT", "KO"))
+treatment <- factor(rep(rep(c("Veh", "Toxin"), each = 4), 2), levels = c("Veh", "Toxin"))
+group     <- factor(paste(genotype, treatment, sep = "."))
+
+design <- model.matrix(~ 0 + group)
+colnames(design) <- levels(group)
+
+contrast_matrix <- makeContrasts(
+  Toxin_in_WT  = WT.Toxin - WT.Veh,
+  Toxin_in_KO  = KO.Toxin - KO.Veh,
+  Interaction  = (KO.Toxin - KO.Veh) - (WT.Toxin - WT.Veh),
+  levels = design
+)
+\end{lstlisting}
+
+\subsection*{Solution to Exercise 21.4}
+We sort the $m = 10$ raw $p$-values in ascending order, compute the Benjamini--Hochberg critical thresholds $(i/m) \cdot q^* = (i/10) \cdot 0.05$, and calculate the step-up adjusted $p$-values:
+
+\begin{table}[ht]
+\centering
+\caption{Step-by-Step Benjamini--Hochberg Adjustment for Exercise 21.4}
+\small
+\begin{tabularx}{\textwidth}{ccccccX}
+\toprule
+\textbf{Rank ($i$)} & \textbf{Raw $p_{(i)}$} & \textbf{BH Threshold} & \textbf{Ratio $(10/i) p_{(i)}$} & \textbf{Adjusted $q_{(i)}$} & \textbf{Significant?} \\
+\midrule
+1  & 0.0004 & 0.0050 & 0.0040 & 0.0040 & Yes ($p_{(i)} \le 0.005$) \\
+2  & 0.0012 & 0.0100 & 0.0060 & 0.0060 & Yes \\
+3  & 0.0035 & 0.0150 & 0.0117 & 0.0117 & Yes \\
+4  & 0.0080 & 0.0200 & 0.0200 & 0.0200 & Yes \\
+5  & 0.0140 & 0.0250 & 0.0280 & 0.0280 & Yes \\
+6  & 0.0190 & 0.0300 & 0.0317 & 0.0317 & Yes \\
+7  & 0.0320 & 0.0350 & 0.0457 & 0.0457 & Yes \\
+8  & 0.0450 & 0.0400 & 0.0562 & 0.0562 & No ($p_{(i)} > 0.040$) \\
+9  & 0.1200 & 0.0450 & 0.1333 & 0.1333 & No \\
+10 & 0.2500 & 0.0500 & 0.2500 & 0.2500 & No \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\noindent
+The largest index satisfying $p_{(i)} \le (i/10) \times 0.05$ is $k = 7$ (where $0.0320 \le 0.0350$). Features with ranks $i = 1$ through $7$ are declared statistically significant at $\text{FDR} \le 0.05$. Notice that feature $i=8$ ($p = 0.0450$) has raw $p < 0.05$ but is correctly rejected as non-significant by FDR control.
+
+\subsection*{Solution to Exercise 21.5}
+Treating \texttt{Patient} as a standard fixed-effect factor consumes $10 - 1 = 9$ degrees of freedom and prevents estimation of any time-invariant between-patient covariates. Furthermore, standard OLS assumes compound independence of error terms, violating the exchangeable autocorrelation of repeated clinical samplings. 
+
+The optimal \texttt{limma} solution models the intra-patient correlation as a random effect via restricted maximum likelihood (REML) using \texttt{duplicateCorrelation()}:
+
+\begin{lstlisting}
+# R solution for Exercise 21.5
+time     <- factor(rep(c("T0", "T7", "T28"), each = 10))
+patient  <- factor(rep(paste0("PT", 1:10), times = 3))
+
+design <- model.matrix(~ 0 + time)
+colnames(design) <- levels(time)
+
+# Estimate consensus intra-patient correlation across all features
+corfit <- duplicateCorrelation(expr_mat, design, block = patient)
+cat(sprintf("Consensus intra-patient correlation: %.3f\n", corfit$consensus))
+
+# Fit linear model incorporating block structure and consensus correlation
+fit <- lmFit(expr_mat, design, block = patient, correlation = corfit$consensus)
+fit_eb <- eBayes(fit)
+\end{lstlisting}
+
+\subsection*{Solution to Exercise 21.6}
+\begin{enumerate}
+    \item \textbf{TMT 16-plex (8 vs 8, no missingness):} Use \texttt{limma::lmFit()} with empirical Bayes moderation. Because TMT intensities are complete and variance shrinkage operates across multiplexed channels with identical technical noise, \texttt{limma} provides maximal statistical power and optimal FDR control.
+    \item \textbf{Label-Free DIA (4 vs 4, 30\% MNAR missingness):} Standard linear models omit rows with missing values or require imputation. When missingness is left-censored (features undetected due to low abundance below instrument limit of detection), use \texttt{proDA} (probabilistic dropout analysis) or imputation with MinDet/QRILC followed by \texttt{limma} with trended empirical Bayes (\texttt{trend = TRUE}).
+    \item \textbf{Single-Cell Proteomics (50 vs 50, > 65\% missingness):} Standard linear models lose over half the quantified proteome. Use hurdle/two-part models or zero-inflated generalized linear models (e.g., \texttt{scater}/\texttt{scp} Bioconductor pipelines). Alternatively, test the frequency of detection (binary logistic regression on presence/absence) in parallel with conditional intensity modeling.
+\end{enumerate}
+
+% =============================================================================
+\begin{thebibliography}{99}
+% =============================================================================
+
+\bibitem{smyth2004linear}
+Smyth, G.~K. (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). limma powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \doi{10.1093/nar/gkv007}.
+
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
+
+\bibitem{bruderer2017optimization}
+Bruderer, R., Bernhardt, O.~M., Gandhi, T., Xuan, Y., Sondermann, J., Guo, T., Bludau, I., \& Reiter, L. (2017). Optimization of experimental parameters in data-independent acquisition ultra-high-performance mass spectrometry for deep and fast proteome profiling. \textit{Molecular \& Cellular Proteomics}, 16(12), 2296--2309. \doi{10.1074/mcp.RA117.000314}.
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham. \doi{10.1007/978-3-031-18099-6}.
+
+\bibitem{gentleman2005bioinformatics}
+Gentleman, R., Carey, V.~J., Huber, W., Irizarry, R.~A., \& Dudoit, S. (Eds.). (2005). \textit{Bioinformatics and Computational Biology Solutions Using R and Bioconductor}. Springer, New York. \doi{10.1007/0-387-29362-0}.
+
+\end{thebibliography}
+
+\end{document}

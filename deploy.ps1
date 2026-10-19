@@ -157,8 +157,8 @@ if (Test-Path "docs\figures\scifig\*") { Copy-Item -Path "docs\figures\scifig\*"
 git add cover.png docs/cover.png 2>$null
 
 # Add R companion package files and pipeline updates
-git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R 2>$null
-git add R/ man/ tests/ scripts/ code/ 2>$null
+git add DESCRIPTION NAMESPACE LICENSE .Rbuildignore _common.R references.bib 2>$null
+git add R/ man/ tests/ scripts/ code/ latex/ 2>$null
 git add data/figures/ figures/scifig/ 2>$null
 git add docs/ 2>$null
 git add deploy.sh deploy.ps1 .gitignore 2>$null

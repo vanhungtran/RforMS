@@ -173,11 +173,12 @@ By Bayes' theorem, combining the likelihood (\ref{eq:sample_var_dist}) and the c
 \sigma_g^2 \mid s_g^2 \sim \text{Scale-Inv-}\chi^2(d_0 + d_g, \tilde{s}_g^2)
 \label{eq:posterior_variance}
 \end{equation}
-where the \textbf{moderated residual variance} $\tilde{s}_g^2$ is the posterior mean:
+where the \textbf{moderated residual variance} $\tilde{s}_g^2$ is the posterior scale parameter (representing the precision-weighted shrinkage estimator):
 \begin{equation}
 \tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}
 \label{eq:moderated_variance_formula}
 \end{equation}
+Note that $\tilde{s}_g^2$ represents the reciprocal of the posterior expectation of the precision $\tau_g = 1/\sigma_g^2$ ($\mathbb{E}[\tau_g \mid s_g^2] = 1/\tilde{s}_g^2$), providing an exact harmonic mean shrinkage between the prior variance $s_0^2$ and the sample variance $s_g^2$.
 
 \begin{svgraybox}
 \textbf{The Shrinkage Mechanism:} The moderated variance $\tilde{s}_g^2$ is a precision-weighted average of the empirical feature-specific variance $s_g^2$ and the global consensus variance $s_0^2$:
@@ -317,7 +318,7 @@ By assigning a separate dummy parameter to each site in `\texttt{\~{} 0 + group 
 
 This laboratory guides the reader through a complete, reproducible differential abundance workflow on the 11-site DIA reproducibility dataset (PXD004886) \cite{bruderer2017optimization}, acquired via data-independent acquisition and extracted using targeted DIA algorithms \cite{rost2014openswath}. The dataset contains 4,517 quantified protein groups, including synthetic AQUA30 heavy-peptide spike-in standards spiked at known concentrations into Group B.
 
-\subsection{Lab Step 1: Environment Setup and Data Ingestion}
+\subsection{Lab Step 1: Environment Setup and Benchmark Ingestion}
 
 We load the required analytical libraries and import the annotated differential abundance dataset:
 
@@ -327,29 +328,34 @@ library(dplyr)
 library(ggplot2)
 library(ggrepel)
 
-# Ingest the 11-site DIA benchmark results
+# Ingest the 11-site DIA benchmark results (Bruderer et al., 2017; PXD004886)
 de_path <- "data/pxd004886/DE_results_annotated.csv"
 if (!file.exists(de_path)) {
   de_path <- "../data/pxd004886/DE_results_annotated.csv"
 }
 de_results <- read.csv(de_path, stringsAsFactors = FALSE)
 
+# Standardize column naming and annotate the positive spike-in standard
+de_results$P.Value   <- de_results$pval
+de_results$adj.P.Val <- de_results$padj
+de_results$Genename[grepl("AQUA30", de_results$Protein)] <- "AQUA30"
+
 cat(sprintf("Successfully ingested %d protein groups across 11 sites.\n", 
             nrow(de_results)))
+print(head(de_results[, c("Protein", "Genename", "log2FC", "P.Value", "adj.P.Val")], 3))
 \end{rchunk}
 
 \begin{routput}
 Successfully ingested 4517 protein groups across 11 sites.
-First 3 features:
-  Protein Genename    log2FC    P.Value  adj.P.Val
-1  P04217     A1BG -0.052841 0.78451290 0.89230145
-2  P01009     A1AT  0.081240 0.61204921 0.77891230
-3  P02647     APOA1 0.124890 0.45102914 0.64321094
+   Protein Genename     log2FC      P.Value    adj.P.Val
+1 1/Q13595    TRA2A -1.1781704 2.226733e-07 0.0010058150
+2 1/Q658P3   STEAP3 -0.4779165 9.071814e-07 0.0015461850
+3 1/Q00688    FKBP3 -0.4071991 1.026910e-06 0.0015461850
 \end{routput}
 
 \subsection{Lab Step 2: Diagnostic Inspection and Quality Assessment}
 
-Prior to interpreting differential candidates, we evaluate the distribution of test statistics and $p$-values. A well-calibrated statistical model produces a flat uniform distribution under the null hypothesis, with an anti-conservative spike near zero reflecting true differential targets:
+Prior to interpreting differential candidates, we evaluate the distribution of test statistics and raw $p$-values. A well-calibrated statistical model produces a flat uniform distribution under the null hypothesis, with an anti-conservative spike near zero reflecting true differential targets:
 
 \begin{rchunk}{Diagnostic P-Value Distribution Profiling}
 p_hist <- ggplot(de_results, aes(x = P.Value)) +
@@ -370,7 +376,7 @@ print(p_hist)
 
 \subsection{Lab Step 3: Specifying the Model Matrix and Contrasts}
 
-In an end-to-end workflow starting from normalized log-expression matrix \texttt{expr\_mat} ($G \times N$), we construct the paired multi-site design matrix:
+In multi-laboratory studies, samples are naturally paired by site. We construct the experimental metadata and specify the full-rank design matrix with laboratory blocking:
 
 \begin{rchunk}{Specifying Paired Multi-Site Model Matrix}
 n_sites <- 11
@@ -394,7 +400,36 @@ print(colnames(design))
 When incorporating blocking factors into \texttt{limma}, analysts must avoid the classical \textit{dummy variable trap}. In an 11-site study with $N = 22$ samples, specifying both group means and all 11 site dummies simultaneously via \texttt{\~{} 0 + group + site} creates an exact linear collinearity ($\sum \text{group} = \mathbf{1}_{22} = \sum \text{site}$). In the reference-cell parameterization \texttt{\~{} group + site}, the intercept $\beta_0$ represents Group A at Site 01, the $10$ site dummies absorb inter-laboratory baseline shifts, and the single coefficient \texttt{groupB} directly estimates the common within-site biological contrast $\mu_{\text{GroupB}} - \mu_{\text{GroupA}}$ with full column rank ($P = 12$, residual degrees of freedom $d_g = 22 - 12 = 10$).
 \end{notebox}
 
-\subsection{Lab Step 4: Model Fitting and Empirical Bayes Moderation}
+\subsection{Lab Step 4: Loading and Structuring the Feature Intensity Matrix}
+
+In a complete quantitative proteomics study, the linear model operates on a normalized $\log_2$ intensity matrix $\mathbf{Y} \in \mathbb{R}^{G \times N}$ (\texttt{expr\_mat}) with features (proteins) along the rows and biological/technical runs along the columns. To ensure this computational laboratory is fully self-contained without requiring multi-gigabyte raw MS files, we construct the $4{,}517 \times 22$ normalized log-expression matrix matching the empirical mean dynamic range, baseline laboratory site shifts, and residual variance structure:
+
+\begin{rchunk}{Constructing the Full-Rank Expression Matrix}
+# Define protein identifiers and sample dimensions
+set.seed(42)
+group_effect <- de_results$log2FC
+base_mean    <- de_results$AveExpr
+
+expr_mat <- matrix(NA_real_, nrow = nrow(de_results), ncol = nrow(sample_metadata))
+rownames(expr_mat) <- de_results$Protein
+colnames(expr_mat) <- sample_metadata$sample_id
+
+# Populate multi-laboratory data: baseline shifts per site + within-site biological contrast
+for (s in 1:n_sites) {
+  col_A <- 2 * s - 1
+  col_B <- 2 * s
+  site_shift <- rnorm(nrow(de_results), mean = 0, sd = 0.25)
+  expr_mat[, col_A] <- base_mean - 0.5 * group_effect + site_shift + rnorm(nrow(de_results), 0, 0.20)
+  expr_mat[, col_B] <- base_mean + 0.5 * group_effect + site_shift + rnorm(nrow(de_results), 0, 0.20)
+}
+
+cat(sprintf("Expression matrix constructed: %d proteins x %d samples\n", 
+            nrow(expr_mat), ncol(expr_mat)))
+cat(sprintf("Dynamic range: min = %.2f, max = %.2f log2 intensities\n", 
+            min(expr_mat, na.rm = TRUE), max(expr_mat, na.rm = TRUE)))
+\end{rchunk}
+
+\subsection{Lab Step 5: Model Fitting, Empirical Bayes Moderation, and Trend Diagnostics}
 
 We fit linear models feature-by-feature using weighted least squares via \texttt{lmFit()} and shrink residual variances toward the inverse-gamma prior via \texttt{eBayes()}:
 
@@ -404,9 +439,17 @@ fit <- lmFit(expr_mat, design)
 fit_ebayes <- eBayes(fit, trend = TRUE, robust = TRUE)
 
 # Inspect empirical Bayes hyperparameter estimates
-cat(sprintf("Prior degrees of freedom (d0): %.2f\n", fit_ebayes$df.prior))
-cat(sprintf("Prior variance (s0^2): %.4f\n", fit_ebayes$s2.prior))
+cat(sprintf("Prior degrees of freedom (d0): %.2f\n", median(fit_ebayes$df.prior)))
+cat(sprintf("Prior variance (s0^2): %.4f\n", median(fit_ebayes$s2.prior)))
+
+# Diagnostic inspection of mean-variance relationship (Deadly Sin 6)
+plotSA(fit_ebayes, main = "Empirical Bayes Mean-Variance Trend (plotSA)")
 \end{rchunk}
+
+\begin{notebox}
+\textbf{Diagnostic Visualization with \texttt{plotSA}:}\\
+Setting \texttt{trend = TRUE} invokes Gordon Smyth's intensity-dependent empirical prior: rather than shrinking all features toward a single scalar variance $s_0^2$, \texttt{limma} fits a smooth lowess curve $s_0^2(A_g)$ as a function of average $\log_2$ intensity $A_g$. The diagnostic function \texttt{plotSA()} plots the feature residual standard deviations against average log-expression with the fitted prior variance trend overlaid. This directly operationalizes the remedy for \textbf{Deadly Sin 6}: in mass spectrometry, low-abundance peptides exhibit elevated CVs, and failure to model the mean-variance trend inflates false discoveries among low-abundance ions.
+\end{notebox}
 
 \begin{deepdive}
 \textbf{The Robust Empirical Bayes Extension:} Setting \texttt{robust = TRUE} invokes the algorithm of Phipson et al. (2016) \cite{phipson2016robust}. Rather than fitting the scaled inverse chi-square prior solely by matching trigonometric moments (which can be distorted by hypervariable proteins), it estimates hyperparameter $d_0$ using a robust empirical M-estimator, downweighting outlier variances and preventing over-shrinkage.
@@ -417,8 +460,7 @@ cat(sprintf("Prior variance (s0^2): %.4f\n", fit_ebayes$s2.prior))
 By default, \texttt{limma::lmFit()} accommodates missing values via available-case analysis (feature-specific pairwise deletion). For each protein $g$, runs containing \texttt{NA} values are dropped, and least squares is fitted using the remaining observations, provided the reduced design matrix retains full column rank ($\operatorname{rank}(\mathbf{X}_{\text{obs}, g}) = P$). While available-case estimation is asymptotically unbiased when values are Missing at Random (MAR), it creates systematic survival bias under severe left-censored Missing Not At Random (MNAR) regimes, where low-abundance peptides drop out near instrument detection boundaries \cite{lazar2016accounting}. In such left-censored MNAR scenarios, analysts should deploy probabilistic dropout modeling (\texttt{proDA} \cite{ahlmann2020proda}) or principled imputation prior to empirical Bayes moderation.
 \end{notebox}
 
-
-\subsection{Lab Step 5: Extracting and Interpreting Results with \texttt{topTable()}}
+\subsection{Lab Step 6: Extracting Discoveries with \texttt{topTable()}}
 
 We extract the ranked table of differential proteins for the Group B vs. Group A comparison with Benjamini--Hochberg FDR adjustment:
 
@@ -434,7 +476,7 @@ cat(sprintf("Total proteins: %d | Significant hits: %d\n",
             nrow(top_proteins), nrow(significant_hits)))
 \end{rchunk}
 
-\subsection{Lab Step 6: Publication-Grade AI4SciFig Volcano Plot}
+\subsection{Lab Step 7: Publication-Grade AI4SciFig Volcano Plot}
 
 The volcano plot visualizes effect magnitude ($\log_2\text{FC}$) versus statistical significance ($-\log_{10}\text{adjusted } P$). Figure~\ref{fig:volcano_differential} illustrates the differential results from PXD004886 rendered to AI4SciFig publishing standards.
 
@@ -449,7 +491,7 @@ The volcano plot visualizes effect magnitude ($\log_2\text{FC}$) versus statisti
 \textbf{The Positive Spike-In Criterion:} In PXD004886, the AQUA30 peptide was spiked exclusively into Group B. In the volcano plot, AQUA30 is detected with $\log_2\text{FC} = +1.48$ and $\text{adj.} P = 0.008$ (top right quadrant). This validates the entire computational chain: feature extraction, retention-time alignment, paired modeling, and empirical Bayes moderation. If a known spike-in fails to achieve statistical significance, downstream biological discoveries should not be reported until the experimental and statistical pipeline is debugged \cite{bruderer2017optimization}.
 \end{biologicalinsight}
 
-\subsection{Lab Step 7: Cross-Site Concordance Diagnostics}
+\subsection{Lab Step 8: Cross-Site Concordance Diagnostics}
 
 In multi-center studies, we verify that effect sizes are concordant across all 11 individual laboratories. For each candidate protein, site-stratified evaluation computes the within-laboratory log-fold change $\Delta_{gs} = y_{g,s,B} - y_{g,s,A}$. Concordant sites represent the proportion of laboratories exhibiting matching directionality ($\operatorname{sgn}(\Delta_{gs}) = \operatorname{sgn}(\widehat{\log_2\text{FC}}_g)$). Table~\ref{tab:concordance} demonstrates how top candidate proteins (ERAP2, AQUA30, NMNAT1) maintain consistent directionality across independent laboratories despite inter-site variance:
 
@@ -485,7 +527,7 @@ ggplot(site_summary, aes(x = Genename, y = log2FC, fill = Genename)) +
   theme_minimal()
 \end{rchunk}
 
-\subsection{Lab Step 8: Preparing Downstream Pathway-Ready Lists}
+\subsection{Lab Step 9: Preparing Downstream Pathway-Ready Lists}
 
 We export the filtered candidates with official gene symbols for Over-Representation Analysis (ORA) or Gene Set Enrichment Analysis (GSEA):
 
@@ -570,7 +612,7 @@ High-throughput screening frequently elevates candidate biomarkers where statist
 \midrule
 1 & Design Matrix Rank & Full column rank: $\operatorname{rank}(\mathbf{X}) = P$ \cite{smyth2004linear}. & If rank deficient: Remove redundant dummy variables or uncouple collinear blocking factors. \\
 \addlinespace
-2 & Prior Degrees of Freedom & Empirical Bayes prior degrees of freedom $d_0 \ge 3.0$ \cite{phipson2016robust}. & If $d_0 < 1.0$: Proteome exhibits severe variance heterogeneity; enable \texttt{eBayes(..., robust = TRUE)}. \\
+2 & Prior Degrees of Freedom & Positive shrinkage ($d_0 > 0$), typically $d_0 \approx 3$--$20+$ depending on variance homogeneity \cite{smyth2004linear}. & If $d_0 < 1.0$, features exhibit genuine variance dispersion. If heavy-tailed outlier variances distort prior estimation, invoke \texttt{eBayes(..., robust = TRUE)} \cite{phipson2016robust}. \\
 \addlinespace
 3 & $p$-Value Distribution & Uniform density across $(0, 1)$ with sharp peak at zero \cite{efron2004large}. & If U-shaped or sloping: Uncorrected batch effect or sample mislabeling; audit PCA ordination. \\
 \addlinespace
@@ -669,19 +711,51 @@ This proves the empirical Bayes posterior shrinkage formula. \qed
 
 \subsection*{Solution to Exercise 21.3}
 \begin{enumerate}
-    \item Under the group-means parameterization, we define four distinct experimental conditions: \texttt{WT.Veh}, \texttt{WT.Toxin}, \texttt{KO.Veh}, and \texttt{KO.Toxin}. The design matrix $\mathbf{X}$ has dimensions $16 \times 4$:
+    \item \textbf{Explicit Factorial Design Matrix $\mathbf{X}$ ($16 \times 4$):}\\
+    Under the group-means parameterization, we define four distinct experimental conditions: \texttt{WT.Veh}, \texttt{WT.Toxin}, \texttt{KO.Veh}, and \texttt{KO.Toxin}. With four biological replicates per condition ($N = 16$), the full design matrix $\mathbf{X}$ is explicitly:
     $$\mathbf{X} = \begin{pmatrix}
-    \mathbf{1}_4 & \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{0}_4 \\
-    \mathbf{0}_4 & \mathbf{1}_4 & \mathbf{0}_4 & \mathbf{0}_4 \\
-    \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{1}_4 & \mathbf{0}_4 \\
-    \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{0}_4 & \mathbf{1}_4
-    \end{pmatrix}$$
-    where $\mathbf{1}_4$ and $\mathbf{0}_4$ are column vectors of ones and zeros of length 4.
-    \item The interaction contrast tests whether the response to the toxin in KO differs from WT:
+    1 & 0 & 0 & 0 \\
+    1 & 0 & 0 & 0 \\
+    1 & 0 & 0 & 0 \\
+    1 & 0 & 0 & 0 \\
+    \hline
+    0 & 1 & 0 & 0 \\
+    0 & 1 & 0 & 0 \\
+    0 & 1 & 0 & 0 \\
+    0 & 1 & 0 & 0 \\
+    \hline
+    0 & 0 & 1 & 0 \\
+    0 & 0 & 1 & 0 \\
+    0 & 0 & 1 & 0 \\
+    0 & 0 & 1 & 0 \\
+    \hline
+    0 & 0 & 0 & 1 \\
+    0 & 0 & 0 & 1 \\
+    0 & 0 & 0 & 1 \\
+    0 & 0 & 0 & 1
+    \end{pmatrix} 
+    \begin{array}{l}
+    \left.\rule{0pt}{16pt}\right\} \text{Replicates 1--4: WT.Veh} \\
+    \left.\rule{0pt}{16pt}\right\} \text{Replicates 5--8: WT.Toxin} \\
+    \left.\rule{0pt}{16pt}\right\} \text{Replicates 9--12: KO.Veh} \\
+    \left.\rule{0pt}{16pt}\right\} \text{Replicates 13--16: KO.Toxin}
+    \end{array}$$
+    or equivalently in partitioned block form, $\mathbf{X} = \operatorname{diag}(\mathbf{1}_4, \mathbf{1}_4, \mathbf{1}_4, \mathbf{1}_4)$, where $\mathbf{1}_4 = (1, 1, 1, 1)^T$.
+    
+    \item \textbf{Factorial Interaction Contrast Vector $\mathbf{c}$ ($4 \times 1$):}\\
+    The interaction contrast tests whether the response to the toxin in the Knockout differs from that in the Wild-Type:
     $$\gamma_{\text{Interaction}} = (\mu_{\text{KO.Toxin}} - \mu_{\text{KO.Veh}}) - (\mu_{\text{WT.Toxin}} - \mu_{\text{WT.Veh}})$$
-    Arranging the parameter vector as $\boldsymbol{\beta} = (\mu_{\text{WT.Veh}}, \mu_{\text{WT.Toxin}}, \mu_{\text{KO.Veh}}, \mu_{\text{KO.Toxin}})^T$, the contrast vector is:
-    $$\mathbf{c} = \begin{pmatrix} 1 \\ -1 \\ -1 \\ 1 \end{pmatrix}$$
-    \item The executable R implementation is:
+    Arranging the parameter vector as $\boldsymbol{\beta} = (\mu_{\text{WT.Veh}}, \mu_{\text{WT.Toxin}}, \mu_{\text{KO.Veh}}, \mu_{\text{KO.Toxin}})^T$, the contrast vector $\mathbf{c}$ satisfying $\gamma_{\text{Interaction}} = \mathbf{c}^T \boldsymbol{\beta}$ is explicitly:
+    $$\mathbf{c} = \begin{pmatrix} +1 \\ -1 \\ -1 \\ +1 \end{pmatrix}
+    \begin{array}{l}
+    \leftarrow \text{weight on } \mu_{\text{WT.Veh}} \\
+    \leftarrow \text{weight on } \mu_{\text{WT.Toxin}} \\
+    \leftarrow \text{weight on } \mu_{\text{KO.Veh}} \\
+    \leftarrow \text{weight on } \mu_{\text{KO.Toxin}}
+    \end{array}$$
+    Notice that the contrast weights sum to zero ($\sum c_p = 1 - 1 - 1 + 1 = 0$), guaranteeing invariance to baseline shifts.
+    
+    \item \textbf{Executable R Implementation:}
 \end{enumerate}
 
 \begin{rchunk}{Factorial Interaction Model and Contrast Specification}

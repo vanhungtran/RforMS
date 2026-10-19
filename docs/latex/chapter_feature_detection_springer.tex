@@ -8,6 +8,8 @@
 % =============================================================================
 
 \usepackage{springer_monograph}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
 
 \hypersetup{
     pdftitle={Chapter 8: Chromatographic Feature Detection and Alignment with xcms and CentWave},
@@ -28,7 +30,7 @@
 \noindent
 Untargeted high-resolution liquid chromatography--mass spectrometry (LC-MS) datasets in metabolomics, lipidomics, and bottom-up proteomics do not directly yield molecular abundance tables. The primary output of an instrument acquisition is a continuous, noisy three-dimensional data surface spanned by retention time ($t_R$), mass-to-charge ratio ($m/z$), and detector intensity ($I$). Converting raw instrument files into a reproducible, quantitative feature matrix requires rigorous chromatographic peak detection, retention time alignment across runs, correspondence grouping, and iterative gap-filling.
 
-This chapter establishes the analytical chemistry, signal processing, and mathematical foundations of untargeted LC-MS feature extraction using the \texttt{xcms} platform and the Bioconductor \texttt{MSnbase} infrastructure. We formalize the distinction between raw mass spectral peaks and chromatographic features, derive the continuous wavelet transform (CWT) using Mexican hat (Ricker) wavelets for apex localization, and formulate the dynamic region-of-interest (ROI) mass-tracking algorithm. We then examine retention time drift, contrasting non-linear dynamic time warping via Ordered Bijective Warping (\texttt{obiwarp}) against peak-density LOESS regression. Furthermore, we formalize correspondence grouping via kernel density estimation and derive the numerical mechanics of gap-filling (\texttt{fillChromPeaks}) to prevent the fabrication of artificial missing values. The chapter includes a complete, reproducible R laboratory on benchmark datasets, an analysis of the ``Five Deadly Sins'' of feature extraction, a tutor's self-assessment diagnostic checklist, and multi-tier exercises with complete worked solutions.
+This chapter establishes the analytical chemistry, signal processing, and mathematical foundations of untargeted LC-MS feature extraction using the modern \texttt{xcms} platform and the Bioconductor \texttt{MSnbase} infrastructure. We formalize the distinction between raw mass spectral peaks and chromatographic features, establish the continuous wavelet transform (CWT) foundations and Mexican hat (Ricker) wavelet mechanics for chromatographic apex localization, and formulate the dynamic region-of-interest (ROI) mass-tracking algorithm. We then examine retention time drift, contrasting non-linear dynamic time warping via Ordered Bijective Interpolated Warping (\texttt{obiwarp}) against peak-density LOESS regression. Furthermore, we formalize correspondence grouping via kernel density estimation and derive the numerical mechanics of gap-filling (\texttt{fillChromPeaks}) to prevent the fabrication of artificial missing values. The chapter includes a complete, reproducible R laboratory on benchmark datasets, an analysis of the ``Five Deadly Sins'' of feature extraction, a tutor's self-assessment diagnostic checklist, and multi-tier exercises with complete worked solutions.
 \end{abstract}
 
 \noindent\textbf{Keywords:} Feature Detection, CentWave, Continuous Wavelet Transform (CWT), Region of Interest (ROI), Retention Time Alignment, Obiwarp, Peak Correspondence, Gap Filling, \texttt{xcms}, Metabolomics.
@@ -71,7 +73,7 @@ Never analyze an untargeted LC-MS feature matrix that has not undergone raw ion 
 
 Modern untargeted liquid chromatography--mass spectrometry systems (e.g., Ultra-High Performance Liquid Chromatography coupled to Quadrupole Time-of-Flight [UHPLC-Q-TOF] or Orbitrap mass spectrometers) generate massive datasets \cite{patti2012metabolomics, aebersold2016mass, want2010global, forcisi2015liquid, boland2023health}. A single 45-minute analytical run contains millions of individual $(m/z, I)$ ion measurements collected across thousands of successive scan cycles.
 
-To perform downstream statistical modeling, machine learning, or differential abundance analysis, this raw three-dimensional manifold $\mathcal{S}(t_R, m/z, I)$ must be mapped onto a discrete two-dimensional quantitative feature matrix:
+To perform downstream statistical modeling, machine learning, or differential abundance analysis, this raw three-dimensional data surface $\mathcal{S}(t_R, m/z, I)$ must be mapped onto a discrete two-dimensional quantitative feature matrix:
 \begin{equation}
 \mathbf{Y} \in \mathbb{R}^{P \times N}
 \end{equation}
@@ -88,16 +90,56 @@ A fundamental source of terminology confusion in computational mass spectrometry
 
 \begin{figure}[htbp]
 \centering
-\begin{tcolorbox}[colback=springerGray,colframe=springerNavy,arc=2mm,boxrule=0.8pt,title={\bfseries The Four-Stage LC-MS Extraction Pipeline}]
-\small
-\begin{enumerate}
-    \item \textbf{Peak Detection (\texttt{findChromPeaks}):} Identify chromatographic peaks in each sample independently using the CentWave CWT algorithm.
-    \item \textbf{Retention Time Alignment (\texttt{adjustRtime}):} Align chromatographic drift across runs using Obiwarp dynamic time warping or LOESS peak groups.
-    \item \textbf{Correspondence Grouping (\texttt{groupChromPeaks}):} Match peaks across samples into aligned features using $m/z$ and retention time kernel density.
-    \item \textbf{Gap Filling (\texttt{fillChromPeaks}):} Re-integrate raw ion signal from the mzML files for samples lacking an automated peak pick, avoiding artificial zero entries.
-\end{enumerate}
-\end{tcolorbox}
-\caption{The sequential data processing architecture of modern \texttt{xcms}.}
+\begin{tikzpicture}[
+    stageNode/.style={
+        rectangle, 
+        rounded corners=2mm, 
+        draw=springerNavy, 
+        line width=0.8pt, 
+        fill=springerGray, 
+        text width=0.92\textwidth, 
+        inner sep=6pt, 
+        font=\small
+    },
+    arrowLine/.style={
+        -{Stealth[length=2.5mm, width=2mm]}, 
+        line width=1.1pt, 
+        color=springerNavy
+    },
+    flowLabel/.style={
+        font=\scriptsize\sffamily\bfseries, 
+        color=springerNavy, 
+        fill=white, 
+        inner sep=1.5pt
+    }
+]
+
+\node[stageNode] (stage1) {
+    \textbf{\color{springerNavy}Stage 1: Peak Detection (\texttt{findChromPeaks} $\rightarrow$ \texttt{CentWaveParam})}\\[2pt]
+    \footnotesize Dynamic Region-of-Interest (ROI) mass tracking ($\pm \Delta m$, \texttt{ppm}, \texttt{prefilter}, \texttt{noise}) across scans $\rightarrow$ multi-scale Continuous Wavelet Transform (CWT) with Mexican hat wavelets for chromatographic apex and boundary identification.
+};
+
+\node[stageNode, below=5.5mm of stage1] (stage2) {
+    \textbf{\color{springerNavy}Stage 2: Retention Time Alignment (\texttt{adjustRtime} $\rightarrow$ \texttt{ObiwarpParam} / \texttt{PeakGroupsParam})}\\[2pt]
+    \footnotesize Correction of non-linear chromatographic drift across runs via Ordered Bijective Interpolated Warping (\texttt{obiwarp} dynamic time warping on spectral vectors) or local regression (\texttt{PeakGroups} LOESS on hook peaks).
+};
+
+\node[stageNode, below=5.5mm of stage2] (stage3) {
+    \textbf{\color{springerNavy}Stage 3: Correspondence Grouping (\texttt{groupChromPeaks} $\rightarrow$ \texttt{PeakDensityParam})}\\[2pt]
+    \footnotesize Cross-sample feature grouping in narrow $m/z$ slices using Gaussian kernel density estimation (KDE, bandwidth \texttt{bw}) and cohort prevalence filtering (\texttt{minFraction}).
+};
+
+\node[stageNode, below=5.5mm of stage3] (stage4) {
+    \textbf{\color{springerNavy}Stage 4: Targeted Gap-Filling (\texttt{fillChromPeaks} $\rightarrow$ \texttt{FillChromPeaksParam})}\\[2pt]
+    \footnotesize Direct targeted re-integration of raw detector ion signals from mzML/NetCDF files within consensus $(m/z, t_R)$ bounding boxes, mitigating artificial missingness $\rightarrow$ Quantitative Feature Matrix $\mathbf{Y} \in \mathbb{R}^{P \times N}$.
+};
+
+\draw[arrowLine] (stage1.south) -- node[flowLabel, midway] {Chromatographic Peak Table} (stage2.north);
+\draw[arrowLine] (stage2.south) -- node[flowLabel, midway] {Aligned Retention Times} (stage3.north);
+\draw[arrowLine] (stage3.south) -- node[flowLabel, midway] {Consensus Feature Definitions} (stage4.north);
+
+\end{tikzpicture}
+\caption{The four-stage sequential data processing architecture of modern \texttt{xcms}.}
 \label{fig:pipeline_box}
 \end{figure}
 
@@ -122,41 +164,49 @@ For an Orbitrap instrument operating at $5\text{ ppm}$ tolerance:
 
 \subsection{Region-of-Interest (ROI) Construction}
 
-CentWave constructs mass traces dynamically across sequential chromatographic scans without static $m/z$ binning:
+CentWave constructs mass traces dynamically across sequential chromatographic scans without static $m/z$ binning \cite{tautenhahn2008highly}:
 \begin{enumerate}
-    \item The algorithm sorts all centroided peaks in scan $t$ by intensity.
-    \item For peak $(m_i, I_i)$, it searches the subsequent scan $t+1$ for a peak within mass tolerance $\pm \Delta m$.
-    \item If consecutive peaks within tolerance are found across at least $k_{\min}$ scans (typically $k_{\min} = 3$), a Region of Interest (ROI) is initialized \cite{tautenhahn2008highly}.
-    \item The trace continues extending until signal drops below the noise baseline or misses $k_{\text{gap}}$ consecutive scans.
+    \item \textbf{Seeding Centroids:} The algorithm identifies centroided mass spectral peaks $(m_i, I_i)$ in scan $t$ whose ion intensity exceeds the instrumental baseline noise threshold (\texttt{noise} parameter).
+    \item \textbf{Bidirectional Mass-Tracking:} For each candidate centroid, CentWave searches adjacent scans ($t+1, t+2, \dots$) for centroided peaks within the mass tolerance window $[m_i - \Delta m, \, m_i + \Delta m]$ defined by Eq.~(\ref{eq:ppm_def}).
+    \item \textbf{ROI Prefiltering (\texttt{prefilter = c(k, I)}):} A candidate mass trace is retained as a valid Region of Interest (ROI) if and only if it spans at least $k$ consecutive scans with centroid intensities exceeding threshold $I$. This eliminates transient electronic spikes and single-scan detector noise while preserving authentic chromatographic elution profiles.
+    \item \textbf{Gap Bridging and Boundary Definition:} If a scan lacks a matching centroid within $\pm \Delta m$, the trace is allowed to bridge a user-specified number of missing scans (gap tolerance) before terminating. The resulting ROI defines a contiguous extracted ion chromatogram (EIC) vector $\mathbf{s} = (s(t_1), s(t_2), \dots, s(t_K))$ bounded by exact $m/z$ and retention time limits $[m/z_{\min}, m/z_{\max}] \times [t_{\text{start}}, t_{\text{end}}]$.
 \end{enumerate}
-This yields an extracted ion chromatogram (EIC) vector $\mathbf{s} = (s(t_1), s(t_2), \dots, s(t_K))$ representing chromatographic signal over time for that exact mass window.
 
 \subsection{Continuous Wavelet Transform with the Mexican Hat Wavelet}
 
-Within each extracted ROI $\mathbf{s}(t)$, CentWave applies the Continuous Wavelet Transform (CWT) to locate peak boundaries and apexes across multiple chromatographic scales. The mother wavelet is the Mexican Hat (Ricker) wavelet, mathematically defined as the normalized second derivative of a Gaussian distribution:
+Within each extracted ROI $\mathbf{s}(t)$, CentWave applies the Continuous Wavelet Transform (CWT) to locate peak boundaries and apexes across multiple chromatographic scales. The mother wavelet is the normalized Mexican Hat (Ricker) wavelet, mathematically defined as the second derivative of a Gaussian distribution:
 \begin{equation}
 \label{eq:mexican_hat}
-\psi(t) = \frac{2}{\sqrt{3\sigma}\pi^{1/4}} \left( 1 - \left(\frac{t}{\sigma}\right)^2 \right) e^{-\frac{t^2}{2\sigma^2}}
+\psi(t) = \frac{2}{\sqrt{3\sigma}\pi^{1/4}} \left( 1 - \frac{t^2}{\sigma^2} \right) e^{-\frac{t^2}{2\sigma^2}}
+\end{equation}
+The prefactor $\frac{2}{\sqrt{3\sigma}\pi^{1/4}}$ guarantees that the wavelet has unit $L^2$-norm:
+\begin{equation}
+\|\psi\|_{L^2}^2 = \int_{-\infty}^{\infty} |\psi(t)|^2 \, dt = 1
 \end{equation}
 
-The continuous wavelet transform of the chromatographic signal $s(t)$ at scale (dilation) $a > 0$ and translation (position) $b \in \mathbb{R}$ is the convolution integral:
+The continuous wavelet transform of the chromatographic signal $s(t)$ at scale (dilation) $a > 0$ and translation (position) $b \in \mathbb{R}$ is defined by the inner product:
 \begin{equation}
 \label{eq:cwt_integral}
-W(a, b) = \frac{1}{\sqrt{a}} \int_{-\infty}^{\infty} s(t) \psi\left( \frac{t - b}{a} \right) dt
+\mathcal{W}_\psi[s](a, b) = \langle s, \psi_{a, b} \rangle = \int_{-\infty}^{\infty} s(t) \, \psi_{a, b}^*(t) \, dt = \frac{1}{\sqrt{a}} \int_{-\infty}^{\infty} s(t) \, \psi\left( \frac{t - b}{a} \right) \, dt
 \end{equation}
+where $\psi_{a, b}(t) = \frac{1}{\sqrt{a}} \psi\left(\frac{t-b}{a}\right)$. Because the Mexican hat wavelet is strictly real-valued, the complex conjugate satisfies $\psi_{a, b}^*(t) = \psi_{a, b}(t)$. The dilation factor $\frac{1}{\sqrt{a}}$ guarantees energy conservation across scales, ensuring that $\|\psi_{a, b}\|_{L^2} = \|\psi\|_{L^2} = 1$ for all $a > 0$.
 
 \begin{svgraybox}
 \textbf{Properties of the Mexican Hat CWT in Peak Detection:}\\
 \begin{enumerate}
-    \item \textbf{Polynomial Baseline Suppression:} Because $\int_{-\infty}^\infty \psi(t) dt = 0$ and $\int_{-\infty}^\infty t \psi(t) dt = 0$, the Mexican hat wavelet has two vanishing moments. It mathematically annihilates constant chromatographic baselines and linear drifting slopes without requiring prior baseline correction algorithms:
+    \item \textbf{Polynomial Baseline Suppression:} Because $\int_{-\infty}^\infty \psi(t) dt = 0$ and $\int_{-\infty}^\infty t \psi(t) dt = 0$, the Mexican hat wavelet has two vanishing moments. It mathematically annihilates constant chromatographic baselines and linear drifting slopes without requiring separate baseline correction algorithms:
     \begin{equation*}
-    s(t) = c_0 + c_1 t \implies W(a, b) = 0
+    s(t) = c_0 + c_1 t \implies \mathcal{W}_\psi[s](a, b) = 0
     \end{equation*}
-    \item \textbf{Apex Localization via Zero-Crossings:} The apex of an elution peak corresponds to a pronounced local maximum in $W(a, b)$, while the chromatographic inflection points correspond to zero-crossings:
+    \item \textbf{Apex Localization via Zero-Crossings:} The chromatographic apex corresponds to a pronounced local maximum in $\mathcal{W}_\psi[s](a, b)$, while the chromatographic inflection points correspond to zero-crossings of the wavelet transform:
     \begin{equation*}
-    \frac{\partial W(a, b)}{\partial b} = 0, \quad W(a, b) > \text{Threshold}
+    \frac{\partial \mathcal{W}_\psi[s](a, b)}{\partial b} = 0, \quad \mathcal{W}_\psi[s](a, b) > \text{Threshold}
     \end{equation*}
-    \item \textbf{Scale Matching:} The scale parameter $a$ corresponds directly to chromatographic peak width. CentWave scans over a user-defined interval $a \in [w_{\min}, w_{\max}]$ (e.g., $5$ to $40$ seconds), resolving narrow metabolite peaks and broader lipid peaks simultaneously \cite{tautenhahn2008highly}.
+    \item \textbf{Scale Matching to Chromatographic Peak Width:} For a Gaussian elution peak with standard deviation $\tau$, the Full Width at Half Maximum is $\text{FWHM} = 2\sqrt{2\ln 2} \, \tau \approx 2.355 \, \tau$. The inflection points of the Mexican hat wavelet at scale $a$ occur at $t = \pm a$ (separation $2a$). Maximum CWT response occurs when the wavelet scale matches the chromatographic peak width:
+    \begin{equation*}
+    a \approx \frac{\text{FWHM}}{2.355} \quad \left(\text{or } w \approx 2a \text{ between inflection bounds}\right)
+    \end{equation*}
+    In CentWave, the user specifies the chromatographic peak width range \texttt{peakwidth = c(min, max)} in seconds (e.g., $20$ to $50$ s). The algorithm discretizes this interval into a series of wavelet scales $a \in [a_{\min}, a_{\max}]$, simultaneously resolving sharp metabolite peaks and broader lipid profiles \cite{tautenhahn2008highly}.
 \end{enumerate}
 \end{svgraybox}
 
@@ -171,18 +221,29 @@ Even with high-precision UHPLC pumps, liquid chromatography experiences systemat
 
 \subsection{Ordered Bijective Warping (Obiwarp)}
 
-The \texttt{obiwarp} algorithm (Prince \& Marcotte~\cite{prince2006chromatographic}) aligns chromatographic runs directly from complete profile-mode matrices without requiring prior peak detection. It uses dynamic time warping (DTW) with a bijection constraint to align sample $S_1$ to reference $S_0$.
+The \texttt{obiwarp} algorithm (Prince \& Marcotte~\cite{prince2006chromatographic}) aligns chromatographic runs directly from complete profile-mode matrices without requiring prior peak detection. It uses dynamic time warping (DTW) with local slope and bijection constraints to align a query run $S_1$ against a selected reference run $S_0$.
 
-Let $\mathbf{M}_0 \in \mathbb{R}^{T_0 \times K}$ and $\mathbf{M}_1 \in \mathbb{R}^{T_1 \times K}$ denote the binned profile matrices for reference and query runs. The alignment path $\phi = (\phi_0(k), \phi_1(k))$ optimizes the global score matrix $\mathbf{D}$ via dynamic programming:
+Let $\mathbf{M}_0 \in \mathbb{R}^{T_0 \times K}$ and $\mathbf{M}_1 \in \mathbb{R}^{T_1 \times K}$ denote the binned profile matrices for reference and query runs, where each row $\mathbf{m}_i$ represents an $m/z$-binned spectrum vector at retention time scan $i$ (with mass resolution parameterized by \texttt{binSize}). The alignment path $\phi = (\phi_0(k), \phi_1(k))$ optimizes the cumulative similarity matrix $\mathbf{D} \in \mathbb{R}^{T_0 \times T_1}$ via dynamic programming:
 \begin{equation}
 \label{eq:obiwarp_recurrence}
 D(i, j) = \operatorname{Sim}(\mathbf{m}_{0, i}, \mathbf{m}_{1, j}) + \max \begin{cases} 
-D(i-1, j-1) - w_{\text{diag}} \\ 
-D(i-1, j) - w_{\text{gap}} \\ 
+D(i-1, j-1) - w_{\text{diag}}, \\ 
+D(i-1, j) - w_{\text{gap}}, \\ 
 D(i, j-1) - w_{\text{gap}} 
 \end{cases}
 \end{equation}
-where $\operatorname{Sim}(\cdot, \cdot)$ is vector cosine correlation or Pearson correlation between spectra at timepoints $i$ and $j$, and $w_{\text{gap}}$ is the penalty for stretching or compressing time \cite{prince2006chromatographic}.
+where $\operatorname{Sim}(\mathbf{m}_{0, i}, \mathbf{m}_{1, j})$ is the spectral similarity metric evaluated between timepoints $i$ and $j$. In \texttt{xcms}, the parameter \texttt{distFun} configures this metric:
+\begin{itemize}
+    \item \texttt{distFun = "cor\_opt"}: Optimized Pearson correlation (the default in \texttt{ObiwarpParam}), computing normalized cross-correlation across spectral bins with rapid convergence.
+    \item \texttt{distFun = "cor"} or \texttt{"cov"}: Standard Pearson correlation or covariance between spectral vectors.
+\end{itemize}
+The penalties in Eq.~(\ref{eq:obiwarp_recurrence}) govern path geometry:
+\begin{itemize}
+    \item $w_{\text{diag}}$ penalizes simultaneous diagonal advancement ($i \to i+1, j \to j+1$). Setting $w_{\text{diag}} = 0$ preserves linear progression without cost.
+    \item $w_{\text{gap}}$ penalizes off-diagonal horizontal or vertical transitions (chromatographic stretching or compression). In \texttt{ObiwarpParam}, this is governed by an affine penalty model parameterized by \texttt{gapInit} (penalty to open a gap) and \texttt{gapExtend} (penalty to lengthen an existing gap).
+    \item \texttt{response}: Controls the non-linear flexibility of the warping function, scaling the relative contribution of the spectral similarity matrix versus the gap penalties.
+    \item \textbf{Local Slope Constraints:} To preserve physical chromatographic ordering, \texttt{obiwarp} enforces strict slope constraints ($\frac{1}{2} \le \frac{\Delta j}{\Delta i} \le 2$), guaranteeing that time flows bijectively and monotonically without temporal fold-overs or extreme plateau artifacts \cite{prince2006chromatographic}.
+\end{itemize}
 
 \subsection{Peak Groups and Kernel Density LOESS Alignment}
 
@@ -224,14 +285,14 @@ where $h$ is the bandwidth parameter (\texttt{bw}, typically 2--5 seconds for UH
 
 \subsection{Gap-Filling (\texttt{fillChromPeaks}): Mitigating Artificial Zeros}
 
-In untargeted omics, if an analyte was present at low abundance in sample $A$, CentWave may fail to trigger an automated peak detection if the signal falls slightly below the signal-to-noise threshold ($\text{S/N} < 10$). If left uncorrected, sample $A$ receives a missing value (\texttt{NA}) or zero, manufacturing an artificial false negative (Chapter 19).
+In untargeted omics, if an analyte was present at low abundance in sample $k$, CentWave may fail to trigger an automated peak detection if baseline noise pushes the signal slightly below the signal-to-noise threshold ($\text{S/N} < 10$). If left uncorrected, sample $k$ receives an artificial missing value (\texttt{NA}) or zero, introducing spurious missingness that distorts statistical imputation and downstream differential testing (Chapter 19).
 
-The \texttt{fillChromPeaks} algorithm executes targeted re-integration:
+The \texttt{fillChromPeaks} algorithm executes targeted re-integration across the raw data surface:
 \begin{equation}
 \label{eq:gap_fill}
-I_{\text{filled}} = \int_{m/z_{\min}}^{m/z_{\max}} \int_{t_{R, \min}}^{t_{R, \max}} \mathcal{S}_{\text{sample } A}(t_R, m/z) \; dt_R \; dm/z
+\hat{A}_{p, k} = \int_{t_{R, \min}^{(p)}}^{t_{R, \max}^{(p)}} \int_{m/z_{\min}^{(p)}}^{m/z_{\max}^{(p)}} I_k(t_R, m/z) \; d(m/z) \; dt_R
 \end{equation}
-By directly integrating the raw instrumental signal over the exact $m/z$ and retention time boundaries defined by the consensus feature across other samples, gap-filling replaces artificial missing values with genuine physical background noise measurements \cite{benton2015evaluating, gieling2020assessment}.
+where $I_k(t_R, m/z)$ denotes the raw detector ion intensity surface of sample $k$, $[t_{R, \min}^{(p)}, t_{R, \max}^{(p)}]$ is the consensus retention time window established by the correspondence feature group $p$, and $[m/z_{\min}^{(p)}, m/z_{\max}^{(p)}]$ is the consensus mass bounding box across the cohort. By querying the raw instrumental files directly at these coordinates, \texttt{fillChromPeaks} measures authentic background detector noise or low-level ion flux, transforming artificial zero entries into genuine quantitative measurements \cite{benton2015evaluating, gieling2020assessment}.
 
 \subsection{Downstream Annotation and Spectral Deconvolution}
 
@@ -265,9 +326,10 @@ sample_info <- data.frame(
 )
 
 # Load in on-disk mode (low memory footprint)
+# AnnotatedDataFrame encapsulates experimental sample metadata
 raw_data <- readMSData(
   selected_files,
-  pdata = new("NAnnotatedDataFrame", sample_info),
+  pdata = new("AnnotatedDataFrame", sample_info),
   mode  = "onDisk"
 )
 
@@ -277,7 +339,7 @@ print(table(raw_data$condition))
 \end{rchunk}
 
 \begin{routput}
-Loaded on-disk MS container: 4 samples, 5116 total spectra.
+Loaded on-disk MS container: 4 samples, 5112 total spectra.
 KO WT 
  2  2 
 \end{routput}
@@ -288,7 +350,11 @@ KO WT
 # -----------------------------------------------------------------------------
 
 # CentWave parameter configuration for high-resolution profiling:
-# ppm = 25 (Q-TOF tolerance), peakwidth = c(20, 50) seconds, snthresh = 10
+# ppm = 25 (mass accuracy tolerance for Q-TOF / high-resolution LC-MS)
+# peakwidth = c(20, 50) seconds (chromatographic peak width range at base)
+# snthresh = 10 (signal-to-noise detection threshold)
+# noise = 500 (minimum centroid intensity to seed dynamic mass traces)
+# prefilter = c(3, 100) (requires >= 3 consecutive scans with intensity >= 100)
 cwp <- CentWaveParam(
   ppm       = 25,
   peakwidth = c(20, 50),
@@ -320,7 +386,7 @@ ko15 ko16 wt15 wt16
 
 \begin{biologicalinsight}
 \textbf{Diagnostic Interpretation of Peak Uniformity:}\\
-Notice that all four samples exhibit approximately 1,180 peaks ($\pm 1.5\%$). This tightly clustered peak yield confirms uniform chromatographic injection volume and consistent electrospray ionization efficiency across runs. A sample yielding $< 800$ peaks would indicate an autosampler partial injection or column blockage \cite{broadhurst2018guidelines}.
+Notice that peak yields across the four samples range from 1,170 to 1,195 peaks, spanning a narrow range of 25 peaks ($\approx 2.1\%$ total spread, or $\pm 1.1\%$ around the cohort mean of 1,182 peaks). This tightly clustered peak yield confirms uniform chromatographic injection volume and consistent electrospray ionization efficiency across runs. A sample yielding $< 800$ peaks would indicate an autosampler partial injection, column blockage, or severe ionization suppression \cite{broadhurst2018guidelines}.
 \end{biologicalinsight}
 
 \begin{rchunk}{Retention Time Alignment and Peak Correspondence}
@@ -329,6 +395,10 @@ Notice that all four samples exhibit approximately 1,180 peaks ($\pm 1.5\%$). Th
 # -----------------------------------------------------------------------------
 
 # 1. Align retention times using Obiwarp dynamic time warping
+# binSize = 0.6 m/z binning for profile matrix construction
+# response = 1 controls warping path flexibility (1 = standard non-linear)
+# distFun = "cor_opt" uses optimized Pearson cross-correlation
+# gapInit = 0.3, gapExtend = 2.4 define affine gap penalties
 owp <- ObiwarpParam(
   binSize   = 0.6,
   response  = 1,
@@ -342,7 +412,7 @@ data_aligned <- adjustRtime(data_peaks, param = owp)
 # 2. Define Feature Correspondence via Peak Density
 # bandwidth = 5 seconds, minFraction = 0.50 (detected in at least 50% of a group)
 pdp <- PeakDensityParam(
-  sampleGroups = data_aligned$condition,
+  sampleGroups = pData(data_aligned)$condition,
   minFraction  = 0.50,
   bw           = 5,
   binSize      = 0.025
@@ -420,8 +490,8 @@ FT00004     32100   31800   33400   32900
 \begin{pitfallbox}
 \textbf{Deadly Sin 3: Skipping Retention Time Alignment on Long Cohorts}\\
 \textit{Mechanism:} Attempting to group features across 100 samples directly using a wide retention time window (\texttt{bw = 30}) without prior alignment \cite{mahieu2016warping}.\\
-\textit{Mathematical Failure:} A wide correspondence bandwidth groups chemically distinct isomers that elute 20 seconds apart into the same false feature, generating contaminated chimeric peaks with scrambled biological quantification.\\
-\textit{Remedy:} Always align retention times (\texttt{adjustRtime}) first using a tight bandwidth ($\le 5\text{ s}$), allowing precise correspondence.
+\textit{Mathematical Failure:} A wide correspondence bandwidth groups chemically distinct isomers that elute 15--20 seconds apart into the same false feature, generating contaminated chimeric peaks with scrambled biological quantification.\\
+\textit{Remedy:} Always align retention times (\texttt{adjustRtime}) first. Set correspondence bandwidth according to post-alignment chromatographic jitter: typically $\le 5\text{ s}$ for UHPLC gradients, and $10$--$15\text{ s}$ for longer, traditional HPLC runs.
 \end{pitfallbox}
 
 \begin{pitfallbox}
@@ -434,7 +504,7 @@ FT00004     32100   31800   33400   32900
 \begin{pitfallbox}
 \textbf{Deadly Sin 5: Profile-Mode Memory Exhaustion}\\
 \textit{Mechanism:} Loading 100 high-resolution raw LC-MS files into active RAM in in-memory mode (\texttt{mode = "inMemory"}) \cite{gatto2012msnbase}.\\
-\textit{Mathematical Failure:} Uncompressed profile-mode spectra consume $> 2\text{ GB}$ per run. A cohort of 100 files requires $> 200\text{ GB}$ of RAM, triggering system paging, disk thrashing, and fatal out-of-memory crashes.\\
+\textit{Mathematical Failure:} Uncompressed profile-mode spectra typically consume $1$--$3\text{ GB}$ per run depending on scan rate and acquisition range. A cohort of 100 files can require $100$--$300\text{ GB}$ of RAM, triggering system paging, disk thrashing, and fatal out-of-memory crashes.\\
 \textit{Remedy:} Always process files using \texttt{readMSData(..., mode = "onDisk")}, where spectral data are retrieved dynamically on-demand from disk.
 \end{pitfallbox}
 
@@ -444,7 +514,7 @@ FT00004     32100   31800   33400   32900
 
 \begin{table}[ht]
 \centering
-\caption{Tutor's Self-Assessment Diagnostic Checklist for LC-MS Feature Extraction}
+\caption{Tutor's Self-Assessment Diagnostic Checklist: Recommended Heuristics and Rules of Thumb for LC-MS Feature Extraction}
 \label{tab:feature_checklist}
 \small
 \begin{tabularx}{\textwidth}{c p{3.8cm} p{4.2cm} X}
@@ -459,7 +529,7 @@ FT00004     32100   31800   33400   32900
 \addlinespace
 4 & Peak Correspondence Density & Feature kernel bandwidth matches aligned chromatographic jitter ($\le 5\text{ s}$) \cite{smith2006xcms}. & If features split: Re-tune \texttt{bw} parameter or relax \texttt{minFraction} group threshold. \\
 \addlinespace
-5 & Post-Gap Completeness & Zero artificial missing values for features passing cohort detection filter \cite{benton2015evaluating}. & If $>10\%$ missing remain: Execute \texttt{fillChromPeaks()} with widened integration boundaries. \\
+5 & Post-Gap Completeness & Minimize artificial missingness via targeted raw ion re-integration (post-gap missing rate $\le 5\%$ for detected features) \cite{benton2015evaluating}. & If $>10\%$ missing remain: Execute \texttt{fillChromPeaks()} with widened integration boundaries. \\
 \addlinespace
 6 & QC Injection Repeatability & Technical coefficient of variation ($\text{CV}_{\text{QC}}$) $\le 20\%$ for pooled QC features \cite{dunn2011mass}. & If $\text{CV} > 30\%$: Inspect electrospray spray stability, clean source, or replace LC guard. \\
 \bottomrule
@@ -482,22 +552,25 @@ A high-resolution Orbitrap mass spectrometer measures three distinct chemical io
     \item If two isobaric lipid isomers have masses $m/z_1 = 760.5851$ and $m/z_2 = 760.5910$, determine whether a $5\text{ ppm}$ tolerance window will resolve or merge them.
 \end{enumerate}
 
-\subsection*{Exercise 8.2: Mathematical Derivation of Mexican Hat Vanishing Moments}
-Prove analytically that the Mexican hat wavelet:
+\subsection*{Exercise 8.2: Mexican Hat Wavelet Moments and $L^2$-Normalization}
+Consider the Mexican hat (Ricker) wavelet defined as the normalized second derivative of a Gaussian:
 \begin{equation*}
-\psi(t) = \frac{2}{\sqrt{3\sigma}\pi^{1/4}} \left( 1 - \frac{t^2}{\sigma^2} \right) e^{-\frac{t^2}{2\sigma^2}}
+\psi(t) = C \left( 1 - \frac{t^2}{\sigma^2} \right) e^{-\frac{t^2}{2\sigma^2}}
 \end{equation*}
-has zero integral ($\int_{-\infty}^\infty \psi(t) dt = 0$) and zero first moment ($\int_{-\infty}^\infty t \psi(t) dt = 0$), and explain why this mathematical property suppresses linear baseline drift in liquid chromatography.
+\begin{enumerate}
+    \item Prove analytically that $\psi(t)$ has zero total area ($\int_{-\infty}^\infty \psi(t) dt = 0$) and zero first moment ($\int_{-\infty}^\infty t \psi(t) dt = 0$). Explain why this mathematical property suppresses constant baseline offsets and linear baseline drift in liquid chromatography.
+    \item Derive the exact $L^2$-normalization constant $C$ such that $\|\psi\|_{L^2}^2 = \int_{-\infty}^\infty |\psi(t)|^2 dt = 1$, and confirm that $C = \frac{2}{\sqrt{3\sigma}\pi^{1/4}}$.
+\end{enumerate}
 
 \subsection*{Exercise 8.3: Dynamic Time Warping and Obiwarp Alignment Mechanics}
 Two chromatographic runs acquire an analyte peak at $t_1 = 412.5\text{ s}$ and $t_2 = 428.0\text{ s}$.
 \begin{enumerate}
     \item State the recursive equation of dynamic time warping and explain the role of the diagonal step penalty $w_{\text{diag}}$ versus the gap penalty $w_{\text{gap}}$.
-    \item Explain the bijection constraint in \texttt{obiwarp} and why standard unbounded DTW can produce non-physical chromatographic artifacts.
+    \item Explain the bijection constraint in \texttt{obiwarp} and why standard unbounded DTW can produce non-physical chromatographic artifacts \cite{prince2006chromatographic}.
 \end{enumerate}
 
 \subsection*{Exercise 8.4: Implementing an Automated Feature Quality Filter in R}
-Write an R function \texttt{filter\_high\_quality\_features(feature\_mat, max\_na\_fraction, min\_cv\_qc)} that evaluates a completed feature table, removes features with excessive missing values, and filters out features with high technical coefficient of variation in quality control samples.
+Write an R function \texttt{filter\_high\_quality\_features(feature\_mat, max\_na\_fraction, min\_cv\_qc)} that evaluates a completed feature table, treats zeros and missing entries as non-detects below instrumental limits of detection, removes features with excessive missing values, and filters out features with high technical coefficient of variation in quality control samples.
 
 % =============================================================================
 \section{Exhaustive Step-by-Step Worked Solutions}
@@ -544,16 +617,16 @@ Because the windows overlap between $760.5872$ and $760.5889$, a setting of $5\t
 \text{ppm}_{\text{req}} < \frac{\Delta m_{\text{actual}} / 2}{m/z} \times 10^6 = \frac{0.00295}{760.585} \times 10^6 \approx \mathbf{3.88\text{ ppm}}
 \end{equation*}
 
-\subsection*{Solution to Exercise 8.2: Mexican Hat Wavelet Vanishing Moments}
+\subsection*{Solution to Exercise 8.2: Mexican Hat Wavelet Moments and $L^2$-Normalization}
 
 \paragraph{Part 1: Proof that $\int_{-\infty}^\infty \psi(t) dt = 0$:}
-The Mexican hat wavelet is the second derivative of a Gaussian:
+The Mexican hat wavelet is the negative second derivative of a Gaussian:
 \begin{equation*}
-g(t) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{t^2}{2\sigma^2}} \implies \psi(t) = -C \frac{d^2 g(t)}{dt^2}
+g(t) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{t^2}{2\sigma^2}} \implies \psi(t) = -C' \frac{d^2 g(t)}{dt^2}
 \end{equation*}
 Integrating directly:
 \begin{equation*}
-\int_{-\infty}^\infty \psi(t) dt = -C \int_{-\infty}^\infty \frac{d^2 g(t)}{dt^2} dt = -C \left[ \frac{d g(t)}{dt} \right]_{-\infty}^\infty
+\int_{-\infty}^\infty \psi(t) dt = -C' \int_{-\infty}^\infty \frac{d^2 g(t)}{dt^2} dt = -C' \left[ \frac{d g(t)}{dt} \right]_{-\infty}^\infty
 \end{equation*}
 The first derivative of the Gaussian is:
 \begin{equation*}
@@ -565,7 +638,7 @@ Evaluating at limits:
 \end{equation*}
 Thus:
 \begin{equation*}
-\int_{-\infty}^\infty \psi(t) dt = -C (0 - 0) = \mathbf{0}
+\int_{-\infty}^\infty \psi(t) dt = -C' (0 - 0) = \mathbf{0}
 \end{equation*}
 
 \paragraph{Part 2: Proof that $\int_{-\infty}^\infty t \psi(t) dt = 0$:}
@@ -583,11 +656,36 @@ The integral of any continuous odd function over a symmetric domain $(-\infty, \
 Let chromatographic signal with linear baseline drift be $s(t) = c_0 + c_1 t + p(t)$, where $p(t)$ is the true chemical elution peak.
 The CWT convolution is:
 \begin{align*}
-W(a, b) &= \frac{1}{\sqrt{a}} \int_{-\infty}^\infty \left[ c_0 + c_1 t + p(t) \right] \psi\left(\frac{t-b}{a}\right) dt \\
-&= \frac{c_0}{\sqrt{a}} \int \psi(u) a du + \frac{c_1}{\sqrt{a}} \int (a u + b) \psi(u) a du + W_{\text{peak}}(a, b) \\
-&= 0 + 0 + W_{\text{peak}}(a, b) = W_{\text{peak}}(a, b)
+\mathcal{W}_\psi[s](a, b) &= \frac{1}{\sqrt{a}} \int_{-\infty}^\infty \left[ c_0 + c_1 t + p(t) \right] \psi\left(\frac{t-b}{a}\right) dt \\
+&= \frac{c_0}{\sqrt{a}} \int \psi(u) a du + \frac{c_1}{\sqrt{a}} \int (a u + b) \psi(u) a du + \mathcal{W}_\psi[p](a, b) \\
+&= 0 + 0 + \mathcal{W}_\psi[p](a, b) = \mathcal{W}_\psi[p](a, b)
 \end{align*}
 The linear baseline slope and constant offset contribute zero to the transform, leaving the wavelet coefficients purely reflective of the chromatographic peak.
+
+\paragraph{Part 4: Derivation of the $L^2$-Normalization Constant ($C$):}
+For $\psi(t)$ to be an energy-normalized mother wavelet in $L^2(\mathbb{R})$, its squared norm must satisfy:
+\begin{equation*}
+\|\psi\|_{L^2}^2 = \int_{-\infty}^\infty |\psi(t)|^2 dt = C^2 \int_{-\infty}^\infty \left( 1 - \frac{t^2}{\sigma^2} \right)^2 e^{-\frac{t^2}{\sigma^2}} dt = 1
+\end{equation*}
+Substitute the change of variables $u = \frac{t}{\sigma}$, so $t = \sigma u$ and $dt = \sigma du$:
+\begin{equation*}
+\|\psi\|_{L^2}^2 = C^2 \sigma \int_{-\infty}^\infty \left( 1 - 2u^2 + u^4 \right) e^{-u^2} du
+\end{equation*}
+Using standard Gaussian definite integrals:
+\begin{align*}
+\int_{-\infty}^\infty e^{-u^2} du &= \sqrt{\pi} \\
+\int_{-\infty}^\infty u^2 e^{-u^2} du &= \frac{1}{2}\sqrt{\pi} \\
+\int_{-\infty}^\infty u^4 e^{-u^2} du &= \frac{3}{4}\sqrt{\pi}
+\end{align*}
+Combining these yields:
+\begin{equation*}
+\int_{-\infty}^\infty \left( 1 - 2u^2 + u^4 \right) e^{-u^2} du = \sqrt{\pi} - 2\left(\frac{1}{2}\sqrt{\pi}\right) + \frac{3}{4}\sqrt{\pi} = \frac{3}{4}\sqrt{\pi}
+\end{equation*}
+Equating to unity:
+\begin{equation*}
+C^2 \sigma \left( \frac{3\sqrt{\pi}}{4} \right) = 1 \implies C^2 = \frac{4}{3\sigma\sqrt{\pi}} \implies C = \frac{2}{\sqrt{3\sigma}\pi^{1/4}}
+\end{equation*}
+This establishes the exact $L^2$-normalization constant in Eq.~(\ref{eq:mexican_hat}), with $\pi^{1/4}$ outside the square root of $3\sigma$.
 
 \subsection*{Solution to Exercise 8.3: Dynamic Time Warping and Obiwarp Mechanics}
 
@@ -599,7 +697,7 @@ The DTW score recurrence is given by Eq.~(\ref{eq:obiwarp_recurrence}).
 \end{itemize}
 
 \paragraph{Part 2: The Bijection Constraint:}
-Standard dynamic time warping allows multiple query points to map to a single reference point (a vertical or horizontal plateau in the alignment path). In chromatography, this corresponds to mapping multiple distinct chemical elution events into a single time point. \texttt{obiwarp} enforces a local slope constraint ($\frac{1}{2} \le \frac{\Delta j}{\Delta i} \le 2$), guaranteeing that time flows monotonically and bijectively, preventing non-physical temporal fold-overs.
+Standard dynamic time warping allows multiple query points to map to a single reference point (a vertical or horizontal plateau in the alignment path). In chromatography, this corresponds to mapping multiple distinct chemical elution events into a single time point. \texttt{obiwarp} enforces a local slope constraint ($\frac{1}{2} \le \frac{\Delta j}{\Delta i} \le 2$), guaranteeing that time flows monotonically and bijectively, preventing non-physical temporal fold-overs \cite{prince2006chromatographic}.
 
 \subsection*{Solution to Exercise 8.4: Automated Feature Quality Filter in R}
 
@@ -617,17 +715,19 @@ filter_high_quality_features <- function(feature_mat,
   initial_features <- nrow(feature_mat)
   
   # 2. Filter by Missing Value Fraction Across Cohort
+  # In untargeted LC-MS feature tables, zeros and NAs represent non-detects below LOD
   na_frac <- apply(feature_mat, 1, function(x) mean(is.na(x) | x == 0))
   pass_na <- na_frac <= max_na_fraction
   
   # 3. Filter by Technical Coefficient of Variation in QC Samples (if present)
   qc_indices <- which(sample_classes == "QC")
   if (length(qc_indices) >= 3) {
-    qc_mat <- feature_mat[, qc_indices]
+    qc_mat <- feature_mat[, qc_indices, drop = FALSE]
     qc_mean <- rowMeans(qc_mat, na.rm = TRUE)
     qc_sd   <- apply(qc_mat, 1, sd, na.rm = TRUE)
-    qc_cv   <- qc_sd / qc_mean
-    pass_cv <- (qc_cv <= max_qc_cv) & (!is.na(qc_cv))
+    # Avoid division by zero: requires positive mean
+    qc_cv   <- ifelse(qc_mean > 0, qc_sd / qc_mean, Inf)
+    pass_cv <- is.finite(qc_cv) & (qc_cv <= max_qc_cv)
   } else {
     message("Fewer than 3 QC samples detected; skipping technical CV filter.")
     pass_cv <- rep(TRUE, initial_features)
@@ -641,21 +741,27 @@ filter_high_quality_features <- function(feature_mat,
               initial_features, nrow(filtered_mat), nrow(filtered_mat) / initial_features * 100))
   cat(sprintf("Excluded for excessive missingness (> %.0f%%): %d features.\n",
               max_na_fraction * 100, sum(!pass_na)))
+  if (length(qc_indices) >= 3) {
+    cat(sprintf("Excluded for excessive QC CV (> %.0f%%): %d features.\n",
+                max_qc_cv * 100, sum(pass_na & !pass_cv)))
+  }
   
   return(filtered_mat)
 }
 
 # Test on simulated feature matrix
-sim_mat <- matrix(rlnorm(500 * 8, 10, 1), nrow = 500)
+set.seed(42)
+sim_mat <- matrix(rlnorm(500 * 8, 10, 0.15), nrow = 500)
 sim_mat[sample(length(sim_mat), 500)] <- NA # Add random missingness
 classes <- c(rep("Bio", 5), rep("QC", 3))
 
-filtered_res <- filter_high_quality_features(sim_mat, classes, max_na_fraction = 0.15)
+filtered_res <- filter_high_quality_features(sim_mat, classes, max_na_fraction = 0.20, max_qc_cv = 0.30)
 \end{rchunk}
 
-\begin{routput}
-{}[STATUS: COMPLETE] Filtered 500 features -$>$ 388 retained (77.6\% pass rate).
-Excluded for excessive missingness ($>$ 15\%): 82 features.
+\begin{routput}[]
+[STATUS: COMPLETE] Filtered 500 features -> 357 retained (71.4% pass rate).
+Excluded for excessive missingness (> 20%): 128 features.
+Excluded for excessive QC CV (> 30%): 15 features.
 \end{routput}
 
 % =============================================================================

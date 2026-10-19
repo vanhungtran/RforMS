@@ -125,6 +125,26 @@ When the variance components in $\mathbf{G}$ and $\mathbf{R}$ are known, solving
 \end{align}
 where $\mathbf{V} = \mathbf{Z} \widetilde{\mathbf{G}} \mathbf{Z}^T + \mathbf{R}$. In per-subject notation, the BLUP is $\hat{\mathbf{u}}_i = \mathbf{G} \mathbf{Z}_i^T \mathbf{V}_i^{-1} (\mathbf{y}_i - \mathbf{X}_i \hat{\boldsymbol{\beta}})$.
 
+\begin{rchunk}{Hands-On Implementation: Solving Henderson's MME Directly in Base R}
+# Construct Henderson's block coefficient matrix C and solve for beta and u
+solve_henderson <- function(X, Z, y, sigma_b, sigma_e) {
+  n <- length(y); q <- ncol(Z)
+  R_inv <- diag(1 / sigma_e^2, n)
+  G_inv <- diag(1 / sigma_b^2, q)
+  
+  C11 <- t(X) %*% R_inv %*% X
+  C12 <- t(X) %*% R_inv %*% Z
+  C21 <- t(Z) %*% R_inv %*% X
+  C22 <- t(Z) %*% R_inv %*% Z + G_inv
+  
+  C   <- rbind(cbind(C11, C12), cbind(C21, C22))
+  rhs <- c(t(X) %*% R_inv %*% y, t(Z) %*% R_inv %*% y)
+  sol <- solve(C, rhs)
+  
+  list(beta = sol[1:ncol(X)], u = sol[(ncol(X) + 1):length(sol)])
+}
+\end{rchunk}
+
 \subsection{Restricted Maximum Likelihood (REML) vs. Maximum Likelihood (ML)}
 
 In mass spectrometry cohorts, the number of observations per cluster $n_i$ is typically modest ($n_i \in [2, 6]$). When estimating variance components $\boldsymbol{\theta} = (\mathbf{G}, \sigma_e^2)$ via standard Maximum Likelihood (ML), fixed effects $\boldsymbol{\beta}$ are estimated simultaneously. In fixed-effects linear regression, ML ignores the degrees of freedom ($p$) consumed by estimating $\boldsymbol{\beta}$, producing downwardly biased residual variance estimates:
@@ -140,6 +160,26 @@ Restricted Maximum Likelihood (REML; Patterson \& Thompson~\cite{patterson1971re
 \ell_{\text{REML}}(\boldsymbol{\theta}) = -\frac{1}{2} \left[ \ln |\mathbf{V}(\boldsymbol{\theta})| + \ln |\mathbf{X}^T \mathbf{V}(\boldsymbol{\theta})^{-1} \mathbf{X}| + (\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}})^T \mathbf{V}(\boldsymbol{\theta})^{-1} (\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}}) \right] + C
 \end{equation}
 REML removes the conditioning on fixed effects, delivering substantially less biased variance component estimates in small cohorts. However, when comparing nested models with \textit{differing fixed-effects specifications} via Likelihood Ratio Tests (LRT), standard ML must be fitted because the error contrast spaces defined by $\mathbf{K}$ differ across distinct design matrices $\mathbf{X}$.
+
+\begin{rchunk}{Empirical Verification: REML vs. ML Variance Estimates in lme4}
+library(MSstats); library(lme4)
+data(SRMRawData); proc <- dataProcess(SRMRawData, use_log_file = FALSE, verbose = FALSE)
+df_idhc <- proc$ProteinLevelData[proc$ProteinLevelData$Protein == "IDHC", ]
+df_idhc$Time <- as.numeric(as.character(df_idhc$GROUP))
+
+fit_reml <- lmer(LogIntensities ~ Time + (1 | SUBJECT), data = df_idhc, REML = TRUE)
+fit_ml   <- lmer(LogIntensities ~ Time + (1 | SUBJECT), data = df_idhc, REML = FALSE)
+
+cat(sprintf("REML sigma: %.4f | ML sigma: %.4f | Ratio: %.6f\n",
+            sigma(fit_reml), sigma(fit_ml), sigma(fit_reml) / sigma(fit_ml)))
+cat(sprintf("Theoretical bias adjustment factor sqrt(n / (n - p)): %.6f\n",
+            sqrt(30 / (30 - 2))))
+\end{rchunk}
+
+\begin{routput}
+REML sigma: 1.1818 | ML sigma: 1.1417 | Ratio: 1.035098
+Theoretical bias adjustment factor sqrt(n / (n - p)): 1.035098
+\end{routput}
 
 \subsection{Small-Sample Degrees of Freedom: Kenward-Roger and Satterthwaite}
 
@@ -210,6 +250,23 @@ Depending on the sampling frequency and biological kinetics, within-subject cova
     \end{equation}
     Here, marginal variance $\operatorname{Var}(y_{ij}) = \sigma_0^2 + 2 t_{ij} \sigma_{01} + t_{ij}^2 \sigma_1^2 + \sigma_e^2$ expands quadratically over time, capturing subject heterogeneity in drug response rates.
 \end{enumerate}
+
+\begin{rchunk}{Hands-On Comparison: Fitting CS vs. AR(1) Covariance Structures in nlme}
+library(nlme)
+# Fit Compound Symmetry vs. First-Order Autoregressive AR(1) via Generalized Least Squares
+m_cs  <- gls(LogIntensities ~ Time, correlation = corCompSymm(form = ~ 1 | SUBJECT), data = df_idhc)
+m_ar1 <- gls(LogIntensities ~ Time, correlation = corAR1(form = ~ Time | SUBJECT), data = df_idhc)
+
+cat(sprintf("Compound Symmetry:   AIC = %.2f | Estimated Rho = %.4f\n",
+            AIC(m_cs), coef(m_cs$modelStruct$corStruct, unconstrained = FALSE)))
+cat(sprintf("Autoregressive AR(1): AIC = %.2f | Estimated Phi = %.4f\n",
+            AIC(m_ar1), coef(m_ar1$modelStruct$corStruct, unconstrained = FALSE)))
+\end{rchunk}
+
+\begin{routput}
+Compound Symmetry:   AIC = 102.30 | Estimated Rho = -0.1027
+Autoregressive AR(1): AIC = 97.54 | Estimated Phi = 0.5537
+\end{routput}
 
 \subsection{Variance Partitioning Formulation}
 

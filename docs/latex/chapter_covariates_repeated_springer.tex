@@ -204,7 +204,7 @@ This Kenward-Roger adjustment is the recommended small-sample standard implement
 
 \begin{notebox}
 \textbf{Computational Scalability: Kenward-Roger vs. Satterthwaite}\\
-While the Kenward-Roger degrees-of-freedom adjustment is the gold standard for small-to-moderate cohorts ($N < 100$), its computational cost scales as $\mathcal{O}(P \cdot N^3)$ due to repeated inversion of inflated covariance matrices across $P$ features. For massive multi-cohort atlases ($P > 10,000$ features, $N > 500$ samples), the Satterthwaite approximation (\texttt{ddf = "Satterthwaite"}) provides a substantially faster, computationally scalable, and only slightly less conservative alternative \cite{kuznetsova2017lmertest}.
+While the Kenward-Roger degrees-of-freedom adjustment is the gold standard for small-to-moderate cohorts ($N < 100$), its total serial CPU computational complexity scales as $\mathcal{O}(P \cdot N^3)$ due to repeated inversion of inflated covariance matrices across $P$ features. However, \texttt{variancePartition::dream} distributes these per-feature matrix inversions in parallel across multi-core architectures via \texttt{BiocParallel}, dramatically reducing wall-clock runtime. For massive multi-cohort atlases ($P > 10,000$ features, $N > 500$ samples), the Satterthwaite approximation (\texttt{ddf = "Satterthwaite"}) provides a substantially faster, computationally scalable, and only slightly less conservative alternative \cite{kuznetsova2017lmertest}.
 \end{notebox}
 
 % =============================================================================
@@ -254,6 +254,7 @@ Depending on the sampling frequency and biological kinetics, within-subject cova
 \begin{rchunk}{Hands-On Comparison: Fitting CS vs. AR(1) Covariance Structures in nlme}
 library(nlme)
 # Fit Compound Symmetry vs. First-Order Autoregressive AR(1) via Generalized Least Squares
+# (using df_idhc preprocessed from MSstats::SRMRawData as prepared in Listing 2)
 m_cs  <- gls(LogIntensities ~ Time, correlation = corCompSymm(form = ~ 1 | SUBJECT), data = df_idhc)
 m_ar1 <- gls(LogIntensities ~ Time, correlation = corAR1(form = ~ Time | SUBJECT), data = df_idhc)
 
@@ -267,6 +268,11 @@ cat(sprintf("Autoregressive AR(1): AIC = %.2f | Estimated Phi = %.4f\n",
 Compound Symmetry:   AIC = 102.30 | Estimated Rho = -0.1027
 Autoregressive AR(1): AIC = 97.54 | Estimated Phi = 0.5537
 \end{routput}
+
+\begin{notebox}
+\textbf{Methodological Note: Interpreting Negative Correlation in Compound Symmetry}\\
+The slight negative estimated correlation for Compound Symmetry ($\hat{\rho} = -0.1027$) reflects very weak replicate-level baseline clustering for \texttt{IDHC} (consistent with the $0\%$ \texttt{SUBJECT} variance component extracted in §\ref{sec:variance_partitioning_lab}), and represents a known boundary artifact in REML estimation when the true between-cluster variance approaches zero. In contrast, the first-order autoregressive structure captures genuine temporal decay ($\hat{\phi} = 0.5537$) across sequentially sampled timepoints, yielding a substantially superior AIC ($97.54$ vs. $102.30$).
+\end{notebox}
 
 \subsection{Variance Partitioning Formulation}
 
@@ -321,12 +327,12 @@ Treating repeated measures from the same patient as independent samples violates
 \label{eq:neff}
 N_{\text{eff}} = \frac{N \times m}{1 + (m - 1)\rho}
 \end{equation}
-For instance, in a cohort of $N = 10$ patients sampled at $m = 4$ timepoints ($n_{\text{total}} = 40$) with $\rho = 0.60$, the effective sample size is only $N_{\text{eff}} = 40 / [1 + 3(0.60)] = 40 / 2.80 \approx 14.3$. An unblocked naive test invents over 25 degrees of freedom out of thin air, generating severe anti-conservative bias and false-positive discoveries (Fig.~\ref{fig:pseudoreplication_ci}). Consequently, when $\rho > 0.10$, naive OLS standard errors are substantially deflated; analysts must deploy linear mixed models, generalized estimating equations (GEE), or cluster-robust standard errors \cite{hurlbert1984pseudoreplication, diggle2002analysis}.
+For instance, in a cohort of $N = 10$ patients sampled at $m = 4$ timepoints ($n_{\text{total}} = 40$) with $\rho = 0.60$, the effective sample size is only $N_{\text{eff}} = 40 / [1 + 3(0.60)] = 40 / 2.80 \approx 14.3$. An unblocked naive $t$-test assumes 38 degrees of freedom ($n_{\text{total}} - 2$), whereas the effective sample size supports only $\sim 12$ ($N_{\text{eff}} - 2$); the $\sim 26$ excess degrees of freedom represent severe statistical inflation, generating anti-conservative bias and spurious discoveries (Fig.~\ref{fig:pseudoreplication_ci}). Consequently, when $\rho > 0.10$, naive OLS standard errors are substantially deflated; analysts must deploy linear mixed models, generalized estimating equations (GEE), or cluster-robust standard errors \cite{hurlbert1984pseudoreplication, diggle2002analysis}.
 
 \begin{figure}[!ht]
 \centering
 \includegraphics[width=\textwidth]{figures/fig_22_1_pseudoreplication_ci.pdf}
-\caption{The Statistical Consequence of Non-Linear Trajectory Modeling and Pseudoreplication in Longitudinal Targeted Proteomics. \textbf{(a)} Naive Ordinary Least Squares (OLS) fits a forced linear slope across ten longitudinal time points ($T_1\text{--}T_{10}$, $n_{\text{total}} = 30$) in yeast metabolic diauxic shift profiling (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}). The linear model completely misses the sigmoidal diauxic shift transition and yields an artificially narrow, misspecified confidence interval (light red ribbon). \textbf{(b)} Linear Mixed-Effects Model combining biological replicate random intercepts (\texttt{SUBJECT}; dashed lines) with natural cubic splines ($\operatorname{ns}(\text{Time}, \text{df}=3)$; navy curve and ribbon). The spline LMM faithfully reconstructs the non-linear plateau kinetics of isocitrate dehydrogenase (\texttt{IDHC}), providing rigorous biological confidence intervals and statistically outperforming the linear slope ($\chi^2 = 38.76, p = 3.84 \times 10^{-9}$).}
+\caption{The Statistical Consequence of Non-Linear Trajectory Modeling and Pseudoreplication in Longitudinal Targeted Proteomics. \textbf{(a)} Naive Ordinary Least Squares (OLS) fits a forced linear slope across ten longitudinal time points ($T_1\text{--}T_{10}$, $n_{\text{total}} = 30$) in yeast metabolic diauxic shift profiling (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}). The linear model completely misses the sigmoidal diauxic shift transition and yields an artificially narrow, misspecified confidence interval (light red ribbon). \textbf{(b)} Linear Mixed-Effects Model combining biological replicate random intercepts (\texttt{SUBJECT}; dashed lines) with natural cubic splines ($\operatorname{ns}(\text{Time}, \text{df}=3)$; navy curve and ribbon). The spline LMM faithfully reconstructs the non-linear plateau kinetics of isocitrate dehydrogenase (\texttt{IDHC}), providing rigorous biological confidence intervals and statistically outperforming the linear slope as evaluated by a formal Likelihood Ratio Test (LRT) comparing nested linear vs. spline models ($\chi^2 = 38.76, \text{df} = 2, p = 3.84 \times 10^{-9}$).}
 \label{fig:pseudoreplication_ci}
 \end{figure}
 
@@ -334,7 +340,13 @@ For instance, in a cohort of $N = 10$ patients sampled at $m = 4$ timepoints ($n
 \section{Hands-On R Laboratory: Longitudinal Analysis on Real Targeted Proteomics}
 % =============================================================================
 
-We now demonstrate the complete longitudinal workflow using \texttt{variancePartition} and \texttt{dream} within the Bioconductor statistical computing environment \cite{gentleman2005bioinformatics, hoffman2021dream, goeminne2016msqrob2} on a published, real-world targeted mass spectrometry time-course study (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}; Chang et al., 2012 \cite{chang2012protein}; Choi et al., 2014 \cite{choi2014msstats}). The study profiles yeast (\textit{Saccharomyces cerevisiae}) central metabolic enzymes across a 10-timepoint longitudinal transition ($T_1\text{--}T_{10}$) through glucose exhaustion, diauxic shift, and stationary phase, with three biological replicates profiled across 30 LC-MS runs.
+We now demonstrate the complete workflow using \texttt{variancePartition} and \texttt{dream} within the Bioconductor statistical computing environment \cite{gentleman2005bioinformatics, hoffman2021dream, goeminne2016msqrob2} on a published, real-world targeted mass spectrometry time-course study (\texttt{MSstats::SRMRawData}; Picotti et al., 2009 \cite{picotti2009high}; Chang et al., 2012 \cite{chang2012protein}; Choi et al., 2014 \cite{choi2014msstats}). The study profiles yeast (\textit{Saccharomyces cerevisiae}) central metabolic enzymes across a 10-timepoint transition ($T_1\text{--}T_{10}$) through glucose exhaustion, diauxic shift, and stationary phase, with three independent biological replicate cultures (\texttt{ReplA}, \texttt{ReplB}, \texttt{ReplC}) harvested in parallel across 30 LC-MS runs.
+
+\begin{notebox}
+\textbf{Methodological Note: Biological Replicates vs. Repeated Measures on Living Subjects}\\
+In clinical trials, repeated measures typically arise from the \textit{same living individual} sampled non-destructively over time (e.g., sequential blood draws). In such studies, persistent intra-subject correlation ($\rho > 0$) causes classical pseudoreplication if ignored. 
+In contrast, in microbial and cell-culture proteomics (such as the Picotti et al. study), sampling at each timepoint is inherently \textit{destructive} (aliquots harvested and lysed). Here, the \texttt{SUBJECT} variable represents independent parallel culture batches (\texttt{ReplA}, \texttt{ReplB}, \texttt{ReplC}). Specifying \texttt{(1 | SUBJECT)} thus models \textbf{biological replicate baseline heterogeneity} (a random blocking effect across the 10 time points), rather than serial within-organism autocorrelation. When cultures are tightly controlled, replicate variance is close to zero (as observed below for \texttt{IDHC}); when culture-to-culture drift or instrument batch offsets exist, \texttt{(1 | SUBJECT)} absorbs this baseline variation without sacrificing fixed-effect degrees of freedom.
+\end{notebox}
 
 \begin{rchunk}{Loading and Preprocessing Real Longitudinal SRM Mass Spectrometry Data}
 suppressPackageStartupMessages({
@@ -342,6 +354,7 @@ suppressPackageStartupMessages({
   library(variancePartition)
   library(limma)
   library(splines)
+  library(reshape2)
 })
 
 # Load published 10-timepoint SRM longitudinal proteomics dataset (Picotti et al., 2009)
@@ -380,11 +393,11 @@ ReplA\_4      ReplA\_4   ReplA        4        4
 \end{routput}
 
 \begin{rchunk}{Automated dream Pipeline Execution with Kenward-Roger DDF}
-# Specify dream formula with fixed timepoint factors and subject random intercepts
+# Specify dream formula with fixed timepoint factors and replicate random intercepts
 form <- ~ 0 + Time_fac + (1 | SUBJECT)
 
-# Construct contrast matrix for key metabolic transitions:
-# Diauxic Shift (T7 vs T1) and Stationary Phase (T10 vs T1)
+# Construct contrast matrix for key metabolic transitions using variancePartition::makeContrastsDream
+# (Hoffman & Roussos, 2021): Diauxic Shift (T7 vs T1) and Stationary Phase (T10 vs T1)
 L <- makeContrastsDream(form, meta_df, 
                         contrasts = c(Diauxic_T7_vs_T1     = "Time_fac7 - Time_fac1",
                                       Stationary_T10_vs_T1 = "Time_fac10 - Time_fac1"))
@@ -393,27 +406,37 @@ cat("Fitting dream linear mixed model with Kenward-Roger DDF...\n")
 fit_mm <- dream(expr_mat, form, meta_df, L = L, ddf = "Kenward-Roger")
 fit_eb <- eBayes(fit_mm)
 
-# Differential abundance results across diauxic shift
-res_diauxic <- variancePartition::topTable(fit_eb, coef = "Diauxic_T7_vs_T1", number = Inf)
-res_diauxic$Significant <- res_diauxic$adj.P.Val < 0.05
+# Extract differential abundance for both metabolic transitions
+res_diauxic   <- variancePartition::topTable(fit_eb, coef = "Diauxic_T7_vs_T1", number = Inf)
+res_stationary <- variancePartition::topTable(fit_eb, coef = "Stationary_T10_vs_T1", number = Inf)
+
 cat("\nDifferential Abundance: Diauxic Shift (T7 vs T1):\n")
-res_diauxic[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "Significant")]
+print(round(res_diauxic[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 4))
+
+cat("\nDifferential Abundance: Stationary Phase (T10 vs T1):\n")
+print(round(res_stationary[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 4))
 \end{rchunk}
 
 \begin{routput}
 Fitting dream linear mixed model with Kenward-Roger DDF...
 
 Differential Abundance: Diauxic Shift (T7 vs T1):
-           logFC   AveExpr          t      P.Value    adj.P.Val Significant
-IDHC  6.15438359   9.35840 21.0981084 3.820619e-14 7.641237e-14        TRUE
-PMG2 -0.09032809  10.50882 -0.5947831 5.593918e-01 5.593918e-01       FALSE
+       logFC AveExpr       t P.Value adj.P.Val
+IDHC  6.1544  9.3584 21.0981       0         0
+PMG2 -0.0903 10.5088 -0.5948  0.5594    0.5594
+
+Differential Abundance: Stationary Phase (T10 vs T1):
+       logFC AveExpr       t P.Value adj.P.Val
+IDHC  6.3053  9.3584 21.6154       0         0
+PMG2 -0.1926 10.5088 -1.2683  0.2208    0.2208
 \end{routput}
 
 \begin{notebox}
 \textbf{Methodological Detail: Contrast Formulations in Longitudinal dream}\\
-The contrast \texttt{Time\_fac7 - Time\_fac1} represents the exact log2 fold-change induced during the metabolic diauxic shift ($T_7$ vs. $T_1$), while \texttt{(1 | SUBJECT)} accounts for intra-replicate baseline correlation across repeated MS runs. Notice that isocitrate dehydrogenase (\texttt{IDHC}, gene \textit{IDP2}) exhibits massive upregulation ($\log_2\text{FC} = +6.15, t = 21.10, p = 3.82 \times 10^{-14}$) as cells switch from glycolysis to ethanol respiration in the TCA and glyoxylate cycles. In contrast, phosphoglycerate mutase 2 (\texttt{PMG2}, gene \textit{GPM2}) remains unaffected ($\log_2\text{FC} = -0.09, p = 0.559$), confirming known biological ground truth without false-positive inflation.
+The contrasts \texttt{Time\_fac7 - Time\_fac1} and \texttt{Time\_fac10 - Time\_fac1} represent the exact $\log_2$ fold-changes induced during the metabolic diauxic shift ($T_7$ vs. $T_1$) and into stationary phase ($T_{10}$ vs. $T_1$), while \texttt{(1 | SUBJECT)} accounts for inter-replicate baseline differences across cultures. Notice that isocitrate dehydrogenase (\texttt{IDHC}, gene \textit{IDP2}) exhibits massive upregulation at diauxic shift ($\log_2\text{FC} = +6.15, t = 21.10, p = 3.82 \times 10^{-14}$) which is fully maintained into stationary phase ($\log_2\text{FC} = +6.31, t = 21.62, p = 2.51 \times 10^{-14}$) as cells switch from glycolysis to ethanol oxidation in the TCA and glyoxylate cycles. In contrast, phosphoglycerate mutase 2 (\texttt{PMG2}, gene \textit{GPM2}) remains stable across both transitions ($p = 0.559$ and $p = 0.221$, respectively), confirming known biological ground truth without false-positive inflation.
 \end{notebox}
 
+\label{sec:variance_partitioning_lab}
 \begin{rchunk}{Variance Partitioning on Real Mass Spectrometry Time-Course}
 # Decompose phenotypic variance into temporal progression vs replicate batch heterogeneity
 form_vp <- ~ (1 | Time_fac) + (1 | SUBJECT)
@@ -432,7 +455,7 @@ PMG2   0.094    0.077     0.829
 
 \begin{notebox}
 \textbf{Tutor's Diagnostic Advice: Interpreting Variance Partitioning}\\
-Variance partitioning decomposes total variation into normalized fractions $f_k \in [0, 1]$. On this real mass spectrometry dataset, variance partitioning reveals striking biological divergence: for \texttt{IDHC}, \textbf{98.5\%} of the total variance is driven by longitudinal time progression (\texttt{Time\_fac}), with less than $1.5\%$ residual noise. Conversely, \texttt{PMG2} exhibits minimal temporal variance ($7.7\%$) and is dominated by residual variation ($82.9\%$) and slight replicate variation ($9.4\%$). Variance partitioning thus functions as an indispensable diagnostic audit, identifying genuine kinetic responders before downstream statistical contrasts.
+Variance partitioning decomposes total variation into normalized fractions $f_k \in [0, 1]$. On this real mass spectrometry dataset, variance partitioning reveals striking biological divergence: for \texttt{IDHC}, \textbf{98.5\%} of the total variance is driven by longitudinal time progression (\texttt{Time\_fac}), with zero culture replicate variation ($0.0\%$) and less than $1.5\%$ residual noise. Conversely, \texttt{PMG2} exhibits minimal temporal variance ($7.7\%$) and is dominated by residual technical variation ($82.9\%$) alongside a modest replicate baseline shift ($9.4\%$). Variance partitioning thus functions as an indispensable diagnostic audit, distinguishing genuine kinetic responders from stable housekeeping enzymes and verifying whether replicate batching is negligible before downstream statistical contrasts.
 \end{notebox}
 
 \begin{rchunk}{Continuous Non-Linear Trajectory Modeling via Natural Cubic Splines}
@@ -508,7 +531,7 @@ m\_spline    6  66.335   -27.167 38.755  2  3.841e-09 ***
 \begin{pitfallbox}
 \textbf{Deadly Sin 5: Omitting Empirical Bayes Moderation in High-Dimensional Omics.}\\
 \textit{Mechanism:} Fitting separate unmoderated mixed models feature-by-feature via \texttt{lmer} when testing thousands of biomolecules simultaneously.\\
-\textit{Consequence:} In typical omics cohorts with small sample sizes ($n < 30$), feature-specific residual variances fluctuate erratically due to limited denominator degrees of freedom, leading to unstable test statistics and inflated false discovery rates regardless of the total feature count $p$. Empirical Bayes moderation borrows information across all features to shrink individual variance estimates toward a common prior trend, stabilizing $t$-statistics and restoring statistical power. (In contrast, in low-dimensional clinical studies with $p < 20$ and large $n$, standard unmoderated REML mixed models are fully sufficient).\\
+\textit{Consequence:} In typical omics cohorts where the sample size per condition is modest ($n < 30$), individual feature-specific residual variances fluctuate erratically due to limited denominator degrees of freedom, yielding unstable test statistics and inflated false discovery rates. Empirical Bayes moderation stabilizes per-feature variance estimates by shrinking individual variances toward a consensus prior trend, restoring statistical power; the total feature count $p$ separately drives the requirement for false discovery rate (FDR) control across multiple hypotheses. Both considerations are paramount in high-throughput omics.\\
 \textit{Remedy:} Deploy empirical Bayes moderation across random-effects fits using \texttt{variancePartition::dream} \cite{hoffman2021dream, ritchie2015limma}.
 \end{pitfallbox}
 

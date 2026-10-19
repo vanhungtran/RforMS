@@ -412,6 +412,12 @@ cat(sprintf("Prior variance (s0^2): %.4f\n", fit_ebayes$s2.prior))
 \textbf{The Robust Empirical Bayes Extension:} Setting \texttt{robust = TRUE} invokes the algorithm of Phipson et al. (2016) \cite{phipson2016robust}. Rather than fitting the scaled inverse chi-square prior solely by matching trigonometric moments (which can be distorted by hypervariable proteins), it estimates hyperparameter $d_0$ using a robust empirical M-estimator, downweighting outlier variances and preventing over-shrinkage.
 \end{deepdive}
 
+\begin{notebox}
+\textbf{Handling of Missing Intensities in \texttt{lmFit}:}\\
+By default, \texttt{limma::lmFit()} accommodates missing values via available-case analysis (feature-specific pairwise deletion). For each protein $g$, runs containing \texttt{NA} values are dropped, and least squares is fitted using the remaining observations, provided the reduced design matrix retains full column rank ($\operatorname{rank}(\mathbf{X}_{\text{obs}, g}) = P$). While available-case estimation is asymptotically unbiased when values are Missing at Random (MAR), it creates systematic survival bias under severe left-censored Missing Not At Random (MNAR) regimes, where low-abundance peptides drop out near instrument detection boundaries \cite{lazar2016accounting}. In such left-censored MNAR scenarios, analysts should deploy probabilistic dropout modeling (\texttt{proDA} \cite{ahlmann2020proda}) or principled imputation prior to empirical Bayes moderation.
+\end{notebox}
+
+
 \subsection{Lab Step 5: Extracting and Interpreting Results with \texttt{topTable()}}
 
 We extract the ranked table of differential proteins for the Group B vs. Group A comparison with Benjamini--Hochberg FDR adjustment:
@@ -499,7 +505,7 @@ write.csv(ranked_gsea_list, "results/ranked_proteins_for_gsea.csv", row.names = 
 
 \begin{pitfallbox}
 \textbf{Sin 1: Testing Without Variance Moderation in Small Cohorts}\\
-Applying ordinary Student's $t$-tests when $n \le 5$ produces extreme variance instability. Spurious division by near-zero variances ($s_g^2 \approx 0$) inflates false discovery rates by up to $40\%$ \cite{smyth2004linear}. \textbf{Remedy:} Always use empirical Bayes moderation (\texttt{limma::eBayes}, \texttt{MSqRob} \cite{goeminne2016msqrob2}, or \texttt{proDA} \cite{ahlmann2020proda}).
+Applying ordinary Student's $t$-tests across thousands of features when $n \le 5$ per group produces extreme feature-specific variance instability. Spurious division by near-zero variances ($s_g^2 \approx 0$) inflates false discovery rates by up to $40\%$ \cite{smyth2004linear}. \textbf{Remedy:} Always use empirical Bayes moderation (\texttt{limma::eBayes}, \texttt{MSqRob} \cite{goeminne2016msqrob2}, or \texttt{proDA} \cite{ahlmann2020proda}).
 \end{pitfallbox}
 
 \begin{pitfallbox}
@@ -699,28 +705,29 @@ We sort the $m = 10$ raw $p$-values in ascending order, compute the Benjamini--H
 
 \begin{table}[ht]
 \centering
-\caption{Step-by-Step Benjamini--Hochberg Adjustment for Exercise 21.4}
+\caption{Step-by-Step Benjamini--Hochberg Adjustment for Exercise 21.4 ($m = 10, q^* = 0.05$)}
+\label{tab:bh_exercise}
 \small
-\begin{tabularx}{\textwidth}{ccccccX}
+\begin{tabularx}{\textwidth}{cccccX}
 \toprule
-\textbf{Rank ($i$)} & \textbf{Raw $p_{(i)}$} & \textbf{BH Threshold} & \textbf{Ratio $(10/i) p_{(i)}$} & \textbf{Adjusted $q_{(i)}$} & \textbf{Significant?} \\
+\textbf{Rank ($i$)} & \textbf{Raw $p_{(i)}$} & \textbf{Critical Cutoff $\frac{i}{m} q^*$} & \textbf{Raw Ratio $\frac{m}{i} p_{(i)}$} & \textbf{Adjusted $q_{(i)}$} & \textbf{Decision ($q^* = 0.05$)} \\
 \midrule
-1  & 0.0004 & 0.0050 & 0.0040 & 0.0040 & Yes ($p_{(i)} \le 0.005$) \\
-2  & 0.0012 & 0.0100 & 0.0060 & 0.0060 & Yes \\
-3  & 0.0035 & 0.0150 & 0.0117 & 0.0117 & Yes \\
-4  & 0.0080 & 0.0200 & 0.0200 & 0.0200 & Yes \\
-5  & 0.0140 & 0.0250 & 0.0280 & 0.0280 & Yes \\
-6  & 0.0190 & 0.0300 & 0.0317 & 0.0317 & Yes \\
-7  & 0.0320 & 0.0350 & 0.0457 & 0.0457 & Yes \\
-8  & 0.0450 & 0.0400 & 0.0562 & 0.0562 & No ($p_{(i)} > 0.040$) \\
-9  & 0.1200 & 0.0450 & 0.1333 & 0.1333 & No \\
-10 & 0.2500 & 0.0500 & 0.2500 & 0.2500 & No \\
+1  & 0.0004 & 0.0050 & 0.0040 & 0.0040 & Significant ($p_{(1)} \le 0.0050$) \\
+2  & 0.0012 & 0.0100 & 0.0060 & 0.0060 & Significant ($p_{(2)} \le 0.0100$) \\
+3  & 0.0035 & 0.0150 & 0.0117 & 0.0117 & Significant ($p_{(3)} \le 0.0150$) \\
+4  & 0.0080 & 0.0200 & 0.0200 & 0.0200 & Significant ($p_{(4)} \le 0.0200$) \\
+5  & 0.0140 & 0.0250 & 0.0280 & 0.0280 & Significant ($p_{(5)} \le 0.0250$) \\
+6  & 0.0190 & 0.0300 & 0.0317 & 0.0317 & Significant ($p_{(6)} \le 0.0300$) \\
+7  & 0.0320 & 0.0350 & 0.0457 & 0.0457 & Significant ($p_{(7)} \le 0.0350$) \\
+8  & 0.0450 & 0.0400 & 0.0562 & 0.0562 & Not Significant ($p_{(8)} > 0.0400$) \\
+9  & 0.1200 & 0.0450 & 0.1333 & 0.1333 & Not Significant ($p_{(9)} > 0.0450$) \\
+10 & 0.2500 & 0.0500 & 0.2500 & 0.2500 & Not Significant ($p_{(10)} > 0.0500$) \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \noindent
-The largest index satisfying $p_{(i)} \le (i/10) \times 0.05$ is $k = 7$ (where $0.0320 \le 0.0350$). Features with ranks $i = 1$ through $7$ are declared statistically significant at $\text{FDR} \le 0.05$. Notice that feature $i=8$ ($p = 0.0450$) has raw $p < 0.05$ but is correctly rejected as non-significant by FDR control \cite{benjamini1995controlling}.
+\textbf{Interpretation and Monotonicity Enforcement:} Column~3 evaluates the primary Benjamini--Hochberg step-up threshold $(i/m) \cdot q^*$. The largest index satisfying $p_{(i)} \le (i/m) \cdot 0.05$ is $k = 7$ (since $p_{(7)} = 0.0320 \le 0.0350$, whereas $p_{(8)} = 0.0450 > 0.0400$). Hence, features $i = 1$ through $7$ are declared statistically significant at $\text{FDR} \le 0.05$. Column~4 displays the unenforced ratio $(m/i) p_{(i)}$, while Column~5 computes the adjusted $q$-values enforcing step-up monotonicity: $q_{(i)} = \min\left(1, \min_{j \ge i} \frac{m}{j} p_{(j)}\right)$. Notice that feature $i=8$ ($p = 0.0450$) has nominal $p < 0.05$ but is correctly rejected by FDR multiplicity control \cite{benjamini1995controlling}.
 
 \subsection*{Solution to Exercise 21.5}
 \begin{enumerate}

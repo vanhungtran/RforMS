@@ -83,7 +83,7 @@ where each row $p \in \{1, \dots, P\}$ represents an aligned chromatographic fea
 
 A fundamental source of terminology confusion in computational mass spectrometry is the distinction between a \textit{spectral peak}, a \textit{chromatographic peak}, and an \textit{aligned feature}:
 \begin{itemize}
-    \item \textbf{Spectral Peak (Centroid):} An ion abundance reading at a discrete $m/z$ coordinate in a single mass spectrum acquired at time $t_R$. In profile-mode data, it represents a Gaussian or Lorentzian instrumental peak along the $m/z$ dimension \cite{chambers2012cross}.
+    \item \textbf{Spectral Peak (Centroid):} An ion abundance reading at a discrete $m/z$ coordinate in a single mass spectrum acquired at time $t_R$. In profile-mode data, the underlying physical signal is a continuous Gaussian or Lorentzian peak; centroiding reduces this distribution to a discrete $(m/z, I)$ coordinate pair \cite{chambers2012cross}.
     \item \textbf{Chromatographic Peak (EIC Peak):} A continuous chromatographic elution profile formed by an analyte eluting from the analytical column over a finite retention time window $[t_{\text{start}}, t_{\text{end}}]$ at a nearly constant $m/z$. It represents a single chemical entity within a single sample run.
     \item \textbf{Aligned Feature (Correspondence Group):} A cross-sample cluster of chromatographic peaks from multiple analytical runs that share the same $m/z$ within instrumental tolerance and the same retention time after chromatographic drift correction \cite{smith2006xcms}.
 \end{itemize}
@@ -156,7 +156,7 @@ In high-resolution mass spectrometers, mass measurement error is proportional to
 \label{eq:ppm_def}
 \Delta m = \frac{m \cdot \text{ppm}}{10^6} \implies [m - \Delta m, \; m + \Delta m]
 \end{equation}
-For an Orbitrap instrument operating at $5\text{ ppm}$ tolerance:
+For an Orbitrap instrument configured with a CentWave mass tolerance setting of $5\text{ ppm}$ (a conservative parameter chosen wider than the instrument's intrinsic $1$--$3\text{ ppm}$ mass accuracy to accommodate inter-run thermal drift):
 \begin{itemize}
     \item At $m/z = 200.000$, $\Delta m = 200 \times 5 \times 10^{-6} = 0.0010\text{ Da} \implies \pm 1.0\text{ mDa}$.
     \item At $m/z = 800.000$, $\Delta m = 800 \times 5 \times 10^{-6} = 0.0040\text{ Da} \implies \pm 4.0\text{ mDa}$.
@@ -167,7 +167,7 @@ For an Orbitrap instrument operating at $5\text{ ppm}$ tolerance:
 CentWave constructs mass traces dynamically across sequential chromatographic scans without static $m/z$ binning \cite{tautenhahn2008highly}:
 \begin{enumerate}
     \item \textbf{Seeding Centroids:} The algorithm identifies centroided mass spectral peaks $(m_i, I_i)$ in scan $t$ whose ion intensity exceeds the instrumental baseline noise threshold (\texttt{noise} parameter).
-    \item \textbf{Bidirectional Mass-Tracking:} For each candidate centroid, CentWave searches adjacent scans ($t+1, t+2, \dots$) for centroided peaks within the mass tolerance window $[m_i - \Delta m, \, m_i + \Delta m]$ defined by Eq.~(\ref{eq:ppm_def}).
+    \item \textbf{Bidirectional Mass-Tracking:} Starting from candidate seed centroids, CentWave tracks mass traces in both forward and reverse retention time directions across adjacent scans ($t+1, t+2, \dots$ and $t-1, t-2, \dots$) for centroided peaks within the mass tolerance window $[m_i - \Delta m, \, m_i + \Delta m]$ defined by Eq.~(\ref{eq:ppm_def}).
     \item \textbf{ROI Prefiltering (\texttt{prefilter = c(k, I)}):} A candidate mass trace is retained as a valid Region of Interest (ROI) if and only if it spans at least $k$ consecutive scans with centroid intensities exceeding threshold $I$. This eliminates transient electronic spikes and single-scan detector noise while preserving authentic chromatographic elution profiles.
     \item \textbf{Gap Bridging and Boundary Definition:} If a scan lacks a matching centroid within $\pm \Delta m$, the trace is allowed to bridge a user-specified number of missing scans (gap tolerance) before terminating. The resulting ROI defines a contiguous extracted ion chromatogram (EIC) vector $\mathbf{s} = (s(t_1), s(t_2), \dots, s(t_K))$ bounded by exact $m/z$ and retention time limits $[m/z_{\min}, m/z_{\max}] \times [t_{\text{start}}, t_{\text{end}}]$.
 \end{enumerate}
@@ -203,11 +203,11 @@ where $\psi_{a, b}(t) = \frac{1}{\sqrt{a}} \psi\left(\frac{t-b}{a}\right)$. Beca
     \begin{equation*}
     \frac{\partial \mathcal{W}_\psi[s](a, b)}{\partial b} = 0, \quad \mathcal{W}_\psi[s](a, b) > \text{Threshold}
     \end{equation*}
-    \item \textbf{Scale Matching to Chromatographic Peak Width:} For a Gaussian elution peak with standard deviation $\tau$, the Full Width at Half Maximum is $\text{FWHM} = 2\sqrt{2\ln 2} \, \tau \approx 2.355 \, \tau$. The inflection points of the Mexican hat wavelet at scale $a$ occur at $t = \pm a$ (separation $2a$). Maximum CWT response occurs when the wavelet scale matches the chromatographic peak width:
+    \item \textbf{Scale Matching to Chromatographic Peak Width:} For a Gaussian elution peak with standard deviation $\tau$, the Full Width at Half Maximum is $\text{FWHM} = 2\sqrt{2\ln 2} \, \tau \approx 2.355 \, \tau$. The inflection points of the Mexican hat wavelet at scale $a$ occur at $t = \pm a$ (separation $2a$). Maximum CWT inner product response occurs when the wavelet scale parameter $a$ matches the peak's Gaussian standard deviation $\tau$, which corresponds to:
     \begin{equation*}
-    a \approx \frac{\text{FWHM}}{2.355} \quad \left(\text{or } w \approx 2a \text{ between inflection bounds}\right)
+    a \approx \tau = \frac{\text{FWHM}}{2.355}
     \end{equation*}
-    In CentWave, the user specifies the chromatographic peak width range \texttt{peakwidth = c(min, max)} in seconds (e.g., $20$ to $50$ s). The algorithm discretizes this interval into a series of wavelet scales $a \in [a_{\min}, a_{\max}]$, simultaneously resolving sharp metabolite peaks and broader lipid profiles \cite{tautenhahn2008highly}.
+    The distance between the wavelet's two inflection points defines the effective peak-width window $w = 2a$. In CentWave, the user specifies the chromatographic peak width range \texttt{peakwidth = c(min, max)} in seconds (e.g., $20$ to $50$ s). The algorithm discretizes this interval into a series of wavelet scales $a \in [a_{\min}, a_{\max}]$, simultaneously resolving sharp metabolite peaks and broader lipid profiles \cite{tautenhahn2008highly}.
 \end{enumerate}
 \end{svgraybox}
 
@@ -348,7 +348,7 @@ KO WT
 # -----------------------------------------------------------------------------
 
 # CentWave parameter configuration for high-resolution profiling:
-# ppm = 25 (mass accuracy tolerance for Q-TOF / high-resolution LC-MS)
+# ppm = 25 (Q-TOF default mass tolerance; for Orbitrap instruments, set ppm = 5-10)
 # peakwidth = c(20, 50) seconds (chromatographic peak width range at base)
 # snthresh = 10 (signal-to-noise detection threshold)
 # noise = 500 (minimum centroid intensity to seed dynamic mass traces)
@@ -410,7 +410,7 @@ data_aligned <- adjustRtime(data_peaks, param = owp)
 # 2. Define Feature Correspondence via Peak Density
 # bandwidth = 5 seconds, minFraction = 0.50 (detected in at least 50% of a group)
 pdp <- PeakDensityParam(
-  sampleGroups = pData(data_aligned)$condition,
+  sampleGroups = pData(data_aligned)$condition, # Equivalent to sample_info$condition
   minFraction  = 0.50,
   bw           = 5,
   binSize      = 0.025
@@ -503,7 +503,7 @@ FT00004     32100   31800   33400   32900
 \begin{pitfallbox}
 \textbf{Deadly Sin 5: Profile-Mode Memory Exhaustion}\\
 \textit{Mechanism:} Loading 100 high-resolution raw LC-MS files into active RAM in in-memory mode (\texttt{mode = "inMemory"}) \cite{gatto2012msnbase}.\\
-\textit{Mathematical Failure:} Uncompressed profile-mode spectra typically consume $1$--$3\text{ GB}$ per run depending on scan rate and acquisition range. A cohort of 100 files can require $100$--$300\text{ GB}$ of RAM, triggering system paging, disk thrashing, and fatal out-of-memory crashes.\\
+\textit{Mathematical Failure:} Uncompressed profile-mode raw spectra typically consume $1$--$3\text{ GB}$ per run (compared to $50$--$200\text{ MB}$ for centroided mzML files). Loading a cohort of 100 profile-mode files in memory can demand $100$--$300\text{ GB}$ of RAM, triggering system paging, disk thrashing, and fatal out-of-memory crashes.\\
 \textit{Remedy:} Always process files using \texttt{readMSData(..., mode = "onDisk")}, where spectral data are retrieved dynamically on-demand from disk.
 \end{pitfallbox}
 
@@ -542,9 +542,9 @@ FT00004     32100   31800   33400   32900
 \subsection*{Exercise 8.1: Analytical Derivation of Instrumental ppm Mass Windows}
 A high-resolution Orbitrap mass spectrometer measures three distinct chemical ions:
 \begin{itemize}
-    \item Metabolite A (L-Lactate, $[M-H]^-$): nominal $m/z = 89.0244$
-    \item Metabolite B (Glucose, $[M+Cl]^-$): nominal $m/z = 215.0328$
-    \item Metabolite C (Phosphatidylcholine, $[M+H]^+$): nominal $m/z = 760.5851$
+    \item Metabolite A (L-Lactate, $[M-H]^-$ with formula $\text{C}_3\text{H}_5\text{O}_3^-$): theoretical $m/z = 89.0244$
+    \item Metabolite B (D-Glucose, $[M+Cl]^-$ with formula $\text{C}_6\text{H}_{12}\text{O}_6^{35}\text{Cl}^-$): theoretical $m/z = 215.0328$
+    \item Metabolite C (Phosphatidylcholine PC(16:0/18:1), $[M+H]^+$ with formula $\text{C}_{42}\text{H}_{83}\text{NO}_8\text{P}^+$): theoretical $m/z = 760.5851$
 \end{itemize}
 \begin{enumerate}
     \item If the instrument operates at a mass accuracy specification of $5\text{ ppm}$, compute the exact absolute mass tolerance window $\pm \Delta m$ in milli-Daltons (mDa) for all three ions.
@@ -576,6 +576,13 @@ Write an R function \texttt{filter\_high\_quality\_features(feature\_mat, max\_n
 % =============================================================================
 
 \subsection*{Solution to Exercise 8.1: Instrumental ppm Mass Windows}
+
+\paragraph{Analytical Chemistry Note on Adduct Exact Masses:}
+In negative electrospray ionization ($[M-H]^-$), the molecule loses a positively charged proton ($^1\text{H}^+$, rest mass $m(\text{H}^+) = 1.007276\text{ Da}$), rather than a neutral hydrogen atom ($^1\text{H}$, mass $1.007825\text{ Da}$):
+\begin{equation*}
+m([M-H]^-) = M_{\text{neutral}} - m(^1\text{H}^+) = M_{\text{neutral}} - m(^1\text{H}) + m_e
+\end{equation*}
+where $m_e = 0.000549\text{ Da}$ is the electron mass. For L-lactic acid ($\text{C}_3\text{H}_6\text{O}_3$, neutral mass $90.0317\text{ Da}$), the $[M-H]^-$ ion ($\text{C}_3\text{H}_5\text{O}_3^-$) has exact mass $90.0317 - 1.0073 = 89.0244\text{ Da}$ ($m/z = 89.0244$, matching HMDB0000171). Neglecting the electron mass by subtracting a neutral $^1\text{H}$ atom yields $89.0239\text{ Da}$, an artificial error of $5.5\text{ mDa}$ ($62\text{ ppm}$).
 
 \paragraph{Part 1: Absolute Tolerance Windows ($\Delta m$):}
 From Eq.~(\ref{eq:ppm_def}):
@@ -686,10 +693,19 @@ C^2 \sigma \left( \frac{3\sqrt{\pi}}{4} \right) = 1 \implies C^2 = \frac{4}{3\si
 \end{equation*}
 This establishes the exact $L^2$-normalization constant in Eq.~(\ref{eq:mexican_hat}), with $\pi^{1/4}$ sitting unambiguously outside the square root of $3\sigma$.
 
+\clearpage
 \subsection*{Solution to Exercise 8.3: Dynamic Time Warping and Obiwarp Mechanics}
 
 \paragraph{Part 1: Dynamic Time Warping Recurrence and Penalties:}
-The DTW score recurrence is given by Eq.~(\ref{eq:obiwarp_recurrence}).
+In classical dynamic time warping, the alignment score accumulates pairwise distances $d(\mathbf{m}_{0, i}, \mathbf{m}_{1, j})$ under constant step and gap penalties:
+\begin{equation*}
+D(i, j) = d(\mathbf{m}_{0, i}, \mathbf{m}_{1, j}) + \min \begin{cases}
+D(i-1, j-1) + w_{\text{diag}}, \\
+D(i-1, j) + w_{\text{gap}}, \\
+D(i, j-1) + w_{\text{gap}}
+\end{cases}
+\end{equation*}
+In \texttt{obiwarp} (Eq.~\ref{eq:obiwarp_recurrence}), this recurrence is tailored to LC-MS by substituting spectral similarity ($\operatorname{Sim}$), scaling the matching term via a continuous \texttt{response} parameter, and using an affine gap penalty $w_{\text{gap}}(l) = \text{gapInit} + (l-1)\cdot \text{gapExtend}$:
 \begin{itemize}
     \item \textbf{Diagonal Step Penalty ($w_{\text{diag}}$):} Penalizes simultaneous advancement in both sample and reference runs ($i \to i+1, j \to j+1$). When $w_{\text{diag}} = 0$, linear matching is favored.
     \item \textbf{Gap Penalty ($w_{\text{gap}}$):} Penalizes horizontal ($i \to i+1, j$) or vertical ($i, j \to j+1$) steps, representing chromatographic expansion or compression. A high $w_{\text{gap}}$ prevents excessive warping, while a low $w_{\text{gap}}$ allows the algorithm to adapt to severe non-linear gradient fluctuations.

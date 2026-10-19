@@ -41,18 +41,27 @@ else
     QUARTO_CMD="quarto"
 fi
 
-# Temporarily suspend OneDrive sync processes if running to prevent file locks (os error 1224) during render
+# Temporarily suspend OneDrive and FileCoAuth sync processes if running to prevent file locks (os error 1224) during render
 ONEDRIVE_WAS_RUNNING=0
-if tasklist //NH //FI "IMAGENAME eq OneDrive.exe" 2>/dev/null | grep -i "OneDrive.exe" > /dev/null 2>&1; then
+if tasklist //NH 2>/dev/null | grep -iE "OneDrive\.exe|FileCoAuth\.exe" > /dev/null 2>&1; then
     ONEDRIVE_WAS_RUNNING=1
-    echo "Temporarily pausing OneDrive to prevent file locks during render..."
+    echo "Temporarily pausing OneDrive and FileCoAuth to prevent file locks during render..."
     taskkill //F //IM OneDrive.exe > /dev/null 2>&1 || true
     taskkill //F //IM OneDrive.Sync.Service.exe > /dev/null 2>&1 || true
-    sleep 1
+    taskkill //F //IM FileCoAuth.exe > /dev/null 2>&1 || true
+    sleep 2
 fi
 
 $QUARTO_CMD render
 RENDER_EXIT_CODE=$?
+
+if [ $RENDER_EXIT_CODE -ne 0 ]; then
+    echo "Quarto render encountered an issue. Retrying render once after clearing FileCoAuth locks..."
+    taskkill //F //IM FileCoAuth.exe > /dev/null 2>&1 || true
+    sleep 3
+    $QUARTO_CMD render
+    RENDER_EXIT_CODE=$?
+fi
 
 if [ $ONEDRIVE_WAS_RUNNING -eq 1 ]; then
     echo "Restarting OneDrive in background..."
@@ -139,12 +148,13 @@ for dir in *_files; do
 done
 
 # Sync figure assets between data/figures, figures/scifig and docs/
-mkdir -p docs/data/figures docs/figures/scifig data/figures figures/scifig
+mkdir -p docs/data/figures docs/figures/scifig data/figures figures/scifig docs/latex
 cp -r data/figures/* docs/data/figures/ 2>/dev/null || true
 cp -r docs/data/figures/* data/figures/ 2>/dev/null || true
 cp -r figures/scifig/* docs/figures/scifig/ 2>/dev/null || true
 cp -r docs/figures/scifig/* figures/scifig/ 2>/dev/null || true
-echo "✓ Additional files and figure assets synced"
+cp -r latex/chapter_differential_abundance_springer.* docs/latex/ 2>/dev/null || true
+echo "✓ Additional files, figure assets, and LaTeX chapter synced"
 echo ""
 
 # Step 4: Stage only HTML files and necessary deployment files

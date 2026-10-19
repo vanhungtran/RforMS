@@ -1,0 +1,13 @@
+time     <- factor(rep(c("T0", "T7", "T28"), each = 10))
+patient  <- factor(rep(paste0("PT", 1:10), times = 3))
+
+design <- model.matrix(~ 0 + time)
+colnames(design) <- levels(time)
+
+# Estimate consensus intra-patient correlation across all features
+corfit <- duplicateCorrelation(expr_mat, design, block = patient)
+cat(sprintf("Consensus intra-patient correlation: %.3f\n", corfit$consensus))
+
+# Fit linear model incorporating block structure and consensus correlation
+fit <- lmFit(expr_mat, design, block = patient, correlation = corfit$consensus)
+fit_eb <- eBayes(fit)

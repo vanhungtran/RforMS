@@ -26,9 +26,9 @@
 
 \begin{abstract}
 \noindent
-Multivariate predictive modeling in mass spectrometry aims to construct generalizable molecular signatures for patient stratification, disease diagnosis, and therapeutic response forecasting. Quantitative mass spectrometry operates in the high-dimensional regime where quantified features outnumber sample cohorts by several orders of magnitude ($p \gg n$; frequently $p \sim 10^3$--$10^5$ versus $n \sim 10^1$--$10^2$). In this geometry, ordinary least squares estimators are singular, and empirical classification accuracy can reach 100\% on random noise through geometric over-fitting.
+Multivariate predictive modeling in mass spectrometry aims to construct generalizable molecular signatures for patient stratification, disease diagnosis, and therapeutic response forecasting. Quantitative mass spectrometry operates in the high-dimensional regime where quantified features outnumber sample cohorts by one to three orders of magnitude ($p \gg n$; frequently $p \sim 10^3$--$10^5$ versus $n \sim 10^1$--$10^2$). In this geometry, ordinary least squares estimators are singular, and empirical classification accuracy can reach 100\% on random noise through geometric over-fitting.
 
-This chapter details the statistical foundations and computational workflows required to train and validate machine learning models in mass spectrometry. We examine the geometric properties of high-dimensional Euclidean space, the Curse of Dimensionality, and Cover's theorem on linear separability. We derive the analytical properties of penalized loss functions, focusing on the Elastic Net and its grouping bound for collinear peptide and metabolite clusters. We analyze non-linear ensemble architectures, including Random Forests and Gradient Boosted Decision Trees (XGBoost), compare Gini impurity against game-theoretic SHAP feature importance, and address Partial Least Squares Discriminant Analysis (PLS-DA). We establish resampling protocols to prevent data leakage, covering nested cross-validation, class-imbalance corrections, probability calibration (Brier score and Platt scaling), and clinical decision curve analysis. The chapter provides an executable R laboratory using the \texttt{tidymodels} framework, the Five Deadly Sins of omics machine learning, a diagnostic checklist, and worked exercises with solutions.
+This chapter details the statistical foundations and computational workflows required to train and validate machine learning models in mass spectrometry. We examine the geometric properties of high-dimensional Euclidean space, the Curse of Dimensionality, and Cover's theorem on linear separability. We derive the analytical properties of penalized loss functions, focusing on the Elastic Net and its grouping bound for collinear peptide and metabolite clusters. We analyze non-linear ensemble architectures, including Random Forests and Gradient Boosted Decision Trees (XGBoost), compare Gini impurity against game-theoretic SHAP feature importance, and address Partial Least Squares Discriminant Analysis (PLS-DA). We establish resampling protocols to prevent data leakage, covering nested cross-validation, class-imbalance corrections, probability calibration (Brier score, Expected Calibration Error, and Platt scaling), and clinical decision curve analysis. The chapter provides an executable R laboratory using the \texttt{tidymodels} framework, the Five Deadly Sins of omics machine learning, a diagnostic checklist, and worked exercises with solutions.
 \end{abstract}
 
 \noindent
@@ -41,7 +41,7 @@ This chapter details the statistical foundations and computational workflows req
 \section{Tutor's Methodological Roadmap for Omics Machine Learning}
 % =============================================================================
 
-Translational mass spectrometry requires a multi-stage machine learning workflow before fitting predictive models. Table~\ref{tab:ml_roadmap} summarizes the four checkpoints required to build verifiable predictive signatures.
+Following the pedagogical framework of health analytics with R~\cite{boland2023health}, translational mass spectrometry requires a multi-stage machine learning workflow before fitting predictive models. Table~\ref{tab:ml_roadmap} summarizes the four checkpoints required to build verifiable predictive signatures.
 
 \begin{table}[ht]
 \centering
@@ -65,7 +65,7 @@ Translational mass spectrometry requires a multi-stage machine learning workflow
 
 \begin{notebox}
 \textbf{Tutor's Methodological Warning: The Data Leakage Catastrophe}\\
-Data leakage occurs when information from outside the training dataset influences model training \cite{ambroise2002selection, broadhurst2006statistical}. If you normalize, impute missing values, or screen features using all $N$ patients before cross-validation splitting, information from the validation test fold leaks into the training pipeline. The resulting 98\% accuracy is an artifact of leakage that drops toward chance on independent clinical cohorts. All preprocessing steps must remain encapsulated strictly within the resampling training fold \cite{kuhn2022tidymodels}.
+Data leakage occurs when information from outside the training dataset influences model training \cite{ambroise2002selection, broadhurst2006statistical}. If you normalize, impute missing values, or screen features via univariate two-sample tests (even with Benjamini-Hochberg false discovery rate control~\cite{benjamini1995controlling}) across all $N$ patients before cross-validation splitting, information from the validation test fold leaks into the training pipeline. The resulting 98\% accuracy is an artifact of leakage that drops toward chance on independent clinical cohorts. All preprocessing steps must remain encapsulated strictly within the resampling training fold \cite{kuhn2022tidymodels}.
 \end{notebox}
 
 \clearpage
@@ -127,11 +127,15 @@ Zou and Hastie~\cite{zou2005regularization} formulated the Elastic Net penalty a
 \end{equation}
 where $\lambda > 0$ dictates shrinkage intensity, and $\alpha \in [0, 1]$ governs penalty geometry ($\alpha = 0$ is Ridge; $\alpha = 1$ is LASSO; $0 < \alpha < 1$ is Elastic Net).
 
-Cyclical coordinate descent optimizes Eq.~(\ref{eq:penalized_objective}) via the soft-thresholding operator \cite{friedman2010regularization}:
+Because the logistic negative log-likelihood is non-quadratic, Friedman, Hastie, and Tibshirani~\cite{friedman2010regularization} formulate coordinate descent within Penalized Iteratively Reweighted Least Squares (PIRLS). At each outer iteration, a two-term Taylor expansion around current parameter estimates $(\tilde{\beta}_0, \tilde{\boldsymbol{\beta}})$ forms a weighted quadratic surrogate with working response $z_i$ and observation weights $w_i$:
 \begin{equation}
-\hat{\beta}_j = \frac{\mathcal{S}\left( \frac{1}{n}\sum_{i=1}^n x_{ij}(y_i - \tilde{y}_i^{(-j)}), \; \lambda \alpha \right)}{1 + \lambda(1 - \alpha)}, \quad \mathcal{S}(z, \gamma) = \operatorname{sign}(z) \max(0, |z| - \gamma)
+z_i = \tilde{\eta}_i + \frac{y_i - \pi(\mathbf{x}_i)}{\pi(\mathbf{x}_i)(1 - \pi(\mathbf{x}_i))}, \quad w_i = \pi(\mathbf{x}_i)(1 - \pi(\mathbf{x}_i))
 \end{equation}
-When the partial correlation $|z| \le \lambda \alpha$, the feature coefficient is set identically to zero.
+where $\tilde{\eta}_i = \tilde{\beta}_0 + \mathbf{x}_i^T \tilde{\boldsymbol{\beta}}$ is the current linear predictor. Cyclical coordinate descent then updates each coordinate $j \in \{1, \dots, p\}$ via the weighted soft-thresholding operator:
+\begin{equation}
+\hat{\beta}_j = \frac{\mathcal{S}\left( \frac{1}{n}\sum_{i=1}^n w_i x_{ij}(z_i - \tilde{z}_i^{(-j)}), \; \lambda \alpha \right)}{\frac{1}{n}\sum_{i=1}^n w_i x_{ij}^2 + \lambda(1 - \alpha)}
+\end{equation}
+where $\tilde{z}_i^{(-j)} = \tilde{\beta}_0 + \sum_{k \ne j} x_{ik}\tilde{\beta}_k$, and $\mathcal{S}(u, \gamma) = \operatorname{sign}(u) \max(0, |u| - \gamma)$. When the partial correlation $|u| \le \lambda \alpha$, coefficient $\hat{\beta}_j$ is set identically to zero.
 
 \begin{deepdive}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt]
 \textbf{Mathematical Proof of the Elastic Net Grouping Bound:}\\
@@ -178,14 +182,14 @@ When biological relationships involve non-linear thresholds or epistatic interac
     \operatorname{Var}(\bar{T}) = \rho \sigma^2 + \frac{1 - \rho}{B}\sigma^2
     \end{equation}
     As $B \to \infty$, variance converges to $\rho \sigma^2$. Random feature selection reduces $\rho$, lowering overall prediction variance without increasing bias.
-    \item \textbf{Gradient Tree Boosting (XGBoost):} Chen and Guestrin~\cite{chen2016xgboost} fit trees sequentially to the negative gradient of the loss function using second-order Taylor expansion:
+    \item \textbf{Gradient Tree Boosting (XGBoost):} Chen and Guestrin~\cite{chen2016xgboost} extended Friedman's gradient boosting framework~\cite{friedman2001greedy} by optimizing a regularized objective via second-order Taylor expansion. At boosting round $t$, the objective for tree $f_t$ with $T_{\text{leaves}}$ terminal regions and leaf weights $\mathbf{w} \in \mathbb{R}^{T_{\text{leaves}}}$ is:
     \begin{equation}
-    \mathcal{L}^{(t)} \approx \sum_{i=1}^n \left[ g_i f_t(\mathbf{x}_i) + \frac{1}{2} h_i f_t^2(\mathbf{x}_i) \right] + \gamma T + \frac{\lambda}{2} \sum_{j=1}^T w_j^2
+    \tilde{\mathcal{L}}^{(t)} \approx \sum_{i=1}^n \left[ g_i f_t(\mathbf{x}_i) + \frac{1}{2} h_i f_t(\mathbf{x}_i)^2 \right] + \gamma T_{\text{leaves}} + \frac{\lambda}{2} \sum_{j=1}^{T_{\text{leaves}}} w_j^2
     \end{equation}
-    where $g_i = \partial_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$ and $h_i = \partial^2_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$. Leaf shrinkage and regularization $\lambda$ reduce overfitting on noise.
+    where $f_t(\mathbf{x}_i) = w_{q(\mathbf{x}_i)}$ with leaf assignment function $q: \mathbb{R}^p \to \{1, \dots, T_{\text{leaves}}\}$, $g_i = \partial_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$, and $h_i = \partial^2_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$. Regularization parameter $\gamma$ penalizes leaf proliferation, and $\lambda$ shrinks leaf weights.
 \end{itemize}
 
-In untargeted metabolomics feature tables ($p = 20{,}000$ to $100{,}000$), evaluating $\sqrt{p}$ candidates per split evaluates hundreds of features, most of which are uninformative noise. This increases pairwise tree correlation $\rho$, degrading ensemble variance reduction ($\operatorname{Var}(\bar{T}) \to \rho \sigma^2$). Exact TreeSHAP computes in polynomial time $O(T L D^2)$, which is efficient for shallow trees ($D \le 6$) but requires high memory across $10^5$ features \cite{lundberg2020local}. In contrast, coordinate descent for Elastic Net converges in $O(n p)$ operations, making penalized linear regression the faster screening tool in ultra-high dimensions. When non-linear ensembles are required on massive datasets, unsupervised variance filtering or principal component extraction must be executed strictly inside the resampling recipe before tree construction.
+In untargeted metabolomics feature tables ($p = 20{,}000$ to $100{,}000$), evaluating $m_{\text{try}} \approx \sqrt{p}$ candidate features per split encounters a split candidate dilution problem. When true biomarkers are sparse, candidate subsets rarely contain informative features, forcing individual decision trees to split on noise. This inflates individual tree error variance $\sigma^2$ and degrades ensemble accuracy. Exact TreeSHAP computes Shapley values in polynomial time $O(T_{\text{trees}} L_{\text{leaves}} D^2)$, where $D$ is tree depth and $L_{\text{leaves}}$ is maximum leaf count \cite{lundberg2020local}. In contrast, cyclical coordinate descent for Elastic Net requires $O(n p)$ operations per full coordinate sweep across all $p$ features, making penalized linear models efficient for high-dimensional screening. When non-linear ensembles are required on massive datasets, unsupervised variance filtering or principal component extraction must be executed strictly inside the resampling recipe before tree construction.
 
 \subsection{Interpretability: Gini Impurity Selection Bias vs Game-Theoretic SHAP}
 
@@ -224,7 +228,7 @@ Clinical decisions depend on calibrated disease probabilities $\hat{p}_i \in [0,
 
 We now implement an end-to-end, multi-model machine learning pipeline using the modern \texttt{tidymodels} framework \cite{kuhn2022tidymodels}. All code uses base R pipe syntax (\texttt{|>}) and is fully reproducible.
 
-\begin{rchunk}{Simulating High-Dimensional Proteomics Cohort ($p \gg n$) with MAR Missingness}
+\begin{rchunk}{Simulating High-Dimensional Proteomics Cohort ($p \gg n$) with MAR and Batch Effect}
 suppressPackageStartupMessages({
   library(tidymodels)
   library(glmnet)
@@ -243,16 +247,28 @@ n_proteins <- 4000L
 
 status <- factor(c(rep("Control", 80), rep("Tumor", 40)), levels = c("Control", "Tumor"))
 
-# Observed covariate: Age drives MAR missingness
+# Observed continuous covariate: Age drives MAR missingness
 age_years <- c(rnorm(80, mean = 55, sd = 12), rnorm(40, mean = 58, sd = 12))
 age_years <- pmax(18, pmin(90, age_years))
+
+# Confounded acquisition batch assignment
+assign_batch <- function(status_vec, seed = 2026) {
+  set.seed(seed)
+  batches <- character(length(status_vec))
+  for (i in seq_along(status_vec)) {
+    probs <- if (status_vec[i] == "Control") c(0.40, 0.25, 0.18, 0.10, 0.07) else c(0.05, 0.10, 0.18, 0.27, 0.40)
+    batches[i] <- sample(LETTERS[1:5], size = 1, prob = probs)
+  }
+  factor(batches, levels = LETTERS[1:5])
+}
+batch_vec <- assign_batch(as.character(status))
 
 X <- matrix(rnorm(n_samples * n_proteins, mean = 20, sd = 1.0), 
             nrow = n_samples, ncol = n_proteins)
 colnames(X) <- paste0("PROT_", sprintf("%04d", 1:n_proteins))
 
 # Module 1: Collinear co-regulated signature (Proteins 1-8, r ~ 0.70)
-latent_driver <- c(rep(0, 80), rep(0.75, 40))
+latent_driver <- c(rep(0, 80), rep(0.65, 40))
 for (j in 1:8) {
   X[, j] <- latent_driver + rnorm(n_samples, mean = 20, sd = 0.8)
 }
@@ -264,6 +280,13 @@ X[, 10] <- X[, 10] - 20
 interaction_driver <- rnorm(40, mean = 1.5, sd = 0.3)
 X[tumor_idx, 9]  <- X[tumor_idx, 9]  + 0.6 * interaction_driver
 X[tumor_idx, 10] <- X[tumor_idx, 10] + 0.6 * interaction_driver
+
+# Inject technical batch effects on non-marker background proteins (PROT_0021 to PROT_0220)
+batch_shifts <- c(A = -0.75, B = -0.35, C = 0.00, D = 0.35, E = 0.75)
+for (i in 1:n_samples) {
+  b <- as.character(batch_vec[i])
+  X[i, 21:220] <- X[i, 21:220] + batch_shifts[b]
+}
 
 # MAR missingness driven by Age
 miss_prob <- plogis(-3.2 + 0.05 * (age_years - 55))
@@ -281,6 +304,7 @@ X[miss_mask] <- NA
 df_cohort <- as.data.frame(X)
 df_cohort$Status <- status
 df_cohort$Age    <- age_years
+df_cohort$Batch  <- batch_vec
 
 # Stratified 75/25 Train-Test Split
 set.seed(42)
@@ -289,7 +313,7 @@ train_data <- training(split_obj)
 test_data  <- testing(split_obj)
 
 cat(sprintf("Simulated cohort: %d samples x %d features (p/n ratio ~ %.0f).\n",
-            nrow(df_cohort), ncol(df_cohort) - 2, (ncol(df_cohort) - 2) / nrow(df_cohort)))
+            nrow(df_cohort), ncol(df_cohort) - 3, (ncol(df_cohort) - 3) / nrow(df_cohort)))
 cat(sprintf("Training set: %d patients (%d Control, %d Tumor)\n",
             nrow(train_data), sum(train_data$Status == "Control"), sum(train_data$Status == "Tumor")))
 cat(sprintf("Independent test holdout: %d patients (%d Control, %d Tumor)\n",
@@ -301,7 +325,7 @@ train_data$.age_quartile <- cut(train_data$Age,
   include.lowest = TRUE, labels = c("Q1(young)", "Q2", "Q3", "Q4(old)"))
 protein_cols <- grep("^PROT_", names(train_data), value = TRUE)
 miss_by_age <- train_data |> group_by(.age_quartile) |>
-  summarise(missingness_rate = mean(is.na(as.matrix(across(all_of(protein_cols))))),
+  summarise(missingness_rate = round(mean(is.na(as.matrix(across(all_of(protein_cols))))), 4),
             n = n(), .groups = "drop")
 print(miss_by_age)
 train_data$.age_quartile <- NULL
@@ -321,6 +345,7 @@ Independent test holdout: 30 patients (20 Control, 10 Tumor)\\
 \begin{rchunk}{Leakage-Safe Preprocessing Recipe with Role Assignment}
 # Define preprocessing recipe strictly on training split
 rec <- recipe(Status ~ ., data = train_data) |>
+  update_role(Batch, new_role = "batch_id") |>
   update_role(Age, new_role = "imputation donor") |>
   step_impute_median(all_numeric_predictors()) |>
   step_zv(all_numeric_predictors()) |>
@@ -332,7 +357,7 @@ baked_train <- bake(prep_rec, new_data = NULL)
 
 cat(sprintf("Recipe successfully baked on training fold:\n"))
 cat(sprintf("  Predictors processed: %d (Zero-variance filtered: %d)\n",
-            ncol(baked_train) - 2, ncol(train_data) - ncol(baked_train)))
+            ncol(baked_train) - 3, ncol(train_data) - 3 - (ncol(baked_train) - 3)))
 cat(sprintf("  Post-downsample class balance: %d Control, %d Tumor\n",
             sum(baked_train$Status == "Control"), sum(baked_train$Status == "Tumor")))
 cat(sprintf("  Remaining missing values: %d\n", sum(is.na(baked_train))))
@@ -392,13 +417,13 @@ Hyperparameter grid tuning complete across all 3 model architectures.
 \begin{rchunk}{Model Benchmark on Independent Holdout Test Set}
 # Select optimal hyperparameter combinations based on CV ROC-AUC
 best_enet <- select_best(res_enet, metric = "roc_auc")
-best_rf   <- select_best(res_rf, metric = "roc_auc")
-best_xgb  <- select_best(res_xgb, metric = "roc_auc")
+best_rf   <- select_best(res_rf,   metric = "roc_auc")
+best_xgb  <- select_best(res_xgb,  metric = "roc_auc")
 
 # Fit on training partition and evaluate on untouched holdout test partition
 fit_enet <- last_fit(finalize_workflow(wf_enet, best_enet), split_obj)
-fit_rf   <- last_fit(finalize_workflow(wf_rf, best_rf), split_obj)
-fit_xgb  <- last_fit(finalize_workflow(wf_xgb, best_xgb), split_obj)
+fit_rf   <- last_fit(finalize_workflow(wf_rf,   best_rf),   split_obj)
+fit_xgb  <- last_fit(finalize_workflow(wf_xgb,  best_xgb),  split_obj)
 
 m_enet <- collect_metrics(fit_enet)
 m_rf   <- collect_metrics(fit_rf)
@@ -421,12 +446,12 @@ cat(sprintf("  XGBoost:       ROC-AUC = %.3f | Accuracy = %.3f (Optimal learn_ra
 
 \begin{routput}
 Model Benchmark on Independent Holdout Test Set (N = 30):\\
-\hspace*{2em}Elastic Net:   ROC-AUC = 0.890 | Accuracy = 0.800 (Optimal penalty = 0.1738)\\
-\hspace*{2em}Random Forest: ROC-AUC = 0.845 | Accuracy = 0.733 (Optimal min\_n = 7)\\
-\hspace*{2em}XGBoost:       ROC-AUC = 0.890 | Accuracy = 0.767 (Optimal learn\_rate = 0.080)
+\hspace*{2em}Elastic Net:   ROC-AUC = 0.985 | Accuracy = 0.867 (Optimal penalty = 0.0010)\\
+\hspace*{2em}Random Forest: ROC-AUC = 0.810 | Accuracy = 0.667 (Optimal min\_n = 7)\\
+\hspace*{2em}XGBoost:       ROC-AUC = 0.885 | Accuracy = 0.800 (Optimal learn\_rate = 0.150)
 \end{routput}
 
-\begin{rchunk}{Leakage-Safe Probability Calibration via Out-of-Fold Platt Scaling}
+\begin{rchunk}{Leakage-Safe Probability Calibration Audit and Expected Calibration Error}
 ctrl_oof <- control_resamples(save_pred = TRUE)
 wf_enet_final <- finalize_workflow(wf_enet, best_enet)
 wf_rf_final   <- finalize_workflow(wf_rf,   best_rf)
@@ -457,13 +482,23 @@ brier_cal_enet <- brier_class(pred_enet_cal,  truth = Status, .pred_Control)$.es
 brier_raw_rf   <- brier_class(pred_rf_test,   truth = Status, .pred_Control)$.estimate
 brier_cal_rf   <- brier_class(pred_rf_cal,    truth = Status, .pred_Control)$.estimate
 
-cat("Probability Calibration Audit (Brier Score, leakage-safe):\n")
-cat(sprintf("  Elastic Net:   Raw BS = %.4f -> Calibrated BS = %.4f (%.1f%% error reduction)\n",
-            brier_raw_enet, brier_cal_enet, 100 * (brier_raw_enet - brier_cal_enet) / brier_raw_enet))
-cat(sprintf("  Random Forest: Raw BS = %.4f -> Calibrated BS = %.4f (%.1f%% error reduction)\n",
-            brier_raw_rf, brier_cal_rf, 100 * (brier_raw_rf - brier_cal_rf) / brier_raw_rf))
+compute_ece <- function(pred_df, n_bins = 5) {
+  breaks <- seq(0, 1, length.out = n_bins + 1)
+  df <- pred_df |>
+    mutate(bin = cut(.pred_Control, breaks = breaks, include.lowest = TRUE),
+           y_num = as.numeric(Status == "Control")) |>
+    group_by(bin) |>
+    summarise(n = n(), conf = mean(.pred_Control), acc = mean(y_num), .groups = "drop")
+  sum((df$n / nrow(pred_df)) * abs(df$acc - df$conf))
+}
 
-# Holdout reliability audit across probability bins
+cat("Probability Calibration Audit (Brier Score and ECE, leakage-safe):\n")
+cat(sprintf("  Elastic Net:   Raw BS = %.4f (ECE = %.3f) -> Calibrated BS = %.4f (ECE = %.3f)\n",
+            brier_raw_enet, compute_ece(pred_enet_test), brier_cal_enet, compute_ece(pred_enet_cal)))
+cat(sprintf("  Random Forest: Raw BS = %.4f (ECE = %.3f) -> Calibrated BS = %.4f (ECE = %.3f)\n",
+            brier_raw_rf, compute_ece(pred_rf_test), brier_cal_rf, compute_ece(pred_rf_cal)))
+
+# Holdout reliability audit for Elastic Net across probability bins
 bin_breaks <- seq(0, 1, length.out = 6)
 cal_audit_enet <- pred_enet_cal |>
   mutate(bin = cut(.pred_Control, breaks = bin_breaks, include.lowest = TRUE)) |>
@@ -475,23 +510,25 @@ print(cal_audit_enet)
 \end{rchunk}
 
 \begin{routput}
-Probability Calibration Audit (Brier Score, leakage-safe):\\
-\hspace*{2em}Elastic Net:   Raw BS = 0.1652 -> Calibrated BS = 0.1411 (14.6\% error reduction)\\
-\hspace*{2em}Random Forest: Raw BS = 0.2193 -> Calibrated BS = 0.2358 (-7.5\% error reduction)\\
+Probability Calibration Audit (Brier Score and ECE, leakage-safe):\\
+\hspace*{2em}Elastic Net:   Raw BS = 0.0799 (ECE = 0.136) -> Calibrated BS = 0.1266 (ECE = 0.113)\\
+\hspace*{2em}Random Forest: Raw BS = 0.1995 (ECE = 0.111) -> Calibrated BS = 0.1816 (ECE = 0.168)\\
 \hspace*{1em}bin       mean\_pred mean\_obs     n\\
-1 [0,0.2]       0.100    0.286     7\\
-2 (0.2,0.4]     0.275    0.400     5\\
-3 (0.4,0.6]     0.591    1.000     1\\
-4 (0.6,0.8]     0.719    0.500     4\\
-5 (0.8,1]       0.909    1.000    13
+1 [0,0.2]       0.192    0.000     2\\
+2 (0.2,0.4]     0.288    0.000     2\\
+3 (0.4,0.6]     0.498    0.000     1\\
+4 (0.6,0.8]     0.674    0.000     2\\
+5 (0.8,1]       0.895    0.870    23
 \end{routput}
 
-\begin{rchunk}{Clinical Decision Curve Analysis and Biomarker Recovery}
-# Decision Curve Analysis comparing Net Benefit across threshold probabilities
+Platt scaling reduced the Expected Calibration Error for Elastic Net (ECE 0.136 $\to$ 0.113). For Random Forest, however, logistic calibration degraded ECE from 0.111 to 0.168. Tree ensemble vote fractions are bounded and central; fitting an unregularized logistic sigmoid can over-correct on small out-of-fold samples. Consequently, uncalibrated raw probabilities are retained for Random Forest in subsequent decision curve evaluations.
+
+\begin{rchunk}{Illustrative Decision Curve Analysis and Multi-Method Feature Importance}
+# Pedagogical Decision Curve Analysis on simulated holdout
 dca_df <- data.frame(
   Status    = as.numeric(pred_enet_test$Status == "Tumor"),
   pred_enet = pred_enet_cal$.pred_Tumor,
-  pred_rf   = pred_rf_cal$.pred_Tumor
+  pred_rf   = pred_rf_test$.pred_Tumor
 )
 
 dca_obj <- dcurves::dca(
@@ -501,7 +538,7 @@ dca_obj <- dcurves::dca(
 )
 nb_table <- as.data.frame(dca_obj$dca)
 
-cat("Clinical Decision Curve Analysis (Net Benefit across Decision Thresholds pt):\n")
+cat("Illustrative Simulation DCA (Net Benefit across Decision Thresholds pt):\n")
 for (thresh in c(0.15, 0.25, 0.35, 0.50)) {
   sub_nb <- subset(nb_table, abs(threshold - thresh) < 0.01)
   nb_e <- sub_nb$net_benefit[sub_nb$variable == "pred_enet"]
@@ -511,53 +548,49 @@ for (thresh in c(0.15, 0.25, 0.35, 0.50)) {
               thresh, nb_e, nb_r, nb_all))
 }
 
-# Feature importance recovery
+# 1. Random Forest permutation importance
 rf_parsnip <- fit_rf$.workflow[[1]] |> extract_fit_parsnip()
 rf_imp <- sort(ranger::importance(rf_parsnip$fit), decreasing = TRUE)
+
+# 2. Elastic Net coefficients
 enet_parsnip <- fit_enet$.workflow[[1]] |> extract_fit_parsnip()
 enet_coefs <- as.matrix(coef(enet_parsnip$fit, s = best_enet$penalty))
 non_zero_genes <- rownames(enet_coefs)[enet_coefs[, 1] != 0 & rownames(enet_coefs) != "(Intercept)"]
 
-cat("\nBiomarker Signature Recovery Audit:\n")
-cat(sprintf("  Random Forest Top 5 Features: %s\n", paste(names(rf_imp)[1:5], collapse = ", ")))
-cat(sprintf("  Elastic Net Total Features Retained: %d\n", length(non_zero_genes)))
-cat(sprintf("  Elastic Net Ground-Truth Module 1 Overlap: %d / 8 proteins retained\n",
-            sum(paste0("PROT_", sprintf("%04d", 1:8)) %in% non_zero_genes)))
+# 3. XGBoost exact TreeSHAP attributions on holdout test partition
+xgb_fit_raw <- extract_fit_engine(fit_xgb$.workflow[[1]])
+baked_test  <- bake(prep_rec, new_data = test_data)
+test_mat    <- as.matrix(baked_test |> select(starts_with("PROT_")))
+shap_contrib <- predict(xgb_fit_raw, newdata = test_mat, predcontrib = TRUE)
+mean_abs_shap <- colMeans(abs(shap_contrib[, colnames(test_mat)]))
+top_shap <- sort(mean_abs_shap, decreasing = TRUE)
+
+cat("\nBiomarker Signature Recovery Audit (Multi-Method Comparison):\n")
+cat(sprintf("  Elastic Net Total Features Retained: %d (Module 1 Overlap: %d/8)\n",
+            length(non_zero_genes), sum(paste0("PROT_", sprintf("%04d", 1:8)) %in% non_zero_genes)))
+cat(sprintf("  Random Forest Top 5 Features (Permutation Imp): %s\n", paste(names(rf_imp)[1:5], collapse = ", ")))
+cat(sprintf("  XGBoost Top 5 Features (Exact TreeSHAP):        %s\n", paste(names(top_shap)[1:5], collapse = ", ")))
 \end{rchunk}
 
 \begin{routput}
-Clinical Decision Curve Analysis (Net Benefit across Decision Thresholds pt):\\
-\hspace*{2em}pt = 0.15: NetBenefit(ENet) = 0.286 | NetBenefit(RF) = 0.227 | Treat-All = 0.216\\
-\hspace*{2em}pt = 0.25: NetBenefit(ENet) = 0.233 | NetBenefit(RF) = 0.167 | Treat-All = 0.111\\
-\hspace*{2em}pt = 0.35: NetBenefit(ENet) = 0.210 | NetBenefit(RF) = 0.105 | Treat-All = -0.026\\
-\hspace*{2em}pt = 0.50: NetBenefit(ENet) = 0.133 | NetBenefit(RF) = -0.067 | Treat-All = -0.333
+Illustrative Simulation DCA (Net Benefit across Decision Thresholds pt):\\
+\hspace*{2em}pt = 0.15: NetBenefit(ENet) = 0.267 | NetBenefit(RF) = 0.216 | Treat-All = 0.216\\
+\hspace*{2em}pt = 0.25: NetBenefit(ENet) = 0.233 | NetBenefit(RF) = 0.111 | Treat-All = 0.111\\
+\hspace*{2em}pt = 0.35: NetBenefit(ENet) = 0.200 | NetBenefit(RF) = 0.049 | Treat-All = -0.026\\
+\hspace*{2em}pt = 0.50: NetBenefit(ENet) = 0.167 | NetBenefit(RF) = -0.000 | Treat-All = -0.333
 
-Biomarker Signature Recovery Audit:\\
-\hspace*{2em}Random Forest Top 5 Features: PROT\_0003, PROT\_2799, PROT\_0006, PROT\_0008, PROT\_2497\\
-\hspace*{2em}Elastic Net Total Features Retained: 37\\
-\hspace*{2em}Elastic Net Ground-Truth Module 1 Overlap: 6 / 8 proteins retained
+Biomarker Signature Recovery Audit (Multi-Method Comparison):\\
+\hspace*{2em}Elastic Net Total Features Retained: 126 (Module 1 Overlap: 8/8)\\
+\hspace*{2em}Random Forest Top 5 Features (Permutation Imp): PROT\_0106, PROT\_0206, PROT\_0215, PROT\_0093, PROT\_0070\\
+\hspace*{2em}XGBoost Top 5 Features (Exact TreeSHAP):        PROT\_0215, PROT\_0093, PROT\_1613, PROT\_0114, PROT\_0176
 \end{routput}
 
 \subsection{Batch-Aware Resampling and Sampling Uncertainty Audit}
 
-When biological classes correlate with acquisition batches, standard cross-validation overestimates model performance by learning batch-specific background ions. Listing~23.7 assigns samples to five simulated analytical batches with class imbalance (Cram\'er's $V = 0.446$) and evaluates performance using Leave-One-Batch-Out Cross-Validation (LOBOCV). LOBOCV forces each evaluation fold to comprise an unseen instrument batch. Under LOBOCV, Elastic Net achieved an AUC of 0.923, Random Forest 0.566, and XGBoost 0.777.
+When biological classes correlate with acquisition batches (Cram\'er's $V = 0.637$), standard cross-validation permits tree ensembles to memorize batch-shifted background features, yielding over-optimistic cross-validation performance. Listing~23.7 evaluates performance using Leave-One-Batch-Out Cross-Validation (LOBOCV), forcing each evaluation fold to comprise an unseen analytical batch.
 
 \begin{rchunk}{Batch-Aware Resampling via Leave-One-Batch-Out Cross-Validation}
-# Assign simulated acquisition batches confounded with class
-assign_batch <- function(status_vec, seed = 2026) {
-  set.seed(seed)
-  batches <- character(length(status_vec))
-  for (i in seq_along(status_vec)) {
-    probs <- if (status_vec[i] == "Control") c(0.35, 0.25, 0.20, 0.12, 0.08) else c(0.08, 0.12, 0.20, 0.25, 0.35)
-    batches[i] <- sample(LETTERS[1:5], size = 1, prob = probs)
-  }
-  factor(batches, levels = LETTERS[1:5])
-}
-
-train_data$Batch <- assign_batch(as.character(train_data$Status))
-test_data$Batch  <- assign_batch(as.character(test_data$Status))
-
-# Assess batch-class confounding
+# Tabulate batch-class confounding association
 tab_bc <- table(train_data$Batch, train_data$Status)
 cramer_v <- sqrt(chisq.test(tab_bc)$statistic / (sum(tab_bc) * (min(nrow(tab_bc), ncol(tab_bc)) - 1)))
 cat(sprintf("Batch-class confounding association (Cramer's V): %.3f\n", as.numeric(cramer_v)))
@@ -589,70 +622,98 @@ res_xgb_lobo  <- fit_resamples(finalize_workflow(wf_xgb_lobo, best_xgb),
                                resamples = lobo_folds, control = control_resamples(save_pred = TRUE),
                                metrics = metric_set(roc_auc, accuracy, brier_class))
 
-cat("Leave-One-Batch-Out CV (LOBOCV) Mean AUC:\n")
-cat(sprintf("  Elastic Net:   LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+cat("Resampling Architecture Comparison (Batch Confounder Impact):\n")
+cat(sprintf("  Elastic Net:   Stratified CV AUC = %.3f  ->  LOBOCV AUC = %.3f (Drop = %+.3f)\n",
+            collect_metrics(res_enet) |> filter(.metric == "roc_auc") |> pull(mean),
             collect_metrics(res_enet_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
-            collect_metrics(res_enet) |> filter(.metric == "roc_auc") |> pull(mean)))
-cat(sprintf("  Random Forest: LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+            (collect_metrics(res_enet_lobo) |> filter(.metric == "roc_auc") |> pull(mean)) -
+            (collect_metrics(res_enet) |> filter(.metric == "roc_auc") |> pull(mean))))
+cat(sprintf("  Random Forest: Stratified CV AUC = %.3f  ->  LOBOCV AUC = %.3f (Drop = %+.3f)\n",
+            collect_metrics(res_rf) |> filter(.metric == "roc_auc") |> pull(mean),
             collect_metrics(res_rf_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
-            collect_metrics(res_rf) |> filter(.metric == "roc_auc") |> pull(mean)))
-cat(sprintf("  XGBoost:       LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+            (collect_metrics(res_rf_lobo) |> filter(.metric == "roc_auc") |> pull(mean)) -
+            (collect_metrics(res_rf) |> filter(.metric == "roc_auc") |> pull(mean))))
+cat(sprintf("  XGBoost:       Stratified CV AUC = %.3f  ->  LOBOCV AUC = %.3f (Drop = %+.3f)\n",
+            collect_metrics(res_xgb) |> filter(.metric == "roc_auc") |> pull(mean),
             collect_metrics(res_xgb_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
-            collect_metrics(res_xgb) |> filter(.metric == "roc_auc") |> pull(mean)))
+            (collect_metrics(res_xgb_lobo) |> filter(.metric == "roc_auc") |> pull(mean)) -
+            (collect_metrics(res_xgb) |> filter(.metric == "roc_auc") |> pull(mean))))
 \end{rchunk}
 
 \begin{routput}
-Batch-class confounding association (Cram\'er's V): 0.446\\
-Leave-One-Batch-Out CV (LOBOCV) Mean AUC:\\
-\hspace*{2em}Elastic Net:   LOBOCV AUC = 0.923 (Stratified CV = 0.842)\\
-\hspace*{2em}Random Forest: LOBOCV AUC = 0.566 (Stratified CV = 0.533)\\
-\hspace*{2em}XGBoost:       LOBOCV AUC = 0.777 (Stratified CV = 0.708)
+Batch-class confounding association (Cram\'er's V): 0.637\\
+Resampling Architecture Comparison (Batch Confounder Impact):\\
+\hspace*{2em}Elastic Net:   Stratified CV AUC = 0.828  ->  LOBOCV AUC = 0.785 (Drop = -0.043)\\
+\hspace*{2em}Random Forest: Stratified CV AUC = 0.825  ->  LOBOCV AUC = 0.584 (Drop = -0.241)\\
+\hspace*{2em}XGBoost:       Stratified CV AUC = 0.731  ->  LOBOCV AUC = 0.517 (Drop = -0.214)
 \end{routput}
 
 \clearpage
 
-On small holdout cohorts ($N = 30$), point estimates of performance metrics carry wide sampling variance. Listing~23.8 calculates non-parametric bootstrap percentile confidence intervals ($B = 2{,}000$) on the holdout test set. The 95\% confidence intervals for AUC span [0.750, 0.981] for Elastic Net, [0.682, 0.966] for Random Forest, and [0.742, 0.995] for XGBoost. The overlapping intervals demonstrate that the three architectures are statistically indistinguishable on this cohort size.
+On small holdout cohorts ($N = 30$), marginal performance metrics carry wide estimation uncertainty. Listing~23.8 computes non-parametric bootstrap percentile confidence intervals ($B = 2{,}000$) alongside paired bootstrap difference tests ($\Delta_{\text{AUC}} = \text{AUC}_{\text{model}_1} - \text{AUC}_{\text{model}_2}$) evaluated across the same 30 holdout patients. Stating that architectures are equivalent based on overlapping marginal confidence intervals is an inferential fallacy \cite{schenker2001judging}; paired resampling evaluates whether difference distributions exclude zero. Under paired bootstrap testing, Elastic Net outperformed Random Forest ($\text{mean } \Delta_{\text{AUC}} = +0.175$, 95\% CI $[+0.030, +0.381]$, paired $p = 0.014$) and XGBoost ($\text{mean } \Delta_{\text{AUC}} = +0.099$, 95\% CI $[+0.004, +0.240]$, paired $p = 0.024$). However, the wide marginal intervals (e.g., Random Forest AUC $[0.608, 0.963]$) emphasize that holdout sizes of $N = 30$ carry substantial sampling variability, precluding definitive architectural ranking without external validation cohorts \cite{delong1988comparing}.
 
-\begin{rchunk}{Bootstrap 95\% Confidence Intervals on Holdout Performance}
+\begin{rchunk}{Paired Bootstrap Resampling and Estimation Uncertainty Audit}
 test_preds <- list(
-  ENet = collect_predictions(fit_enet) |> select(Status, .pred_class, .pred_Control),
-  RF   = collect_predictions(fit_rf)   |> select(Status, .pred_class, .pred_Control),
-  XGB  = collect_predictions(fit_xgb)  |> select(Status, .pred_class, .pred_Control)
+  ENet = collect_predictions(fit_enet) |> select(.row, Status, .pred_class, .pred_Control),
+  RF   = collect_predictions(fit_rf)   |> select(.row, Status, .pred_class, .pred_Control),
+  XGB  = collect_predictions(fit_xgb)  |> select(.row, Status, .pred_class, .pred_Control)
 )
 
-compute_boot_metrics <- function(pred_df, B = 2000, seed = 42) {
-  set.seed(seed)
-  N <- nrow(pred_df)
-  map_dfr(1:B, function(i) {
-    idx <- sample.int(N, size = N, replace = TRUE)
-    boot_df <- pred_df[idx, ]
-    if (length(unique(boot_df$Status)) < 2) return(NULL)
-    tibble(
-      auc   = roc_auc(boot_df, truth = Status, .pred_Control)$.estimate,
-      acc   = accuracy(boot_df, truth = Status, estimate = .pred_class)$.estimate,
-      brier = brier_class(boot_df, truth = Status, .pred_Control)$.estimate
-    )
-  })
-}
+set.seed(42)
+B <- 2000
+N_test <- nrow(test_preds$ENet)
 
-boot_results <- map(test_preds, compute_boot_metrics, B = 2000)
+boot_paired <- map_dfr(1:B, function(i) {
+  idx <- sample.int(N_test, size = N_test, replace = TRUE)
+  df_e <- test_preds$ENet[idx, ]; df_r <- test_preds$RF[idx, ]; df_x <- test_preds$XGB[idx, ]
+  if (length(unique(df_e$Status)) < 2) return(NULL)
+  
+  auc_e <- roc_auc(df_e, truth = Status, .pred_Control)$.estimate
+  auc_r <- roc_auc(df_r, truth = Status, .pred_Control)$.estimate
+  auc_x <- roc_auc(df_x, truth = Status, .pred_Control)$.estimate
+  
+  tibble(auc_e = auc_e, auc_r = auc_r, auc_x = auc_x,
+         delta_er = auc_e - auc_r, delta_ex = auc_e - auc_x,
+         acc_e = accuracy(df_e, truth = Status, estimate = .pred_class)$.estimate,
+         acc_r = accuracy(df_r, truth = Status, estimate = .pred_class)$.estimate,
+         acc_x = accuracy(df_x, truth = Status, estimate = .pred_class)$.estimate,
+         br_e  = brier_class(df_e, truth = Status, .pred_Control)$.estimate,
+         br_r  = brier_class(df_r, truth = Status, .pred_Control)$.estimate,
+         br_x  = brier_class(df_x, truth = Status, .pred_Control)$.estimate)
+})
 
-cat("Bootstrap 95% Confidence Intervals on Holdout Metrics (N = 30, B = 2000):\n")
-for (m in c("ENet", "RF", "XGB")) {
-  b <- boot_results[[m]]
-  cat(sprintf("  %-4s AUC: %.3f [%.3f, %.3f] | Acc: %.3f [%.3f, %.3f] | Brier: %.3f [%.3f, %.3f]\n",
-              m,
-              median(b$auc), quantile(b$auc, 0.025), quantile(b$auc, 0.975),
-              median(b$acc), quantile(b$acc, 0.025), quantile(b$acc, 0.975),
-              median(b$brier), quantile(b$brier, 0.025), quantile(b$brier, 0.975)))
-}
+cat("Marginal 95% Confidence Intervals (N = 30, B = 2000):\n")
+cat(sprintf("  ENet: AUC = %.3f [%.3f, %.3f] | Acc = %.3f [%.3f, %.3f] | Brier = %.3f [%.3f, %.3f]\n",
+            m_enet$.estimate[m_enet$.metric == "roc_auc"], quantile(boot_paired$auc_e, 0.025), quantile(boot_paired$auc_e, 0.975),
+            m_enet$.estimate[m_enet$.metric == "accuracy"], quantile(boot_paired$acc_e, 0.025), quantile(boot_paired$acc_e, 0.975),
+            brier_class(test_preds$ENet, truth = Status, .pred_Control)$.estimate, quantile(boot_paired$br_e, 0.025), quantile(boot_paired$br_e, 0.975)))
+cat(sprintf("  RF:   AUC = %.3f [%.3f, %.3f] | Acc = %.3f [%.3f, %.3f] | Brier = %.3f [%.3f, %.3f]\n",
+            m_rf$.estimate[m_rf$.metric == "roc_auc"], quantile(boot_paired$auc_r, 0.025), quantile(boot_paired$auc_r, 0.975),
+            m_rf$.estimate[m_rf$.metric == "accuracy"], quantile(boot_paired$acc_r, 0.025), quantile(boot_paired$acc_r, 0.975),
+            brier_class(test_preds$RF, truth = Status, .pred_Control)$.estimate, quantile(boot_paired$br_r, 0.025), quantile(boot_paired$br_r, 0.975)))
+cat(sprintf("  XGB:  AUC = %.3f [%.3f, %.3f] | Acc = %.3f [%.3f, %.3f] | Brier = %.3f [%.3f, %.3f]\n",
+            m_xgb$.estimate[m_xgb$.metric == "roc_auc"], quantile(boot_paired$auc_x, 0.025), quantile(boot_paired$auc_x, 0.975),
+            m_xgb$.estimate[m_xgb$.metric == "accuracy"], quantile(boot_paired$acc_x, 0.025), quantile(boot_paired$acc_x, 0.975),
+            brier_class(test_preds$XGB, truth = Status, .pred_Control)$.estimate, quantile(boot_paired$br_x, 0.025), quantile(boot_paired$br_x, 0.975)))
+
+cat("\nPaired Bootstrap Difference Tests (Delta AUC):\n")
+cat(sprintf("  ENet vs RF:  Mean Delta = %+.3f, 95%% CI [%+.3f, %+.3f], p = %.3f\n",
+            mean(boot_paired$delta_er), quantile(boot_paired$delta_er, 0.025), quantile(boot_paired$delta_er, 0.975),
+            2 * min(mean(boot_paired$delta_er > 0), mean(boot_paired$delta_er < 0))))
+cat(sprintf("  ENet vs XGB: Mean Delta = %+.3f, 95%% CI [%+.3f, %+.3f], p = %.3f\n",
+            mean(boot_paired$delta_ex), quantile(boot_paired$delta_ex, 0.025), quantile(boot_paired$delta_ex, 0.975),
+            2 * min(mean(boot_paired$delta_ex > 0), mean(boot_paired$delta_ex < 0))))
 \end{rchunk}
 
 \begin{routput}
-Bootstrap 95\% Confidence Intervals on Holdout Metrics (N = 30, B = 2000):\\
-\hspace*{2em}ENet AUC: 0.890 [0.750, 0.981] | Acc: 0.800 [0.633, 0.933] | Brier: 0.165 [0.126, 0.211]\\
-\hspace*{2em}RF   AUC: 0.845 [0.682, 0.966] | Acc: 0.733 [0.567, 0.900] | Brier: 0.219 [0.204, 0.235]\\
-\hspace*{2em}XGB  AUC: 0.890 [0.742, 0.995] | Acc: 0.767 [0.600, 0.900] | Brier: 0.154 [0.084, 0.241]
+Marginal 95\% Confidence Intervals (N = 30, B = 2000):\\
+\hspace*{2em}ENet: AUC = 0.985 [0.937, 1.000] | Acc = 0.867 [0.733, 0.967] | Brier = 0.080 [0.031, 0.140]\\
+\hspace*{2em}RF:   AUC = 0.810 [0.608, 0.963] | Acc = 0.667 [0.500, 0.833] | Brier = 0.200 [0.169, 0.234]\\
+\hspace*{2em}XGB:  AUC = 0.885 [0.740, 0.981] | Acc = 0.800 [0.667, 0.933] | Brier = 0.127 [0.062, 0.201]
+
+Paired Bootstrap Difference Tests (Delta AUC):\\
+\hspace*{2em}ENet vs RF:  Mean Delta = +0.175, 95\% CI [+0.030, +0.381], p = 0.014\\
+\hspace*{2em}ENet vs XGB: Mean Delta = +0.099, 95\% CI [+0.004, +0.240], p = 0.024
 \end{routput}
 
 \begin{notebox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, title={Computational Environment and Reproducibility Parameters}]
@@ -852,6 +913,9 @@ Chen, T., \& Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In \
 \bibitem{cover1965geometrical}
 Cover, T.~M. (1965). Geometrical and statistical properties of systems of linear inequalities with applications in pattern recognition. \textit{IEEE Transactions on Electronic Computers}, EC-14(3), 326--334. \doi{10.1109/PGEC.1965.264137}.
 
+\bibitem{delong1988comparing}
+DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: A nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
+
 \bibitem{friedman2001greedy}
 Friedman, J.~H. (2001). Greedy function approximation: a gradient boosting machine. \textit{Annals of Statistics}, 29(5), 1189--1232. \doi{10.1214/aos/1013203451}.
 
@@ -878,6 +942,9 @@ Lundberg, S.~M., Erion, G., Chen, H., DeGrave, A., Prutkin, J.~M., Nair, B., Kat
 
 \bibitem{platt1999probabilistic}
 Platt, J. (1999). Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. \textit{Advances in Large Margin Classifiers}, 10(3), 61--74.
+
+\bibitem{schenker2001judging}
+Schenker, N., \& Gentleman, J.~F. (2001). On judging the significance of differences by examining the overlap between confidence intervals. \textit{The American Statistician}, 55(3), 182--186. \doi{10.1198/000313001317098149}.
 
 \bibitem{strobl2007bias}
 Strobl, C., Boulesteix, A.~L., Zeileis, A., \& Hothorn, T. (2007). Bias in random forest variable importance measures: Illustrations, sources and a solution. \textit{BMC Bioinformatics}, 8, 25. \doi{10.1186/1471-2105-8-25}.

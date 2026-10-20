@@ -333,13 +333,29 @@ test_mat    <- as.matrix(baked_test |> select(starts_with("PROT_")))
 shap_contrib <- predict(xgb_fit_raw, newdata = test_mat, predcontrib = TRUE)
 mean_abs_shap <- colMeans(abs(shap_contrib[, colnames(test_mat)]))
 top_shap <- sort(mean_abs_shap, decreasing = TRUE)
+xgb_top20 <- names(top_shap)[1:20]
+rf_top20  <- names(rf_imp)[1:20]
+enet_top20 <- names(sort(abs(enet_coefs[non_zero_genes, 1]), decreasing = TRUE))[1:20]
 
-cat("\nBiomarker Signature Recovery Audit (Multi-Method Comparison):\n")
+# Multi-method ground-truth biomarker recovery audit
+module1_features <- paste0("PROT_", sprintf("%04d", 1:8))
+module2_features <- paste0("PROT_", sprintf("%04d", 9:10))
+batch_features   <- paste0("PROT_", sprintf("%04d", 21:220))
+
+recovery_table <- tibble(
+  Method  = c("Elastic Net", "Random Forest", "XGBoost"),
+  Module1 = c(sum(module1_features %in% enet_top20), sum(module1_features %in% rf_top20), sum(module1_features %in% xgb_top20)),
+  Module2 = c(sum(module2_features %in% enet_top20), sum(module2_features %in% rf_top20), sum(module2_features %in% xgb_top20)),
+  Batch   = c(sum(batch_features %in% enet_top20),   sum(batch_features %in% rf_top20),   sum(batch_features %in% xgb_top20))
+)
+
+cat("\nBiomarker Signature Recovery Audit (Both Modules, Top-20 Features):\n")
+print(recovery_table)
 cat(sprintf("  Elastic Net Total Features Retained: %d\n", length(non_zero_genes)))
 cat(sprintf("  Elastic Net Ground-Truth Module 1 Overlap: %d / 8 proteins retained\n",
-            sum(paste0("PROT_", sprintf("%04d", 1:8)) %in% non_zero_genes)))
-cat(sprintf("  Random Forest Top 5 Features (Permutation Imp): %s\n", paste(names(rf_imp)[1:5], collapse = ", ")))
-cat(sprintf("  XGBoost Top 5 Features (Exact TreeSHAP):        %s\n", paste(names(top_shap)[1:5], collapse = ", ")))
+            sum(module1_features %in% non_zero_genes)))
+cat(sprintf("  Random Forest Top 5 Features (Permutation Imp): %s\n", paste(rf_top20[1:5], collapse = ", ")))
+cat(sprintf("  XGBoost Top 5 Features (Exact TreeSHAP):        %s\n", paste(xgb_top20[1:5], collapse = ", ")))
 
 # -----------------------------------------------------------------------------
 # Listing 23.7: Batch-Aware Resampling via Leave-One-Batch-Out CV (LOBOCV)
@@ -495,6 +511,10 @@ cat(sprintf("  ENet vs XGB: Mean Delta = %+.3f, 95%% CI [%+.3f, %+.3f], Paired b
 # -----------------------------------------------------------------------------
 cat("\n--- Listing 23.9: Stacked Generalization via stacks ---\n")
 
+# (N4) Meta-learner tuning bias caveat: blend_predictions() tunes the meta-learner
+# penalty on the SAME 5-fold OOF predictions used to tune the base models.
+# For production clinical validation, nested CV is recommended.
+
 # Initialize candidate stack from 5-fold CV tuned model objects
 proteomic_stack <- stacks() |>
   add_candidates(res_enet) |>
@@ -518,10 +538,70 @@ auc_stack   <- roc_auc(test_res_stack, truth = Status, .pred_Control)$.estimate
 acc_stack   <- accuracy(test_res_stack, truth = Status, .pred_class)$.estimate
 brier_stack <- brier_class(test_res_stack, truth = Status, .pred_Control)$.estimate
 
-cat("Stacked Ensemble Holdout Performance (N = 30):\n")
+cat("Stacked Ensemble Holdout Performance (N = 30, point estimates):\n")
 cat(sprintf("  ROC-AUC:  %.3f\n", auc_stack))
 cat(sprintf("  Accuracy: %.3f\n", acc_stack))
 cat(sprintf("  Brier:    %.4f\n", brier_stack))
+
+# Add stacked ensemble to paired bootstrap procedure (B = 2000)
+test_preds$STACK <- tibble(
+  .row          = test_preds$ENet$.row,
+  Status        = test_res_stack$Status,
+  .pred_class   = test_res_stack$.pred_class,
+  .pred_Control = test_res_stack$.pred_Control
+)
+
+set.seed(42)
+B <- 2000
+N_test <- nrow(test_preds$ENet)
+
+boot_paired_full <- map_dfr(1:B, function(i) {
+  idx <- sample.int(N_test, size = N_test, replace = TRUE)
+  df_e <- test_preds$ENet[idx, ]; df_r <- test_preds$RF[idx, ]
+  df_x <- test_preds$XGB[idx, ];  df_s <- test_preds$STACK[idx, ]
+  if (length(unique(df_e$Status)) < 2) return(NULL)
+  tibble(
+    auc_e = roc_auc(df_e, truth = Status, .pred_Control)$.estimate,
+    auc_r = roc_auc(df_r, truth = Status, .pred_Control)$.estimate,
+    auc_x = roc_auc(df_x, truth = Status, .pred_Control)$.estimate,
+    auc_s = roc_auc(df_s, truth = Status, .pred_Control)$.estimate,
+    br_e  = brier_class(df_e, truth = Status, .pred_Control)$.estimate,
+    br_r  = brier_class(df_r, truth = Status, .pred_Control)$.estimate,
+    br_x  = brier_class(df_x, truth = Status, .pred_Control)$.estimate,
+    br_s  = brier_class(df_s, truth = Status, .pred_Control)$.estimate,
+    delta_auc_se = auc_s - auc_e, delta_auc_sr = auc_s - auc_r, delta_auc_sx = auc_s - auc_x,
+    delta_br_se  = br_s  - br_e,  delta_br_sr  = br_s  - br_r,  delta_br_sx  = br_s  - br_x
+  )
+}) |> filter(!is.na(auc_s))
+
+cat(sprintf("\nSTACK Marginal 95%% CI: AUC = %.3f [%.3f, %.3f] | Brier = %.4f [%.4f, %.4f]\n",
+            auc_stack, quantile(boot_paired_full$auc_s, 0.025), quantile(boot_paired_full$auc_s, 0.975),
+            brier_stack, quantile(boot_paired_full$br_s, 0.025), quantile(boot_paired_full$br_s, 0.975)))
+
+compute_paired <- function(d) list(m = mean(d), lo = quantile(d, 0.025), hi = quantile(d, 0.975),
+                                   p = 2 * min(mean(d > 0), mean(d < 0)))
+res_auc_se <- compute_paired(boot_paired_full$delta_auc_se)
+res_auc_sr <- compute_paired(boot_paired_full$delta_auc_sr)
+res_auc_sx <- compute_paired(boot_paired_full$delta_auc_sx)
+res_br_se  <- compute_paired(boot_paired_full$delta_br_se)
+res_br_sr  <- compute_paired(boot_paired_full$delta_br_sr)
+res_br_sx  <- compute_paired(boot_paired_full$delta_br_sx)
+
+cat("Paired Bootstrap Difference Tests (STACK vs Base Models):\n")
+cat("AUC differences (positive = STACK better):\n")
+cat(sprintf("  STACK vs ENet: Delta AUC = %+.3f, 95%% CI [%+.3f, %+.3f], p = %.3f\n",
+            res_auc_se$m, res_auc_se$lo, res_auc_se$hi, res_auc_se$p))
+cat(sprintf("  STACK vs RF:   Delta AUC = %+.3f, 95%% CI [%+.3f, %+.3f], p = %.3f\n",
+            res_auc_sr$m, res_auc_sr$lo, res_auc_sr$hi, res_auc_sr$p))
+cat(sprintf("  STACK vs XGB:  Delta AUC = %+.3f, 95%% CI [%+.3f, %+.3f], p = %.3f\n",
+            res_auc_sx$m, res_auc_sx$lo, res_auc_sx$hi, res_auc_sx$p))
+cat("Brier differences (negative = STACK better):\n")
+cat(sprintf("  STACK vs ENet: Delta Brier = %+.4f, 95%% CI [%+.4f, %+.4f], p = %.3f\n",
+            res_br_se$m, res_br_se$lo, res_br_se$hi, res_br_se$p))
+cat(sprintf("  STACK vs RF:   Delta Brier = %+.4f, 95%% CI [%+.4f, %+.4f], p = %.3f\n",
+            res_br_sr$m, res_br_sr$lo, res_br_sr$hi, res_br_sr$p))
+cat(sprintf("  STACK vs XGB:  Delta Brier = %+.4f, 95%% CI [%+.4f, %+.4f], p = %.3f\n",
+            res_br_sx$m, res_br_sx$lo, res_br_sx$hi, res_br_sx$p))
 
 cat("\n=============================================================================\n")
 cat("Laboratory Execution Complete: All Workflows Verified Reproducible.\n")

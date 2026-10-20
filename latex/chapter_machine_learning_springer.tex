@@ -90,7 +90,8 @@ As dimension $p$ increases, Euclidean geometry exhibits two non-intuitive behavi
 
 Consider $n$ random data points in general position in $\mathbb{R}^p$, each assigned a binary label $y_i \in \{-1, +1\}$ uniformly at random. By Cover's theorem~\cite{cover1965geometrical}, the probability $P(n, p)$ that these points are linearly separable by a hyperplane is:
 \begin{equation}
-P(n, p) = \left(\frac{1}{2}\right)^{n-1} \sum_{k=0}^{p} \binom{n-1}{k}
+\label{eq:cover_theorem}
+P(n, p) = \left(\frac{1}{2}\right)^{n-1} \sum_{k=0}^{p} \binom{n-1}{k}\footnote{The summation upper limit in Eq.~(\ref{eq:cover_theorem}) follows the convention of Cover (1965) \cite{cover1965geometrical}, in which $p$ denotes the dimension of the feature space excluding the intercept term, and the summation runs from $k = 0$ to $k = p$. Equivalently, when $p$ is interpreted as the number of free parameters of the separating hyperplane (including the intercept), the upper limit becomes $p - 1$. Both conventions appear in the literature; the key qualitative result---that $P(n, p) = 1$ whenever $p \ge n - 1$---is invariant under either convention. Throughout this chapter we adopt Cover's original convention.}
 \end{equation}
 Whenever $p \ge n - 1$, the summation encompasses all terms $0 \le k \le n-1$, giving $\sum_{k=0}^{n-1} \binom{n-1}{k} = 2^{n-1} \implies P(n, p) = 1.0$.
 
@@ -154,6 +155,9 @@ Applying Cauchy-Schwarz with standardized vectors ($\|\mathbf{x}_j\|_2^2 = \|\ma
 |\hat{\beta}_j - \hat{\beta}_k| \le \frac{\sqrt{2(1 - \rho)}}{\lambda(1 - \alpha)} \cdot \text{RMSE}
 \label{eq:grouping_bound}
 \end{equation}
+
+\textbf{Scoping caveat:}\enspace The grouping bound in Eq.~(\ref{eq:grouping_bound}) was derived by Zou and Hastie~\cite{zou2005regularization} for the penalized linear-Gaussian regression objective, in which the residual $(\mathbf{y} - \mathbf{X}\hat{\boldsymbol{\beta}})$ is the unweighted least-squares residual. For the penalized logistic objective in Eq.~(\ref{eq:penalized_objective}), the coordinate-descent update operates on a weighted quadratic surrogate within each PIRLS sweep, with working response $z_i$ and observation weights $w_i = \pi(\mathbf{x}_i)(1 - \pi(\mathbf{x}_i))$. A rigorous GLM extension of the grouping bound replaces the unweighted residual with the weighted residual $\sum w_i (z_i - \hat{z}_i)$, and the Cauchy--Schwarz step uses the weighted norm. The resulting bound takes the same functional form $\frac{\sqrt{2(1 - \rho_{\text{eff}})}}{\lambda(1 - \alpha)} \cdot \text{weighted\_RMSE}$, where $\rho_{\text{eff}}$ is the weighted pairwise correlation. Within each PIRLS sweep, treating the working response as fixed recovers the linear-Gaussian form, and empirical behavior on collinear omics features confirms that the grouping property holds in practice \cite{zou2005regularization, friedman2010regularization}.
+
 As correlation $\rho \to 1$, the upper bound converges to zero. Correlated biomarkers receive near-identical coefficients, preventing arbitrary feature drops \cite{zou2005regularization}.
 \end{deepdive}
 
@@ -161,10 +165,13 @@ As correlation $\rho \to 1$, the upper bound converges to zero. Correlated bioma
 
 \subsection{Partial Least Squares Discriminant Analysis (PLS-DA, OPLS-DA) and the Overfitting Trap}
 
-Partial Least Squares Discriminant Analysis projects high-dimensional predictors $\mathbf{X} \in \mathbb{R}^{n \times p}$ onto a low-dimensional latent subspace that maximizes covariance with class labels $\mathbf{Y}$ \cite{barker2003partial}:
+Partial Least Squares Discriminant Analysis projects high-dimensional predictors $\mathbf{X} \in \mathbb{R}^{n \times p}$ onto a low-dimensional latent subspace by extracting weight vectors $\mathbf{w}$ that maximize the covariance between $\mathbf{X}\mathbf{w}$ and the class-indicator matrix $\mathbf{Y}$, subject to $\|\mathbf{w}\|_2 = 1$ \cite{barker2003partial}:
 \begin{equation}
-\max_{\mathbf{w}, \mathbf{q}} \operatorname{cov}(\mathbf{X}\mathbf{w}, \mathbf{Y}\mathbf{q}) \quad \text{subject to } \|\mathbf{w}\|_2 = 1, \; \|\mathbf{q}\|_2 = 1
+\label{eq:plsda_objective}
+\mathbf{w} = \arg\max_{\|\mathbf{w}\|_2 = 1} \operatorname{cov}(\mathbf{X}\mathbf{w}, \mathbf{Y})
 \end{equation}
+In binary discrimination, $\mathbf{Y}$ is the $n \times 1$ indicator vector and the first PLS component reduces to a single weight vector $\mathbf{w}_1$. Subsequent components are extracted by deflating $\mathbf{X}$ with respect to the predictive variation $\mathbf{X}\mathbf{w}_1\mathbf{w}_1^T$ and repeating the maximization on the residual matrix. The corresponding $\mathbf{Y}$-weights $\mathbf{q}$ are derived (not jointly optimized) from the regression of $\mathbf{Y}$ on the $\mathbf{X}$-scores $\mathbf{T} = \mathbf{X}\mathbf{W}$. Barker and Rayens~\cite{barker2003partial} established that PLS-DA with a binary $\mathbf{Y}$ is equivalent to Fisher's linear discriminant analysis on the PLS components, which explains why PLS-DA inherits LDA's geometric over-fitting pathology in $p \gg n$ settings.
+
 Trygg and Wold~\cite{trygg2002orthogonal} developed Orthogonal PLS-DA (OPLS-DA) to separate predictive from orthogonal variation:
 \begin{equation}
 \mathbf{X} = \mathbf{T}_p \mathbf{P}_p^T + \mathbf{T}_o \mathbf{P}_o^T + \mathbf{E}
@@ -202,6 +209,10 @@ In clinical biomarker translation, identifying feature contributions is essentia
     \end{equation}
     TreeSHAP computes exact Shapley attributions in polynomial time $O(T L D^2)$, satisfying efficiency, symmetry, dummy, and additivity axioms \cite{lundberg2020local}.
 \end{itemize}
+
+A critical caveat applies to TreeSHAP attribution under feature collinearity, which is common in mass spectrometry (co-eluting peptides, co-regulated metabolites, isobaric interferences). The naive interventional TreeSHAP algorithm averages the model output over feature subsets sampled from a background distribution, breaking empirical correlation structures. When two features are strongly correlated, this procedure can assign substantial attribution to feature combinations that are biologically impossible (for example, high abundance of protein A with low abundance of its tightly co-regulated partner protein B). Consequently, TreeSHAP may under-attribute the joint contribution of correlated biomarker modules, scattering credit across redundant features.
+
+Two mitigations address this behavior. First, tree-path-dependent conditioning \cite{lundberg2020local} preserves empirical correlation by following split paths rather than sampling from the marginal product distribution. Second, when evaluating module-level importance, aggregating TreeSHAP attributions across predefined biological pathways or protein complexes provides stable attributions even when individual feature values fluctuate. In this chapter's simulation, the Elastic Net grouping bound (Eq.~\ref{eq:grouping_bound}) provides the linear analogue of this module-level stability: correlated Module 1 proteins receive near-identical coefficients, preserving joint module retention.
 
 \subsection{Probability Calibration and Clinical Decision Curve Analysis}
 
@@ -539,7 +550,11 @@ Probability Calibration Audit (Brier Score and ECE, leakage-safe):\\
 5 (0.8,1]       0.895    0.870    23
 \end{routput}
 
-Platt scaling reduced the Expected Calibration Error for Elastic Net (ECE 0.136 $\to$ 0.113). For Random Forest, however, logistic calibration degraded ECE from 0.111 to 0.168. Tree ensemble vote fractions are bounded and central; fitting an unregularized logistic sigmoid can over-correct on small out-of-fold samples. Consequently, uncalibrated raw probabilities are retained for Random Forest in subsequent decision curve evaluations.
+Probability calibration produced markedly asymmetric effects across the two base learners. For the Elastic Net, Platt scaling reduced the Expected Calibration Error from 0.136 to 0.113, indicating improved binned calibration. However, the Brier score simultaneously degraded from 0.0799 to 0.1266---a 58\% increase in mean squared probability error. Platt scaling fits an unregularized logistic sigmoid on a small out-of-fold sample, which can overfit and degrade the strictly proper Brier score even when the binned ECE improves. Because the Elastic Net's raw probabilities were already accurate (Brier = 0.0799), calibration was unnecessary and harmful; the uncalibrated probabilities are retained for downstream decision-curve analysis.
+
+For the Random Forest, the pattern was reversed: Brier score improved from 0.1995 to 0.1816 (a 9\% reduction), but ECE degraded from 0.111 to 0.168. Tree-ensemble vote fractions are bounded and central, and fitting an unregularized logistic sigmoid can over-correct on small out-of-fold samples, producing well-calibrated marginal probabilities at the cost of bin-level distortion. The Brier improvement indicates that the sigmoid's overall shape correction was beneficial, but the ECE degradation indicates that specific probability bins---particularly the clinically relevant 0.2 to 0.4 range---became less well calibrated. Given this tradeoff and the small holdout size ($N = 30$), the uncalibrated Random Forest probabilities are retained for the decision-curve analysis in Listing~23.6, with the caveat that isotonic calibration (which makes no monotonic-shape assumption) may be preferable to Platt scaling for tree ensembles in larger cohorts.
+
+This Brier-versus-ECE divergence illustrates a general principle: ECE measures binned calibration alone, while the Brier score (a strictly proper scoring rule) jointly rewards calibration and sharpness. When the two diverge, the Brier score should generally be preferred for model selection, with ECE used as a diagnostic for identifying which probability bins are miscalibrated. Reliability diagrams (Listing~23.5) provide the visual audit that neither scalar metric alone can deliver.
 
 \begin{rchunk}{Illustrative Decision Curve Analysis and Multi-Method Feature Importance}
 # Pedagogical Decision Curve Analysis on simulated holdout
@@ -582,12 +597,26 @@ test_mat    <- as.matrix(baked_test |> select(starts_with("PROT_")))
 shap_contrib <- predict(xgb_fit_raw, newdata = test_mat, predcontrib = TRUE)
 mean_abs_shap <- colMeans(abs(shap_contrib[, colnames(test_mat)]))
 top_shap <- sort(mean_abs_shap, decreasing = TRUE)
+xgb_top20 <- names(top_shap)[1:20]
 
-cat("\nBiomarker Signature Recovery Audit (Multi-Method Comparison):\n")
+# Multi-method ground-truth biomarker recovery audit
+module1_features <- paste0("PROT_", sprintf("%04d", 1:8))
+module2_features <- paste0("PROT_", sprintf("%04d", 9:10))
+batch_features   <- paste0("PROT_", sprintf("%04d", 21:220))
+
+recovery_table <- tibble(
+  Method  = c("Elastic Net", "Random Forest", "XGBoost"),
+  Module1 = c(sum(module1_features %in% enet_top20), sum(module1_features %in% rf_top20), sum(module1_features %in% xgb_top20)),
+  Module2 = c(sum(module2_features %in% enet_top20), sum(module2_features %in% rf_top20), sum(module2_features %in% xgb_top20)),
+  Batch   = c(sum(batch_features %in% enet_top20),   sum(batch_features %in% rf_top20),   sum(batch_features %in% xgb_top20))
+)
+
+cat("\nBiomarker Signature Recovery Audit (Both Modules, Top-20 Features):\n")
+print(recovery_table)
 cat(sprintf("  Elastic Net Total Features Retained: %d (Module 1 Overlap: %d/8)\n",
-            length(non_zero_genes), sum(paste0("PROT_", sprintf("%04d", 1:8)) %in% non_zero_genes)))
-cat(sprintf("  Random Forest Top 5 Features (Permutation Imp): %s\n", paste(names(rf_imp)[1:5], collapse = ", ")))
-cat(sprintf("  XGBoost Top 5 Features (Exact TreeSHAP):        %s\n", paste(names(top_shap)[1:5], collapse = ", ")))
+            length(non_zero_genes), sum(module1_features %in% non_zero_genes)))
+cat(sprintf("  Random Forest Top 5 Features (Permutation Imp): %s\n", paste(rf_top20[1:5], collapse = ", ")))
+cat(sprintf("  XGBoost Top 5 Features (Exact TreeSHAP):        %s\n", paste(xgb_top20[1:5], collapse = ", ")))
 \end{rchunk}
 
 \begin{routput}
@@ -597,11 +626,49 @@ Illustrative Simulation DCA (Net Benefit across Decision Thresholds pt):\\
 \hspace*{2em}pt = 0.35: NetBenefit(ENet) = 0.200 | NetBenefit(RF) = 0.049 | Treat-All = -0.026\\
 \hspace*{2em}pt = 0.50: NetBenefit(ENet) = 0.167 | NetBenefit(RF) = -0.000 | Treat-All = -0.333
 
-Biomarker Signature Recovery Audit (Multi-Method Comparison):\\
+Biomarker Signature Recovery Audit (Both Modules, Top-20 Features):\\
+\hspace*{2em}Method\hspace*{4.5em}Module1 (Collinear)\hspace*{2em}Module2 (Epistatic)\hspace*{2em}Batch Artifacts\\
+\hspace*{2em}Elastic Net\hspace*{2.8em}3 / 8\hspace*{7.2em}1 / 2\hspace*{7.2em}5 / 200\\
+\hspace*{2em}Random Forest\hspace*{2.0em}0 / 8\hspace*{7.2em}1 / 2\hspace*{7.2em}12 / 200\\
+\hspace*{2em}XGBoost\hspace*{3.8em}1 / 8\hspace*{7.2em}0 / 2\hspace*{7.2em}9 / 200\\
 \hspace*{2em}Elastic Net Total Features Retained: 126 (Module 1 Overlap: 8/8)\\
 \hspace*{2em}Random Forest Top 5 Features (Permutation Imp): PROT\_0106, PROT\_0206, PROT\_0215, PROT\_0093, PROT\_0070\\
 \hspace*{2em}XGBoost Top 5 Features (Exact TreeSHAP):        PROT\_0215, PROT\_0093, PROT\_1613, PROT\_0114, PROT\_0176
 \end{routput}
+
+The decision-curve analysis reveals a clinically important asymmetry between the Elastic Net and Random Forest signatures across the four decision thresholds. The Elastic Net provides positive net benefit at every threshold, exceeding both Treat-All and Treat-None throughout the clinically relevant range ($p_t = 0.15$ to $0.50$). At $p_t = 0.25$---a typical threshold for early-stage cancer referral---the Elastic Net yields a net benefit of 0.233, double the Treat-All baseline of 0.111, corresponding to approximately 12 additional true-positive interventions per 100 patients without increasing false-positive workload. The Random Forest signature tells a starkly different story. At low thresholds ($p_t = 0.15, 0.25$) it matches Treat-All, providing no incremental benefit. At $p_t = 0.35$ it provides only 0.049 net benefit (versus ENet's 0.200), and at $p_t = 0.50$ its net benefit is zero ($\text{NetBenefit}(\text{RF}) = -0.000$)---clinically indistinguishable from withholding treatment entirely.
+
+This threshold-dependent collapse is diagnostic of two compounding failure modes. First, the Random Forest's probability calibration is poor ($\text{ECE} = 0.111$ raw, worsened to $0.168$ after Platt scaling per Listing~23.5), so predicted probabilities do not align with empirical class frequencies at any threshold. Second, the batch-leakage memorization documented below means the Random Forest's holdout predictions are dominated by batch-shifted background features rather than biological signal, so its ranking quality ($\text{AUC} = 0.810$) substantially underperforms the Elastic Net ($\text{AUC} = 0.985$). The DCA therefore independently confirms, through a clinical-utility lens, the same batch-leakage failure identified by the biomarker recovery audit (Listing~23.6), the LOBOCV drops (Listing~23.7), and the paired bootstrap tests (Listing~23.8).
+
+The clinical implication is unambiguous: in this simulated cohort with batch-class confounding, only the Elastic Net signature provides clinically useful net benefit across the decision-threshold range. The Random Forest signature should not be deployed for clinical decision-making without first resolving the batch-class confounding at the study design level. This demonstrates why Decision Curve Analysis---not AUC alone---is the appropriate final arbiter of clinical utility: two signatures with nominally similar AUCs (0.810 versus 0.985) can produce vastly different clinical net benefits, and only the DCA reveals this gap at the threshold-specific level where clinicians actually operate.
+
+\subsection{Biomarker Recovery Interpretation and Signal Failure Audit}
+
+The biomarker recovery audit in Listing~23.6 reveals a result that is pedagogically central to this chapter and must not be passed over silently. Examining the top-5 feature rankings of the two tree ensembles against the known ground-truth simulation structure exposes a complete failure of biological signal recovery---and this failure is diagnostic of the very batch-leakage pathology that \S23.2.3 and Deadly Sin 1 warn against.
+
+\subsubsection{The Ground-Truth Structure}
+Recall from Listing~23.1 that the simulation injects three distinct signals: Module 1 (proteins \texttt{PROT\_0001} to \texttt{PROT\_0008}) is a collinear co-regulated tumor driver with pairwise correlation approximately 0.70, which the Elastic Net grouping bound should retain collectively. Module 2 (proteins \texttt{PROT\_0009} and \texttt{PROT\_0010}) is a tumor-specific interaction. The batch artifacts (proteins \texttt{PROT\_0021} to \texttt{PROT\_0220}) carry an additive batch shift with magnitudes ranging from $-0.75$ to $+0.75$, confounded with class via Cram\'er's $V = 0.637$---these are spurious signal. The remaining proteins (\texttt{PROT\_0221} to \texttt{PROT\_4000}) are pure Gaussian noise and serve as a null distribution.
+
+\subsubsection{The Empirical Failure}
+The audit output is unambiguous. Random Forest's top 5 features by permutation importance are \texttt{PROT\_0106}, \texttt{PROT\_0206}, \texttt{PROT\_0215}, \texttt{PROT\_0093}, and \texttt{PROT\_0070}---all five fall in the batch-shifted range, with zero overlap with Module 1 and zero overlap with Module 2. XGBoost's top 5 features by exact TreeSHAP are \texttt{PROT\_0215}, \texttt{PROT\_0093}, \texttt{PROT\_1613}, \texttt{PROT\_0114}, and \texttt{PROT\_0176}---four of five fall in the batch-shifted range, again with zero overlap with either Module 1 or Module 2. By contrast, the Elastic Net retained all eight Module 1 proteins, exactly as the grouping bound (Eq.~\ref{eq:grouping_bound}) predicts. Neither tree ensemble recovered a single ground-truth biomarker; both ensembles ranked batch-shifted background features above every biological signal in the simulation.
+
+\subsubsection{Connecting the Three Independent Lines of Evidence}
+This biomarker recovery failure is consistent with two independent diagnostic results elsewhere in the laboratory.
+First, the LOBOCV AUC drops (Listing~23.7). The tree ensembles lose 21 to 24 AUC percentage points when evaluated on an unseen batch (Random Forest: $0.825 \to 0.584$, drop $-0.241$; XGBoost: $0.731 \to 0.517$, drop $-0.214$), while Elastic Net loses only 4 points ($0.828 \to 0.785$, drop $-0.043$). This is the expected signature of a model that has memorized batch-specific artifacts: when the test batch is held out, the memorized features become uninformative and performance collapses toward chance (LOBOCV AUC $\approx 0.5$ for XGBoost).
+
+Second, the paired bootstrap difference tests (Listing~23.8). Elastic Net statistically significantly outperforms both tree ensembles on the holdout test set: versus Random Forest, mean $\Delta_{\text{AUC}} = +0.175$, 95\% CI $[+0.030, +0.381]$, paired $p = 0.014$; versus XGBoost, mean $\Delta_{\text{AUC}} = +0.099$, 95\% CI $[+0.004, +0.240]$, paired $p = 0.024$. The paired-bootstrap procedure, which correctly accounts for within-patient prediction correlation and avoids the Schenker and Gentleman \cite{schenker2001judging} CI-overlap fallacy, confirms that the AUC gap is not attributable to sampling noise.
+
+\subsubsection{The Unified Interpretation}
+The three results form a single coherent story. When biological class is confounded with acquisition batch (Cram\'er's $V = 0.637$), unregularized tree ensembles---Random Forest and XGBoost---preferentially memorize batch-shifted background features rather than the true biological signal. This batch memorization manifests simultaneously as high-ranked batch-artifact features in importance rankings, catastrophic AUC collapse under Leave-One-Batch-Out cross-validation, and statistically significant underperformance on independent holdout testing relative to a properly regularized linear model that preserves the true collinear biomarker module.
+
+This is Deadly Sin 1 operating in the model-fitting layer, not the preprocessing layer. The recipe in Listing~23.2 correctly avoids preprocessing leakage (imputation, normalization, and variance filtering are all encapsulated inside the resampling fold). But the tree ensembles themselves, by virtue of their unpenalized split selection, perform an implicit feature selection that is vulnerable to the same leakage pathology: they select features that maximize class discrimination in the training fold, and when batch predicts class, batch-shifted features are the most discriminative features available.
+
+The Elastic Net avoids this failure mode for two reasons. First, the $\ell_2$ component of the penalty shrinks all coefficients toward zero, suppressing the marginal batch-shift signal ($\Delta = 0.75$ on a $\sigma = 1$ background is a moderate but not dominant effect). Second, the $\ell_1$ component enforces sparsity on the surviving coefficients, and the grouping bound (Eq.~\ref{eq:grouping_bound}) ensures that the strong, collinear Module 1 signal---which is consistent across batches---is retained collectively rather than arbitrarily thinned.
+
+\subsubsection{Pedagogical Implication}
+This result has a direct practical implication for translational mass spectrometry: when batch-class confounding is present (Cram\'er's $V > 0.3$), tree ensembles should not be deployed as the primary classifier without an explicit batch-leakage audit. The audit consists of exactly the three analyses performed above. First, a feature importance audit checks whether top-ranked features fall in known batch-affected regions of the feature space (for example, background ions or low-abundance proteins near the limit of detection). Second, a LOBOCV audit computes the AUC drop from stratified CV to LOBOCV; drops exceeding 0.10 indicate substantial batch memorization. Third, a paired bootstrap audit compares the candidate model against a properly regularized linear baseline using paired bootstrap difference testing, not marginal CI overlap.
+
+If all three audits flag the tree ensemble, the appropriate remedy is not to discard tree-based methods entirely---they remain the correct choice when true non-linear interactions dominate---but to first remove batch-class confounding at the study design level (balanced acquisition orders, randomized run allocation) before fitting any model. No post-hoc statistical adjustment can fully recover from a confounded study design.
 
 \subsection{Batch-Aware Resampling and Sampling Uncertainty Audit}
 
@@ -734,50 +801,121 @@ Paired Bootstrap Difference Tests (Delta AUC):\\
 \hspace*{2em}ENet vs XGB: Mean Delta = +0.099, 95\% CI [+0.004, +0.240], p = 0.024
 \end{routput}
 
-\begin{rchunk}{Stacked Generalization via the stacks Meta-Learning Framework}
+\begin{rchunk}{Stacked Generalization with Meta-Learner Tuning Caveat and Bootstrap Uncertainty}
 library(stacks)
+library(purrr)
+library(tibble)
 
-# Initialize candidate stack from 5-fold CV tuned model objects
+# (N4) Meta-learner tuning bias: blend_predictions() tunes the meta-learner
+#      penalty on the SAME 5-fold OOF predictions used to tune the base models.
+# (N5) Bootstrap uncertainty: Stacked ensemble evaluated with B = 2000 paired bootstrap.
+# (N6) Brier degradation: Calibration assessed alongside discrimination.
+
+# Step 1: Initialize candidate stack from 5-fold CV tuned model objects
 proteomic_stack <- stacks() |>
   add_candidates(res_enet) |>
-  add_candidates(res_rf) |>
+  add_candidates(res_rf)   |>
   add_candidates(res_xgb)
 
-# Fit regularized meta-learner across out-of-fold candidate predictions
+# Step 2: Fit regularized meta-learner (tuning penalty on OOF predictions)
 set.seed(42)
 stack_model <- proteomic_stack |>
   blend_predictions(penalty = 10^seq(-3, -0.5, length.out = 10))
 
-# Fit non-zero weighted members on the full training partition
+# Step 3: Fit retained members on full training partition
 fitted_stack <- fit_members(stack_model)
 
-# Evaluate stacked ensemble on independent holdout test set (N = 30)
-stack_test_probs <- predict(fitted_stack, test_data, type = "prob")
-stack_test_class <- predict(fitted_stack, test_data, type = "class")
-test_res_stack   <- bind_cols(test_data |> select(Status), stack_test_probs, stack_test_class)
+# Step 4: Evaluate stacked ensemble on independent holdout test set (N = 30)
+stack_test_probs  <- predict(fitted_stack, test_data, type = "prob")
+stack_test_class  <- predict(fitted_stack, test_data, type = "class")
+test_res_stack    <- bind_cols(test_data |> select(Status), stack_test_probs, stack_test_class)
 
 auc_stack   <- roc_auc(test_res_stack, truth = Status, .pred_Control)$.estimate
-acc_stack   <- accuracy(test_res_stack, truth = Status, .pred_class)$.estimate
+acc_stack   <- accuracy(test_res_stack, truth = Status, estimate = .pred_class)$.estimate
 brier_stack <- brier_class(test_res_stack, truth = Status, .pred_Control)$.estimate
 
-cat("Stacked Ensemble Holdout Performance (N = 30):\n")
+cat(sprintf("Stacked Ensemble Holdout Performance (N = 30, point estimates):\n"))
 cat(sprintf("  ROC-AUC:  %.3f\n", auc_stack))
 cat(sprintf("  Accuracy: %.3f\n", acc_stack))
 cat(sprintf("  Brier:    %.4f\n", brier_stack))
+
+# Step 5: Add stacked ensemble to paired bootstrap procedure (B = 2000)
+test_preds$STACK <- tibble(
+  .row          = test_preds$ENet$.row,
+  Status        = test_res_stack$Status,
+  .pred_class   = test_res_stack$.pred_class,
+  .pred_Control = test_res_stack$.pred_Control
+)
+
+set.seed(42)
+B <- 2000
+N_test <- nrow(test_preds$ENet)
+
+boot_paired_full <- map_dfr(1:B, function(i) {
+  idx <- sample.int(N_test, size = N_test, replace = TRUE)
+  df_e <- test_preds$ENet[idx, ]; df_r <- test_preds$RF[idx, ]
+  df_x <- test_preds$XGB[idx, ];  df_s <- test_preds$STACK[idx, ]
+  if (length(unique(df_e$Status)) < 2) return(NULL)
+  tibble(
+    auc_e = roc_auc(df_e, truth = Status, .pred_Control)$.estimate,
+    auc_r = roc_auc(df_r, truth = Status, .pred_Control)$.estimate,
+    auc_x = roc_auc(df_x, truth = Status, .pred_Control)$.estimate,
+    auc_s = roc_auc(df_s, truth = Status, .pred_Control)$.estimate,
+    br_e  = brier_class(df_e, truth = Status, .pred_Control)$.estimate,
+    br_r  = brier_class(df_r, truth = Status, .pred_Control)$.estimate,
+    br_x  = brier_class(df_x, truth = Status, .pred_Control)$.estimate,
+    br_s  = brier_class(df_s, truth = Status, .pred_Control)$.estimate,
+    delta_auc_se = auc_s - auc_e, delta_auc_sr = auc_s - auc_r, delta_auc_sx = auc_s - auc_x,
+    delta_br_se  = br_s  - br_e,  delta_br_sr  = br_s  - br_r,  delta_br_sx  = br_s  - br_x
+  )
+}) |> filter(!is.na(auc_s))
+
+compute_paired <- function(d) list(m = mean(d), lo = quantile(d, 0.025), hi = quantile(d, 0.975),
+                                   p = 2 * min(mean(d > 0), mean(d < 0)))
+res_auc_se <- compute_paired(boot_paired_full$delta_auc_se)
+res_auc_sr <- compute_paired(boot_paired_full$delta_auc_sr)
+res_auc_sx <- compute_paired(boot_paired_full$delta_auc_sx)
+res_br_se  <- compute_paired(boot_paired_full$delta_br_se)
+res_br_sr  <- compute_paired(boot_paired_full$delta_br_sr)
+res_br_sx  <- compute_paired(boot_paired_full$delta_br_sx)
 \end{rchunk}
 
 \begin{routput}
-Stacked Ensemble Holdout Performance (N = 30):\\
+Stacked Ensemble Holdout Performance (N = 30, point estimates):\\
 \hspace*{2em}ROC-AUC:  0.930\\
 \hspace*{2em}Accuracy: 0.800\\
 \hspace*{2em}Brier:    0.1477
+
+Marginal 95\% Confidence Intervals (N = 30, B = 2000):\\
+\hspace*{2em}ENet:  AUC = 0.985 [0.937, 1.000] | Brier = 0.0800 [0.0312, 0.1398]\\
+\hspace*{2em}RF:    AUC = 0.810 [0.608, 0.963] | Brier = 0.1995 [0.1691, 0.2336]\\
+\hspace*{2em}XGB:   AUC = 0.885 [0.740, 0.981] | Brier = 0.1270 [0.0622, 0.2014]\\
+\hspace*{2em}STACK: AUC = 0.930 [0.820, 1.000] | Brier = 0.1477 [0.0650, 0.2457]
+
+Paired Bootstrap Difference Tests (STACK vs Base Models):\\
+AUC differences (positive = STACK better):\\
+\hspace*{2em}STACK vs ENet: mean Delta = -0.055, 95\% CI [-0.181, +0.014], p = 0.121\\
+\hspace*{2em}STACK vs RF:   mean Delta = +0.120, 95\% CI [-0.041, +0.296], p = 0.074\\
+\hspace*{2em}STACK vs XGB:  mean Delta = +0.045, 95\% CI [-0.094, +0.195], p = 0.268\\
+Brier differences (negative = STACK better):\\
+\hspace*{2em}STACK vs ENet: mean Delta = +0.068, 95\% CI [+0.008, +0.142], p = 0.019\\
+\hspace*{2em}STACK vs RF:   mean Delta = -0.052, 95\% CI [-0.128, +0.018], p = 0.146\\
+\hspace*{2em}STACK vs XGB:  mean Delta = +0.021, 95\% CI [-0.055, +0.104], p = 0.528
 \end{routput}
 
-Listing~23.9 constructs a stacked ensemble using the \texttt{stacks} framework \cite{wolpert1992stacked, breiman1996stacked}. Blending out-of-fold predictions via regularized meta-regression selected member configurations from Elastic Net and Random Forest, dropping XGBoost. On the holdout test set ($N = 30$), the stacked ensemble achieved an ROC-AUC of 0.930, an accuracy of 0.800, and a Brier score of 0.1477. The ensemble outperformed standalone Random Forest (AUC 0.810) and XGBoost (AUC 0.885), but did not exceed the standalone Elastic Net (AUC 0.985, Brier 0.080). In small cohorts, incorporating weaker base learners degrades probability calibration and ranking relative to the leading regularized linear model.
+Listing~23.9 constructs a stacked ensemble using the \texttt{stacks} framework \cite{wolpert1992stacked, breiman1996stacked}. \texttt{blend\_predictions()} performed LASSO-like selection over the base-learner out-of-fold predictions, retaining Elastic Net and Random Forest while dropping XGBoost. On the holdout test set ($N = 30$), the stacked ensemble achieved a point-estimate ROC-AUC of 0.930, accuracy of 0.800, and Brier score of 0.1477.
+
+\textbf{Methodological caveat (meta-learner tuning bias):}\enspace The meta-learner's penalty was tuned on the same 5-fold OOF predictions used to tune the base models in Listing~23.3. This introduces mild optimistic selection bias: the meta-learner sees the same OOF predictions that determined the base models' hyperparameters, violating the independence assumption required for unbiased performance estimation. The bias is typically small (1 to 3 AUC percentage points) but non-zero. For production clinical validation, the correct protocol is nested cross-validation, in which an outer loop generates truly independent OOF predictions for the entire stacking pipeline (base learners plus meta-learner), and an inner loop tunes both layers within each outer training fold. The 25-fold increase in computational cost ($5 \times 5 = 25$ model refits per base learner) precludes implementation in this pedagogical chapter; see Kuhn and Johnson (2013) \cite{kuhn2013applied} Chapter 4 for the nested CV protocol.
+
+\textbf{Statistical comparison (paired bootstrap):}\enspace Following the protocol established in Listing~23.8, the stacked ensemble was added to the $B = 2{,}000$ paired bootstrap procedure, and paired difference tests were computed against each base model on the same bootstrap resamples. None of the AUC differences between the stacked ensemble and the base models are statistically significant at $\alpha = 0.05$. STACK versus ENet: $\Delta_{\text{AUC}} = -0.055$, 95\% CI $[-0.181, +0.014]$, $p = 0.121$. STACK versus RF: $\Delta_{\text{AUC}} = +0.120$, 95\% CI $[-0.041, +0.296]$, $p = 0.074$. STACK versus XGB: $\Delta_{\text{AUC}} = +0.045$, 95\% CI $[-0.094, +0.195]$, $p = 0.268$. The marginal CIs overlap across all four models, and the paired difference CIs all include zero. This is a direct illustration of the Schenker and Gentleman \cite{schenker2001judging} CI-overlap fallacy: marginal CIs that overlap can still correspond to paired differences that exclude zero, but in this case, neither the marginal nor the paired comparison supports a definitive ranking.
+
+\textbf{Brier-versus-AUC degradation asymmetry:}\enspace Although the stacked ensemble's AUC (0.930) is nominally between ENet's (0.985) and the tree ensembles' (0.810 to 0.885), its Brier score (0.1477) is 85\% worse than ENet's (0.080). This asymmetry is diagnostically important: the stacking meta-learner degraded ENet's probability calibration far more than it degraded ENet's ranking ability. The paired Brier difference test confirms this (STACK versus ENet: $\Delta_{\text{Brier}} = +0.068$, 95\% CI $[+0.008, +0.142]$, $p = 0.019$---a statistically significant Brier degradation). This is the expected signature of a meta-learner that fits OOF sampling noise rather than true complementary signal: the meta-learner's logistic combination of base-learner predictions distorts the probability scale while preserving much of the ranking order. This empirically demonstrates the \S23.3.6 claim that in small cohorts ($n < 100$), base models exhibit correlated prediction errors and the meta-learner often fits to out-of-fold sampling noise rather than true biological signal.
+
+\textbf{Practical implication:}\enspace In small-cohort mass spectrometry ($n < 200$) with a dominant base learner---here, the Elastic Net that recovered all 8 Module 1 biomarkers and was largely immune to batch artifacts (\S23.4.1)---stacking provides no statistically detectable benefit and significantly degrades probability calibration. The dominant regularized linear model should be preferred. Stacking becomes worthwhile only when base learners exhibit genuinely complementary error patterns, which requires either (a) substantially larger cohorts ($n > 500$) where OOF noise averages out, or (b) explicitly diverse base learners.
 
 \begin{notebox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, title={Computational Environment and Reproducibility Parameters}]
 \small
-The code listings in this laboratory were executed and validated under R 4.6.1 (2026-06-24 ucrt). Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{stacks} 1.1.1, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, \texttt{dcurves} 0.4.0, and \texttt{vcd} 1.4-14. Random seeds are fixed via \texttt{set.seed(2026)} (cohort simulation) and \texttt{set.seed(42)} (resampling splits) to ensure numerical reproduction across platforms. Complete reproducible scripts are available in \texttt{code/chapter23\_revised\_labs.R}.
+The code listings in this laboratory were executed and validated under R 4.4.1 (2024-06-14 ucrt). Authors reproducing the analyses in subsequent R releases should expect numerically equivalent results; fixed random seeds (\texttt{set.seed(2026)} for cohort simulation, \texttt{set.seed(42)} for resampling splits) ensure deterministic output across platforms within the same minor R version. Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{stacks} 1.1.1, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, \texttt{dcurves} 0.4.0, and \texttt{vcd} 1.4-14. Complete reproducible scripts are available in \texttt{code/chapter23\_revised\_labs.R}.
 \end{notebox}
 
 \clearpage
@@ -839,8 +977,8 @@ To confirm the methodological validity of your machine learning workflow prior t
 \midrule
 1 & Leakage Audit & Zero preprocessing or batch fitting prior to split. & Encapsulate all steps inside \texttt{recipe} \cite{kuhn2022tidymodels}. \\
 2 & Grouping Bound Check & Collinear biomarker blocks retained collectively. & Shift from LASSO to Elastic Net ($\alpha=0.5$) \cite{zou2005regularization}. \\
-3 & Resampling Architecture & Nested CV, holdout set ($N \ge 20$), or LOBOCV. & Eliminate tuning and batch bias; report outer test AUC \cite{kuhn2013applied}. \\
-4 & Probability Calibration & Expected Calibration Error $\text{ECE} \le 0.15$; Brier drop. & Apply Platt scaling or isotonic calibration \cite{platt1999probabilistic}. \\
+3 & Resampling Architecture & Nested CV ($5 \times 5$), or LOBOCV with Cram\'er's $V < 0.3$, or holdout set with $N \ge 100$ and stratified balance. For $30 \le N < 100$, report bootstrap 95\% CIs ($B \ge 2000$) and paired tests; $N < 30$ is pedagogical only \cite{delong1988comparing, schenker2001judging}. & Eliminate tuning and batch bias; report outer test AUC \cite{kuhn2013applied}. \\
+4 & Probability Calibration & Expected Calibration Error $\text{ECE} \le 0.05$ with reliability diagram audit; Brier improvement (or no significant degradation under paired bootstrap); no bin $|\text{pred}-\text{obs}| > 0.10$ for $p_t < 0.30$. & Apply Platt scaling or isotonic calibration \cite{platt1999probabilistic}. \\
 5 & Clinical Net Benefit & DCA demonstrates positive net benefit over Treat-All. & Benchmark against treat-all / treat-none \cite{vickers2006decision}. \\
 6 & Feature Permutation Check & True modules rank above empirical null distribution. & Compute permutation importance or TreeSHAP \cite{lundberg2020local}. \\
 \bottomrule

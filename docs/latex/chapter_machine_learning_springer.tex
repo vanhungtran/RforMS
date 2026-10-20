@@ -224,7 +224,7 @@ Clinical decisions depend on calibrated disease probabilities $\hat{p}_i \in [0,
 
 We now implement an end-to-end, multi-model machine learning pipeline using the modern \texttt{tidymodels} framework \cite{kuhn2022tidymodels}. All code uses base R pipe syntax (\texttt{|>}) and is fully reproducible.
 
-\begin{rchunk}{Simulating Ultra-High-Dimensional Proteomics Cohort ($p \gg n$)}
+\begin{rchunk}{Simulating High-Dimensional Proteomics Cohort ($p \gg n$) with MAR Missingness}
 suppressPackageStartupMessages({
   library(tidymodels)
   library(glmnet)
@@ -239,33 +239,48 @@ suppressPackageStartupMessages({
 
 set.seed(2026)
 n_samples  <- 120
-n_proteins <- 400
+n_proteins <- 4000L
 
-# 80 Controls, 40 Tumor (2:1 clinical imbalance)
 status <- factor(c(rep("Control", 80), rep("Tumor", 40)), levels = c("Control", "Tumor"))
 
-# Baseline expression: N(20, 1.0)
+# Observed covariate: Age drives MAR missingness
+age_years <- c(rnorm(80, mean = 55, sd = 12), rnorm(40, mean = 58, sd = 12))
+age_years <- pmax(18, pmin(90, age_years))
+
 X <- matrix(rnorm(n_samples * n_proteins, mean = 20, sd = 1.0), 
             nrow = n_samples, ncol = n_proteins)
-colnames(X) <- paste0("PROT_", sprintf("%03d", 1:n_proteins))
+colnames(X) <- paste0("PROT_", sprintf("%04d", 1:n_proteins))
 
-# Module 1: Collinear co-regulated biomarker signature (Proteins 1 to 8, r ~ 0.70)
+# Module 1: Collinear co-regulated signature (Proteins 1-8, r ~ 0.70)
 latent_driver <- c(rep(0, 80), rep(0.75, 40))
 for (j in 1:8) {
   X[, j] <- latent_driver + rnorm(n_samples, mean = 20, sd = 0.8)
 }
 
-# Module 2: Non-linear epistatic interaction (Proteins 9 & 10)
+# Module 2: Epistatic interaction (Proteins 9 & 10, zero main effect)
 tumor_idx <- 81:120
-X[tumor_idx[1:20], 9]  <- X[tumor_idx[1:20], 9] + 0.9
-X[tumor_idx[1:20], 10] <- X[tumor_idx[1:20], 10] + 0.9
+X[, 9]  <- X[, 9]  - 20
+X[, 10] <- X[, 10] - 20
+interaction_driver <- rnorm(40, mean = 1.5, sd = 0.3)
+X[tumor_idx, 9]  <- X[tumor_idx, 9]  + 0.6 * interaction_driver
+X[tumor_idx, 10] <- X[tumor_idx, 10] + 0.6 * interaction_driver
 
-# Inject 5% missing values at random (MNAR/MAR floor)
-miss_idx <- sample(length(X), size = 0.05 * length(X))
-X[miss_idx] <- NA
+# MAR missingness driven by Age
+miss_prob <- plogis(-3.2 + 0.05 * (age_years - 55))
+miss_mask <- matrix(runif(n_samples * n_proteins) < rep(miss_prob, times = n_proteins),
+                    nrow = n_samples, ncol = n_proteins)
+
+# MNAR component on low-abundance proteins near detection limit
+low_abund <- which(colMeans(X, na.rm = TRUE) < 19.5)
+for (j in low_abund) {
+  thresh_j <- quantile(X[, j], 0.05, na.rm = TRUE)
+  miss_mask[, j] <- miss_mask[, j] | ((X[, j] < thresh_j) & (runif(n_samples) < 0.30))
+}
+X[miss_mask] <- NA
 
 df_cohort <- as.data.frame(X)
 df_cohort$Status <- status
+df_cohort$Age    <- age_years
 
 # Stratified 75/25 Train-Test Split
 set.seed(42)
@@ -273,28 +288,43 @@ split_obj  <- initial_split(df_cohort, prop = 0.75, strata = Status)
 train_data <- training(split_obj)
 test_data  <- testing(split_obj)
 
-cat(sprintf("Simulated cohort: %d samples x %d features.\n", nrow(df_cohort), ncol(df_cohort) - 1))
+cat(sprintf("Simulated cohort: %d samples x %d features (p/n ratio ~ %.0f).\n",
+            nrow(df_cohort), ncol(df_cohort) - 2, (ncol(df_cohort) - 2) / nrow(df_cohort)))
 cat(sprintf("Training set: %d patients (%d Control, %d Tumor)\n",
             nrow(train_data), sum(train_data$Status == "Control"), sum(train_data$Status == "Tumor")))
 cat(sprintf("Independent test holdout: %d patients (%d Control, %d Tumor)\n",
             nrow(test_data), sum(test_data$Status == "Control"), sum(test_data$Status == "Tumor")))
-cat(sprintf("Global missingness rate: %.2f%%\n",
-            100 * mean(is.na(df_cohort[, -which(names(df_cohort) == "Status")]))))
+
+# MAR audit across age quartiles
+train_data$.age_quartile <- cut(train_data$Age,
+  breaks = quantile(train_data$Age, c(0, 0.25, 0.5, 0.75, 1)),
+  include.lowest = TRUE, labels = c("Q1(young)", "Q2", "Q3", "Q4(old)"))
+protein_cols <- grep("^PROT_", names(train_data), value = TRUE)
+miss_by_age <- train_data |> group_by(.age_quartile) |>
+  summarise(missingness_rate = mean(is.na(as.matrix(across(all_of(protein_cols))))),
+            n = n(), .groups = "drop")
+print(miss_by_age)
+train_data$.age_quartile <- NULL
 \end{rchunk}
 
 \begin{routput}
-Simulated cohort: 120 samples x 400 features.
-Training set: 90 patients (60 Control, 30 Tumor)
-Independent test holdout: 30 patients (20 Control, 10 Tumor)
-Global missingness rate: 5.00%
+Simulated cohort: 120 samples x 4000 features (p/n ratio ~ 33).\\
+Training set: 90 patients (60 Control, 30 Tumor)\\
+Independent test holdout: 30 patients (20 Control, 10 Tumor)\\
+\hspace*{1em}.age\_quartile missingness\_rate     n\\
+1 Q1(young)               0.0188    23\\
+2 Q2                      0.0313    22\\
+3 Q3                      0.0470    22\\
+4 Q4(old)                 0.0890    23
 \end{routput}
 
-\begin{rchunk}{Leakage-Safe Preprocessing Recipe with Imbalance Correction}
+\begin{rchunk}{Leakage-Safe Preprocessing Recipe with Role Assignment}
 # Define preprocessing recipe strictly on training split
 rec <- recipe(Status ~ ., data = train_data) |>
-  step_impute_median(all_predictors()) |>
-  step_zv(all_predictors()) |>
-  step_normalize(all_predictors()) |>
+  update_role(Age, new_role = "imputation donor") |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_zv(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors()) |>
   step_downsample(Status, under_ratio = 1.2)
 
 prep_rec <- prep(rec, training = train_data)
@@ -302,17 +332,17 @@ baked_train <- bake(prep_rec, new_data = NULL)
 
 cat(sprintf("Recipe successfully baked on training fold:\n"))
 cat(sprintf("  Predictors processed: %d (Zero-variance filtered: %d)\n",
-            ncol(baked_train) - 1, ncol(train_data) - ncol(baked_train)))
+            ncol(baked_train) - 2, ncol(train_data) - ncol(baked_train)))
 cat(sprintf("  Post-downsample class balance: %d Control, %d Tumor\n",
             sum(baked_train$Status == "Control"), sum(baked_train$Status == "Tumor")))
 cat(sprintf("  Remaining missing values: %d\n", sum(is.na(baked_train))))
 \end{rchunk}
 
 \begin{routput}
-Recipe successfully baked on training fold:
-  Predictors processed: 400 (Zero-variance filtered: 0)
-  Post-downsample class balance: 36 Control, 30 Tumor
-  Remaining missing values: 0
+Recipe successfully baked on training fold:\\
+\hspace*{2em}Predictors processed: 4000 (Zero-variance filtered: 0)\\
+\hspace*{2em}Post-downsample class balance: 36 Control, 30 Tumor\\
+\hspace*{2em}Remaining missing values: 0
 \end{routput}
 
 Listing 23.2 balances classes using \texttt{step\_downsample} with an under-sampling ratio of 1.2. Downsampling discards 24 control samples, reducing the training set from 90 to 66 patients. In small cohorts, discarding samples reduces statistical power. Synthetic over-sampling via \texttt{themis::step\_smote} generates artificial minority cases by interpolating between $k$-nearest neighbors; SMOTE must execute strictly inside the cross-validation training fold to prevent leakage (Deadly Sin 3). A third strategy is cost-sensitive loss weighting, which retains all training samples without synthesizing artificial points. In XGBoost, setting \texttt{scale\_pos\_weight = 2.0} doubles the loss penalty on misclassified tumor cases. In \texttt{ranger}, passing \texttt{case\_weights} prioritizes minority observations during split evaluation without altering sample geometry. When scaling to untargeted metabolomics ($p \ge 10^4$), unsupervised filtering (such as \texttt{step\_nzv} or variance thresholding) should precede model fitting in the recipe to reduce feature dimension without label leakage.
@@ -391,47 +421,77 @@ cat(sprintf("  XGBoost:       ROC-AUC = %.3f | Accuracy = %.3f (Optimal learn_ra
 
 \begin{routput}
 Model Benchmark on Independent Holdout Test Set (N = 30):\\
-\hspace*{2em}Elastic Net:   ROC-AUC = 0.860 | Accuracy = 0.833 (Optimal penalty = 0.1738)\\
-\hspace*{2em}Random Forest: ROC-AUC = 0.885 | Accuracy = 0.833 (Optimal min\_n = 12)\\
-\hspace*{2em}XGBoost:       ROC-AUC = 0.755 | Accuracy = 0.700 (Optimal learn\_rate = 0.020)
+\hspace*{2em}Elastic Net:   ROC-AUC = 0.890 | Accuracy = 0.800 (Optimal penalty = 0.1738)\\
+\hspace*{2em}Random Forest: ROC-AUC = 0.845 | Accuracy = 0.733 (Optimal min\_n = 7)\\
+\hspace*{2em}XGBoost:       ROC-AUC = 0.890 | Accuracy = 0.767 (Optimal learn\_rate = 0.080)
 \end{routput}
 
-\begin{rchunk}{Probability Calibration via Platt Scaling and Brier Score Audit}
-pred_enet <- collect_predictions(fit_enet)
-pred_rf   <- collect_predictions(fit_rf)
+\begin{rchunk}{Leakage-Safe Probability Calibration via Out-of-Fold Platt Scaling}
+ctrl_oof <- control_resamples(save_pred = TRUE)
+wf_enet_final <- finalize_workflow(wf_enet, best_enet)
+wf_rf_final   <- finalize_workflow(wf_rf,   best_rf)
 
-# Compute raw Brier scores
-brier_raw_enet <- brier_class(pred_enet, truth = Status, .pred_Control)$.estimate
-brier_raw_rf   <- brier_class(pred_rf, truth = Status, .pred_Control)$.estimate
+# Fit calibration maps strictly on training out-of-fold (OOF) predictions
+set.seed(42)
+oof_enet <- fit_resamples(wf_enet_final, resamples = cv_folds,
+                          control = ctrl_oof, metrics = metric_set(roc_auc, brier_class))
+set.seed(42)
+oof_rf   <- fit_resamples(wf_rf_final,   resamples = cv_folds,
+                          control = ctrl_oof, metrics = metric_set(roc_auc, brier_class))
 
-# Logistic calibration (Platt scaling) via probably
-cal_model_enet <- cal_estimate_logistic(pred_enet, truth = Status)
-cal_pred_enet  <- cal_apply(pred_enet, cal_model_enet)
-brier_cal_enet <- brier_class(cal_pred_enet, truth = Status, .pred_Control)$.estimate
+oof_pred_enet <- collect_predictions(oof_enet)
+oof_pred_rf   <- collect_predictions(oof_rf)
 
-cal_model_rf <- cal_estimate_logistic(pred_rf, truth = Status)
-cal_pred_rf  <- cal_apply(pred_rf, cal_model_rf)
-brier_cal_rf <- brier_class(cal_pred_rf, truth = Status, .pred_Control)$.estimate
+cal_map_enet <- cal_estimate_logistic(oof_pred_enet, truth = Status)
+cal_map_rf   <- cal_estimate_logistic(oof_pred_rf,   truth = Status)
 
-cat("Probability Calibration Audit (Brier Score, lower is superior):\n")
+# Apply frozen calibration maps to untouched holdout test partition
+pred_enet_test <- collect_predictions(fit_enet)
+pred_rf_test   <- collect_predictions(fit_rf)
+
+pred_enet_cal <- cal_apply(pred_enet_test, cal_map_enet)
+pred_rf_cal   <- cal_apply(pred_rf_test,   cal_map_rf)
+
+brier_raw_enet <- brier_class(pred_enet_test, truth = Status, .pred_Control)$.estimate
+brier_cal_enet <- brier_class(pred_enet_cal,  truth = Status, .pred_Control)$.estimate
+brier_raw_rf   <- brier_class(pred_rf_test,   truth = Status, .pred_Control)$.estimate
+brier_cal_rf   <- brier_class(pred_rf_cal,    truth = Status, .pred_Control)$.estimate
+
+cat("Probability Calibration Audit (Brier Score, leakage-safe):\n")
 cat(sprintf("  Elastic Net:   Raw BS = %.4f -> Calibrated BS = %.4f (%.1f%% error reduction)\n",
             brier_raw_enet, brier_cal_enet, 100 * (brier_raw_enet - brier_cal_enet) / brier_raw_enet))
 cat(sprintf("  Random Forest: Raw BS = %.4f -> Calibrated BS = %.4f (%.1f%% error reduction)\n",
             brier_raw_rf, brier_cal_rf, 100 * (brier_raw_rf - brier_cal_rf) / brier_raw_rf))
+
+# Holdout reliability audit across probability bins
+bin_breaks <- seq(0, 1, length.out = 6)
+cal_audit_enet <- pred_enet_cal |>
+  mutate(bin = cut(.pred_Control, breaks = bin_breaks, include.lowest = TRUE)) |>
+  group_by(bin) |>
+  summarise(mean_pred = round(mean(.pred_Control), 3),
+            mean_obs  = round(mean(Status == "Control"), 3),
+            n = n(), .groups = "drop")
+print(cal_audit_enet)
 \end{rchunk}
 
 \begin{routput}
-Probability Calibration Audit (Brier Score, lower is superior):\\
-\hspace*{2em}Elastic Net:   Raw BS = 0.1720 -> Calibrated BS = 0.1416 (17.6\% error reduction)\\
-\hspace*{2em}Random Forest: Raw BS = 0.2053 -> Calibrated BS = 0.0950 (53.7\% error reduction)
+Probability Calibration Audit (Brier Score, leakage-safe):\\
+\hspace*{2em}Elastic Net:   Raw BS = 0.1652 -> Calibrated BS = 0.1411 (14.6\% error reduction)\\
+\hspace*{2em}Random Forest: Raw BS = 0.2193 -> Calibrated BS = 0.2358 (-7.5\% error reduction)\\
+\hspace*{1em}bin       mean\_pred mean\_obs     n\\
+1 [0,0.2]       0.100    0.286     7\\
+2 (0.2,0.4]     0.275    0.400     5\\
+3 (0.4,0.6]     0.591    1.000     1\\
+4 (0.6,0.8]     0.719    0.500     4\\
+5 (0.8,1]       0.909    1.000    13
 \end{routput}
 
 \begin{rchunk}{Clinical Decision Curve Analysis and Biomarker Recovery}
 # Decision Curve Analysis comparing Net Benefit across threshold probabilities
 dca_df <- data.frame(
-  Status    = as.numeric(pred_enet$Status == "Tumor"),
-  pred_enet = cal_pred_enet$.pred_Tumor,
-  pred_rf   = cal_pred_rf$.pred_Tumor
+  Status    = as.numeric(pred_enet_test$Status == "Tumor"),
+  pred_enet = pred_enet_cal$.pred_Tumor,
+  pred_rf   = pred_rf_cal$.pred_Tumor
 )
 
 dca_obj <- dcurves::dca(
@@ -462,20 +522,20 @@ cat("\nBiomarker Signature Recovery Audit:\n")
 cat(sprintf("  Random Forest Top 5 Features: %s\n", paste(names(rf_imp)[1:5], collapse = ", ")))
 cat(sprintf("  Elastic Net Total Features Retained: %d\n", length(non_zero_genes)))
 cat(sprintf("  Elastic Net Ground-Truth Module 1 Overlap: %d / 8 proteins retained\n",
-            sum(paste0("PROT_", sprintf("%03d", 1:8)) %in% non_zero_genes)))
+            sum(paste0("PROT_", sprintf("%04d", 1:8)) %in% non_zero_genes)))
 \end{rchunk}
 
 \begin{routput}
 Clinical Decision Curve Analysis (Net Benefit across Decision Thresholds pt):\\
-\hspace*{2em}pt = 0.15: NetBenefit(ENet) = 0.222 | NetBenefit(RF) = 0.216 | Treat-All = 0.216\\
-\hspace*{2em}pt = 0.25: NetBenefit(ENet) = 0.133 | NetBenefit(RF) = 0.111 | Treat-All = 0.111\\
-\hspace*{2em}pt = 0.35: NetBenefit(ENet) = 0.103 | NetBenefit(RF) = -0.026 | Treat-All = -0.026\\
-\hspace*{2em}pt = 0.50: NetBenefit(ENet) = 0.167 | NetBenefit(RF) = 0.167 | Treat-All = -0.333
+\hspace*{2em}pt = 0.15: NetBenefit(ENet) = 0.286 | NetBenefit(RF) = 0.227 | Treat-All = 0.216\\
+\hspace*{2em}pt = 0.25: NetBenefit(ENet) = 0.233 | NetBenefit(RF) = 0.167 | Treat-All = 0.111\\
+\hspace*{2em}pt = 0.35: NetBenefit(ENet) = 0.210 | NetBenefit(RF) = 0.105 | Treat-All = -0.026\\
+\hspace*{2em}pt = 0.50: NetBenefit(ENet) = 0.133 | NetBenefit(RF) = -0.067 | Treat-All = -0.333
 
 Biomarker Signature Recovery Audit:\\
-\hspace*{2em}Random Forest Top 5 Features: PROT\_008, PROT\_007, PROT\_001, PROT\_037, PROT\_003\\
-\hspace*{2em}Elastic Net Total Features Retained: 22\\
-\hspace*{2em}Elastic Net Ground-Truth Module 1 Overlap: 7 / 8 proteins retained
+\hspace*{2em}Random Forest Top 5 Features: PROT\_0003, PROT\_2799, PROT\_0006, PROT\_0008, PROT\_2497\\
+\hspace*{2em}Elastic Net Total Features Retained: 37\\
+\hspace*{2em}Elastic Net Ground-Truth Module 1 Overlap: 6 / 8 proteins retained
 \end{routput}
 
 \begin{notebox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, title={Computational Environment and Reproducibility Parameters}]

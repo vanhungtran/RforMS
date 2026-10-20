@@ -152,11 +152,11 @@ fig2 <- ggplot(df_dens, aes(x = Intensity, color = Method, linetype = Method)) +
   geom_density(linewidth = 0.7, trim = FALSE) +
   scale_color_manual(values = method_colors) +
   scale_linetype_manual(values = method_lines) +
-  scale_x_continuous(limits = c(15, 28), breaks = seq(16, 28, 2)) +
-  scale_y_continuous(limits = c(0, 0.32), breaks = seq(0, 0.30, 0.05)) +
-  annotate("segment", x = 17.52, xend = 17.52, y = 0.26, yend = 0.17,
+  scale_x_continuous(limits = c(14.5, 29.0), breaks = seq(16, 28, 2)) +
+  scale_y_continuous(limits = c(0, 0.50), breaks = seq(0, 0.50, 0.10)) +
+  annotate("segment", x = 17.52, xend = 17.52, y = 0.38, yend = 0.22,
            arrow = arrow(length = unit(1.6, "mm")), color = PALETTE[["red_strong"]], linewidth = 0.5) +
-  annotate("text", x = 17.52, y = 0.28, label = "MinDet spike (17.52)",
+  annotate("text", x = 17.52, y = 0.42, label = "MinDet spike (17.52)",
            size = 5.5 / .pt, color = PALETTE[["red_strong"]], hjust = 0.5) +
   labs(x = expression("Protein Abundance ("*log[2]*" Intensity)"),
        y = "Empirical Probability Density",

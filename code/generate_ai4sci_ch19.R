@@ -207,15 +207,16 @@ p2 <- ggplot(density_df, aes(x = Value, colour = Strategy, linetype = Strategy, 
   scale_colour_manual(values = strat_colors) +
   scale_linetype_manual(values = strat_linetypes) +
   scale_linewidth_manual(values = strat_linewidths) +
-  annotate("segment", x = 17.52, xend = 17.52, y = 0.25, yend = 0.17,
+  annotate("segment", x = 17.52, xend = 17.52, y = 0.38, yend = 0.22,
            arrow = arrow(length = unit(1.8, "mm"), type = "closed"),
            colour = "#D95F02", linewidth = 0.65) +
-  annotate("label", x = 17.52, y = 0.28,
+  annotate("label", x = 17.52, y = 0.42,
            label = "MinDet Point-Mass Spike\n(Variance Deflation)",
            size = 2.1, fill = "white", alpha = 0.9, colour = "#D95F02",
            fontface = "bold", label.padding = unit(0.15, "lines")) +
-  scale_x_continuous(limits = c(15.0, 28.5), breaks = seq(16, 28, 2)) +
-  scale_y_continuous(limits = c(0, 0.32), breaks = seq(0, 0.30, 0.05)) +
+  scale_x_continuous(limits = c(14.5, 29.0), breaks = seq(16, 28, 2)) +
+  scale_y_continuous(limits = c(0, 0.50), breaks = seq(0, 0.50, 0.10),
+                     expand = expansion(mult = c(0, 0.02))) +
   labs(
     title = "Empirical Intensity Density Distributions Post-Imputation",
     subtitle = "Stochastic models restore continuous left tails; MinDet introduces an artificial point-mass spike",
@@ -233,7 +234,7 @@ p2 <- ggplot(density_df, aes(x = Value, colour = Strategy, linetype = Strategy, 
     plot.margin = margin(t = 4, r = 6, b = 4, l = 4, unit = "pt")
   )
 
-save_ai4sci(p2, "fig_19_2_imputation_distributions", width_mm = 165, height_mm = 70)
+save_ai4sci(p2, "fig_19_2_imputation_distributions", width_mm = 165, height_mm = 74)
 
 # =============================================================================
 # Figure 19.3: Differential Sensitivity and Variance Inflation
@@ -336,7 +337,7 @@ p3b <- ggplot(mi_plot_df, aes(x = Missing_Pct, y = Variance_Inflation, colour = 
     "True Null"                 = "#A5A5A5"
   )) +
   scale_x_continuous(limits = c(0, 65), breaks = seq(0, 60, 15)) +
-  scale_y_continuous(limits = c(0, 45), breaks = seq(0, 40, 10)) +
+  scale_y_continuous(limits = c(0, 48), breaks = seq(0, 40, 10)) +
   labs(
     title = "(e) Rubin Variance Inflation Factor",
     subtitle = "Between-imputation variance expands confidence bounds as missingness increases",

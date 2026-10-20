@@ -52,11 +52,11 @@ Translational mass spectrometry requires a multi-stage machine learning workflow
 \toprule
 \textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Data Topology} & High-dimensional space ($p \gg n$) causes distance concentration and empty space \cite{cover1965geometrical, hastie2009elements}. & Audit missingness, collinear blocks, and class imbalance; stratify splits. & Pre-screening features on whole cohort (data leakage). Remedy: Perform all filtering inside CV folds \cite{ambroise2002selection}. \\
+\textbf{1. Data Topology} & High-dimensional space ($p \gg n$) causes distance concentration and empty space \cite{cover1965geometrical, hastie2009elements}. & Audit missingness, collinear blocks, class imbalance, and batch structures; stratify splits. & Pre-screening features or pooling batches across cohorts (data leakage). Remedy: Perform all filtering, imputation, and batch fitting inside CV folds \cite{ambroise2002selection, broadhurst2006statistical}. \\
 \addlinespace
-\textbf{2. Model Architecture} & Linear sparsity (Elastic Net \cite{zou2005regularization}), latent projection (PLS-DA \cite{barker2003partial}), vs. non-linear interactions (Random Forest, XGBoost \cite{breiman2001random, chen2016xgboost}). & Select inductive bias matching biological hypothesis; preserve collinear groups. & LASSO randomly dropping correlated peptides. Remedy: Elastic Net ($\alpha \in [0.2, 0.8]$) \cite{zou2005regularization}. \\
+\textbf{2. Model Architecture} & Linear sparsity (Elastic Net \cite{zou2005regularization}), latent projection (PLS-DA, OPLS-DA \cite{barker2003partial, trygg2002orthogonal}), vs. non-linear interactions (Random Forest, XGBoost \cite{breiman2001random, chen2016xgboost}). & Select inductive bias matching biological hypothesis; preserve collinear groups. & LASSO randomly dropping correlated peptides. Remedy: Elastic Net ($\alpha \in [0.2, 0.8]$) \cite{zou2005regularization}. \\
 \addlinespace
-\textbf{3. Resampling Integrity} & Hyperparameter tuning on test splits produces optimistic performance bias \cite{kuhn2013applied}. & Implement nested cross-validation (inner tuning loop, outer evaluation loop) or holdout test split. & Over-optimistic AUC reports. Remedy: Nested $5 \times 5$ cross-validation with untouched holdout test partition \cite{kuhn2022tidymodels}. \\
+\textbf{3. Resampling Integrity} & Hyperparameter tuning on test splits produces optimistic performance bias \cite{kuhn2013applied}. & Implement nested cross-validation (inner tuning loop, outer evaluation loop) or Leave-One-Batch-Out CV (LOBOCV). & Over-optimistic AUC reports. Remedy: Nested $5 \times 5$ cross-validation or LOBOCV with untouched holdout test partition \cite{kuhn2022tidymodels}. \\
 \addlinespace
 \textbf{4. Clinical Utility} & Raw classifier scores are uncalibrated risk probabilities \cite{brier1950verification, platt1999probabilistic}. & Evaluate Brier score, Expected Calibration Error (ECE), and Decision Curve Analysis. & High AUC with distorted probabilities. Remedy: Platt scaling or isotonic calibration \cite{vickers2006decision}. \\
 \bottomrule
@@ -68,6 +68,8 @@ Translational mass spectrometry requires a multi-stage machine learning workflow
 Data leakage occurs when information from outside the training dataset influences model training \cite{ambroise2002selection, broadhurst2006statistical}. If you normalize, impute missing values, or screen features using all $N$ patients before cross-validation splitting, information from the validation test fold leaks into the training pipeline. The resulting 98\% accuracy is an artifact of leakage that drops toward chance on independent clinical cohorts. All preprocessing steps must remain encapsulated strictly within the resampling training fold \cite{kuhn2022tidymodels}.
 \end{notebox}
 
+\clearpage
+
 % =============================================================================
 \section{The High-Dimensional Pathology (\texorpdfstring{$p \gg n$}{p >> n}) in Mass Spectrometry}
 % =============================================================================
@@ -78,21 +80,10 @@ Clinical proteomics cohorts quantify $p = 4{,}000$ to $10{,}000$ proteins, and u
 
 As dimension $p$ increases, Euclidean geometry exhibits two non-intuitive behaviors:
 \begin{enumerate}
-    \item \textbf{Hypersphere Volume Vanishing:} The volume of a $p$-dimensional hypersphere of radius $r$ inscribed within a hypercube of side length $2r$ is:
-    \begin{equation}
-    V_p(r) = \frac{\pi^{p/2}}{\Gamma\left(\frac{p}{2} + 1\right)} r^p
-    \end{equation}
-    The ratio of the volume of the sphere to the volume of the enclosing hypercube $(2r)^p$ converges asymptotically to zero:
-    \begin{equation}
-    \lim_{p \to \infty} \frac{V_p(r)}{(2r)^p} = \lim_{p \to \infty} \frac{\pi^{p/2}}{2^p \, \Gamma\left(\frac{p}{2} + 1\right)} = 0
-    \end{equation}
-    In high-dimensional space, almost all volume concentrates in the corners of the hypercube \cite{hastie2009elements}.
+    \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\setlength{\parsep}{0pt}
+    \item \textbf{Hypersphere Volume Vanishing:} The volume of a $p$-dimensional hypersphere of radius $r$ inscribed within a hypercube of side length $2r$ is $V_p(r) = \frac{\pi^{p/2}}{\Gamma(p/2 + 1)} r^p$. The ratio of the sphere volume to the enclosing hypercube $(2r)^p$ converges asymptotically to zero: $\lim_{p \to \infty} \frac{V_p(r)}{(2r)^p} = \lim_{p \to \infty} \frac{\pi^{p/2}}{2^p \, \Gamma\left(\frac{p}{2} + 1\right)} = 0$ \cite{hastie2009elements}. Almost all volume concentrates in the corners of the hypercube.
     
-    \item \textbf{Distance Concentration:} For $n$ points drawn independently from a distribution in $\mathbb{R}^p$, the distance between any two points concentrates around the mean distance:
-    \begin{equation}
-    \lim_{p \to \infty} \frac{\operatorname{dist}_{\max} - \operatorname{dist}_{\min}}{\operatorname{dist}_{\min}} = 0
-    \end{equation}
-    In high dimensions, sample pairs become equidistant, causing unpenalized nearest-neighbor algorithms to degenerate.
+    \item \textbf{Distance Concentration:} For $n$ points drawn independently in $\mathbb{R}^p$, pairwise distances concentrate around the mean: $\lim_{p \to \infty} \frac{\operatorname{dist}_{\max} - \operatorname{dist}_{\min}}{\operatorname{dist}_{\min}} = 0$. Sample pairs become equidistant, causing unpenalized nearest-neighbor algorithms to degenerate.
 \end{enumerate}
 
 \subsection{Cover's Theorem on Separability}
@@ -101,15 +92,18 @@ Consider $n$ random data points in general position in $\mathbb{R}^p$, each assi
 \begin{equation}
 P(n, p) = \left(\frac{1}{2}\right)^{n-1} \sum_{k=0}^{p} \binom{n-1}{k}
 \end{equation}
-Whenever $p \ge n - 1$, the summation encompasses all terms $0 \le k \le n-1$, yielding:
-\begin{equation}
-\sum_{k=0}^{n-1} \binom{n-1}{k} = 2^{n-1} \implies P(n, p) = 1.0
-\end{equation}
+Whenever $p \ge n - 1$, the summation encompasses all terms $0 \le k \le n-1$, giving $\sum_{k=0}^{n-1} \binom{n-1}{k} = 2^{n-1} \implies P(n, p) = 1.0$.
 
-\begin{biologicalinsight}
+\begin{biologicalinsight}[top=2pt, bottom=2pt, before skip=2pt, after skip=2pt]
 \textbf{The Inevitability of 100\% Training Accuracy:}\\
 When features outnumber samples ($p > n$), an unregularized linear classifier achieves 100\% training accuracy on Gaussian noise with randomly permuted labels. High training accuracy in $p \gg n$ data is not evidence of biomarker discovery; it is a mathematical property of the linear system's null space \cite{cover1965geometrical, vapnik1998statistical}.
 \end{biologicalinsight}
+
+\subsection{Batch Effects, Confounder Leakage, and Group-Aware Resampling}
+
+Instrument drift, column aging, ambient temperature variation, and reagent lots generate technical batch effects in mass spectrometry assays \cite{broadhurst2006statistical}. When batch normalization algorithms (such as ComBat or empirical Bayes scaling) are fitted across the pooled cohort before splitting, estimated location and scale parameters borrow variance across partition boundaries. This leaks test partition outcome information into the training data, inflating validation accuracy on pure noise. When biological classes correlate with acquisition batches or run order, classifiers memorize batch-specific background ions rather than disease markers. Preprocessing pipelines must estimate batch adjustment parameters strictly on the training partition and apply frozen transformations to validation folds. In multi-site or multi-day studies, models must be evaluated using Leave-One-Batch-Out Cross-Validation (LOBOCV) or stratified Group K-Fold cross-validation to assess true cross-batch generalization.
+
+\clearpage
 
 % =============================================================================
 \section{Theoretical Foundations of Mass Spectrometry Machine Learning}
@@ -139,7 +133,7 @@ Cyclical coordinate descent optimizes Eq.~(\ref{eq:penalized_objective}) via the
 \end{equation}
 When the partial correlation $|z| \le \lambda \alpha$, the feature coefficient is set identically to zero.
 
-\begin{deepdive}
+\begin{deepdive}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt]
 \textbf{Mathematical Proof of the Elastic Net Grouping Bound:}\\
 Let $\hat{\boldsymbol{\beta}}$ be the Elastic Net minimizer for normalized predictors $\mathbf{x}_j$ and $\mathbf{x}_k$ with sample correlation $\rho = \frac{1}{n}\mathbf{x}_j^T \mathbf{x}_k$. Assume $\operatorname{sign}(\hat{\beta}_j) = \operatorname{sign}(\hat{\beta}_k) > 0$.
 From the sub-gradient optimality conditions of Eq.~(\ref{eq:penalized_objective}):
@@ -159,13 +153,21 @@ Applying Cauchy-Schwarz with standardized vectors ($\|\mathbf{x}_j\|_2^2 = \|\ma
 As correlation $\rho \to 1$, the upper bound converges to zero. Correlated biomarkers receive near-identical coefficients, preventing arbitrary feature drops \cite{zou2005regularization}.
 \end{deepdive}
 
-\subsection{Partial Least Squares Discriminant Analysis (PLS-DA) and the Overfitting Trap}
+\clearpage
+
+\subsection{Partial Least Squares Discriminant Analysis (PLS-DA, OPLS-DA) and the Overfitting Trap}
 
 Partial Least Squares Discriminant Analysis projects high-dimensional predictors $\mathbf{X} \in \mathbb{R}^{n \times p}$ onto a low-dimensional latent subspace that maximizes covariance with class labels $\mathbf{Y}$ \cite{barker2003partial}:
 \begin{equation}
 \max_{\mathbf{w}, \mathbf{q}} \operatorname{cov}(\mathbf{X}\mathbf{w}, \mathbf{Y}\mathbf{q}) \quad \text{subject to } \|\mathbf{w}\|_2 = 1, \; \|\mathbf{q}\|_2 = 1
 \end{equation}
-While widely applied in metabolomics, PLS-DA easily overfits in $p \gg n$ settings \cite{broadhurst2006statistical, westerhuis2008assessment}. Because $\mathbf{Y}$ guides component construction, PLS-DA can separate random Gaussian noise into distinct visual clusters. The goodness-of-fit metric $R^2_Y$ is inflated by noise. Models must be validated using cross-validated predictive ability ($Q^2_Y$) and non-parametric response permutation testing ($N \ge 1{,}000$ label permutations) \cite{westerhuis2008assessment}.
+Trygg and Wold~\cite{trygg2002orthogonal} developed Orthogonal PLS-DA (OPLS-DA) to separate predictive from orthogonal variation:
+\begin{equation}
+\mathbf{X} = \mathbf{T}_p \mathbf{P}_p^T + \mathbf{T}_o \mathbf{P}_o^T + \mathbf{E}
+\end{equation}
+where $\mathbf{T}_p \mathbf{P}_p^T$ isolates variation correlated with $\mathbf{Y}$, and $\mathbf{T}_o \mathbf{P}_o^T$ captures variation orthogonal to $\mathbf{Y}$, such as analytical drift or patient demographic covariates. In binary problems, OPLS-DA condenses the predictive variation onto a single score vector $\mathbf{t}_p$, enabling biomarker visualization through S-plots that map feature covariance against correlation.
+
+Neither PLS-DA nor OPLS-DA prevents geometric over-fitting in $p \gg n$ settings \cite{broadhurst2006statistical, westerhuis2008assessment}. Because $\mathbf{Y}$ guides the orthogonal projection, OPLS-DA strips non-predictive variance out of the primary component, separating pure Gaussian noise into distinct visual clusters. The goodness-of-fit metric $R^2_Y$ is inflated by noise. Models must be validated using cross-validated predictive ability ($Q^2_Y$) and non-parametric response permutation testing ($N \ge 1{,}000$ label permutations) \cite{westerhuis2008assessment}.
 
 \subsection{Tree Ensembles: Random Forest and Gradient Tree Boosting}
 
@@ -182,6 +184,8 @@ When biological relationships involve non-linear thresholds or epistatic interac
     \end{equation}
     where $g_i = \partial_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$ and $h_i = \partial^2_{\hat{y}^{(t-1)}} \ell(y_i, \hat{y}^{(t-1)})$. Leaf shrinkage and regularization $\lambda$ reduce overfitting on noise.
 \end{itemize}
+
+In untargeted metabolomics feature tables ($p = 20{,}000$ to $100{,}000$), evaluating $\sqrt{p}$ candidates per split evaluates hundreds of features, most of which are uninformative noise. This increases pairwise tree correlation $\rho$, degrading ensemble variance reduction ($\operatorname{Var}(\bar{T}) \to \rho \sigma^2$). Exact TreeSHAP computes in polynomial time $O(T L D^2)$, which is efficient for shallow trees ($D \le 6$) but requires high memory across $10^5$ features \cite{lundberg2020local}. In contrast, coordinate descent for Elastic Net converges in $O(n p)$ operations, making penalized linear regression the faster screening tool in ultra-high dimensions. When non-linear ensembles are required on massive datasets, unsupervised variance filtering or principal component extraction must be executed strictly inside the resampling recipe before tree construction.
 
 \subsection{Interpretability: Gini Impurity Selection Bias vs Game-Theoretic SHAP}
 
@@ -310,6 +314,8 @@ Recipe successfully baked on training fold:
   Post-downsample class balance: 36 Control, 30 Tumor
   Remaining missing values: 0
 \end{routput}
+
+Listing 23.2 balances classes using \texttt{step\_downsample} with an under-sampling ratio of 1.2. Downsampling discards 24 control samples, reducing the training set from 90 to 66 patients. In small cohorts, discarding samples reduces statistical power. Synthetic over-sampling via \texttt{themis::step\_smote} generates artificial minority cases by interpolating between $k$-nearest neighbors; SMOTE must execute strictly inside the cross-validation training fold to prevent leakage (Deadly Sin 3). A third strategy is cost-sensitive loss weighting, which retains all training samples without synthesizing artificial points. In XGBoost, setting \texttt{scale\_pos\_weight = 2.0} doubles the loss penalty on misclassified tumor cases. In \texttt{ranger}, passing \texttt{case\_weights} prioritizes minority observations during split evaluation without altering sample geometry. When scaling to untargeted metabolomics ($p \ge 10^4$), unsupervised filtering (such as \texttt{step\_nzv} or variance thresholding) should precede model fitting in the recipe to reduce feature dimension without label leakage.
 
 \begin{rchunk}{Multi-Model Specification and 5-Fold Cross-Validation Tuning}
 # Model specifications
@@ -483,10 +489,10 @@ The code listings in this laboratory were executed and validated under R 4.6.1 (
 % =============================================================================
 
 \begin{pitfallbox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt]
-\textbf{Deadly Sin 1: The Pre-Filtering Data Leakage Catastrophe.}\\
-\textit{Mechanism:} Screening features across all $N$ patients using univariate tests ($p < 0.05$) before splitting into training and validation sets.\\
-\textit{Consequence:} Validation set information leaks into the feature selector, producing 99\% cross-validation accuracy on pure random noise that fails in clinical validation \cite{ambroise2002selection}.\\
-\textit{Remedy:} Execute all feature filtering, scaling, and imputation strictly inside the cross-validation training fold (\texttt{tidymodels::recipe}) \cite{kuhn2022tidymodels}.
+\textbf{Deadly Sin 1: Pre-Filtering and Batch Correction Data Leakage.}\\
+\textit{Mechanism:} Screening features via univariate tests or fitting batch normalization models (such as ComBat or RUV) across all $N$ patients before train/test splitting.\\
+\textit{Consequence:} Validation set labels and variance parameters leak into the training pipeline, yielding 99\% cross-validation accuracy that fails on independent instrument runs \cite{ambroise2002selection, broadhurst2006statistical}.\\
+\textit{Remedy:} Execute all feature filtering, scaling, imputation, and batch parameter fitting strictly inside the cross-validation training fold (\texttt{tidymodels::recipe}), and validate using Leave-One-Batch-Out Cross-Validation (LOBOCV) \cite{kuhn2022tidymodels}.
 \end{pitfallbox}
 
 \begin{pitfallbox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt]
@@ -500,7 +506,7 @@ The code listings in this laboratory were executed and validated under R 4.6.1 (
 \textbf{Deadly Sin 3: Applying SMOTE to the Entire Dataset Before Resampling.}\\
 \textit{Mechanism:} Generating synthetic minority samples using SMOTE on the complete dataset before cross-validation.\\
 \textit{Consequence:} Synthetic test points are derived directly from training neighbors, causing over-fitting.\\
-\textit{Remedy:} Apply SMOTE strictly to the training fold within the resampling recipe (\texttt{themis::step\_smote}) \cite{chawla2002smote}.
+\textit{Remedy:} Apply SMOTE strictly to the training fold within the resampling recipe (\texttt{themis::step\_smote}) \cite{chawla2002smote}, or use cost-sensitive loss weights (\texttt{scale\_pos\_weight}) to avoid discarding data or synthesizing artificial points.
 \end{pitfallbox}
 
 \begin{pitfallbox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt]
@@ -534,9 +540,9 @@ To confirm the methodological validity of your machine learning workflow prior t
 \toprule
 \textbf{Step} & \textbf{Diagnostic Metric} & \textbf{Acceptable Threshold} & \textbf{Corrective Protocol} \\
 \midrule
-1 & Leakage Audit & Zero preprocessing prior to train/test split. & Encapsulate all steps inside \texttt{recipe} \cite{kuhn2022tidymodels}. \\
+1 & Leakage Audit & Zero preprocessing or batch fitting prior to split. & Encapsulate all steps inside \texttt{recipe} \cite{kuhn2022tidymodels}. \\
 2 & Grouping Bound Check & Collinear biomarker blocks retained collectively. & Shift from LASSO to Elastic Net ($\alpha=0.5$) \cite{zou2005regularization}. \\
-3 & Resampling Architecture & Nested CV or untouched holdout set ($N \ge 20$). & Eliminate tuning bias; report outer test AUC \cite{kuhn2013applied}. \\
+3 & Resampling Architecture & Nested CV, holdout set ($N \ge 20$), or LOBOCV. & Eliminate tuning and batch bias; report outer test AUC \cite{kuhn2013applied}. \\
 4 & Probability Calibration & Expected Calibration Error $\text{ECE} \le 0.15$; Brier drop. & Apply Platt scaling or isotonic calibration \cite{platt1999probabilistic}. \\
 5 & Clinical Net Benefit & DCA demonstrates positive net benefit over Treat-All. & Benchmark against treat-all / treat-none \cite{vickers2006decision}. \\
 6 & Feature Permutation Check & True modules rank above empirical null distribution. & Compute permutation importance or TreeSHAP \cite{lundberg2020local}. \\
@@ -633,12 +639,11 @@ $$\text{Net Benefit}_{\text{All}} = \frac{30}{100} - \frac{70}{100}\left(\frac{1
 For "Treat None", $\text{TP} = 0$ and $\text{FP} = 0$, giving $\text{Net Benefit}_{\text{None}} = 0.000$.
 The model's net benefit of $0.200$ exceeds both Treat-All ($0.067$) and Treat-None ($0.000$). The net benefit gain over Treat-All is $0.200 - 0.067 = 0.133$, which corresponds to detecting $13.3$ additional true cancer cases per 100 patients without increasing false-positive interventions.
 
-% =============================================================================
-\section*{Canonical References}
-\addcontentsline{toc}{section}{Canonical References}
-% =============================================================================
+\clearpage
 
+% =============================================================================
 \begin{thebibliography}{99}
+% =============================================================================
 
 \bibitem{ambroise2002selection}
 Ambroise, C., \& McLachlan, G.~J. (2002). Selection bias in gene extraction on the basis of microarray gene-expression data. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6562--6566. \doi{10.1073/pnas.102102699}.
@@ -702,6 +707,9 @@ Strobl, C., Boulesteix, A.~L., Zeileis, A., \& Hothorn, T. (2007). Bias in rando
 
 \bibitem{tibshirani1996regression}
 Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 58(1), 267--288. \doi{10.1111/j.2517-6161.1996.tb02080.x}.
+
+\bibitem{trygg2002orthogonal}
+Trygg, J., \& Wold, S. (2002). Orthogonal projections to latent structures (O-PLS). \textit{Journal of Chemometrics}, 16(3), 119--128. \doi{10.1002/cem.695}.
 
 \bibitem{vapnik1998statistical}
 Vapnik, V.~N. (1998). \textit{Statistical Learning Theory}. John Wiley \& Sons, New York.

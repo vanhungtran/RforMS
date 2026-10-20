@@ -447,7 +447,7 @@ Executed 5 imputation strategies across 386 retained proteins:\\
 \hspace*{1em}1. MinDet: Deterministic minimum replacement\\
 \hspace*{1em}2. Perseus: Stochastic downshifted Gaussian ($\delta = 1.8, \omega = 0.3$)\\
 \hspace*{1em}3. QRILC: Quantile regression truncated normal estimation\\
-\hspace*{1em}4. $-NN: Distance-weighted donor matching ( = 5$)\\
+\hspace*{1em}4. $k$-NN: Distance-weighted donor matching ($k = 5$)\\
 \hspace*{1em}5. Hybrid MAR/MNAR: Palstr{\\o}m--Matthiesen segmented imputation
 \end{routput}
 
@@ -594,9 +594,9 @@ print(benchmark_table)
 2 MinDet (Deterministic) \hspace*{4.2em}27 \hspace*{1.5em}25 \hspace*{1em}2 \hspace*{1.8em}7.4 \hspace*{0.8em}-0.105 \hspace*{1.2em}0.698\\
 3 Perseus (Downshifted Gauss.) \hspace*{1.2em}33 \hspace*{1.5em}30 \hspace*{1em}3 \hspace*{1.8em}9.1 \hspace*{0.8em}-0.144 \hspace*{1.2em}0.915\\
 4 QRILC (Quantile Regression) \hspace*{1.8em}32 \hspace*{1.5em}29 \hspace*{1em}3 \hspace*{1.8em}9.4 \hspace*{0.8em}-0.122 \hspace*{1.2em}0.607\\
-5 $-NN (Donor Matching) \hspace*{4.5em}26 \hspace*{1.5em}26 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.244 \hspace*{1.2em}1.700\\
+5 $k$-NN (Donor Matching) \hspace*{4.5em}26 \hspace*{1.5em}26 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.244 \hspace*{1.2em}1.700\\
 6 Hybrid MAR/MNAR (Palstr{\\o}m) \hspace*{1.5em}26 \hspace*{1.5em}26 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.244 \hspace*{1.2em}1.700\\
-7 Rubin MI (=20$) \hspace*{6.5em}5 \hspace*{2em}5 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.096 \hspace*{1.2em}0.628\\
+7 Rubin MI ($M = 20$) \hspace*{6.5em}5 \hspace*{2em}5 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.096 \hspace*{1.2em}0.628\\
 8 proDA (Imputation-Free) \hspace*{3.5em}20 \hspace*{1.5em}20 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.105 \hspace*{1.2em}0.242
 \end{routput}
 
@@ -716,7 +716,7 @@ All analyses were executed under R version 4.4.1 (2024-06-14 ucrt) and Bioconduc
 \section{Tutor's Self-Assessment Diagnostic Checklist}
 % =============================================================================
 
-Table~\ref{tab:missing_checklist} details the six diagnostic checks required before reporting biological discoveries from an imputed mass spectrometry dataset.
+Table~\ref{tab:missing_checklist} details the seven diagnostic checks required before reporting biological discoveries from an imputed mass spectrometry dataset.
 
 \begin{table}[htbp]
 \centering
@@ -750,7 +750,10 @@ Table~\ref{tab:missing_checklist} details the six diagnostic checks required bef
 
 \noindent
 \textbf{Exercise 19.1 (Rubin's Variance Pooling and Small-Sample Degrees of Freedom):}\\
-In a clinical proteomics study with $M = 5$ multiply imputed datasets across $n = 20$ patients (two groups of 10, complete-data degrees of freedom $\nu_{\text{com}} = 18$), a biomarker exhibits estimated log-fold changes $\hat{\mathbf{Q}} = (1.80,$ .10,$ .95,$ .05,$ .90)^T$. The estimated within-imputation sampling variances are $\hat{\mathbf{U}} = (0.040,$ .045,$ .042,$ .038,$ .041)^T$.
+In a clinical proteomics study with $M = 5$ multiply imputed datasets across $n = 20$ patients (two groups of 10, complete-data degrees of freedom $\nu_{\text{com}} = 18$), a biomarker exhibits estimated log-fold changes:
+$$\hat{\mathbf{Q}} = (1.80,\, 2.10,\, 1.95,\, 2.05,\, 1.90)^T$$
+with corresponding within-imputation sampling variances:
+$$\hat{\mathbf{U}} = (0.040,\, 0.045,\, 0.042,\, 0.038,\, 0.041)^T$$
 \begin{enumerate}
     \item Compute the pooled point estimate $\bar{Q}$.
     \item Compute the average within-imputation variance $\bar{U}$, the between-imputation variance $B$, and the total pooled variance $T$.
@@ -777,10 +780,6 @@ A downregulated protein has true Disease mean abundance $\mu_{\text{Dis}} = 17.5
     \item If the true Control abundance is $\mu_{\text{Ctrl}} = 20.0$, calculate the true fold change $\Delta_{\text{true}} = \mu_{\text{Dis}} - \mu_{\text{Ctrl}}$ and the estimated fold change $\Delta_{\text{knn}} = y_{\text{Dis}}^* - \mu_{\text{Ctrl}}$.
     \item Compute the estimation bias $\text{Bias} = \Delta_{\text{knn}} - \Delta_{\text{true}}$ and explain why donor matching produces fold-change attenuation under MNAR.
 \end{enumerate}
-
-% =============================================================================
-\section{Worked Solutions}
-% =============================================================================
 
 \vspace{0.8em}
 \noindent
@@ -893,8 +892,6 @@ The covariance error of deterministic substitution ($\text{ADCS}_A = 0.333$) is 
 \textbf{4. Methodological Interpretation for Network Analysis:}\\
 Deterministic value substitution replaces missing cells with a constant, which artificially truncates variance and eliminates correlation with co-regulated partners (reducing true correlation from $r = 0.40$ to $r = 0.10$). In downstream biological network construction (such as weighted gene correlation network analysis, WGCNA), this covariance distortion artificially dissolves true co-expression modules, leading to false negatives in functional pathway discovery~\cite{templ2023visualization}.
 
-\section*{Canonical References}
-\addcontentsline{toc}{section}{Canonical References}
 % =============================================================================
 
 \begin{thebibliography}{99}

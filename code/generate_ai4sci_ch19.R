@@ -284,7 +284,7 @@ plot_v_proda  <- annotate_volcano(de_proda)
 make_clean_volcano <- function(df, panel_tag, title_text, tp, fp, fdr, show_y = FALSE) {
   sub_text <- sprintf("TP = %d | FP = %d | FDR = %.1f%%", tp, fp, fdr)
   ggplot(df, aes(x = logFC, y = -log10(P_Value), colour = Status_Plot)) +
-    geom_point(alpha = 0.65, size = 0.9) +
+    geom_point(alpha = 0.65, size = 0.9, show.legend = FALSE) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "#555555", linewidth = 0.3) +
     geom_vline(xintercept = c(-1.0, 1.0), linetype = "dashed", colour = "#555555", linewidth = 0.3) +
     scale_colour_manual(values = c(
@@ -353,10 +353,9 @@ p3b <- ggplot(mi_plot_df, aes(x = Missing_Pct, y = Variance_Inflation, colour = 
     plot.margin = margin(t = 4, r = 4, b = 2, l = 4, unit = "pt")
   )
 
-# Stack row of 4 volcanoes above the Rubin plot; single collected bottom legend
+# Stack row of 4 volcanoes above the Rubin plot; clean bottom legend from p3b
 fig3 <- (volcano_row / p3b) +
-  plot_layout(heights = c(1.1, 1.0), guides = "collect") &
-  theme(legend.position = "bottom", legend.text = element_text(size = 5.8))
+  plot_layout(heights = c(1.1, 1.0))
 
 save_ai4sci(fig3, "fig_19_3_differential_sensitivity", width_mm = 165, height_mm = 96)
 
@@ -412,7 +411,7 @@ p4b <- ggplot(p_df, aes(x = Prot_1, y = ifelse(is.na(Prot_2), 18.0, Prot_2),
   scale_y_continuous(limits = c(17.5, 27.0), breaks = seq(18, 26, 2)) +
   labs(
     title = "(b) Bivariate Margin Scatterplot",
-    subtitle = "Marginal distribution below dashed line exposes conditional dropouts",
+    subtitle = "Marginal dots below line expose conditional dropouts",
     x = expression(Protein~1~(Log[2]~Intensity)),
     y = expression(Protein~2~(Log[2]~Intensity)),
     colour = "",

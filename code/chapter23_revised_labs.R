@@ -11,6 +11,7 @@
 # -----------------------------------------------------------------------------
 suppressPackageStartupMessages({
   library(tidymodels)
+  library(stacks)
   library(glmnet)
   library(ranger)
   library(xgboost)
@@ -170,17 +171,23 @@ wf_xgb  <- workflow() |> add_recipe(rec) |> add_model(spec_xgb)
 set.seed(42)
 cv_folds <- vfold_cv(train_data, v = 5, strata = Status)
 
+# Stacks requires candidate out-of-fold predictions and workflow objects
+ctrl_stack <- control_stack_grid()
+
 res_enet <- tune_grid(wf_enet, resamples = cv_folds,
                       grid = tibble(penalty = 10^seq(-3, -0.2, length.out = 6)),
-                      metrics = metric_set(roc_auc, accuracy, brier_class))
+                      metrics = metric_set(roc_auc, accuracy, brier_class),
+                      control = ctrl_stack)
 
 res_rf <- tune_grid(wf_rf, resamples = cv_folds,
                     grid = tibble(min_n = c(3, 7, 12)),
-                    metrics = metric_set(roc_auc, accuracy, brier_class))
+                    metrics = metric_set(roc_auc, accuracy, brier_class),
+                    control = ctrl_stack)
 
 res_xgb <- tune_grid(wf_xgb, resamples = cv_folds,
                      grid = tibble(learn_rate = c(0.02, 0.08, 0.15)),
-                     metrics = metric_set(roc_auc, accuracy, brier_class))
+                     metrics = metric_set(roc_auc, accuracy, brier_class),
+                     control = ctrl_stack)
 
 cat("Hyperparameter grid tuning complete across all 3 model architectures.\n")
 
@@ -482,6 +489,39 @@ cat(sprintf("  ENet vs XGB: Mean Delta = %+.3f, 95%% CI [%+.3f, %+.3f], Paired b
             quantile(boot_paired$delta_auc_enet_xgb, 0.025),
             quantile(boot_paired$delta_auc_enet_xgb, 0.975),
             p_diff_enet_xgb))
+
+# -----------------------------------------------------------------------------
+# Listing 23.9: Stacked Generalization via the stacks Meta-Learning Framework
+# -----------------------------------------------------------------------------
+cat("\n--- Listing 23.9: Stacked Generalization via stacks ---\n")
+
+# Initialize candidate stack from 5-fold CV tuned model objects
+proteomic_stack <- stacks() |>
+  add_candidates(res_enet) |>
+  add_candidates(res_rf) |>
+  add_candidates(res_xgb)
+
+# Fit regularized meta-learner across out-of-fold candidate predictions
+set.seed(42)
+stack_model <- proteomic_stack |>
+  blend_predictions(penalty = 10^seq(-3, -0.5, length.out = 10))
+
+# Fit non-zero weighted members on the full training partition
+fitted_stack <- fit_members(stack_model)
+
+# Evaluate stacked ensemble on independent holdout test set (N = 30)
+stack_test_probs <- predict(fitted_stack, test_data, type = "prob")
+stack_test_class <- predict(fitted_stack, test_data, type = "class")
+test_res_stack   <- bind_cols(test_data |> select(Status), stack_test_probs, stack_test_class)
+
+auc_stack   <- roc_auc(test_res_stack, truth = Status, .pred_Control)$.estimate
+acc_stack   <- accuracy(test_res_stack, truth = Status, .pred_class)$.estimate
+brier_stack <- brier_class(test_res_stack, truth = Status, .pred_Control)$.estimate
+
+cat("Stacked Ensemble Holdout Performance (N = 30):\n")
+cat(sprintf("  ROC-AUC:  %.3f\n", auc_stack))
+cat(sprintf("  Accuracy: %.3f\n", acc_stack))
+cat(sprintf("  Brier:    %.4f\n", brier_stack))
 
 cat("\n=============================================================================\n")
 cat("Laboratory Execution Complete: All Workflows Verified Reproducible.\n")

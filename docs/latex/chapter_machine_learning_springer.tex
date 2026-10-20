@@ -222,6 +222,17 @@ Clinical decisions depend on calibrated disease probabilities $\hat{p}_i \in [0,
     where $p_t$ is the clinical decision threshold probability. DCA directly benchmarks the clinical net utility of the mass spectrometry signature against treat-all and treat-none strategies across clinical thresholds.
 \end{itemize}
 
+\subsection{Boundary Conditions: Deep Learning, Stacked Meta-Models, and Wrapper Selection}
+
+Machine learning applications in mass spectrometry divide into spectrum-level modeling and patient-level cohort classification:
+\begin{itemize}
+    \item \textbf{Deep Learning in Mass Spectrometry ($N \gg p$ vs $p \gg n$):} Deep neural networks require large sample sizes to prevent over-fitting. In mass spectrometry, deep architectures succeed when trained on hundreds of thousands to millions of spectra. Prosit~\cite{gessulat2019prosit} used recurrent neural networks trained on $2.1 \times 10^7$ tandem mass spectra to predict fragmentation intensities. DeepLC~\cite{bouwmeester2021deeplc} uses convolutional networks trained on large peptide collections to predict retention times. DIA-NN~\cite{demichev2020diann} uses deep neural networks to score chromatographic peak groups. In contrast, patient classification cohorts typically provide $n = 50$ to $200$ samples and $p = 4{,}000$ to $50{,}000$ features. Deep tabular networks (such as multilayer perceptrons and TabNet) contain far more parameters than observations. On small tabular datasets, deep architectures underperform regularized linear models and gradient-boosted trees \cite{grinsztajn2022tree}.
+    
+    \item \textbf{Stacked Generalization and Meta-Learning:} Stacked generalization~\cite{wolpert1992stacked, breiman1996stacked, vanderLaan2007super} trains a meta-learner (typically a constrained regularized regression) on out-of-fold predictions from multiple base learners. In small cohorts ($n < 100$), base models exhibit correlated prediction errors. The meta-learner often fits to out-of-fold sampling noise rather than true biological signal, yielding little improvement over the single best tuned base model. In R, the \texttt{stacks} package implements stacked ensembling within \texttt{tidymodels}. External platforms such as H2O provide stacked ensembles but require a separate Java virtual machine runtime.
+    
+    \item \textbf{Wrapper Feature Selection vs Embedded Sparsity:} In earlier R literature, the \texttt{caret} package \cite{kuhn2013applied} served as the primary machine learning framework. Its Recursive Feature Elimination function (\texttt{rfe}) iteratively fits a model, ranks variable importance, and discards low-ranking features. When $p = 4{,}000$, nested RFE refits candidate models across hundreds of subset sizes and cross-validation folds, creating high computational cost. Executing RFE outside the resampling loop introduces selection bias and invalidates validation metrics \cite{ambroise2002selection}. Modern \texttt{tidymodels} pipelines replace wrapper selection with embedded $\ell_1$ shrinkage (Elastic Net), unsupervised recipe filters (\texttt{step\_zv}, \texttt{step\_corr}), or dedicated filtering recipes.
+\end{itemize}
+
 % =============================================================================
 \section{Hands-On R Laboratory: Tidymodels Workflow in Proteomics}
 % =============================================================================
@@ -231,6 +242,7 @@ We now implement an end-to-end, multi-model machine learning pipeline using the 
 \begin{rchunk}{Simulating High-Dimensional Proteomics Cohort ($p \gg n$) with MAR and Batch Effect}
 suppressPackageStartupMessages({
   library(tidymodels)
+  library(stacks)
   library(glmnet)
   library(ranger)
   library(xgboost)
@@ -395,17 +407,23 @@ wf_xgb  <- workflow() |> add_recipe(rec) |> add_model(spec_xgb)
 set.seed(42)
 cv_folds <- vfold_cv(train_data, v = 5, strata = Status)
 
+# Retain candidate predictions and workflows for stacking
+ctrl_stack <- control_stack_grid()
+
 res_enet <- tune_grid(wf_enet, resamples = cv_folds,
                       grid = tibble(penalty = 10^seq(-3, -0.2, length.out = 6)),
-                      metrics = metric_set(roc_auc, accuracy, brier_class))
+                      metrics = metric_set(roc_auc, accuracy, brier_class),
+                      control = ctrl_stack)
 
 res_rf <- tune_grid(wf_rf, resamples = cv_folds,
                     grid = tibble(min_n = c(3, 7, 12)),
-                    metrics = metric_set(roc_auc, accuracy, brier_class))
+                    metrics = metric_set(roc_auc, accuracy, brier_class),
+                    control = ctrl_stack)
 
 res_xgb <- tune_grid(wf_xgb, resamples = cv_folds,
                      grid = tibble(learn_rate = c(0.02, 0.08, 0.15)),
-                     metrics = metric_set(roc_auc, accuracy, brier_class))
+                     metrics = metric_set(roc_auc, accuracy, brier_class),
+                     control = ctrl_stack)
 
 cat("Hyperparameter grid tuning complete across all 3 model architectures.\n")
 \end{rchunk}
@@ -716,9 +734,50 @@ Paired Bootstrap Difference Tests (Delta AUC):\\
 \hspace*{2em}ENet vs XGB: Mean Delta = +0.099, 95\% CI [+0.004, +0.240], p = 0.024
 \end{routput}
 
+\begin{rchunk}{Stacked Generalization via the stacks Meta-Learning Framework}
+library(stacks)
+
+# Initialize candidate stack from 5-fold CV tuned model objects
+proteomic_stack <- stacks() |>
+  add_candidates(res_enet) |>
+  add_candidates(res_rf) |>
+  add_candidates(res_xgb)
+
+# Fit regularized meta-learner across out-of-fold candidate predictions
+set.seed(42)
+stack_model <- proteomic_stack |>
+  blend_predictions(penalty = 10^seq(-3, -0.5, length.out = 10))
+
+# Fit non-zero weighted members on the full training partition
+fitted_stack <- fit_members(stack_model)
+
+# Evaluate stacked ensemble on independent holdout test set (N = 30)
+stack_test_probs <- predict(fitted_stack, test_data, type = "prob")
+stack_test_class <- predict(fitted_stack, test_data, type = "class")
+test_res_stack   <- bind_cols(test_data |> select(Status), stack_test_probs, stack_test_class)
+
+auc_stack   <- roc_auc(test_res_stack, truth = Status, .pred_Control)$.estimate
+acc_stack   <- accuracy(test_res_stack, truth = Status, .pred_class)$.estimate
+brier_stack <- brier_class(test_res_stack, truth = Status, .pred_Control)$.estimate
+
+cat("Stacked Ensemble Holdout Performance (N = 30):\n")
+cat(sprintf("  ROC-AUC:  %.3f\n", auc_stack))
+cat(sprintf("  Accuracy: %.3f\n", acc_stack))
+cat(sprintf("  Brier:    %.4f\n", brier_stack))
+\end{rchunk}
+
+\begin{routput}
+Stacked Ensemble Holdout Performance (N = 30):\\
+\hspace*{2em}ROC-AUC:  0.930\\
+\hspace*{2em}Accuracy: 0.800\\
+\hspace*{2em}Brier:    0.1477
+\end{routput}
+
+Listing~23.9 constructs a stacked ensemble using the \texttt{stacks} framework \cite{wolpert1992stacked, breiman1996stacked}. Blending out-of-fold predictions via regularized meta-regression selected member configurations from Elastic Net and Random Forest, dropping XGBoost. On the holdout test set ($N = 30$), the stacked ensemble achieved an ROC-AUC of 0.930, an accuracy of 0.800, and a Brier score of 0.1477. The ensemble outperformed standalone Random Forest (AUC 0.810) and XGBoost (AUC 0.885), but did not exceed the standalone Elastic Net (AUC 0.985, Brier 0.080). In small cohorts, incorporating weaker base learners degrades probability calibration and ranking relative to the leading regularized linear model.
+
 \begin{notebox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, title={Computational Environment and Reproducibility Parameters}]
 \small
-The code listings in this laboratory were executed and validated under R 4.6.1 (2026-06-24 ucrt). Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, \texttt{dcurves} 0.4.0, and \texttt{vcd} 1.4-14. Random seeds are fixed via \texttt{set.seed(2026)} (cohort simulation) and \texttt{set.seed(42)} (resampling splits) to ensure numerical reproduction across platforms. Complete reproducible scripts are available in \texttt{code/chapter23\_revised\_labs.R}.
+The code listings in this laboratory were executed and validated under R 4.6.1 (2026-06-24 ucrt). Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{stacks} 1.1.1, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, \texttt{dcurves} 0.4.0, and \texttt{vcd} 1.4-14. Random seeds are fixed via \texttt{set.seed(2026)} (cohort simulation) and \texttt{set.seed(42)} (resampling splits) to ensure numerical reproduction across platforms. Complete reproducible scripts are available in \texttt{code/chapter23\_revised\_labs.R}.
 \end{notebox}
 
 \clearpage
@@ -895,6 +954,12 @@ Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A p
 \bibitem{boland2023health}
 Boland, M.~R. (2023). \textit{Health Data Analytics with R: A Hands-On Guide}. Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-18099-6}.
 
+\bibitem{bouwmeester2021deeplc}
+Bouwmeester, R., Gabriels, R., Hulstaert, N., Martens, L., \& Degroeve, S. (2021). DeepLC can predict retention times for peptides that carry as yet unseen modifications. \textit{Nature Methods}, 18(11), 1363--1369. \doi{10.1038/s41592-021-01301-5}.
+
+\bibitem{breiman1996stacked}
+Breiman, L. (1996). Stacked regressions. \textit{Machine Learning}, 24(1), 49--64. \doi{10.1007/BF00117832}.
+
 \bibitem{breiman2001random}
 Breiman, L. (2001). Random forests. \textit{Machine Learning}, 45(1), 5--32. \doi{10.1023/A:1010933404324}.
 
@@ -916,11 +981,20 @@ Cover, T.~M. (1965). Geometrical and statistical properties of systems of linear
 \bibitem{delong1988comparing}
 DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: A nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
 
+\bibitem{demichev2020diann}
+Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural network and deep learning based software for DIA proteomics. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.
+
 \bibitem{friedman2001greedy}
 Friedman, J.~H. (2001). Greedy function approximation: a gradient boosting machine. \textit{Annals of Statistics}, 29(5), 1189--1232. \doi{10.1214/aos/1013203451}.
 
 \bibitem{friedman2010regularization}
 Friedman, J., Hastie, T., \& Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. \textit{Journal of Statistical Software}, 33(1), 1--22. \doi{10.18637/jss.v033.i01}.
+
+\bibitem{gessulat2019prosit}
+Gessulat, S., Schmidt, T., Zolg, D.~P., Samaras, P., Schnatbaum, K., Zerweck, J., Knaute, T., Dahlmann, J., Heinzlmeir, S., Wallweber, L., Michalski, A., Schlegl, J., Ehrlich, H.~C., Kuster, B., \& Wilhelm, M. (2019). Prosit: proteome-wide prediction of peptide tandem mass spectra by deep learning. \textit{Nature Methods}, 16(6), 509--518. \doi{10.1038/s41592-019-0426-7}.
+
+\bibitem{grinsztajn2022tree}
+Grinsztajn, L., Oyallon, E., \& Varoquaux, G. (2022). Why do tree-based models still outperform deep learning on tabular data? \textit{Advances in Neural Information Processing Systems}, 35, 507--520.
 
 \bibitem{hastie2009elements}
 Hastie, T., Tibshirani, R., \& Friedman, J. (2009). \textit{The Elements of Statistical Learning: Data Mining, Inference, and Prediction} (2nd ed.). Springer, New York, NY.
@@ -955,6 +1029,9 @@ Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. \textit
 \bibitem{trygg2002orthogonal}
 Trygg, J., \& Wold, S. (2002). Orthogonal projections to latent structures (O-PLS). \textit{Journal of Chemometrics}, 16(3), 119--128. \doi{10.1002/cem.695}.
 
+\bibitem{vanderLaan2007super}
+van der Laan, M.~J., Polley, E.~C., \& Hubbard, A.~E. (2007). Super learner. \textit{Statistical Applications in Genetics and Molecular Biology}, 6(1), Article 25. \doi{10.2202/1544-6115.1309}.
+
 \bibitem{vapnik1998statistical}
 Vapnik, V.~N. (1998). \textit{Statistical Learning Theory}. John Wiley \& Sons, New York.
 
@@ -963,6 +1040,9 @@ Vickers, A.~J., \& Elkin, E.~B. (2006). Decision curve analysis: a novel method 
 
 \bibitem{westerhuis2008assessment}
 Westerhuis, J.~A., Hoefsloot, H.~C., Smit, S., Vis, D.~J., Smilde, A.~K., van Velzen, E.~J., van Duynhoven, J.~P., \& Pratic\`o, G. (2008). Assessment of PLSDA cross validation. \textit{Metabolomics}, 4(1), 81--89. \doi{10.1007/s11306-007-0099-6}.
+
+\bibitem{wolpert1992stacked}
+Wolpert, D.~H. (1992). Stacked generalization. \textit{Neural Networks}, 5(2), 241--259. \doi{10.1016/S0893-6080(05)80023-1}.
 
 \bibitem{zou2005regularization}
 Zou, H., \& Hastie, T. (2005). Regularization and variable selection via the elastic net. \textit{Journal of the Royal Statistical Society: Series B (Statistical Methodology)}, 67(2), 301--320. \doi{10.1111/j.1467-9868.2005.00503.x}.

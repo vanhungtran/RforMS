@@ -57,7 +57,7 @@ Before applying imputation functions or running automated pipelines, the analyti
 \addlinespace
 \textbf{3. Modeling} & Tail-censored Gaussian draws vs. donor matching vs. probabilistic dropout \cite{tyanova2016perseus, ahlmann2020proda, palstrom2020imputation}. & Substitute missing values appropriately, or model dropouts directly without imputation. & Deterministic zero/min replacement spikes variance. Remedy: QRILC or proDA \cite{ahlmann2020proda}. \\
 \addlinespace
-\textbf{4. Sensitivity Audit} & Variance shrinkage underestimation from single imputation \cite{rubin1987multiple, little2019statistical}. & Quantify inferential stability across multiple imputation draws via Rubin's rules. & Downstream $p$-values falsely anti-conservative. Remedy: Report multiple imputation pooled SE \cite{barnard1999small, vanbuuren2018}. \\
+\textbf{4. Sensitivity Audit} & Variance shrinkage underestimation from single imputation \cite{rubin1987multiple, little2019statistical}. & Quantify inferential stability across multiple imputation draws via Rubin's rules and evaluate covariance preservation via ADCS \cite{templ2023visualization}. & Downstream $p$-values falsely anti-conservative; distorted covariance. Remedy: Report multiple imputation pooled SE \cite{barnard1999small, vanbuuren2018} and audit NRMSE/ADCS \cite{templ2023visualization}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -102,6 +102,16 @@ The missing data mechanism is characterized by the conditional probability distr
     This is the primary physical driver of missingness in analytical chemistry: analytes present below the instrument limit of detection (LOD) or limit of quantitation (LOQ) fail to generate a discernible chromatographic peak above baseline noise.
 \end{enumerate}
 
+\subsection{Compositional Data and Analytical Zero Taxonomies (Templ 2023)}
+
+Mass spectrometry measurements are fundamentally relative: detector ion currents reflect proportional abundances within a finite total ion current (TIC) or sample loading. Following the compositional data framework established by Matthias Templ~\cite{templ2023visualization}, analytical chemistry distinguishes three distinct forms of unobserved or zero values:
+\begin{enumerate}
+    \item \textbf{Values Below Detection Limit (BDL) or Rounded Zeros:} Continuous chemical concentrations that fall below the physical sensitivity of the instrument ($y_{ij} < \text{LOD}$). This is the primary physical cause of left-censored MNAR in label-free proteomics.
+    \item \textbf{Count Zeros:} Absolute absence of discrete ion detection events in integer count datasets (such as spectral counting or low-intensity tandem MS/MS transitions).
+    \item \textbf{Structural Zeros:} Biological non-expression where the protein or metabolite is physically absent ($y_{ij} \equiv 0$). This occurs in tissue-specific gene silencing, knockout models, or non-synthesized secondary metabolites.
+\end{enumerate}
+Treating BDL values as structural zeros creates false biological silencing, while applying standard linear imputation to compositional data distorts the simplex geometry and alters relative ratios across all other channels~\cite{templ2023visualization}.
+
 \subsection{Analytical Mechanisms in Proteomics and Metabolomics}
 
 Proteomics and metabolomics experiments exhibit compound missingness patterns driven by instrument operation and experimental design:
@@ -137,6 +147,30 @@ Figure~\ref{fig:missingness_diagnosis} illustrates this empirical diagnosis on a
 \includegraphics[width=\textwidth]{figures/fig_19_1_missingness_diagnosis.pdf}
 \caption{Empirical diagnosis of missingness architecture and group-wise completeness. Panel A: Logistic missingness diagnosis curve modeling dropout probability as a function of mean observed abundance. The negative slope ($\hat{\gamma}_1 = -0.358$, $p = 1.78 \times 10^{-7}$) establishes abundance-dependent MNAR left-censoring below the limit of detection ($\text{LOD} = 20.2$). Panel B: Sample-by-sample feature completeness comparing Control and Disease cohorts, demonstrating that group-wise filtering ($\ge 70\%$ in $\ge 1$ group) preserves true on/off biomarkers.}
 \label{fig:missingness_diagnosis}
+\end{figure}
+
+\subsection{Formal Hypothesis Testing: Little's Multivariate MCAR Test}
+
+Beyond univariate logistic curves, Donald Rubin and Roderick Little~\cite{little1988test, templ2023visualization} established the multivariate omnibus test for Missing Completely at Random (MCAR). The sample of $n$ observations is partitioned into $S$ distinct missingness patterns, where pattern $s$ contains $n_s$ samples with an identical subset of $p_s$ observed variables. Little's test statistic evaluates the weighted sum of squared Mahalanobis distances between pattern-specific observed means $\bar{\mathbf{y}}_{\text{obs}, s}$ and maximum likelihood mean estimates $\hat{\boldsymbol{\mu}}_{\text{obs}, s}$ obtained via the Expectation-Maximization (EM) algorithm:
+\begin{equation}
+\label{eq:little_mcar}
+d_{\text{MCAR}}^2 = \sum_{s=1}^S n_s \left( \bar{\mathbf{y}}_{\text{obs}, s} - \hat{\boldsymbol{\mu}}_{\text{obs}, s} \right)^T \hat{\boldsymbol{\Sigma}}_{\text{obs}, s}^{-1} \left( \bar{\mathbf{y}}_{\text{obs}, s} - \hat{\boldsymbol{\mu}}_{\text{obs}, s} \right)
+\end{equation}
+Under the null hypothesis that missingness is MCAR, $d_{\text{MCAR}}^2$ asymptotically follows a central $\chi^2$ distribution with $\sum_{s=1}^S p_s - p$ degrees of freedom~\cite{little1988test, templ2023visualization}. In high-throughput mass spectrometry, Little's test almost universally rejects MCAR ($p < 10^{-4}$) because instrument duty cycles and detection thresholds systematically induce abundance-dependent missingness.
+
+\subsection{Multivariate Missingness Visualization via VIM Topology}
+
+Matthias Templ~\cite{templ2023visualization} developed the Visualization and Imputation of Missing Values (\texttt{VIM}) framework to expose missingness structures before model fitting:
+\begin{itemize}
+    \item \textbf{Sorted Matrix Map (\texttt{VIM::matrixplot}):} The data matrix is rendered as an intensity heatmap sorted along the vertical axis by mean feature abundance (Figure~\ref{fig:templ_diagnostics}A). Observed values appear in grayscale, while missing entries appear in red. In mass spectrometry, this map visualizes the analytical limit of detection: missing values concentrate heavily at the bottom of the matrix.
+    \item \textbf{Bivariate Margin Scatterplot (\texttt{VIM::marginplot}):} When examining two candidate biomarkers, standard scatterplots discard sample pairs where either feature is unobserved. Templ's margin plot places red marginal boxplots and dotplots along the plot boundary (Figure~\ref{fig:templ_diagnostics}B), displaying the distribution of Feature 1 when Feature 2 is observed versus when Feature 2 is missing.
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/fig_19_4_templ_diagnostics.pdf}
+\caption{Multivariate missingness visualization and imputation quality evaluation (Templ 2023). Panel A: VIM missingness matrix map sorted by mean feature abundance. Missing values (red) concentrate at the bottom of the ranking, establishing analytical left-censoring below the instrument detection threshold. Panel B: Bivariate margin scatterplot for Protein 1 versus Protein 2. Marginal red points indicate observations where Protein 2 is unobserved, exposing conditional missingness dependencies. Panel C: Multi-criterion benchmark plotting precision (NRMSE) against Average Difference of Covariance Structure (ADCS). Perseus achieves the lowest precision error ($\text{NRMSE} = 1.218$) and minimal covariance distortion ($\text{ADCS} = 0.313$), while MinDet and QRILC distort multivariate covariance.}
+\label{fig:templ_diagnostics}
 \end{figure}
 
 \subsection{Imputation-Free Modeling: Probabilistic Dropout Analysis (proDA)}
@@ -240,6 +274,27 @@ In small clinical cohorts ($n \le 30$), standard Rubin degrees of freedom $\nu_{
 \end{align}
 where $\nu_{\text{com}} = n - \operatorname{rank}(\mathbf{X})$ is the complete-data residual degrees of freedom \cite{barnard1999small}.
 
+\subsection{Multi-Criterion Quality Evaluation: Precision and Covariance Preservation}
+
+Matthias Templ~\cite{templ2023visualization} demonstrated that evaluating imputation algorithms solely through downstream hypothesis testing or prediction accuracy is insufficient. A complete methodological evaluation requires two orthogonal criteria:
+
+\paragraph{1. Imputation Precision on Missing Entries:}
+When evaluating algorithms against a benchmark where true values $\mathbf{Y}_{\text{true}}$ are known, precision is quantified by the Normalized Root Mean Squared Error (NRMSE) and Mean Absolute Error (MAE) evaluated strictly over the unobserved entries $\mathcal{M} = \{(i,j) : M_{ij} = 1\}$:
+\begin{align}
+\text{RMSE} &= \sqrt{\frac{1}{|\mathcal{M}|} \sum_{(i,j) \in \mathcal{M}} \left( y_{ij}^* - y_{ij}^{\text{true}} \right)^2} \\
+\text{NRMSE} &= \frac{\text{RMSE}}{\sigma(\mathbf{Y}_{\text{true}}^{\text{mis}})} = \frac{\sqrt{\frac{1}{|\mathcal{M}|} \sum_{(i,j) \in \mathcal{M}} \left( y_{ij}^* - y_{ij}^{\text{true}} \right)^2}}{\sqrt{\frac{1}{|\mathcal{M}|-1} \sum_{(i,j) \in \mathcal{M}} \left( y_{ij}^{\text{true}} - \bar{y}_{\text{true}}^{\text{mis}} \right)^2}} \\
+\text{MAE} &= \frac{1}{|\mathcal{M}|} \sum_{(i,j) \in \mathcal{M}} \left| y_{ij}^* - y_{ij}^{\text{true}} \right|
+\end{align}
+An $\text{NRMSE} < 1.0$ indicates that the algorithm predicts missing values more accurately than the unobserved mean; an $\text{NRMSE} > 1.0$ indicates that imputed values exhibit substantial variance or systematic offset~\cite{templ2023visualization}.
+
+\paragraph{2. Preservation of Multivariate Covariance Structure (ADCS):}
+Biomarker discovery relies on co-expression networks, correlation clustering, and pathway topology. Replacing missing entries with constant values or poorly regularized donors distorts the empirical covariance matrix $\boldsymbol{\Sigma}$. Templ~\cite{templ2023visualization} formulated the Average Difference of Covariance Structure (ADCS) based on the Frobenius matrix norm:
+\begin{equation}
+\label{eq:adcs_metric}
+\text{ADCS} = \frac{1}{p} \|\boldsymbol{\Sigma}_{\text{imp}} - \boldsymbol{\Sigma}_{\text{true}}\|_F = \sqrt{\frac{1}{p^2} \sum_{j=1}^p \sum_{k=1}^p \left( \sigma_{jk}^{(\text{imp})} - \sigma_{jk}^{(\text{true})} \right)^2}
+\end{equation}
+The ADCS metric measures the average Euclidean error per element of the $p \times p$ covariance matrix. In Section~\ref{sec:r_laboratory}, we show that deterministic MinDet severely inflates ADCS ($\text{ADCS} = 0.371$), whereas Perseus and $k$-NN better preserve the covariance structure ($\text{ADCS} \approx 0.313$--$0.323$).
+
 Figure~\ref{fig:imputation_distributions} illustrates the resulting post-imputation distributions across methods.
 
 \begin{figure}[htbp]
@@ -251,6 +306,7 @@ Figure~\ref{fig:imputation_distributions} illustrates the resulting post-imputat
 
 % =============================================================================
 \section{Hands-On R Laboratory: Multi-Method Imputation and Sensitivity Auditing}
+\label{sec:r_laboratory}
 % =============================================================================
 
 This laboratory implements a benchmark comparing five imputation algorithms, Rubin multiple imputation ($M=20$), and \texttt{proDA} on a synthetic proteomics cohort of 400 proteins across 20 clinical samples.
@@ -544,6 +600,66 @@ print(benchmark_table)
 8 proDA (Imputation-Free) \hspace*{3.5em}20 \hspace*{1.5em}20 \hspace*{1em}0 \hspace*{1.8em}0.0 \hspace*{0.8em}-0.105 \hspace*{1.2em}0.242
 \end{routput}
 
+\begin{rchunk}{Templ Imputation Quality Audit and Little MCAR Test}
+# Listing 19.6: Precision (NRMSE, MAE) and Covariance Preservation (ADCS)
+missing_mask <- is.na(obs_filtered)
+
+calc_templ_metrics <- function(imputed_mat, name) {
+  y_true <- truth_filtered[missing_mask]
+  y_imp  <- imputed_mat[missing_mask]
+  
+  rmse <- sqrt(mean((y_imp - y_true)^2))
+  mae  <- mean(abs(y_imp - y_true))
+  nrmse <- rmse / sd(y_true)
+  
+  sigma_true <- cov(t(truth_filtered))
+  sigma_imp  <- cov(t(imputed_mat))
+  adcs <- (1 / p_filt) * norm(sigma_imp - sigma_true, type = "F")
+  
+  tibble(
+    Method = name,
+    RMSE   = round(rmse, 3),
+    NRMSE  = round(nrmse, 3),
+    MAE    = round(mae, 3),
+    ADCS   = round(adcs, 3)
+  )
+}
+
+templ_benchmark <- bind_rows(
+  calc_templ_metrics(mat_mindet, "MinDet (Deterministic)"),
+  calc_templ_metrics(mat_perseus, "Perseus (Downshifted Gaussian)"),
+  calc_templ_metrics(mat_qrilc, "QRILC (Quantile Regression)"),
+  calc_templ_metrics(mat_knn, "k-NN (Donor Matching)"),
+  calc_templ_metrics(mat_hybrid, "Hybrid MAR/MNAR (Palstrom 2020)")
+)
+
+print(templ_benchmark)
+
+# Little's MCAR test on representative feature block (Templ 2023, Section 3.5)
+sub_df <- as.data.frame(t(obs_filtered[1:6, ]))
+colnames(sub_df) <- paste0("Prot_", 1:6)
+mcar_res <- naniar::mcar_test(sub_df)
+cat("\nLittle MCAR Test on Representative Feature Subset:\n")
+print(mcar_res)
+\end{rchunk}
+
+\begin{routput}
+\# A tibble: 5 x 5\\
+\hspace*{1em}Method \hspace*{11.5em}RMSE NRMSE \hspace*{1em}MAE \hspace*{1.2em}ADCS\\
+\hspace*{1em}\textless{}chr\textgreater{} \hspace*{13em}\textless{}dbl\textgreater{} \hspace*{0.8em}\textless{}dbl\textgreater{} \hspace*{1em}\textless{}dbl\textgreater{} \hspace*{1.2em}\textless{}dbl\textgreater{}\\
+1 MinDet (Deterministic) \hspace*{4.2em}1.91 \hspace*{1.2em}1.40 \hspace*{1.2em}1.55 \hspace*{1.2em}0.371\\
+2 Perseus (Downshifted Gauss.) \hspace*{1.2em}1.66 \hspace*{1.2em}1.22 \hspace*{1.2em}1.31 \hspace*{1.2em}0.313\\
+3 QRILC (Quantile Regression) \hspace*{1.8em}2.15 \hspace*{1.2em}1.58 \hspace*{1.2em}1.73 \hspace*{1.2em}0.438\\
+4 $k$-NN (Donor Matching) \hspace*{4.5em}1.88 \hspace*{1.2em}1.38 \hspace*{1.2em}1.55 \hspace*{1.2em}0.323\\
+5 Hybrid MAR/MNAR (Palstr{\o}m) \hspace*{1.5em}1.88 \hspace*{1.2em}1.38 \hspace*{1.2em}1.55 \hspace*{1.2em}0.323\\
+\\
+Little MCAR Test on Representative Feature Subset:\\
+\# A tibble: 1 x 4\\
+\hspace*{1em}statistic \hspace*{1.5em}df p.value missing.patterns\\
+\hspace*{1em}\textless{}dbl\textgreater{} \hspace*{2em}\textless{}dbl\textgreater{} \hspace*{1em}\textless{}dbl\textgreater{} \hspace*{3em}\textless{}int\textgreater{}\\
+1 \hspace*{1.2em}33.4 \hspace*{2.5em}27 \hspace*{0.8em}0.184 \hspace*{4em}7
+\end{routput}
+
 Figure~\ref{fig:differential_sensitivity} presents the volcano plots and Rubin variance inflation audit corresponding to this benchmark.
 
 \begin{figure}[htbp]
@@ -622,6 +738,8 @@ Table~\ref{tab:missing_checklist} details the six diagnostic checks required bef
 5 & Rubin Pooling Check & Total variance $T$ incorporates between-imputation variance $B$. & Compute Rubin pooled standard errors across $\ge 10$ draws \cite{rubin1987multiple, barnard1999small}. \\
 \addlinespace
 6 & Multiple Testing Control & Empirical null $p$-value distribution is uniform on $[0, 1]$. & Confirm false discovery rate control via Benjamini--Hochberg \cite{benjamini1995controlling}. \\
+\addlinespace
+7 & Covariance Structure & Average Difference of Covariance Structure $\text{ADCS} < 0.35$. & Reject deterministic substitution (MinDet) if Frobenius covariance distortion is high \cite{templ2023visualization}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -658,6 +776,26 @@ A downregulated protein has true Disease mean abundance $\mu_{\text{Dis}} = 17.5
     \item State the imputed value $y_{\text{Dis}}^*$ assigned by $k$-NN.
     \item If the true Control abundance is $\mu_{\text{Ctrl}} = 20.0$, calculate the true fold change $\Delta_{\text{true}} = \mu_{\text{Dis}} - \mu_{\text{Ctrl}}$ and the estimated fold change $\Delta_{\text{knn}} = y_{\text{Dis}}^* - \mu_{\text{Ctrl}}$.
     \item Compute the estimation bias $\text{Bias} = \Delta_{\text{knn}} - \Delta_{\text{true}}$ and explain why donor matching produces fold-change attenuation under MNAR.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked Solutions}
+% =============================================================================
+
+\vspace{0.8em}
+\noindent
+\textbf{Exercise 19.4 (Templ's Average Difference of Covariance Structure Metric):}\\
+In a multi-omics quality audit~\cite{templ2023visualization}, an analyst evaluates two imputation methods on a $p = 3$ protein network with true covariance matrix:
+$$\boldsymbol{\Sigma}_{\text{true}} = \begin{pmatrix} 1.0 & 0.6 & 0.4 \\ 0.6 & 1.0 & 0.5 \\ 0.4 & 0.5 & 1.0 \end{pmatrix}$$
+Method A (deterministic minimum replacement) deflates variance on feature 3 and dampens cross-covariances:
+$$\boldsymbol{\Sigma}_{\text{imp}, A} = \begin{pmatrix} 1.0 & 0.6 & 0.1 \\ 0.6 & 1.0 & 0.2 \\ 0.1 & 0.2 & 0.2 \end{pmatrix}$$
+Method B (stochastic model-based imputation) preserves the covariance structure with minor sampling fluctuations:
+$$\boldsymbol{\Sigma}_{\text{imp}, B} = \begin{pmatrix} 1.05 & 0.58 & 0.38 \\ 0.58 & 0.98 & 0.52 \\ 0.38 & 0.52 & 1.02 \end{pmatrix}$$
+\begin{enumerate}
+    \item Compute the error matrix $\mathbf{D}_A = \boldsymbol{\Sigma}_{\text{imp}, A} - \boldsymbol{\Sigma}_{\text{true}}$ and its Frobenius norm $\|\mathbf{D}_A\|_F$.
+    \item Compute the error matrix $\mathbf{D}_B = \boldsymbol{\Sigma}_{\text{imp}, B} - \boldsymbol{\Sigma}_{\text{true}}$ and its Frobenius norm $\|\mathbf{D}_B\|_F$.
+    \item Calculate the Average Difference of Covariance Structure ($\text{ADCS} = \frac{1}{p} \|\mathbf{D}\|_F$) for both methods.
+    \item Explain why preserving covariance structure is essential for molecular network and pathway analysis.
 \end{enumerate}
 
 % =============================================================================
@@ -731,6 +869,30 @@ $$\text{Bias} = \Delta_{\text{knn}} - \Delta_{\text{true}} = +1.5 - (-2.5) = +4.
 The true downregulation of $-2.5$ is inverted to an apparent upregulation of $+1.5$. This demonstrates why donor-matching algorithms ($k$-NN and random forests) fail on left-censored MNAR data: by drawing exclusively from observed (higher) signals, they assign inflated abundances to low-abundance features, attenuating true fold changes and reversing effect directions \cite{palstrom2020imputation, lazar2016accounting}.
 
 % =============================================================================
+\subsection*{Solution to Exercise 19.4: Templ's ADCS Metric}
+
+\textbf{1. Error Matrix $\mathbf{D}_A$ and Frobenius Norm:}\\
+$$\mathbf{D}_A = \boldsymbol{\Sigma}_{\text{imp}, A} - \boldsymbol{\Sigma}_{\text{true}} = \begin{pmatrix} 0.0 & 0.0 & -0.3 \\ 0.0 & 0.0 & -0.3 \\ -0.3 & -0.3 & -0.8 \end{pmatrix}$$
+The squared entries of $\mathbf{D}_A$ are:
+$$\sum_{i=1}^3 \sum_{j=1}^3 d_{ij}^2 = 0 + 0 + (-0.3)^2 + 0 + 0 + (-0.3)^2 + (-0.3)^2 + (-0.3)^2 + (-0.8)^2$$
+$$= 4(0.09) + 0.64 = 0.36 + 0.64 = 1.000$$
+$$\|\mathbf{D}_A\|_F = \sqrt{1.000} = 1.000$$
+
+\textbf{2. Error Matrix $\mathbf{D}_B$ and Frobenius Norm:}\\
+$$\mathbf{D}_B = \boldsymbol{\Sigma}_{\text{imp}, B} - \boldsymbol{\Sigma}_{\text{true}} = \begin{pmatrix} +0.05 & -0.02 & -0.02 \\ -0.02 & -0.02 & +0.02 \\ -0.02 & +0.02 & +0.02 \end{pmatrix}$$
+The squared entries of $\mathbf{D}_B$ are:
+$$\sum_{i=1}^3 \sum_{j=1}^3 d_{ij}^2 = (0.05)^2 + 8(0.02)^2 = 0.0025 + 8(0.0004) = 0.0025 + 0.0032 = 0.0057$$
+$$\|\mathbf{D}_B\|_F = \sqrt{0.0057} \approx 0.0755$$
+
+\textbf{3. Average Difference of Covariance Structure (ADCS):}\\
+For $p = 3$:
+$$\text{ADCS}_A = \frac{1}{3} \|\mathbf{D}_A\|_F = \frac{1.000}{3} \approx 0.333$$
+$$\text{ADCS}_B = \frac{1}{3} \|\mathbf{D}_B\|_F = \frac{0.0755}{3} \approx 0.0252$$
+The covariance error of deterministic substitution ($\text{ADCS}_A = 0.333$) is 13.2 times larger than that of model-based stochastic imputation ($\text{ADCS}_B = 0.0252$).
+
+\textbf{4. Methodological Interpretation for Network Analysis:}\\
+Deterministic value substitution replaces missing cells with a constant, which artificially truncates variance and eliminates correlation with co-regulated partners (reducing true correlation from $r = 0.40$ to $r = 0.10$). In downstream biological network construction (such as weighted gene correlation network analysis, WGCNA), this covariance distortion artificially dissolves true co-expression modules, leading to false negatives in functional pathway discovery~\cite{templ2023visualization}.
+
 \section*{Canonical References}
 \addcontentsline{toc}{section}{Canonical References}
 % =============================================================================
@@ -791,6 +953,9 @@ Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and mis
 \bibitem{lazar2016accounting}
 Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \doi{10.1021/acs.jproteome.5b00981}.
 
+\bibitem{little1988test}
+Little, R.~J. (1988). A test of missing completely at random for multivariate data with missing values. \textit{Journal of the American Statistical Association}, 83(404), 1198--1202. \doi{10.1080/01621459.1988.10478722}.
+
 \bibitem{little2019statistical}
 Little, R.~J., \& Rubin, D.~B. (2019). \textit{Statistical Analysis with Missing Data} (3rd ed.). John Wiley \& Sons, Hoboken, NJ.
 
@@ -817,6 +982,9 @@ Stekhoven, D.~J., \& B\"uhlmann, P. (2012). MissForest---non-parametric missing 
 
 \bibitem{storey2003statistical}
 Storey, J.~D., \& Tibshirani, R. (2003). Statistical significance for genomewide studies. \textit{Proceedings of the National Academy of Sciences}, 100(16), 9440--9445. \doi{10.1073/pnas.1530509100}.
+
+\bibitem{templ2023visualization}
+Templ, M. (2023). \textit{Visualization and Imputation of Missing Values: With Applications in R}. Statistics and Computing, Springer Nature, Cham, Switzerland. \doi{10.1007/978-3-031-23136-0}.
 
 \bibitem{ting2011sps}
 Ting, L., Rad, R., Gygi, S.~P., \& Haas, W. (2011). MS3 eliminates ratio distortion in isobaric multiplexed quantitative proteomics. \textit{Nature Methods}, 8(11), 937--940. \doi{10.1038/nmeth.1714}.

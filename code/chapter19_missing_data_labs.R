@@ -273,6 +273,51 @@ benchmark_table <- bind_rows(
 
 print(benchmark_table)
 
+# -----------------------------------------------------------------------------
+# Listing 19.6: Templ Multi-Criterion Imputation Quality Audit & MCAR Testing
+# -----------------------------------------------------------------------------
+cat("\n--- Listing 19.6: Templ Imputation Quality Audit (NRMSE, MAE, ADCS) ---\n")
+
+missing_mask <- is.na(obs_filtered)
+
+calc_templ_metrics <- function(imputed_mat, name) {
+  y_true <- truth_filtered[missing_mask]
+  y_imp  <- imputed_mat[missing_mask]
+  
+  rmse <- sqrt(mean((y_imp - y_true)^2))
+  mae  <- mean(abs(y_imp - y_true))
+  nrmse <- rmse / sd(y_true)
+  
+  sigma_true <- cov(t(truth_filtered))
+  sigma_imp  <- cov(t(imputed_mat))
+  adcs <- (1 / p_filt) * norm(sigma_imp - sigma_true, type = "F")
+  
+  tibble(
+    Method = name,
+    RMSE   = round(rmse, 3),
+    NRMSE  = round(nrmse, 3),
+    MAE    = round(mae, 3),
+    ADCS   = round(adcs, 3)
+  )
+}
+
+templ_benchmark <- bind_rows(
+  calc_templ_metrics(mat_mindet, "MinDet (Deterministic)"),
+  calc_templ_metrics(mat_perseus, "Perseus (Downshifted Gaussian)"),
+  calc_templ_metrics(mat_qrilc, "QRILC (Quantile Regression)"),
+  calc_templ_metrics(mat_knn, "k-NN (Donor Matching)"),
+  calc_templ_metrics(mat_hybrid, "Hybrid MAR/MNAR (Palstrom 2020)")
+)
+
+print(templ_benchmark)
+
+# Little's MCAR test on representative feature block (Templ 2023, Section 3.5)
+sub_df <- as.data.frame(t(obs_filtered[1:6, ]))
+colnames(sub_df) <- paste0("Prot_", 1:6)
+mcar_res <- naniar::mcar_test(sub_df)
+cat("\nLittle MCAR Test on Representative Feature Subset:\n")
+print(mcar_res)
+
 cat("\n=============================================================================\n")
 cat("Laboratory Execution Complete: All Workflows Verified Reproducible.\n")
 cat("=============================================================================\n")

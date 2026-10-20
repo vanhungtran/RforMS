@@ -237,7 +237,7 @@ To preserve continuous variance under analytical left-censoring, Tyanova et al.~
 \label{eq:perseus_impute}
 y_{ij}^* \sim \mathcal{N}\left( \hat{\mu}_j - \delta \hat{\sigma}_j, \; (\omega \hat{\sigma}_j)^2 \right)
 \end{equation}
-where canonical parameters are $\delta = 1.8$ standard deviations downward shift and $\omega = 0.3$ distribution width shrinkage.
+where canonical parameters are $\delta = 1.8$ standard deviations downward shift and $\omega = 0.3$ distribution width shrinkage. The choice of $(\delta, \omega)$ introduces a direct tradeoff: larger downshifts ($\delta \ge 2.0$) alleviate fold-change attenuation on left-censored features but inflate prediction error (NRMSE) and distort empirical covariance (ADCS), as audited in Section~\ref{sec:r_laboratory}.
 
 Lazar et al.~\cite{lazar2016accounting} refined this approach in Quantile Regression for Left-Censored Data (QRILC). QRILC estimates the parameters $(\mu_j, \sigma_j)$ of a truncated normal distribution by fitting a linear regression between the empirical quantiles of observed data and the standard normal probit function. Missing values are drawn from the estimated truncated left-tail, eliminating heuristic parameter tuning.
 
@@ -281,7 +281,11 @@ In small clinical cohorts ($n \le 30$), standard Rubin degrees of freedom $\nu_{
 \nu_{\text{obs}} &= \frac{\nu_{\text{com}} + 1}{\nu_{\text{com}} + 3} \nu_{\text{com}} \left(1 - \frac{r_m}{1 + r_m}\right) \\
 \nu_{\text{adj}} &= \frac{\nu_{\text{old}} \nu_{\text{obs}}}{\nu_{\text{old}} + \nu_{\text{obs}}}
 \end{align}
-where $\nu_{\text{com}} = n - \operatorname{rank}(\mathbf{X})$ is the complete-data residual degrees of freedom \cite{barnard1999small}.
+where $\nu_{\text{com}} = n - \operatorname{rank}(\mathbf{X})$ is the complete-data residual degrees of freedom \cite{barnard1999small}. The feature-specific loss of information is quantified by the Fraction of Missing Information (FMI):
+\begin{equation}
+\lambda = \frac{B + B/M}{T}
+\end{equation}
+which represents the proportion of total sampling variance $T$ directly attributable to missing-value uncertainty.
 
 In high-throughput proteomics, multiple imputation is frequently implemented by drawing $M$ stochastic completions from a left-censored parametric model (such as QRILC or Perseus)~\cite{palstrom2020imputation}. While repeated draws from a fixed model capture imputation variability, full Bayesian multiple imputation additionally requires resampling the underlying model parameters (e.g., via parametric bootstrap) to propagate complete parameter uncertainty~\cite{rubin1987multiple, vanbuuren2018}. Drawing repeatedly from fixed parameters functions as a \textit{stochastic multiple imputation sensitivity audit}, capturing between-imputation variance and inflating test statistic standard errors to prevent anti-conservative bias.
 
@@ -408,49 +412,65 @@ Logistic Missingness Diagnosis Model:\\
 \hspace*{1em}Slope     ($\gamma_1$): -0.358 (SE = 0.069, $p = 1.78\times 10^{-7}$) $\to$ Consistent with abundance-dependent missingness (MNAR).
 \end{routput}
 
-\begin{rchunk}{Multi-Method Imputation Pipeline}
-# 1. Deterministic MinDet
-mat_mindet <- impute.MinDet(obs_filtered)
+\begin{rchunk}{Modular Implementations of Theoretical Imputation Algorithms}
+# 1. Deterministic MinDet (Equation 19.8)
+impute_mindet <- function(mat) {
+  imputeLCMD::impute.MinDet(mat)
+}
 
-# 2. Perseus stochastic left-censored Gaussian (delta = 1.8, omega = 0.3)
-set.seed(42)
-mat_perseus <- obs_filtered
-for (j in 1:ncol(mat_perseus)) {
-  na_idx <- which(is.na(mat_perseus[, j]))
-  m_val  <- mean(mat_perseus[, j], na.rm = TRUE)
-  s_val  <- sd(mat_perseus[, j], na.rm = TRUE)
-  mat_perseus[na_idx, j] <- rnorm(length(na_idx), mean = m_val - 1.8 * s_val, sd = 0.3 * s_val)
+# 2. Perseus stochastic downshifted Gaussian (Equation 19.9)
+impute_perseus <- function(mat, delta = 1.8, omega = 0.3) {
+  res <- mat
+  for (j in 1:ncol(res)) {
+    na_idx <- which(is.na(res[, j]))
+    if (length(na_idx) > 0) {
+      m_val <- mean(res[, j], na.rm = TRUE)
+      s_val <- sd(res[, j], na.rm = TRUE)
+      res[na_idx, j] <- rnorm(length(na_idx), mean = m_val - delta * s_val, sd = omega * s_val)
+    }
+  }
+  res
 }
 
 # 3. QRILC (Quantile Regression for Left-Censored Data)
-set.seed(42)
-mat_qrilc <- impute.QRILC(obs_filtered)[[1]]
+impute_qrilc <- function(mat) {
+  imputeLCMD::impute.QRILC(mat)[[1]]
+}
 
-# 4. k-NN (Hastie et al. donor matching)
-set.seed(42)
-mat_knn <- impute.knn(obs_filtered, k = 5)$data
+# 4. k-NN distance-weighted donor matching (Equations 19.10-19.11)
+impute_knn <- function(mat, k = 5) {
+  impute::impute.knn(mat, k = k)$data
+}
 
-# 5. Hybrid MAR/MNAR (Palstrom, Matthiesen, & Beck 2020)
-set.seed(42)
-mat_hybrid <- obs_filtered
-is_mnar_prot <- mean_obs < 22.0
-for (i in 1:p_filt) {
-  na_j <- which(is.na(mat_hybrid[i, ]))
-  if (length(na_j) > 0) {
-    if (is_mnar_prot[i]) {
-      mat_hybrid[i, na_j] <- mat_qrilc[i, na_j]
-    } else {
-      mat_hybrid[i, na_j] <- mat_knn[i, na_j]
+# 5. Hybrid MAR/MNAR segmented imputation (Equation 19.11)
+impute_hybrid <- function(mat, tau = 22.0, k = 5) {
+  mean_obs_vec <- rowMeans(mat, na.rm = TRUE)
+  is_mnar <- mean_obs_vec < tau
+  qrilc_imp <- impute_qrilc(mat)
+  knn_imp   <- impute_knn(mat, k = k)
+  res <- mat
+  for (i in 1:nrow(res)) {
+    na_j <- which(is.na(res[i, ]))
+    if (length(na_j) > 0) {
+      res[i, na_j] <- if (is_mnar[i]) qrilc_imp[i, na_j] else knn_imp[i, na_j]
     }
   }
+  res
 }
+
+# Execute standard formulations across retained cohort
+set.seed(42); mat_mindet  <- impute_mindet(obs_filtered)
+set.seed(42); mat_perseus <- impute_perseus(obs_filtered, delta = 1.8, omega = 0.3)
+set.seed(42); mat_qrilc   <- impute_qrilc(obs_filtered)
+set.seed(42); mat_knn     <- impute_knn(obs_filtered, k = 5)
+set.seed(42); mat_hybrid  <- impute_hybrid(obs_filtered, tau = 22.0, k = 5)
 
 cat("Executed 5 imputation strategies across 386 retained proteins:\n")
 cat("  1. MinDet: Deterministic minimum replacement\n")
 cat("  2. Perseus: Stochastic downshifted Gaussian (delta = 1.8, omega = 0.3)\n")
 cat("  3. QRILC: Quantile regression truncated normal estimation\n")
 cat("  4. k-NN: Distance-weighted donor matching (k = 5)\n")
-cat("  5. Hybrid MAR/MNAR: Palstrom-Matthiesen segmented imputation\n")
+cat("  5. Hybrid MAR/MNAR: Palstrom-Matthiesen segmented imputation (tau = 22.0)\n")
 \end{rchunk}
 
 \begin{routput}
@@ -459,41 +479,54 @@ Executed 5 imputation strategies across 386 retained proteins:\\
 \hspace*{1em}2. Perseus: Stochastic downshifted Gaussian ($\delta = 1.8, \omega = 0.3$)\\
 \hspace*{1em}3. QRILC: Quantile regression truncated normal estimation\\
 \hspace*{1em}4. $k$-NN: Distance-weighted donor matching ($k = 5$)\\
-\hspace*{1em}5. Hybrid MAR/MNAR: Palstr{\\o}m--Matthiesen segmented imputation
+\hspace*{1em}5. Hybrid MAR/MNAR: Palstr{\\o}m--Matthiesen segmented imputation ($\tau = 22.0$)
 \end{routput}
 
 \begin{rchunk}{Rubin Multiple Imputation and Moderated Empirical Bayes Pooling}
+rubin_pool <- function(Q_list, U_list, nu_com = 18) {
+  M <- ncol(Q_list)
+  Q_bar <- rowMeans(Q_list)
+  U_bar <- rowMeans(U_list)
+  B_var <- apply(Q_list, 1, var)
+  T_var <- U_bar + (1 + 1 / M) * B_var
+  SE_rubin <- sqrt(T_var)
+  t_rubin  <- Q_bar / SE_rubin
+  
+  # Barnard-Rubin (1999) adjusted degrees of freedom
+  r_m <- (1 + 1 / M) * B_var / U_bar
+  nu_old <- (M - 1) * (1 + 1 / r_m)^2
+  nu_obs <- (nu_com + 1) / (nu_com + 3) * nu_com * (1 - r_m / (1 + r_m))
+  nu_adj <- ifelse(B_var == 0, nu_com, (nu_old * nu_obs) / (nu_old + nu_obs))
+  p_rubin <- 2 * pt(-abs(t_rubin), df = pmax(nu_adj, 2))
+  fmi     <- (B_var + B_var / M) / T_var
+  
+  list(Q_bar = Q_bar, U_bar = U_bar, B_var = B_var, T_var = T_var,
+       SE = SE_rubin, t_stat = t_rubin, r_m = r_m, nu_adj = nu_adj,
+       p_val = p_rubin, fmi = fmi)
+}
+
 M <- 20
 Q_list <- matrix(0, nrow = p_filt, ncol = M)
 U_list <- matrix(0, nrow = p_filt, ncol = M)
 
 for (m in 1:M) {
   set.seed(m * 1000)
-  mat_m <- impute.QRILC(obs_filtered)[[1]]
+  mat_m <- impute_qrilc(obs_filtered)
   fit_m <- lmFit(mat_m, design)
   fit_m <- contrasts.fit(fit_m, contrast_mat)
   fit_m <- eBayes(fit_m)
   
   Q_list[, m] <- fit_m$coefficients[, "Disease_vs_Control"]
-  # Contrast variance: stdev.unscaled^2 * s2.post
   U_list[, m] <- (fit_m$stdev.unscaled[, "Disease_vs_Control"])^2 * fit_m$s2.post
 }
 
-# Rubin's Pooling Formulas
-Q_bar <- rowMeans(Q_list)
-U_bar <- rowMeans(U_list)
-B_var <- apply(Q_list, 1, var)
-T_var <- U_bar + (1 + 1 / M) * B_var
-SE_rubin <- sqrt(T_var)
-t_rubin  <- Q_bar / SE_rubin
-
-# Barnard-Rubin (1999) adjusted degrees of freedom
-r_m <- (1 + 1 / M) * B_var / U_bar
-nu_old <- (M - 1) * (1 + 1 / r_m)^2
-nu_com <- 20 - 2 # 18 complete-data degrees of freedom
-nu_obs <- (nu_com + 1) / (nu_com + 3) * nu_com * (1 - r_m / (1 + r_m))
-nu_adj <- ifelse(B_var == 0, nu_com, (nu_old * nu_obs) / (nu_old + nu_obs))
-p_rubin <- 2 * pt(-abs(t_rubin), df = pmax(nu_adj, 2))
+rubin_res <- rubin_pool(Q_list, U_list, nu_com = 18)
+Q_bar    <- rubin_res$Q_bar
+U_bar    <- rubin_res$U_bar
+T_var    <- rubin_res$T_var
+SE_rubin <- rubin_res$SE
+nu_adj   <- rubin_res$nu_adj
+p_rubin  <- rubin_res$p_val
 
 rubin_summary <- tibble(
   Protein   = rownames(obs_filtered),
@@ -687,6 +720,109 @@ Figure~\ref{fig:differential_sensitivity} presents the volcano plots and Rubin v
 \caption{Differential abundance sensitivity and variance inflation audit across imputation architectures. Panel A: Volcano plots ($-\log_{10} p$ versus $\log_2 \text{FC}$) comparing ground truth against MinDet, QRILC, and proDA. Red points indicate true upregulated features ($\Delta = +2.0$), blue points indicate true downregulated features ($\Delta = -2.5$), and gray points denote null features. MinDet induces false-positive discoveries (FDR = 7.4\%) along the significance threshold, whereas proDA achieves zero false discoveries (FDR = 0.0\%) with minimal bias ($\text{Bias}_{\text{Down}} = +0.242$). Panel B: Rubin multiple imputation variance inflation factor ($(T - \bar{U}) / \bar{U} \times 100\%$) as a function of missingness percentage across all 386 proteins, demonstrating empirical variance expansion that prevents anti-conservative test statistics.}
 \label{fig:differential_sensitivity}
 \end{figure}
+
+\subsection{Parameter Sensitivity Auditing and Cross-Method Concordance}
+
+Hyperparameter tuning within single imputation cannot eliminate false discovery rate inflation. Listing~19.7 audits Perseus parameters across downshifts $\delta \in [1.4, 2.2]$ and widths $\omega \in [0.2, 0.4]$. Increasing $\delta$ from $1.4$ to $2.2$ reduces downward fold-change bias from $+1.15$ to $+0.68$, but increases NRMSE from $1.06$ to $1.44$ and worsens ADCS covariance distortion from $0.269$ to $0.384$. Across all combinations, false discovery rates remain between $6.7\%$ and $10.3\%$.
+
+\begin{rchunk}{Parameter Sensitivity Auditing and Cross-Method Concordance}
+# Listing 19.7: Parameter Sweeps, Concordance Matrix, and Information Loss
+# A. Perseus Hyperparameter Grid Sweep
+grid_perseus <- expand.grid(delta = c(1.4, 1.8, 2.2), omega = c(0.2, 0.3, 0.4))
+sens_perseus <- purrr::map2_dfr(grid_perseus$delta, grid_perseus$omega, function(d, w) {
+  set.seed(42); imp <- impute_perseus(obs_filtered, delta = d, omega = w)
+  de <- eval_de(run_limma(imp)$logFC, run_limma(imp)$pval, "Perseus")
+  tp <- calc_templ_metrics(imp, "Perseus")
+  tibble(delta = d, omega = w, Significant = de$Significant, TP = de$TP, FP = de$FP,
+         FDR_pct = de$FDR_pct, Bias_Down = de$Bias_Down, NRMSE = tp$NRMSE, ADCS = tp$ADCS)
+})
+print(sens_perseus)
+
+# B. Hybrid Segmentation Cutoff Sweep
+sens_hybrid <- purrr::map_dfr(c(21.2, 21.6, 22.0, 22.4, 22.8), function(tau) {
+  set.seed(42); imp <- impute_hybrid(obs_filtered, tau = tau, k = 5)
+  de <- eval_de(run_limma(imp)$logFC, run_limma(imp)$pval, "Hybrid")
+  tp <- calc_templ_metrics(imp, "Hybrid")
+  n_mnar <- sum(mean_obs < tau)
+  tibble(Cutoff_tau = tau, N_MNAR = n_mnar, Pct_MNAR = round(n_mnar / p_filt * 100, 1),
+         Significant = de$Significant, TP = de$TP, FP = de$FP, FDR_pct = de$FDR_pct,
+         Bias_Down = de$Bias_Down, NRMSE = tp$NRMSE, ADCS = tp$ADCS)
+})
+print(sens_hybrid)
+
+# C. Cross-Method Concordance (Pairwise Jaccard Similarity Matrix)
+sig_sets <- lapply(method_results, function(x) rownames(obs_filtered)[which(p.adjust(x$pval, "BH") < 0.05)])
+jaccard_mat <- sapply(sig_sets, function(a) {
+  sapply(sig_sets, function(b) round(length(intersect(a, b)) / max(length(union(a, b)), 1), 3))
+})
+print(jaccard_mat)
+
+# D. Rubin MI Variance Inflation by Missingness Deciles
+fmi_binned <- tibble(Missing_Pct = round(rowSums(is.na(obs_filtered)) / n * 100, 1),
+                     VIF_Pct = round((rubin_res$T_var - rubin_res$U_bar) / rubin_res$U_bar * 100, 2),
+                     FMI_Pct = round(rubin_res$fmi * 100, 2), nu_adj = round(rubin_res$nu_adj, 1)) %>%
+  mutate(Miss_Bin = cut(Missing_Pct, breaks = c(-1, 0, 10, 20, 30, 100),
+                        labels = c("0%", "1-10%", "11-20%", "21-30%", ">30%"))) %>%
+  group_by(Miss_Bin) %>%
+  summarise(N = n(), Mean_VIF = round(mean(VIF_Pct), 1), Max_VIF = round(max(VIF_Pct), 1),
+            Mean_FMI = round(mean(FMI_Pct), 1), Mean_df = round(mean(nu_adj), 1), .groups = "drop")
+print(fmi_binned)
+\end{rchunk}
+
+\begin{routput}
+A. Perseus Hyperparameter Sensitivity Grid:\\
+\# A tibble: 9 x 9\\
+\hspace*{1em}delta omega Significant \hspace*{0.5em}TP \hspace*{0.5em}FP FDR\_pct Bias\_Down NRMSE \hspace*{0.5em}ADCS\\
+\hspace*{1em}\textless{}dbl\textgreater{} \textless{}dbl\textgreater{} \hspace*{2.5em}\textless{}int\textgreater{} \textless{}int\textgreater{} \textless{}int\textgreater{} \hspace*{1.2em}\textless{}dbl\textgreater{} \hspace*{1.8em}\textless{}dbl\textgreater{} \textless{}dbl\textgreater{} \textless{}dbl\textgreater{}\\
+1 \hspace*{0.5em}1.4 \hspace*{0.8em}0.2 \hspace*{4em}30 \hspace*{1.5em}27 \hspace*{1em}3 \hspace*{1.8em}10.0 \hspace*{2em}1.140 \hspace*{1em}1.06 \hspace*{0.8em}0.269\\
+2 \hspace*{0.5em}1.8 \hspace*{0.8em}0.2 \hspace*{4em}33 \hspace*{1.5em}30 \hspace*{1em}3 \hspace*{2.2em}9.1 \hspace*{2em}0.913 \hspace*{1em}1.21 \hspace*{0.8em}0.308\\
+3 \hspace*{0.5em}2.2 \hspace*{0.8em}0.2 \hspace*{4em}28 \hspace*{1.5em}26 \hspace*{1em}2 \hspace*{2.2em}7.1 \hspace*{2em}0.682 \hspace*{1em}1.43 \hspace*{0.8em}0.379\\
+4 \hspace*{0.5em}1.4 \hspace*{0.8em}0.3 \hspace*{4em}29 \hspace*{1.5em}26 \hspace*{1em}3 \hspace*{1.8em}10.3 \hspace*{2em}1.150 \hspace*{1em}1.08 \hspace*{0.8em}0.273\\
+5 \hspace*{0.5em}1.8 \hspace*{0.8em}0.3 \hspace*{4em}33 \hspace*{1.5em}30 \hspace*{1em}3 \hspace*{2.2em}9.1 \hspace*{2em}0.915 \hspace*{1em}1.22 \hspace*{0.8em}0.313\\
+6 \hspace*{0.5em}2.2 \hspace*{0.8em}0.3 \hspace*{4em}29 \hspace*{1.5em}27 \hspace*{1em}2 \hspace*{2.2em}6.9 \hspace*{2em}0.684 \hspace*{1em}1.44 \hspace*{0.8em}0.384\\
+7 \hspace*{0.5em}1.4 \hspace*{0.8em}0.4 \hspace*{4em}30 \hspace*{1.5em}27 \hspace*{1em}3 \hspace*{1.8em}10.0 \hspace*{2em}1.150 \hspace*{1em}1.10 \hspace*{0.8em}0.280\\
+8 \hspace*{0.5em}1.8 \hspace*{0.8em}0.4 \hspace*{4em}32 \hspace*{1.5em}29 \hspace*{1em}3 \hspace*{2.2em}9.4 \hspace*{2em}0.917 \hspace*{1em}1.24 \hspace*{0.8em}0.320\\
+9 \hspace*{0.5em}2.2 \hspace*{0.8em}0.4 \hspace*{4em}28 \hspace*{1.5em}26 \hspace*{1em}2 \hspace*{2.2em}7.1 \hspace*{2em}0.686 \hspace*{1em}1.46 \hspace*{0.8em}0.391\\
+\\
+B. Hybrid Segmentation Cutoff Sensitivity:\\
+\# A tibble: 5 x 10\\
+\hspace*{1em}Cutoff\_tau N\_MNAR Pct\_MNAR Significant \hspace*{0.5em}TP \hspace*{0.5em}FP FDR\_pct Bias\_Down NRMSE \hspace*{0.5em}ADCS\\
+\hspace*{1em}\textless{}dbl\textgreater{} \hspace*{2.5em}\textless{}int\textgreater{} \hspace*{1.8em}\textless{}dbl\textgreater{} \hspace*{2.5em}\textless{}int\textgreater{} \textless{}int\textgreater{} \textless{}int\textgreater{} \hspace*{1.2em}\textless{}dbl\textgreater{} \hspace*{1.8em}\textless{}dbl\textgreater{} \textless{}dbl\textgreater{} \textless{}dbl\textgreater{}\\
+1 \hspace*{1.2em}21.2 \hspace*{3em}2 \hspace*{2.5em}0.5 \hspace*{4em}25 \hspace*{1.5em}25 \hspace*{1em}0 \hspace*{2.2em}0.0 \hspace*{2em}1.720 \hspace*{1em}1.38 \hspace*{0.8em}0.323\\
+2 \hspace*{1.2em}21.6 \hspace*{2.5em}17 \hspace*{2.5em}4.4 \hspace*{4em}31 \hspace*{1.5em}31 \hspace*{1em}0 \hspace*{2.2em}0.0 \hspace*{2em}1.350 \hspace*{1em}1.35 \hspace*{0.8em}0.320\\
+3 \hspace*{1.2em}22.0 \hspace*{2.5em}83 \hspace*{2em}21.5 \hspace*{4em}36 \hspace*{1.5em}36 \hspace*{1em}0 \hspace*{2.2em}0.0 \hspace*{2em}0.906 \hspace*{1em}1.34 \hspace*{0.8em}0.313\\
+4 \hspace*{1.2em}22.4 \hspace*{2em}266 \hspace*{2em}68.9 \hspace*{4em}36 \hspace*{1.5em}32 \hspace*{1em}4 \hspace*{1.8em}11.1 \hspace*{2em}0.682 \hspace*{1em}1.48 \hspace*{0.8em}0.365\\
+5 \hspace*{1.2em}22.8 \hspace*{2em}354 \hspace*{2em}91.7 \hspace*{4em}31 \hspace*{1.5em}28 \hspace*{1em}3 \hspace*{2.2em}9.7 \hspace*{2em}0.607 \hspace*{1em}1.52 \hspace*{0.8em}0.407\\
+\\
+C. Pairwise Jaccard Similarity Matrix:\\
+\hspace*{5em}Oracle MinDet Perseus QRILC \hspace*{0.5em}kNN Hybrid Rubin\_MI proDA\\
+Oracle \hspace*{2.2em}1.000 \hspace*{0.8em}0.471 \hspace*{1.2em}0.558 0.538 0.510 \hspace*{1em}0.714 \hspace*{1.5em}0.104 0.417\\
+MinDet \hspace*{2.2em}0.471 \hspace*{0.8em}1.000 \hspace*{1.2em}0.765 0.844 0.359 \hspace*{1em}0.400 \hspace*{1.5em}0.185 0.516\\
+Perseus \hspace*{1.8em}0.558 \hspace*{0.8em}0.765 \hspace*{1.2em}1.000 0.806 0.439 \hspace*{1em}0.533 \hspace*{1.5em}0.152 0.514\\
+QRILC \hspace*{2.5em}0.538 \hspace*{0.8em}0.844 \hspace*{1.2em}0.806 1.000 0.318 \hspace*{1em}0.478 \hspace*{1.5em}0.156 0.486\\
+kNN \hspace*{3.5em}0.510 \hspace*{0.8em}0.359 \hspace*{1.2em}0.439 0.318 1.000 \hspace*{1em}0.676 \hspace*{1.5em}0.192 0.484\\
+Hybrid \hspace*{2.5em}0.714 \hspace*{0.8em}0.400 \hspace*{1.2em}0.533 0.478 0.676 \hspace*{1em}1.000 \hspace*{1.5em}0.139 0.436\\
+Rubin\_MI \hspace*{1.2em}0.104 \hspace*{0.8em}0.185 \hspace*{1.2em}0.152 0.156 0.192 \hspace*{1em}0.139 \hspace*{1.5em}1.000 0.250\\
+proDA \hspace*{2.5em}0.417 \hspace*{0.8em}0.516 \hspace*{1.2em}0.514 0.486 0.484 \hspace*{1em}0.436 \hspace*{1.5em}0.250 1.000\\
+\\
+D. Rubin MI Variance Inflation and FMI by Missingness Deciles:\\
+\# A tibble: 5 x 6\\
+\hspace*{1em}Miss\_Bin \hspace*{1.5em}N Mean\_VIF Max\_VIF Mean\_FMI Mean\_df\\
+\hspace*{1em}\textless{}fct\textgreater{} \hspace*{2.5em}\textless{}int\textgreater{} \hspace*{1.2em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{}\\
+1 0\% \hspace*{4em}5 \hspace*{2.2em}0.0 \hspace*{2.5em}0.0 \hspace*{2.5em}0.0 \hspace*{2em}18.0\\
+2 1-10\% \hspace*{2.5em}74 \hspace*{2.2em}2.5 \hspace*{2.5em}4.8 \hspace*{2.5em}2.4 \hspace*{2em}15.9\\
+3 11-20\% \hspace*{1.8em}131 \hspace*{2.2em}4.5 \hspace*{2em}11.0 \hspace*{2.5em}4.3 \hspace*{2em}15.6\\
+4 21-30\% \hspace*{1.8em}128 \hspace*{2.2em}7.4 \hspace*{2em}20.8 \hspace*{2.5em}6.8 \hspace*{2em}15.1\\
+5 \textgreater{}30\% \hspace*{2.2em}48 \hspace*{1.8em}10.8 \hspace*{2em}19.0 \hspace*{2.5em}9.6 \hspace*{2em}14.6
+\end{routput}
+
+The sensitivity audit reveals four structural behaviors across imputation architectures:
+\begin{enumerate}
+    \item \textbf{Single Imputation FDR Persistence:} Sweeping Perseus parameters $(\delta, \omega)$ fails to eliminate false discoveries (FDR remains 6.9\%--10.3\%). Shift parameter $\delta = 1.8$ yields the highest true positive count (30 TP) while bounding NRMSE at 1.22.
+    \item \textbf{Hybrid Stratification Threshold:} Varying the hybrid cutoff $\tau$ traces the operating boundary between MAR and MNAR. At $\tau = 21.2$, $k$-NN dominates, yielding zero false positives but severe downward attenuation ($\text{Bias}_{\text{Down}} = +1.720$). Setting $\tau = 22.0$ identifies 36 true positives (0.0\% FDR) and halves attenuation ($+0.906$). Setting $\tau \ge 22.4$ causes QRILC to dominate, elevating FDR to 11.1\%.
+    \item \textbf{Biomarker Concordance Clustering:} Single imputation methods form a tight cluster with pairwise Jaccard similarities $J = 0.765$--$0.844$, sharing overlapping false-positive detections. Conversely, proDA and Rubin MI identify conservative, zero-FDR discovery sets ($J = 0.417$ and $J = 0.104$ against ground truth).
+    \item \textbf{Information Loss Penalization in Rubin MI:} Features with higher missingness experience proportional variance inflation (mean VIF expands from 0.0\% at complete observation to 10.8\% at $>30\%$ missingness, peaking at 20.8\%). Barnard--Rubin degrees of freedom shrink from 18.0 to 14.6, penalizing test statistics where analytical data are sparse.
+\end{enumerate}
 
 \begin{svgraybox}[title=Computational Reproducibility Specification]
 All analyses were executed under R version 4.4.1 (2024-06-14 ucrt) and Bioconductor 3.19. Primary packages include \texttt{limma} (v3.60.4), \texttt{imputeLCMD} (v2.1), \texttt{impute} (v1.78.0), and \texttt{proDA} (v1.18.0). Fixed random seeds (\texttt{seed = 2026} for cohort generation, \texttt{seed = 42} for imputation draws) guarantee deterministic numerical reproduction of all tables, model coefficients, and figures.

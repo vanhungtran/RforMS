@@ -90,7 +90,7 @@ coef_log <- summary(log_fit)$coefficients
 cat("\nLogistic Missingness Diagnosis Model:\n")
 cat(sprintf("  Intercept (gamma_0): %+.3f (SE = %.3f, p = %.2e)\n",
             coef_log[1, 1], coef_log[1, 2], coef_log[1, 4]))
-cat(sprintf("  Slope     (gamma_1): %+.3f (SE = %.3f, p = %.2e) -> MNAR left-censoring confirmed.\n",
+cat(sprintf("  Slope     (gamma_1): %+.3f (SE = %.3f, p = %.2e) -> Consistent with abundance-dependent missingness (MNAR).\n",
             coef_log[2, 1], coef_log[2, 2], coef_log[2, 4]))
 
 # -----------------------------------------------------------------------------
@@ -120,10 +120,11 @@ set.seed(42)
 mat_knn <- impute.knn(obs_filtered, k = 5)$data
 
 # 5. Hybrid MAR/MNAR (Palstrom, Matthiesen, & Beck 2020)
-# Low-abundance features (< 20.8) receive QRILC; moderate/high abundance receive k-NN.
+# Segmented imputation: low-abundance features (< 22.0, ~bottom 20%) receive QRILC;
+# moderate/high abundance features receive k-NN.
 set.seed(42)
 mat_hybrid <- obs_filtered
-is_mnar_prot <- mean_obs < 20.8
+is_mnar_prot <- mean_obs < 22.0
 for (i in 1:p_filt) {
   na_j <- which(is.na(mat_hybrid[i, ]))
   if (length(na_j) > 0) {

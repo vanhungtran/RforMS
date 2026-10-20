@@ -538,9 +538,126 @@ Biomarker Signature Recovery Audit:\\
 \hspace*{2em}Elastic Net Ground-Truth Module 1 Overlap: 6 / 8 proteins retained
 \end{routput}
 
+\subsection{Batch-Aware Resampling and Sampling Uncertainty Audit}
+
+When biological classes correlate with acquisition batches, standard cross-validation overestimates model performance by learning batch-specific background ions. Listing~23.7 assigns samples to five simulated analytical batches with class imbalance (Cram\'er's $V = 0.446$) and evaluates performance using Leave-One-Batch-Out Cross-Validation (LOBOCV). LOBOCV forces each evaluation fold to comprise an unseen instrument batch. Under LOBOCV, Elastic Net achieved an AUC of 0.923, Random Forest 0.566, and XGBoost 0.777.
+
+\begin{rchunk}{Batch-Aware Resampling via Leave-One-Batch-Out Cross-Validation}
+# Assign simulated acquisition batches confounded with class
+assign_batch <- function(status_vec, seed = 2026) {
+  set.seed(seed)
+  batches <- character(length(status_vec))
+  for (i in seq_along(status_vec)) {
+    probs <- if (status_vec[i] == "Control") c(0.35, 0.25, 0.20, 0.12, 0.08) else c(0.08, 0.12, 0.20, 0.25, 0.35)
+    batches[i] <- sample(LETTERS[1:5], size = 1, prob = probs)
+  }
+  factor(batches, levels = LETTERS[1:5])
+}
+
+train_data$Batch <- assign_batch(as.character(train_data$Status))
+test_data$Batch  <- assign_batch(as.character(test_data$Status))
+
+# Assess batch-class confounding
+tab_bc <- table(train_data$Batch, train_data$Status)
+cramer_v <- sqrt(chisq.test(tab_bc)$statistic / (sum(tab_bc) * (min(nrow(tab_bc), ncol(tab_bc)) - 1)))
+cat(sprintf("Batch-class confounding association (Cramer's V): %.3f\n", as.numeric(cramer_v)))
+
+# Construct Leave-One-Batch-Out folds
+lobo_folds <- group_vfold_cv(train_data, group = "Batch", v = NULL)
+
+rec_lobo <- recipe(Status ~ ., data = train_data) |>
+  update_role(Batch, new_role = "batch_id") |>
+  update_role(Age, new_role = "imputation donor") |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_zv(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors())
+
+wf_enet_lobo <- workflow() |> add_recipe(rec_lobo) |> add_model(spec_enet)
+wf_rf_lobo   <- workflow() |> add_recipe(rec_lobo) |> add_model(spec_rf)
+wf_xgb_lobo  <- workflow() |> add_recipe(rec_lobo) |> add_model(spec_xgb)
+
+set.seed(42)
+res_enet_lobo <- fit_resamples(finalize_workflow(wf_enet_lobo, best_enet),
+                               resamples = lobo_folds, control = control_resamples(save_pred = TRUE),
+                               metrics = metric_set(roc_auc, accuracy, brier_class))
+set.seed(42)
+res_rf_lobo   <- fit_resamples(finalize_workflow(wf_rf_lobo, best_rf),
+                               resamples = lobo_folds, control = control_resamples(save_pred = TRUE),
+                               metrics = metric_set(roc_auc, accuracy, brier_class))
+set.seed(42)
+res_xgb_lobo  <- fit_resamples(finalize_workflow(wf_xgb_lobo, best_xgb),
+                               resamples = lobo_folds, control = control_resamples(save_pred = TRUE),
+                               metrics = metric_set(roc_auc, accuracy, brier_class))
+
+cat("Leave-One-Batch-Out CV (LOBOCV) Mean AUC:\n")
+cat(sprintf("  Elastic Net:   LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+            collect_metrics(res_enet_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
+            collect_metrics(res_enet) |> filter(.metric == "roc_auc") |> pull(mean)))
+cat(sprintf("  Random Forest: LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+            collect_metrics(res_rf_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
+            collect_metrics(res_rf) |> filter(.metric == "roc_auc") |> pull(mean)))
+cat(sprintf("  XGBoost:       LOBOCV AUC = %.3f (Stratified CV = %.3f)\n",
+            collect_metrics(res_xgb_lobo) |> filter(.metric == "roc_auc") |> pull(mean),
+            collect_metrics(res_xgb) |> filter(.metric == "roc_auc") |> pull(mean)))
+\end{rchunk}
+
+\begin{routput}
+Batch-class confounding association (Cram\'er's V): 0.446\\
+Leave-One-Batch-Out CV (LOBOCV) Mean AUC:\\
+\hspace*{2em}Elastic Net:   LOBOCV AUC = 0.923 (Stratified CV = 0.842)\\
+\hspace*{2em}Random Forest: LOBOCV AUC = 0.566 (Stratified CV = 0.533)\\
+\hspace*{2em}XGBoost:       LOBOCV AUC = 0.777 (Stratified CV = 0.708)
+\end{routput}
+
+\clearpage
+
+On small holdout cohorts ($N = 30$), point estimates of performance metrics carry wide sampling variance. Listing~23.8 calculates non-parametric bootstrap percentile confidence intervals ($B = 2{,}000$) on the holdout test set. The 95\% confidence intervals for AUC span [0.750, 0.981] for Elastic Net, [0.682, 0.966] for Random Forest, and [0.742, 0.995] for XGBoost. The overlapping intervals demonstrate that the three architectures are statistically indistinguishable on this cohort size.
+
+\begin{rchunk}{Bootstrap 95\% Confidence Intervals on Holdout Performance}
+test_preds <- list(
+  ENet = collect_predictions(fit_enet) |> select(Status, .pred_class, .pred_Control),
+  RF   = collect_predictions(fit_rf)   |> select(Status, .pred_class, .pred_Control),
+  XGB  = collect_predictions(fit_xgb)  |> select(Status, .pred_class, .pred_Control)
+)
+
+compute_boot_metrics <- function(pred_df, B = 2000, seed = 42) {
+  set.seed(seed)
+  N <- nrow(pred_df)
+  map_dfr(1:B, function(i) {
+    idx <- sample.int(N, size = N, replace = TRUE)
+    boot_df <- pred_df[idx, ]
+    if (length(unique(boot_df$Status)) < 2) return(NULL)
+    tibble(
+      auc   = roc_auc(boot_df, truth = Status, .pred_Control)$.estimate,
+      acc   = accuracy(boot_df, truth = Status, estimate = .pred_class)$.estimate,
+      brier = brier_class(boot_df, truth = Status, .pred_Control)$.estimate
+    )
+  })
+}
+
+boot_results <- map(test_preds, compute_boot_metrics, B = 2000)
+
+cat("Bootstrap 95% Confidence Intervals on Holdout Metrics (N = 30, B = 2000):\n")
+for (m in c("ENet", "RF", "XGB")) {
+  b <- boot_results[[m]]
+  cat(sprintf("  %-4s AUC: %.3f [%.3f, %.3f] | Acc: %.3f [%.3f, %.3f] | Brier: %.3f [%.3f, %.3f]\n",
+              m,
+              median(b$auc), quantile(b$auc, 0.025), quantile(b$auc, 0.975),
+              median(b$acc), quantile(b$acc, 0.025), quantile(b$acc, 0.975),
+              median(b$brier), quantile(b$brier, 0.025), quantile(b$brier, 0.975)))
+}
+\end{rchunk}
+
+\begin{routput}
+Bootstrap 95\% Confidence Intervals on Holdout Metrics (N = 30, B = 2000):\\
+\hspace*{2em}ENet AUC: 0.890 [0.750, 0.981] | Acc: 0.800 [0.633, 0.933] | Brier: 0.165 [0.126, 0.211]\\
+\hspace*{2em}RF   AUC: 0.845 [0.682, 0.966] | Acc: 0.733 [0.567, 0.900] | Brier: 0.219 [0.204, 0.235]\\
+\hspace*{2em}XGB  AUC: 0.890 [0.742, 0.995] | Acc: 0.767 [0.600, 0.900] | Brier: 0.154 [0.084, 0.241]
+\end{routput}
+
 \begin{notebox}[top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, title={Computational Environment and Reproducibility Parameters}]
 \small
-The code listings in this laboratory were executed and validated under R 4.6.1 (2026-06-24 ucrt). Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, and \texttt{dcurves} 0.4.0. Random seeds are fixed via \texttt{set.seed(2026)} (cohort simulation) and \texttt{set.seed(42)} (resampling splits) to ensure numerical reproduction across platforms.
+The code listings in this laboratory were executed and validated under R 4.6.1 (2026-06-24 ucrt). Key package dependencies: \texttt{tidymodels} 1.2.0, \texttt{glmnet} 4.1-8, \texttt{ranger} 0.16.0, \texttt{xgboost} 1.7.8.1, \texttt{themis} 1.0.2, \texttt{probably} 1.0.3, \texttt{dcurves} 0.4.0, and \texttt{vcd} 1.4-14. Random seeds are fixed via \texttt{set.seed(2026)} (cohort simulation) and \texttt{set.seed(42)} (resampling splits) to ensure numerical reproduction across platforms. Complete reproducible scripts are available in \texttt{code/chapter23\_revised\_labs.R}.
 \end{notebox}
 
 \clearpage

@@ -477,6 +477,144 @@ p4c <- ggplot(templ_df, aes(x = NRMSE, y = ADCS, label = Method, colour = Method
 fig4 <- (p4a | p4b) / p4c + plot_layout(heights = c(1.05, 1.0))
 save_ai4sci(fig4, "fig_19_4_templ_diagnostics", width_mm = 165, height_mm = 112)
 
+# =============================================================================
+# Figure 19.5: Parameter Sensitivity Auditing and Cross-Method Concordance
+# =============================================================================
+cat("\n--- Generating Figure 19.5: Sensitivity & Concordance (AI4Sci Style) ---\n")
+
+# Panel A: Perseus Hyperparameter Tradeoff
+p5a_df <- perseus_sens_df %>%
+  mutate(Omega_Label = paste0("omega == ", omega))
+
+p5a <- ggplot(p5a_df, aes(x = NRMSE, y = Bias_Down, colour = factor(omega), shape = factor(omega))) +
+  geom_line(aes(group = omega), linewidth = 0.5, linetype = "dashed", alpha = 0.7) +
+  geom_point(size = 2.2) +
+  geom_text_repel(aes(label = sprintf("delta==%.1f", delta)), parse = TRUE,
+                  size = 2.1, box.padding = 0.25, point.padding = 0.2, show.legend = FALSE) +
+  scale_colour_manual(values = c("0.2" = "#1B9E77", "0.3" = "#0F4D92", "0.4" = "#D95F02"),
+                      name = expression(Width~shrinkage~(omega))) +
+  scale_shape_manual(values = c("0.2" = 15, "0.3" = 16, "0.4" = 17),
+                     name = expression(Width~shrinkage~(omega))) +
+  labs(
+    title = "(a) Perseus Hyperparameter Tradeoff",
+    subtitle = "Higher downshift delta reduces fold-change bias but increases NRMSE error",
+    x = "Normalized Root Mean Squared Error (NRMSE)",
+    y = expression(Downward~Fold-Change~Bias~(Log[2]))
+  ) +
+  theme_scifigure(base_size = 6.8, grid = "both") +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 5.5),
+    legend.title = element_text(size = 5.8, face = "bold"),
+    legend.margin = margin(t = -2, b = 0),
+    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+  )
+
+# Panel B: Hybrid Segmentation Cutoff Transition
+p5b <- ggplot(hybrid_sens_df, aes(x = Cutoff_tau)) +
+  geom_line(aes(y = Bias_Down, colour = "Downward Bias (log2 FC)"), linewidth = 0.6) +
+  geom_point(aes(y = Bias_Down, colour = "Downward Bias (log2 FC)"), size = 2.0) +
+  geom_line(aes(y = FDR_pct / 10, colour = "False Discovery Rate (/10%)"), linewidth = 0.6, linetype = "dashed") +
+  geom_point(aes(y = FDR_pct / 10, colour = "False Discovery Rate (/10%)"), size = 2.0, shape = 17) +
+  annotate("rect", xmin = 21.8, xmax = 22.2, ymin = 0, ymax = 1.8,
+           alpha = 0.12, fill = "#1B9E77") +
+  annotate("text", x = 22.0, y = 1.75, label = "Optimal Cutoff: tau = 22.0\n(0.0% FDR, Bias = +0.906)",
+           size = 2.0, fontface = "italic", colour = "#1B9E77", hjust = 0.5) +
+  scale_y_continuous(
+    name = expression(Downward~Fold-Change~Bias~(Log[2])),
+    sec.axis = sec_axis(~ . * 10, name = "Empirical False Discovery Rate (%)")
+  ) +
+  scale_x_continuous(breaks = c(21.2, 21.6, 22.0, 22.4, 22.8)) +
+  scale_colour_manual(
+    values = c("Downward Bias (log2 FC)" = "#0F4D92", "False Discovery Rate (/10%)" = "#D95F02"),
+    name = ""
+  ) +
+  labs(
+    title = "(b) Hybrid Cutoff Optimization",
+    subtitle = "tau = 22.0 balances MAR donor matching and MNAR tail imputation",
+    x = expression(Abundance~Segmentation~Cutoff~(tau))
+  ) +
+  theme_scifigure(base_size = 6.8, grid = "both") +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 5.5),
+    legend.margin = margin(t = -2, b = 0),
+    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+  )
+
+# Panel C: Cross-Method Biomarker Concordance Heatmap
+jaccard_df <- as.data.frame(as.table(jaccard_mat)) %>%
+  rename(Method_A = Var1, Method_B = Var2, Jaccard = Freq) %>%
+  mutate(
+    Method_A = factor(Method_A, levels = rev(colnames(jaccard_mat))),
+    Method_B = factor(Method_B, levels = colnames(jaccard_mat))
+  )
+
+p5c <- ggplot(jaccard_df, aes(x = Method_B, y = Method_A, fill = Jaccard)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(aes(label = sprintf("%.2f", Jaccard),
+                colour = ifelse(Jaccard > 0.6, "white", "black")),
+            size = 2.0, fontface = "bold", show.legend = FALSE) +
+  scale_fill_gradient(low = "#F7FBFF", high = "#084594", limits = c(0, 1),
+                      name = "Jaccard Index") +
+  scale_colour_manual(values = c("white" = "white", "black" = "#202020")) +
+  labs(
+    title = "(c) Cross-Method Biomarker Concordance",
+    subtitle = "Single imputation methods cluster together (J > 0.75), sharing false positives",
+    x = "",
+    y = ""
+  ) +
+  theme_scifigure(base_size = 6.8, grid = "none") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.5),
+    axis.text.y = element_text(size = 5.5),
+    legend.position = "bottom",
+    legend.key.width = unit(15, "pt"),
+    legend.key.height = unit(5, "pt"),
+    legend.text = element_text(size = 5.2),
+    legend.title = element_text(size = 5.5, face = "bold"),
+    legend.margin = margin(t = -2, b = 0),
+    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+  )
+
+# Panel D: Rubin MI Information Loss & Variance Inflation
+p5d_df <- fmi_binned %>%
+  mutate(Miss_Bin = factor(Miss_Bin, levels = c("0%", "1-10%", "11-20%", "21-30%", ">30%")))
+
+p5d <- ggplot(p5d_df, aes(x = Miss_Bin)) +
+  geom_col(aes(y = Mean_VIF_Pct, fill = "Variance Inflation (%)"), width = 0.55, alpha = 0.85) +
+  geom_errorbar(aes(ymin = Mean_VIF_Pct, ymax = Max_VIF_Pct), width = 0.2, colour = "#0F4D92", linewidth = 0.5) +
+  geom_line(aes(y = Mean_FMI_Pct * 2, group = 1, colour = "Fraction Missing Info (x2 %)"), linewidth = 0.6) +
+  geom_point(aes(y = Mean_FMI_Pct * 2, colour = "Fraction Missing Info (x2 %)"), size = 2.0, shape = 17) +
+  geom_text(aes(y = Max_VIF_Pct + 1.2, label = sprintf("nu[adj]==%.1f", Mean_df_adj)),
+            parse = TRUE, size = 2.0, colour = "#202020") +
+  scale_y_continuous(
+    name = "Mean & Max Variance Inflation (%)",
+    limits = c(0, 24),
+    breaks = seq(0, 20, 5),
+    sec.axis = sec_axis(~ . / 2, name = "Mean Fraction Missing Info (FMI %)")
+  ) +
+  scale_fill_manual(values = c("Variance Inflation (%)" = "#4292C6"), name = "") +
+  scale_colour_manual(values = c("Fraction Missing Info (x2 %)" = "#D95F02"), name = "") +
+  labs(
+    title = "(d) Rubin MI Information Loss & Variance Inflation",
+    subtitle = "Variance expands up to 20.8% and df shrinks as missingness increases",
+    x = "Protein Missingness Rate Strata"
+  ) +
+  theme_scifigure(base_size = 6.8, grid = "both") +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 5.5),
+    legend.margin = margin(t = -2, b = 0),
+    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+  )
+
+# Assemble Figure 19.5 (2x2 layout, 165 mm width x 125 mm height)
+fig5 <- (p5a | p5b) / (p5c | p5d) +
+  plot_layout(heights = c(1.0, 1.15))
+
+save_ai4sci(fig5, "fig_19_5_sensitivity_concordance", width_mm = 165, height_mm = 125)
+
 cat("\n=============================================================================\n")
-cat("All Four Chapter 19 Figures Successfully Generated in AI4Sci Style (165 mm Margin Fit)!\n")
+cat("All Five Chapter 19 Figures Successfully Generated in AI4Sci Style (165 mm Margin Fit)!\n")
 cat("=============================================================================\n")

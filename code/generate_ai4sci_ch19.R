@@ -492,9 +492,9 @@ p5a <- ggplot(p5a_df, aes(x = NRMSE, y = Bias_Down, colour = factor(omega), shap
   geom_text_repel(aes(label = sprintf("delta==%.1f", delta)), parse = TRUE,
                   size = 1.9, box.padding = 0.2, point.padding = 0.15, show.legend = FALSE) +
   scale_colour_manual(values = c("0.2" = "#1B9E77", "0.3" = "#0F4D92", "0.4" = "#D95F02"),
-                      name = expression(bold(omega))) +
+                      name = expression(Width~shrinkage~(omega)*":")) +
   scale_shape_manual(values = c("0.2" = 15, "0.3" = 16, "0.4" = 17),
-                     name = expression(bold(omega))) +
+                     name = expression(Width~shrinkage~(omega)*":")) +
   scale_x_continuous(limits = c(1.04, 1.48), breaks = seq(1.1, 1.4, 0.1)) +
   scale_y_continuous(limits = c(0.65, 1.18), breaks = seq(0.7, 1.1, 0.1)) +
   labs(
@@ -505,13 +505,15 @@ p5a <- ggplot(p5a_df, aes(x = NRMSE, y = Bias_Down, colour = factor(omega), shap
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = c(0.18, 0.24),
-    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
-    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.direction = "horizontal",
+    legend.margin = margin(t = 0, b = 2, unit = "pt"),
+    legend.box.margin = margin(0, 0, 0, 0),
     legend.key.size = unit(7, "pt"),
     legend.text = element_text(size = 5.0),
     legend.title = element_text(size = 5.2, face = "bold"),
-    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
+    plot.margin = margin(t = 2, r = 5, b = 4, l = 4, unit = "pt")
   )
 
 # Panel B: Hybrid Segmentation Cutoff Transition
@@ -541,12 +543,14 @@ p5b <- ggplot(hybrid_sens_df, aes(x = Cutoff_tau)) +
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = c(0.32, 0.22),
-    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
-    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.direction = "horizontal",
+    legend.margin = margin(t = 0, b = 2, unit = "pt"),
+    legend.box.margin = margin(0, 0, 0, 0),
     legend.key.size = unit(7, "pt"),
     legend.text = element_text(size = 5.0),
-    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
+    plot.margin = margin(t = 2, r = 5, b = 4, l = 4, unit = "pt")
   )
 
 # Panel C: Cross-Method Biomarker Concordance Heatmap
@@ -563,8 +567,15 @@ p5c <- ggplot(jaccard_df, aes(x = Method_B, y = Method_A, fill = Jaccard)) +
                 colour = ifelse(Jaccard > 0.6, "white", "black")),
             size = 1.9, fontface = "bold", show.legend = FALSE) +
   scale_fill_gradient(low = "#F7FBFF", high = "#084594", limits = c(0, 1),
-                      name = "Jaccard\nIndex") +
+                      name = "Jaccard Index:") +
   scale_colour_manual(values = c("white" = "white", "black" = "#202020")) +
+  guides(fill = guide_colorbar(
+    direction = "horizontal",
+    barwidth = unit(50, "pt"),
+    barheight = unit(5, "pt"),
+    title.position = "left",
+    title.vjust = 0.85
+  )) +
   labs(
     title = "(c) Cross-Method Concordance",
     subtitle = "Single imputation methods cluster (J > 0.75)",
@@ -575,13 +586,13 @@ p5c <- ggplot(jaccard_df, aes(x = Method_B, y = Method_A, fill = Jaccard)) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.0),
     axis.text.y = element_text(size = 5.0),
-    legend.position = "right",
-    legend.key.width = unit(5, "pt"),
-    legend.key.height = unit(18, "pt"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.margin = margin(t = 0, b = 2, unit = "pt"),
+    legend.box.margin = margin(0, 0, 0, 0),
     legend.text = element_text(size = 4.8),
     legend.title = element_text(size = 5.0, face = "bold"),
-    legend.margin = margin(l = 1, r = 1, t = 0, b = 0, unit = "pt"),
-    plot.margin = margin(t = 3, r = 3, b = 4, l = 4, unit = "pt")
+    plot.margin = margin(t = 2, r = 5, b = 4, l = 4, unit = "pt")
   )
 
 # Panel D: Rubin MI Information Loss & Relative Variance Increase
@@ -610,20 +621,21 @@ p5d <- ggplot(p5d_df, aes(x = Miss_Bin)) +
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = c(0.36, 0.88),
-    legend.box = "horizontal",
-    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
-    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.direction = "horizontal",
+    legend.margin = margin(t = 0, b = 2, unit = "pt"),
+    legend.box.margin = margin(0, 0, 0, 0),
     legend.key.size = unit(7, "pt"),
     legend.text = element_text(size = 5.0),
-    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
+    plot.margin = margin(t = 2, r = 5, b = 4, l = 4, unit = "pt")
   )
 
-# Assemble Figure 19.5 (2x2 layout, 165 mm width x 112 mm height)
+# Assemble Figure 19.5 (2x2 layout, 165 mm width x 115 mm height)
 fig5 <- (p5a | p5b) / (p5c | p5d) +
   plot_layout(heights = c(1.0, 1.05))
 
-save_ai4sci(fig5, "fig_19_5_sensitivity_concordance", width_mm = 165, height_mm = 112)
+save_ai4sci(fig5, "fig_19_5_sensitivity_concordance", width_mm = 165, height_mm = 115)
 cat("\n=============================================================================\n")
 cat("All Five Chapter 19 Figures Successfully Generated in AI4Sci Style (165 mm Margin Fit)!\n")
 cat("=============================================================================\n")

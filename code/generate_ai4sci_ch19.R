@@ -582,23 +582,23 @@ p5d_df <- fmi_binned %>%
   mutate(Miss_Bin = factor(Miss_Bin, levels = c("0%", "1-10%", "11-20%", "21-30%", ">30%")))
 
 p5d <- ggplot(p5d_df, aes(x = Miss_Bin)) +
-  geom_col(aes(y = Mean_VIF_Pct, fill = "Variance Inflation (%)"), width = 0.55, alpha = 0.85) +
-  geom_errorbar(aes(ymin = Mean_VIF_Pct, ymax = Max_VIF_Pct), width = 0.2, colour = "#0F4D92", linewidth = 0.5) +
+  geom_col(aes(y = Mean_RVI_Pct, fill = "Variance Inflation (%)"), width = 0.55, alpha = 0.85) +
+  geom_errorbar(aes(ymin = Mean_RVI_Pct, ymax = Max_RVI_Pct), width = 0.2, colour = "#0F4D92", linewidth = 0.5) +
   geom_line(aes(y = Mean_FMI_Pct * 2, group = 1, colour = "Fraction Missing Info (x2 %)"), linewidth = 0.6) +
   geom_point(aes(y = Mean_FMI_Pct * 2, colour = "Fraction Missing Info (x2 %)"), size = 2.0, shape = 17) +
-  geom_text(aes(y = Max_VIF_Pct + 1.2, label = sprintf("nu[adj]==%.1f", Mean_df_adj)),
+  geom_text(aes(y = Max_RVI_Pct + 1.2, label = sprintf("nu[adj]==%.1f", Mean_df_adj)),
             parse = TRUE, size = 2.0, colour = "#202020") +
   scale_y_continuous(
-    name = "Mean & Max Variance Inflation (%)",
+    name = "Mean & Max Relative Variance Increase (RVI %)",
     limits = c(0, 24),
     breaks = seq(0, 20, 5),
     sec.axis = sec_axis(~ . / 2, name = "Mean Fraction Missing Info (FMI %)")
   ) +
-  scale_fill_manual(values = c("Variance Inflation (%)" = "#4292C6"), name = "") +
+  scale_fill_manual(values = c("Relative Variance Increase (%)" = "#4292C6"), name = "") +
   scale_colour_manual(values = c("Fraction Missing Info (x2 %)" = "#D95F02"), name = "") +
   labs(
-    title = "(d) Rubin MI Information Loss & Variance Inflation",
-    subtitle = "Variance expands up to 20.8% and df shrinks as missingness increases",
+    title = "(d) Rubin MI Information Loss & Relative Variance Increase",
+    subtitle = "RVI expands up to 20.8% and df shrinks from 18.0 to 14.6 as missingness increases",
     x = "Protein Missingness Rate Strata"
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +

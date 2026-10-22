@@ -238,6 +238,7 @@ print(head(rubin_summary, 5))
 # -----------------------------------------------------------------------------
 cat("\n--- Listing 19.4: Imputation-Free Modeling via proDA ---\n")
 
+# moderate_location = FALSE disables location shrinkage on means, ensuring fold-change estimates remain directly comparable to limma contrasts
 fit_proda <- proDA(obs_filtered, design = design, moderate_location = FALSE)
 res_proda <- test_diff(fit_proda, "Disease - Control")
 
@@ -461,15 +462,15 @@ spearman_mat <- round(cor(logfc_df, method = "spearman"), 3)
 print(spearman_mat)
 
 # D. Rubin MI Variance Inflation Factor and Fraction of Missing Information
-cat("\nD. Rubin MI Variance Inflation and Information Loss Audit:\n")
+cat("\nD. Rubin MI Relative Variance Increase (RVI) and Information Loss Audit:\n")
 prot_miss_pct <- round(rowSums(is.na(obs_filtered)) / n * 100, 1)
-vif_pct <- round((rubin_res$T_var - rubin_res$U_bar) / rubin_res$U_bar * 100, 2)
+rvi_pct <- round((rubin_res$T_var - rubin_res$U_bar) / rubin_res$U_bar * 100, 2)
 fmi_pct <- round(rubin_res$fmi * 100, 2)
 
 fmi_summary <- tibble(
   Protein = rownames(obs_filtered),
   Missing_Pct = prot_miss_pct,
-  VIF_Pct = vif_pct,
+  RVI_Pct = rvi_pct,
   FMI_Pct = fmi_pct,
   nu_adj = round(rubin_res$nu_adj, 1)
 )
@@ -480,8 +481,8 @@ fmi_binned <- fmi_summary %>%
   group_by(Miss_Bin) %>%
   summarise(
     N_Proteins   = n(),
-    Mean_VIF_Pct = round(mean(VIF_Pct), 1),
-    Max_VIF_Pct  = round(max(VIF_Pct), 1),
+    Mean_RVI_Pct = round(mean(RVI_Pct), 1),
+    Max_RVI_Pct  = round(max(RVI_Pct), 1),
     Mean_FMI_Pct = round(mean(FMI_Pct), 1),
     Mean_df_adj  = round(mean(nu_adj), 1),
     .groups = "drop"

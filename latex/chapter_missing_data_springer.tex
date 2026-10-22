@@ -283,9 +283,10 @@ In small clinical cohorts ($n \le 30$), standard Rubin degrees of freedom $\nu_{
 \end{align}
 where $\nu_{\text{com}} = n - \operatorname{rank}(\mathbf{X})$ is the complete-data residual degrees of freedom \cite{barnard1999small}. The feature-specific loss of information is quantified by the Fraction of Missing Information (FMI):
 \begin{equation}
-\lambda = \frac{B + B/M}{T}
+\label{eq:fmi_lambda}
+\lambda = \frac{B + B/M}{T} = \frac{r_m}{1 + r_m}
 \end{equation}
-which represents the proportion of total sampling variance $T$ directly attributable to missing-value uncertainty.
+which represents the proportion of total sampling variance $T$ directly attributable to missing-value uncertainty, algebraically equivalent to $r_m / (1 + r_m)$ where $r_m = (1 + 1/M)B / \bar{U}$ is Rubin's relative increase in variance (RVI).
 
 In high-throughput proteomics, multiple imputation is frequently implemented by drawing $M$ stochastic completions from a left-censored parametric model (such as QRILC or Perseus)~\cite{palstrom2020imputation}. While repeated draws from a fixed model capture imputation variability, full Bayesian multiple imputation additionally requires resampling the underlying model parameters (e.g., via parametric bootstrap) to propagate complete parameter uncertainty~\cite{rubin1987multiple, vanbuuren2018}. Drawing repeatedly from fixed parameters functions as a \textit{stochastic multiple imputation sensitivity audit}, capturing between-imputation variance and inflating test statistic standard errors to prevent anti-conservative bias.
 
@@ -554,7 +555,10 @@ Rubin Multiple Imputation Pooled Estimates (Top 5 Features):\\
 5 PROT\_0046 \hspace*{0.8em}-2.94 \hspace*{1.5em}0.659 \hspace*{1.5em}0.682 \hspace*{5em}7.0 \hspace*{2em}15.2 0.000603
 \end{routput}
 
+In Listing 19.4, we specify \texttt{moderate\_location = FALSE}. By default, \texttt{proDA} shrinks both location (mean) vectors and variance parameters toward an empirical prior. Disabling location shrinkage ensures that estimated fold changes ($\hat{\beta}$) remain unmoderated sample contrast estimates directly comparable to linear modeling in \texttt{limma}, while preserving empirical Bayes moderation of feature variances and exact dropout likelihood integration.
+
 \begin{rchunk}{Imputation-Free Modeling via proDA}
+# moderate_location = FALSE disables prior shrinkage on means, matching limma unmoderated contrasts
 fit_proda <- proDA(obs_filtered, design = design, moderate_location = FALSE)
 res_proda <- test_diff(fit_proda, "Disease - Control")
 
@@ -751,6 +755,12 @@ sens_hybrid <- purrr::map_dfr(c(21.2, 21.6, 22.0, 22.4, 22.8), function(tau) {
 print(sens_hybrid)
 
 # C. Cross-Method Concordance (Pairwise Jaccard Similarity Matrix)
+method_results <- list(
+  Oracle = res_oracle, MinDet = res_mindet, Perseus = res_perseus,
+  QRILC = res_qrilc, kNN = res_knn, Hybrid = res_hybrid,
+  Rubin_MI = list(logFC = Q_bar, pval = p_rubin),
+  proDA = list(logFC = res_proda$diff, pval = res_proda$pval)
+)
 sig_sets <- lapply(method_results, function(x) rownames(obs_filtered)[which(p.adjust(x$pval, "BH") < 0.05)])
 jaccard_mat <- sapply(sig_sets, function(a) {
   sapply(sig_sets, function(b) round(length(intersect(a, b)) / max(length(union(a, b)), 1), 3))
@@ -759,12 +769,12 @@ print(jaccard_mat)
 
 # D. Rubin MI Variance Inflation by Missingness Deciles
 fmi_binned <- tibble(Missing_Pct = round(rowSums(is.na(obs_filtered)) / n * 100, 1),
-                     VIF_Pct = round((rubin_res$T_var - rubin_res$U_bar) / rubin_res$U_bar * 100, 2),
+                     RVI_Pct = round((rubin_res$T_var - rubin_res$U_bar) / rubin_res$U_bar * 100, 2),
                      FMI_Pct = round(rubin_res$fmi * 100, 2), nu_adj = round(rubin_res$nu_adj, 1)) %>%
   mutate(Miss_Bin = cut(Missing_Pct, breaks = c(-1, 0, 10, 20, 30, 100),
                         labels = c("0%", "1-10%", "11-20%", "21-30%", ">30%"))) %>%
   group_by(Miss_Bin) %>%
-  summarise(N = n(), Mean_VIF = round(mean(VIF_Pct), 1), Max_VIF = round(max(VIF_Pct), 1),
+  summarise(N = n(), Mean_RVI = round(mean(RVI_Pct), 1), Max_RVI = round(max(RVI_Pct), 1),
             Mean_FMI = round(mean(FMI_Pct), 1), Mean_df = round(mean(nu_adj), 1), .groups = "drop")
 print(fmi_binned)
 \end{rchunk}
@@ -805,9 +815,9 @@ Hybrid \hspace*{2.5em}0.714 \hspace*{0.8em}0.400 \hspace*{1.2em}0.533 0.478 0.67
 Rubin\_MI \hspace*{1.2em}0.104 \hspace*{0.8em}0.185 \hspace*{1.2em}0.152 0.156 0.192 \hspace*{1em}0.139 \hspace*{1.5em}1.000 0.250\\
 proDA \hspace*{2.5em}0.417 \hspace*{0.8em}0.516 \hspace*{1.2em}0.514 0.486 0.484 \hspace*{1em}0.436 \hspace*{1.5em}0.250 1.000\\
 \\
-D. Rubin MI Variance Inflation and FMI by Missingness Deciles:\\
+D. Rubin MI Relative Variance Increase (RVI) and FMI by Missingness Deciles:\\
 \# A tibble: 5 x 6\\
-\hspace*{1em}Miss\_Bin \hspace*{1.5em}N Mean\_VIF Max\_VIF Mean\_FMI Mean\_df\\
+\hspace*{1em}Miss\_Bin \hspace*{1.5em}N Mean\_RVI Max\_RVI Mean\_FMI Mean\_df\\
 \hspace*{1em}\textless{}fct\textgreater{} \hspace*{2.5em}\textless{}int\textgreater{} \hspace*{1.2em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{} \hspace*{1.5em}\textless{}dbl\textgreater{}\\
 1 0\% \hspace*{4em}5 \hspace*{2.2em}0.0 \hspace*{2.5em}0.0 \hspace*{2.5em}0.0 \hspace*{2em}18.0\\
 2 1-10\% \hspace*{2.5em}74 \hspace*{2.2em}2.5 \hspace*{2.5em}4.8 \hspace*{2.5em}2.4 \hspace*{2em}15.9\\
@@ -818,10 +828,10 @@ D. Rubin MI Variance Inflation and FMI by Missingness Deciles:\\
 
 The sensitivity audit reveals four structural behaviors across imputation architectures:
 \begin{enumerate}
-    \item \textbf{Single Imputation FDR Persistence:} Sweeping Perseus parameters $(\delta, \omega)$ fails to eliminate false discoveries (FDR remains 6.9\%--10.3\%). Shift parameter $\delta = 1.8$ yields the highest true positive count (30 TP) while bounding NRMSE at 1.22.
-    \item \textbf{Hybrid Stratification Threshold:} Varying the hybrid cutoff $\tau$ traces the operating boundary between MAR and MNAR. At $\tau = 21.2$, $k$-NN dominates, yielding zero false positives but severe downward attenuation ($\text{Bias}_{\text{Down}} = +1.720$). Setting $\tau = 22.0$ identifies 36 true positives (0.0\% FDR) and halves attenuation ($+0.906$). Setting $\tau \ge 22.4$ causes QRILC to dominate, elevating FDR to 11.1\%.
-    \item \textbf{Biomarker Concordance Clustering:} Single imputation methods form a tight cluster with pairwise Jaccard similarities $J = 0.765$--$0.844$, sharing overlapping false-positive detections. Conversely, proDA and Rubin MI identify conservative, zero-FDR discovery sets ($J = 0.417$ and $J = 0.104$ against ground truth).
-    \item \textbf{Information Loss Penalization in Rubin MI:} Features with higher missingness experience proportional variance inflation (mean VIF expands from 0.0\% at complete observation to 10.8\% at $>30\%$ missingness, peaking at 20.8\%). Barnard--Rubin degrees of freedom shrink from 18.0 to 14.6, penalizing test statistics where analytical data are sparse.
+    \item \textbf{Single Imputation FDR Persistence:} Sweeping Perseus parameters $(\delta, \omega)$ fails to eliminate false discoveries, with empirical FDR remaining between 6.9\% and 10.3\% across all grid points (minimum 6.9\% at $\delta = 2.2, \omega = 0.3$). Shift parameter $\delta = 1.8$ yields the highest true positive count (30 TP) while bounding NRMSE at 1.22. Across the full parameter sweep, NRMSE ranges from $1.06$ to $1.46$ and ADCS ranges from $0.269$ to $0.391$.
+    \item \textbf{Hybrid Stratification Threshold:} Varying the hybrid cutoff $\tau$ traces the operating boundary between MAR and MNAR. At $\tau = 21.2$, $k$-NN dominates, yielding zero false positives but severe downward attenuation ($\text{Bias}_{\text{Down}} = +1.720$). Setting $\tau = 22.0$ identifies 36 true positives (0.0\% FDR) and halves attenuation ($+0.906$). Setting $\tau = 22.4$ causes QRILC to dominate, elevating FDR to 11.1\% (9.7\% at $\tau = 22.8$).
+    \item \textbf{Biomarker Concordance Clustering:} Single imputation methods form a tight cluster with pairwise Jaccard similarities $J = 0.765$--$0.844$, sharing overlapping false-positive detections along the rejection boundary. Conversely, proDA and Rubin MI identify conservative, zero-FDR discovery sets ($J = 0.417$ and $J = 0.104$ against ground truth).
+    \item \textbf{Degrees of Freedom Shrinkage Drives Rubin MI Power Drop:} The 6-fold reduction in discoveries under Rubin multiple imputation (5 detections vs. 27--36 under single imputation) is driven primarily by the Barnard--Rubin small-sample degrees of freedom penalty ($\nu_{\text{adj}} \approx 14.6$--$15.9$ vs. $\nu_{\text{com}} = 18$) rather than between-imputation variance inflation alone. With mean relative variance increase $\bar{r}_m = 4.5\%$--$10.8\%$, standard errors expand by only $\sqrt{1 + r_m} \approx 2.2\%$--$5.3\%$. However, under Benjamini--Hochberg FDR correction across 386 hypotheses, shrinking residual degrees of freedom widens Student's $t$ tail quantiles ($t_{0.0005, 15} = 4.073$ vs. $t_{0.0005, 18} = 3.922$). In small clinical cohorts ($n = 20$), this degrees of freedom reduction provides the essential penalization that eliminates anti-conservative test statistics.
 \end{enumerate}
 
 Figure~\ref{fig:sensitivity_concordance} visualizes the multi-parameter sensitivity surfaces and cross-method concordance topology.
@@ -829,7 +839,7 @@ Figure~\ref{fig:sensitivity_concordance} visualizes the multi-parameter sensitiv
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/fig_19_5_sensitivity_concordance.pdf}
-\caption{Parameter sensitivity auditing and cross-method concordance topology across imputation strategies. Panel A: Perseus hyperparameter sensitivity tradeoff showing that increasing downshift $\delta$ from 1.4 to 2.2 alleviates downward fold-change attenuation on true downregulations ($\Delta = -2.5$), but inflates prediction error ($\text{NRMSE} = 1.06 \to 1.44$) while leaving empirical false discovery rates anti-conservative ($6.9\%$--$10.3\%$). Panel B: Hybrid segmentation cutoff sweep ($\tau \in [21.2, 22.8]$), identifying $\tau = 22.0$ as the optimal empirical boundary ($0.0\%$ FDR, $\text{Bias}_{\text{Down}} = +0.906$) balancing $k$-NN donor matching against QRILC left-tail imputation. Panel C: Pairwise Jaccard similarity heatmap of candidate biomarker discoveries ($\text{BH} < 0.05$). Single-imputation architectures cluster tightly ($J = 0.765$--$0.844$), sharing overlapping false discoveries along the rejection boundary, whereas proDA and Rubin MI identify conservative, zero-FDR subsets. Panel D: Rubin multiple imputation information loss and variance expansion by missingness deciles. Variance expands up to $20.8\%$ and adjusted residual degrees of freedom shrink from 18.0 to 14.6 for sparse proteins ($>30\%$ missingness), penalizing inferential test statistics where analytical measurements are absent.}
+\caption{Parameter sensitivity auditing and cross-method concordance topology across imputation strategies. Panel A: Perseus hyperparameter sensitivity tradeoff showing that increasing downshift $\delta$ from 1.4 to 2.2 alleviates downward fold-change attenuation on true downregulations ($\Delta = -2.5$), but inflates prediction error ($\text{NRMSE} = 1.06 \to 1.46$) and covariance distortion ($\text{ADCS} = 0.269 \to 0.391$) while leaving empirical false discovery rates anti-conservative ($6.9\%$--$10.3\%$). Panel B: Hybrid segmentation cutoff sweep ($\tau \in [21.2, 22.8]$), identifying $\tau = 22.0$ as the optimal empirical boundary ($0.0\%$ FDR, $\text{Bias}_{\text{Down}} = +0.906$) balancing $k$-NN donor matching against QRILC left-tail imputation. Panel C: Pairwise Jaccard similarity heatmap of candidate biomarker discoveries ($\text{BH} < 0.05$). Single-imputation architectures cluster tightly ($J = 0.765$--$0.844$), sharing overlapping false discoveries along the rejection boundary, whereas proDA and Rubin MI identify conservative, zero-FDR subsets. Panel D: Rubin multiple imputation information loss and relative variance increase (RVI) by missingness deciles. RVI expands up to $20.8\%$ and adjusted residual degrees of freedom shrink from 18.0 to 14.6 for sparse proteins ($>30\%$ missingness), penalizing inferential test statistics where analytical measurements are absent.}
 \label{fig:sensitivity_concordance}
 \end{figure}
 
@@ -1089,7 +1099,7 @@ Broadhurst, D., Goodacre, R., Reinke, S.~N., Kuligowski, J., Wilson, I.~D., Lewi
 Choi, M., Chang, C.~Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., \& Vitek, O. (2014). MSstats: an R package for statistical analysis of quantitative mass spectrometry-based proteomic experiments. \textit{Bioinformatics}, 30(17), 2524--2526. \doi{10.1093/bioinformatics/btu305}.
 
 \bibitem{cox2014maxlfq}
-Cox, J., Hein, M.~Y., Luber, C.~A., Parida, I., Cox, J., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
+Cox, J., Hein, M.~Y., Luber, C.~A., Paron, I., Nagaraj, N., \& Mann, M. (2014). Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ. \textit{Molecular \& Cellular Proteomics}, 13(9), 2513--2526. \doi{10.1074/mcp.M113.031591}.
 
 \bibitem{demichev2020dia}
 Demichev, V., Messner, C.~B., Vernardis, S.~I., Lilley, K.~S., \& Ralser, M. (2020). DIA-NN: neural networks and interference correction enable deep proteome coverage in high throughput. \textit{Nature Methods}, 17(1), 41--44. \doi{10.1038/s41592-019-0638-x}.

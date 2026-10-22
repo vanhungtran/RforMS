@@ -488,41 +488,46 @@ p5a_df <- perseus_sens_df %>%
 
 p5a <- ggplot(p5a_df, aes(x = NRMSE, y = Bias_Down, colour = factor(omega), shape = factor(omega))) +
   geom_line(aes(group = omega), linewidth = 0.5, linetype = "dashed", alpha = 0.7) +
-  geom_point(size = 2.2) +
+  geom_point(size = 2.0) +
   geom_text_repel(aes(label = sprintf("delta==%.1f", delta)), parse = TRUE,
-                  size = 2.1, box.padding = 0.25, point.padding = 0.2, show.legend = FALSE) +
+                  size = 1.9, box.padding = 0.2, point.padding = 0.15, show.legend = FALSE) +
   scale_colour_manual(values = c("0.2" = "#1B9E77", "0.3" = "#0F4D92", "0.4" = "#D95F02"),
-                      name = expression(Width~shrinkage~(omega))) +
+                      name = expression(bold(omega))) +
   scale_shape_manual(values = c("0.2" = 15, "0.3" = 16, "0.4" = 17),
-                     name = expression(Width~shrinkage~(omega))) +
+                     name = expression(bold(omega))) +
+  scale_x_continuous(limits = c(1.04, 1.48), breaks = seq(1.1, 1.4, 0.1)) +
+  scale_y_continuous(limits = c(0.65, 1.18), breaks = seq(0.7, 1.1, 0.1)) +
   labs(
     title = "(a) Perseus Hyperparameter Tradeoff",
-    subtitle = "Higher downshift delta reduces fold-change bias but increases NRMSE error",
+    subtitle = "Higher delta reduces bias; inflates NRMSE",
     x = "Normalized Root Mean Squared Error (NRMSE)",
-    y = expression(Downward~Fold-Change~Bias~(Log[2]))
+    y = expression(Downward~Bias~(Log[2]~FC))
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = "bottom",
-    legend.text = element_text(size = 5.5),
-    legend.title = element_text(size = 5.8, face = "bold"),
-    legend.margin = margin(t = -2, b = 0),
-    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+    legend.position = c(0.18, 0.24),
+    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
+    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.key.size = unit(7, "pt"),
+    legend.text = element_text(size = 5.0),
+    legend.title = element_text(size = 5.2, face = "bold"),
+    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
   )
 
 # Panel B: Hybrid Segmentation Cutoff Transition
 p5b <- ggplot(hybrid_sens_df, aes(x = Cutoff_tau)) +
   geom_line(aes(y = Bias_Down, colour = "Downward Bias (log2 FC)"), linewidth = 0.6) +
-  geom_point(aes(y = Bias_Down, colour = "Downward Bias (log2 FC)"), size = 2.0) +
+  geom_point(aes(y = Bias_Down, colour = "Downward Bias (log2 FC)"), size = 1.9) +
   geom_line(aes(y = FDR_pct / 10, colour = "False Discovery Rate (/10%)"), linewidth = 0.6, linetype = "dashed") +
-  geom_point(aes(y = FDR_pct / 10, colour = "False Discovery Rate (/10%)"), size = 2.0, shape = 17) +
-  annotate("rect", xmin = 21.8, xmax = 22.2, ymin = 0, ymax = 1.8,
+  geom_point(aes(y = FDR_pct / 10, colour = "False Discovery Rate (/10%)"), size = 1.9, shape = 17) +
+  annotate("rect", xmin = 21.8, xmax = 22.2, ymin = 0, ymax = 1.85,
            alpha = 0.12, fill = "#1B9E77") +
-  annotate("text", x = 22.0, y = 1.75, label = "Optimal Cutoff: tau = 22.0\n(0.0% FDR, Bias = +0.906)",
-           size = 2.0, fontface = "italic", colour = "#1B9E77", hjust = 0.5) +
+  annotate("text", x = 22.0, y = 1.76, label = "Optimal: tau = 22.0\n(0.0% FDR, Bias = +0.906)",
+           size = 1.9, fontface = "italic", colour = "#1B9E77", hjust = 0.5) +
   scale_y_continuous(
-    name = expression(Downward~Fold-Change~Bias~(Log[2])),
-    sec.axis = sec_axis(~ . * 10, name = "Empirical False Discovery Rate (%)")
+    name = expression(Downward~Bias~(Log[2]~FC)),
+    limits = c(0, 1.85), breaks = seq(0, 1.5, 0.5),
+    sec.axis = sec_axis(~ . * 10, name = "Empirical FDR (%)")
   ) +
   scale_x_continuous(breaks = c(21.2, 21.6, 22.0, 22.4, 22.8)) +
   scale_colour_manual(
@@ -531,15 +536,17 @@ p5b <- ggplot(hybrid_sens_df, aes(x = Cutoff_tau)) +
   ) +
   labs(
     title = "(b) Hybrid Cutoff Optimization",
-    subtitle = "tau = 22.0 balances MAR donor matching and MNAR tail imputation",
-    x = expression(Abundance~Segmentation~Cutoff~(tau))
+    subtitle = "tau = 22.0 balances MAR donors & MNAR tail",
+    x = expression(Abundance~Cutoff~(tau))
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = "bottom",
-    legend.text = element_text(size = 5.5),
-    legend.margin = margin(t = -2, b = 0),
-    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+    legend.position = c(0.32, 0.22),
+    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
+    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.key.size = unit(7, "pt"),
+    legend.text = element_text(size = 5.0),
+    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
   )
 
 # Panel C: Cross-Method Biomarker Concordance Heatmap
@@ -551,70 +558,72 @@ jaccard_df <- as.data.frame(as.table(jaccard_mat)) %>%
   )
 
 p5c <- ggplot(jaccard_df, aes(x = Method_B, y = Method_A, fill = Jaccard)) +
-  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_tile(colour = "white", linewidth = 0.35) +
   geom_text(aes(label = sprintf("%.2f", Jaccard),
                 colour = ifelse(Jaccard > 0.6, "white", "black")),
-            size = 2.0, fontface = "bold", show.legend = FALSE) +
+            size = 1.9, fontface = "bold", show.legend = FALSE) +
   scale_fill_gradient(low = "#F7FBFF", high = "#084594", limits = c(0, 1),
-                      name = "Jaccard Index") +
+                      name = "Jaccard\nIndex") +
   scale_colour_manual(values = c("white" = "white", "black" = "#202020")) +
   labs(
-    title = "(c) Cross-Method Biomarker Concordance",
-    subtitle = "Single imputation methods cluster together (J > 0.75), sharing false positives",
+    title = "(c) Cross-Method Concordance",
+    subtitle = "Single imputation methods cluster (J > 0.75)",
     x = "",
     y = ""
   ) +
   theme_scifigure(base_size = 6.8, grid = "none") +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.5),
-    axis.text.y = element_text(size = 5.5),
-    legend.position = "bottom",
-    legend.key.width = unit(15, "pt"),
-    legend.key.height = unit(5, "pt"),
-    legend.text = element_text(size = 5.2),
-    legend.title = element_text(size = 5.5, face = "bold"),
-    legend.margin = margin(t = -2, b = 0),
-    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.0),
+    axis.text.y = element_text(size = 5.0),
+    legend.position = "right",
+    legend.key.width = unit(5, "pt"),
+    legend.key.height = unit(18, "pt"),
+    legend.text = element_text(size = 4.8),
+    legend.title = element_text(size = 5.0, face = "bold"),
+    legend.margin = margin(l = 1, r = 1, t = 0, b = 0, unit = "pt"),
+    plot.margin = margin(t = 3, r = 3, b = 4, l = 4, unit = "pt")
   )
 
-# Panel D: Rubin MI Information Loss & Variance Inflation
+# Panel D: Rubin MI Information Loss & Relative Variance Increase
 p5d_df <- fmi_binned %>%
   mutate(Miss_Bin = factor(Miss_Bin, levels = c("0%", "1-10%", "11-20%", "21-30%", ">30%")))
 
 p5d <- ggplot(p5d_df, aes(x = Miss_Bin)) +
-  geom_col(aes(y = Mean_RVI_Pct, fill = "Variance Inflation (%)"), width = 0.55, alpha = 0.85) +
-  geom_errorbar(aes(ymin = Mean_RVI_Pct, ymax = Max_RVI_Pct), width = 0.2, colour = "#0F4D92", linewidth = 0.5) +
-  geom_line(aes(y = Mean_FMI_Pct * 2, group = 1, colour = "Fraction Missing Info (x2 %)"), linewidth = 0.6) +
-  geom_point(aes(y = Mean_FMI_Pct * 2, colour = "Fraction Missing Info (x2 %)"), size = 2.0, shape = 17) +
+  geom_col(aes(y = Mean_RVI_Pct, fill = "Mean RVI (%)"), width = 0.55, alpha = 0.85) +
+  geom_errorbar(aes(ymin = Mean_RVI_Pct, ymax = Max_RVI_Pct), width = 0.2, colour = "#0F4D92", linewidth = 0.45) +
+  geom_line(aes(y = Mean_FMI_Pct * 2, group = 1, colour = "Mean FMI (x2 %)"), linewidth = 0.6) +
+  geom_point(aes(y = Mean_FMI_Pct * 2, colour = "Mean FMI (x2 %)"), size = 1.9, shape = 17) +
   geom_text(aes(y = Max_RVI_Pct + 1.2, label = sprintf("nu[adj]==%.1f", Mean_df_adj)),
-            parse = TRUE, size = 2.0, colour = "#202020") +
+            parse = TRUE, size = 1.8, colour = "#202020") +
   scale_y_continuous(
-    name = "Mean & Max Relative Variance Increase (RVI %)",
+    name = "Mean & Max RVI (%)",
     limits = c(0, 24),
     breaks = seq(0, 20, 5),
-    sec.axis = sec_axis(~ . / 2, name = "Mean Fraction Missing Info (FMI %)")
+    sec.axis = sec_axis(~ . / 2, name = "Mean FMI (%)")
   ) +
-  scale_fill_manual(values = c("Relative Variance Increase (%)" = "#4292C6"), name = "") +
-  scale_colour_manual(values = c("Fraction Missing Info (x2 %)" = "#D95F02"), name = "") +
+  scale_fill_manual(values = c("Mean RVI (%)" = "#4292C6"), name = "") +
+  scale_colour_manual(values = c("Mean FMI (x2 %)" = "#D95F02"), name = "") +
   labs(
-    title = "(d) Rubin MI Information Loss & Relative Variance Increase",
-    subtitle = "RVI expands up to 20.8% and df shrinks from 18.0 to 14.6 as missingness increases",
+    title = "(d) Rubin MI Information Loss & RVI",
+    subtitle = "RVI to 20.8%, df shrinks 18.0 to 14.6",
     x = "Protein Missingness Rate Strata"
   ) +
   theme_scifigure(base_size = 6.8, grid = "both") +
   theme(
-    legend.position = "bottom",
-    legend.text = element_text(size = 5.5),
-    legend.margin = margin(t = -2, b = 0),
-    plot.margin = margin(t = 3, r = 4, b = 3, l = 3, unit = "pt")
+    legend.position = c(0.36, 0.88),
+    legend.box = "horizontal",
+    legend.background = element_rect(fill = alpha("white", 0.90), colour = "#cccccc", linewidth = 0.3),
+    legend.margin = margin(t = 2, r = 4, b = 2, l = 4, unit = "pt"),
+    legend.key.size = unit(7, "pt"),
+    legend.text = element_text(size = 5.0),
+    plot.margin = margin(t = 3, r = 5, b = 4, l = 4, unit = "pt")
   )
 
-# Assemble Figure 19.5 (2x2 layout, 165 mm width x 125 mm height)
+# Assemble Figure 19.5 (2x2 layout, 165 mm width x 112 mm height)
 fig5 <- (p5a | p5b) / (p5c | p5d) +
-  plot_layout(heights = c(1.0, 1.15))
+  plot_layout(heights = c(1.0, 1.05))
 
-save_ai4sci(fig5, "fig_19_5_sensitivity_concordance", width_mm = 165, height_mm = 125)
-
+save_ai4sci(fig5, "fig_19_5_sensitivity_concordance", width_mm = 165, height_mm = 112)
 cat("\n=============================================================================\n")
 cat("All Five Chapter 19 Figures Successfully Generated in AI4Sci Style (165 mm Margin Fit)!\n")
 cat("=============================================================================\n")

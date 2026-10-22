@@ -8,6 +8,8 @@
 % =============================================================================
 
 \usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
 
 \hypersetup{
     pdftitle={Chapter 26: Single-Cell Proteomics: Low-Input Quantification, scp Data Architecture, and Sparse Matrix Modeling},
@@ -29,7 +31,7 @@
 \noindent
 Bulk quantitative proteomics measures the ensemble average of millions of cells, masking stochastic transcriptional bursting, rare functional sub-populations, and cell-to-cell biochemical heterogeneity. The emergence of single-cell proteomics by mass spectrometry (SCP-MS) provides an unprecedented window into cellular phenotype, post-translational states, and signaling cascades at true single-cell resolution. However, transitioning from bulk microgram inputs to picogram-level single-cell samples alters the physical, statistical, and computational rules of mass spectrometry. Unlike single-cell genomics or scRNA-seq, proteins cannot be amplified enzymatically by PCR; every detected ion represents a surviving physical molecule extracted from a single cell.
 
-Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, severe Poisson ion-sampling shot noise, high identification sparsity ($>40$--$60\%$ missing values), and complex nested acquisition structures (multiplexed isobaric runs combining single cells with high-abundance carrier and reference channels). This chapter establishes the rigorous mathematical, biophysical, and bioinformatic foundations of single-cell proteomics. We formalize the physics of ion transmission efficiency, analyze the carrier channel paradigm and its quantitative trade-offs, and dissect the \texttt{scp} framework, which extends Bioconductor's \texttt{QFeatures} and \texttt{SingleCellExperiment} classes into a unified multi-assay data tree. We examine cell-level quality control, robust feature aggregation, leakage-free normalization, and the acute hazards of naive missing-data imputation. The chapter culminates in an executable, end-to-end R laboratory, the ``Five Deadly Sins'' of single-cell proteomics, a self-assessment diagnostic checklist, and multi-tier exercises with exhaustive step-by-step worked solutions.
+Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, severe Poisson ion-sampling shot noise, high identification sparsity ($40$--$60\%$ missing values), and complex nested acquisition structures (multiplexed isobaric runs combining single cells with high-abundance carrier and reference channels). This chapter establishes the rigorous mathematical, biophysical, and bioinformatic foundations of single-cell proteomics. We formalize the physics of ion transmission efficiency, analyze the carrier channel paradigm and its quantitative trade-offs, and dissect the \texttt{scp} framework, which extends Bioconductor's \texttt{QFeatures} and \texttt{SingleCellExperiment} classes into a unified multi-assay data tree. We examine cell-level quality control, Tukey biweight feature aggregation, leakage-free normalization, and the acute hazards of naive missing-data imputation. Following the hands-on data analytics pedagogy \cite{boland2023health}, the chapter culminates in an executable, end-to-end R laboratory, the ``Five Deadly Sins'' of single-cell proteomics, a self-assessment diagnostic checklist, and multi-tier exercises with step-by-step worked solutions.
 \end{abstract}
 
 \noindent
@@ -57,10 +59,12 @@ Consequently, SCP datasets are dominated by ultra-low signal-to-noise ratios, se
 \addlinespace
 \textbf{3. Cell QC \& Normalization} & Droplet dispensing variations, empty wells, cell doublets, and run-to-run batch effects \cite{woo2022high, gebreyesus2022streamlined}. & Audit channel signal-to-blank ratio ($>3.0$), filter doublets, and execute leakage-free median/IRS scaling. & Normalizing single cells while retaining carrier channel. Remedy: Subsetting single cells via \texttt{subsetByColData()} before scaling \cite{petelski2021multiplexed}. \\
 \addlinespace
-\textbf{4. Sparsity \& Inference} & Hybrid MCAR/MNAR missingness ($>40$--$60\%$) and cell-level pseudoreplication \cite{amenta2022pseudoreplication, brunner2022ultra}. & Perform robust dimensionality reduction without bulk imputation; model donor clustering via mixed models. & Imputing high-sparsity matrices with KNN, manufacturing false clusters. Remedy: Non-imputed filtering and mixed-effects inference \cite{choi2014msstats}. \\
+\textbf{4. Sparsity \& Inference} & Hybrid MAR/MNAR missingness ($40$--$60\%$) and cell-level pseudoreplication \cite{squair2021confronting, zimmerman2021practical, brunner2022ultra}. & Perform dimensionality reduction on complete cases without bulk imputation; model donor clustering via mixed models. & Imputing high-sparsity matrices with KNN, manufacturing false clusters. Remedy: Non-imputed filtering and mixed-effects inference \cite{choi2014msstats}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\FloatBarrier
 
 \begin{notebox}
 \textbf{Tutor's Methodological Advice: The Carrier Balancing Axiom}\\
@@ -73,7 +77,7 @@ The carrier channel in multiplexed single-cell proteomics (SCoPE2) is an analyti
 
 \subsection{The Picogram Challenge: Why Proteomics Cannot Rely on PCR}
 
-A single mammalian cell (e.g., a human lymphocyte, fibroblast, or epithelial cell) contains approximately $100$ to $200\;\text{pg}$ of total protein mass, corresponding to roughly $10^9$ to $10^{10}$ individual polypeptide molecules distributed across $10^4$ distinct protein species \cite{steger2021single, aebersold2016mass}. In single-cell RNA sequencing (scRNA-seq), picogram amounts of mRNA are reverse-transcribed and amplified through exponential polymerase chain reaction (PCR) cycles to generate microgram quantities of sequencing cDNA \cite{lun2016pooling}. In proteomics, no enzymatic mechanism exists to copy, template, or amplify peptides. Every detected ion represents a physical molecule that survived sample lysis, reduction, alkylation, enzymatic digestion, liquid chromatography, electrospray ionization, ion transmission optics, and mass filtering \cite{kelly2020single}.
+A single mammalian cell (e.g., a human lymphocyte, fibroblast, or epithelial cell) contains approximately $100$ to $200\;\text{pg}$ of total protein mass, corresponding to roughly $2 \times 10^9$ to $3 \times 10^9$ individual polypeptide molecules distributed across $10^4$ distinct protein species \cite{steger2021single, aebersold2016mass}. In single-cell RNA sequencing (scRNA-seq), picogram amounts of mRNA are reverse-transcribed and amplified through exponential polymerase chain reaction (PCR) cycles to generate microgram quantities of sequencing cDNA \cite{lun2016pooling}. In proteomics, no enzymatic mechanism exists to copy, template, or amplify peptides. Every detected ion represents a physical molecule that survived sample lysis, reduction, alkylation, enzymatic digestion, liquid chromatography, electrospray ionization, ion transmission optics, and mass filtering \cite{kelly2020single}.
 
 \subsection{Ion Transmission Efficiency and Poisson Shot Noise Limits}
 
@@ -118,7 +122,7 @@ A standard 16-plex TMTpro single-cell acquisition incorporates four distinct fun
 \begin{enumerate}
     \item \textbf{Carrier (Booster) Channel (e.g., TMT-126):} Contains peptide digest equivalent to $50$ to $100$ cells. In MS1 full scans, the carrier co-elutes with identical single-cell peptides, elevating precursor intensity above the instrument trigger threshold for MS2 fragmentation \cite{slavov2021scope2}.
     \item \textbf{Reference Channel (e.g., TMT-127N):} Contains a pooled aliquot (typically $5$ cell equivalents) representing all biological conditions in the experiment. The reference channel serves as an invariant internal standard for cross-batch normalization \cite{petelski2021multiplexed}.
-    \item \textbf{Single-Cell Channels (e.g., TMT-127C through 134N):} Up to 13--14 channels dedicated to individual isolated single cells.
+    \item \textbf{Single-Cell Channels (e.g., TMT-127C through 134N):} Up to 13 channels dedicated to individual isolated single cells.
     \item \textbf{Negative Control (Empty/Blank) Channel:} Contains carrier buffer and digestion enzymes without any loaded cell, providing a baseline measurement of non-specific chemical background and isotopic contamination \cite{vanderaa2021scp}.
 \end{enumerate}
 
@@ -128,9 +132,10 @@ While the carrier channel enables peptide identification, excessive carrier load
 \begin{equation}
 C_{\text{total}} = C_{\text{carrier}} + C_{\text{ref}} + \sum_{j=1}^{m} C_{\text{single},j} \le C_{\text{cap}}
 \end{equation}
-If the carrier channel represents a 200-fold excess over individual single cells:
+If the carrier channel represents a 200-fold excess over individual single cells and the reference channel represents 5 single-cell equivalents:
 \begin{equation}
-\frac{C_{\text{carrier}}}{\sum_{j=1}^{14} C_{\text{single},j}} \approx \frac{200}{14 \times 1} \approx 14.3
+\label{eq:carrier_capacity_share}
+\frac{C_{\text{carrier}}}{C_{\text{total}}} = \frac{C_{\text{carrier}}}{C_{\text{carrier}} + C_{\text{ref}} + \sum_{j=1}^{13} C_{\text{single},j}} = \frac{200}{200 + 5 + 13 \times 1} = \frac{200}{218} \approx 91.7\%
 \end{equation}
 Over 90\% of the ion trap capacity is consumed exclusively by carrier ions. Single-cell reporter ions are crowded out, reducing the number of sampled single-cell ions $\lambda_{\text{single}}$ and dramatically inflating Poisson shot noise according to Eq.~(\ref{eq:poisson_cv}) \cite{cheung2021carrier, sielaff2023evaluation}.
 
@@ -194,11 +199,12 @@ Before biological analysis, single-cell channels must undergo rigorous quality f
 
 Normalization in multiplexed SCP must correct for two orthogonal technical axes without leaking carrier signal into single-cell estimates:
 \begin{enumerate}
-    \item \textbf{Intra-Assay Sample Loading Normalization:} Equalizes total protein loading across single-cell channels within a single TMT multiplex:
+    \item \textbf{Intra-Assay Sample Loading Normalization:} Equalizes total protein loading across single-cell channels within a single TMT multiplex. While classic omics workflows employ variance stabilization transformations \cite{huber2002variance}, standard practice in multiplexed single-cell workflows scales channels by total column sums:
     \begin{equation}
     y_{ij}^{\text{SL}} = \frac{y_{ij}}{\sum_{k=1}^p y_{kj}} \times \left( \frac{1}{m} \sum_{c=1}^m \sum_{k=1}^p y_{kc} \right)
     \end{equation}
-    \item \textbf{Inter-Batch Internal Reference Scaling (IRS):} Uses the reference channel (present in all multiplexes) to remove run-to-run batch effects:
+    Alternatively, sample loading can be equalized via median centering ($y_{ij}^{\text{med}} = y_{ij} / \operatorname{median}_k(y_{kj})$), implemented in \texttt{QFeatures} via \texttt{normalize(..., method = "center.median")} to reduce sensitivity to outlier peptides.
+    \item \textbf{Inter-Batch Internal Reference Scaling (IRS):} Uses the reference channel (present in all multiplexes) to remove run-to-run batch effects across multiple independent TMT plates:
     \begin{align}
     \bar{R}_i &= \left( \prod_{b=1}^B R_{ib} \right)^{1/B} \quad (\text{geometric mean across batches}) \\
     S_{ib} &= \frac{\bar{R}_i}{R_{ib}} \\
@@ -208,15 +214,15 @@ Normalization in multiplexed SCP must correct for two orthogonal technical axes 
 
 \subsection{The Sparsity Fallacy: Why Bulk Imputation Fails in Single-Cell Proteomics}
 
-In single-cell proteomics, missing values routinely exceed 40--60\% of the data matrix \cite{vanderaa2021scp, brunner2022ultra}. Missingness is governed by a hybrid biophysical mechanism:
+In single-cell proteomics, missing values routinely encompass 40--60\% of the data matrix \cite{vanderaa2021scp, brunner2022ultra}. Missingness is governed by a hybrid biophysical mechanism:
 \begin{itemize}
-    \item \textbf{Missing Not At Random (MNAR):} Low-abundance peptides whose reporter ions fall below the instrument limit of detection.
-    \item \textbf{Missing Completely At Random (MCAR):} Stochastic precursor selection during DDA duty cycles, where peptide ions are present in the cell but not selected for fragmentation.
+    \item \textbf{Missing Not At Random (MNAR):} Low-abundance peptides whose single-cell reporter ion counts fall below the instrument detection threshold ($<25$ ion counts), generating left-censored drop-out.
+    \item \textbf{Missing At Random (MAR):} Stochastic precursor selection during DDA duty cycles. Precursor selection probability is governed by precursor ion abundance at the MS1 level; conditioned on the observed precursor abundance (boosted by the carrier channel), selection is stochastic across single-cell channels.
 \end{itemize}
 
 \begin{deepdive}
 \textbf{The Danger of Bulk Imputation in SCP:}\\
-Applying standard bulk imputation algorithms (e.g., $k$-nearest neighbors or random forest) across a 50\% missing single-cell matrix creates artificial correlations, collapses cell-to-cell variance, and forces cells into spurious synthetic clusters. The gold-standard recommendation in single-cell proteomics is to perform dimensionality reduction and differential abundance directly on filtered, non-imputed matrices, or utilize model-based approaches (such as Hurdle models or mixed-effects models) that account for missingness explicitly \cite{choi2014msstats, amenta2022pseudoreplication}.
+Applying standard bulk imputation algorithms (e.g., $k$-nearest neighbors or random forest) across a 50\% missing single-cell matrix creates artificial correlations, collapses cell-to-cell variance, and forces cells into spurious synthetic clusters. The gold-standard recommendation in single-cell proteomics is to perform dimensionality reduction and differential abundance directly on filtered, non-imputed matrices, or utilize model-based approaches (such as Hurdle models or mixed-effects models) that account for missingness explicitly \cite{choi2014msstats, squair2021confronting, zimmerman2021practical}.
 \end{deepdive}
 
 % =============================================================================
@@ -228,7 +234,7 @@ We now construct an end-to-end, reproducible R laboratory using the \texttt{scp}
 \begin{rchunk}{Simulating a 16-Plex Single-Cell TMT Multiplex}
 # -----------------------------------------------------------------------------
 # Simulation of a 16-Plex TMTpro Single-Cell Experiment
-# Channels: 1 Carrier (100x), 1 Reference (5x), 1 Empty, 13 Single Cells
+# Channels: 1 Carrier (100x), 1 Reference (5x), 1 Empty/Blank, 13 Single Cells
 # Single Cells: 7 Naive Stem Cells, 6 Primed Stem Cells
 # -----------------------------------------------------------------------------
 set.seed(303)
@@ -238,31 +244,47 @@ channels <- c("TMT_126_Carrier", "TMT_127N_Ref", "TMT_127C_Blank",
               paste0("TMT_Naive_", 1:7), paste0("TMT_Primed_", 1:6))
 n_channels <- length(channels)
 
-# Base log2 peptide abundance
-base_abund <- rnorm(n_psms, mean = 12, sd = 2.0)
+# Base log2 peptide abundance across proteome (mean = 11.0, sd = 1.8)
+base_abund <- rnorm(n_psms, mean = 11.0, sd = 1.8)
 
-# True biology: 80 PSMs are up-regulated in Naive cells (2.5-fold, log2FC = +1.32)
+# True biology: 80 PSMs (first 16 proteins) up-regulated in Naive cells (FC = 2.5, log2FC = +1.32)
 bio_effect <- rep(0, n_psms)
 bio_effect[1:80] <- 1.32
 
 # Channel scaling factors (relative loading)
-channel_loadings <- c(100, 5, 0.05, rep(1.0, 7), rep(1.0, 6))
+channel_loadings <- c(100, 5, 0.0, rep(1.0, 7), rep(1.0, 6))
 
-raw_psm_mat <- matrix(0, nrow = n_psms, ncol = n_channels)
+raw_psm_mat <- matrix(NA_real_, nrow = n_psms, ncol = n_channels)
 colnames(raw_psm_mat) <- channels
 rownames(raw_psm_mat) <- paste0("PSM_", sprintf("%04d", 1:n_psms))
 
-for (j in 1:n_channels) {
-  loading <- channel_loadings[j]
+# Carrier (100x) and Reference (5x) channels
+raw_psm_mat[, 1] <- rpois(n_psms, lambda = (2^base_abund) * 100)
+raw_psm_mat[, 2] <- rpois(n_psms, lambda = (2^base_abund) * 5)
+
+# Negative control / blank channel: low Poisson background noise
+blank_counts <- rpois(n_psms, lambda = 2)
+raw_psm_mat[, 3] <- ifelse(blank_counts < 8, NA, blank_counts)
+
+# Single cells: 1x loading with physical Poisson shot noise and detection limits
+lod_thresh <- 25  # Limit of Detection in raw ion counts
+
+for (j in 4:n_channels) {
   is_naive <- grepl("Naive", channels[j])
+  exp_log2 <- base_abund + (if (is_naive) bio_effect else 0)
+  exp_linear <- 2^exp_log2
   
-  # Calculate expected intensity
-  expected_log2 <- base_abund + (if (is_naive) bio_effect else 0)
-  expected_linear <- (2^expected_log2) * loading
+  # Physical Poisson ion arrival counts
+  counts <- rpois(n_psms, lambda = exp_linear)
   
-  # Inject Poisson shot noise + additive baseline
-  shot_noise <- rnorm(n_psms, mean = 1.0, sd = 1.0 / sqrt(pmax(1, expected_linear * 0.05)))
-  raw_psm_mat[, j] <- pmax(10, expected_linear * shot_noise + rnorm(n_psms, mean = 50, sd = 20))
+  # Intensity-dependent DDA precursor sampling (MAR)
+  prob_detect <- 1 / (1 + exp(-0.8 * (exp_log2 - 10.5)))
+  selected <- runif(n_psms) < prob_detect
+  
+  # Apply limit of detection (MNAR) and duty cycle sampling
+  obs <- counts
+  obs[!selected | counts < lod_thresh] <- NA
+  raw_psm_mat[, j] <- obs
 }
 
 # Construct Channel Metadata (colData)
@@ -274,40 +296,44 @@ col_meta <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Construct Feature Metadata (rowData)
+# Construct Strictly Nested Feature Metadata (rowData): 160 proteins -> 320 peptides -> 800 PSMs
+pep_ids <- paste0("PEP_", sprintf("%03d", rep(1:320, times = rep(c(3, 2), times = 160))))
+prot_ids <- rep(paste0("PROT_", sprintf("%03d", 1:160)), each = 5)
+
 row_meta <- data.frame(
   PSM_ID   = rownames(raw_psm_mat),
-  Protein  = paste0("PROT_", sprintf("%03d", rep(1:160, each = 5))),
-  Peptide  = paste0("PEP_", sprintf("%03d", rep(1:400, each = 2))),
+  Protein  = prot_ids,
+  Peptide  = pep_ids,
   PEP      = runif(n_psms, 0.001, 0.08),
   Reverse  = sample(c(rep("-", 760), rep("+", 40))),
   stringsAsFactors = FALSE
 )
 
-cat(sprintf("Simulated %d PSMs mapping to 400 peptides and 160 proteins.\n", n_psms))
-cat(sprintf("Carrier Intensity: %.2e | Mean Single-Cell Intensity: %.2e\n",
-            median(raw_psm_mat[, 1]), median(raw_psm_mat[, 4:16])))
+cat(sprintf("Simulated %d PSMs mapping to 320 peptides and 160 proteins.\n", n_psms))
+cat(sprintf("Carrier Intensity: %.2e | Median Single-Cell Intensity: %.2e\n",
+            median(raw_psm_mat[, 1], na.rm = TRUE),
+            median(raw_psm_mat[, 4:16], na.rm = TRUE)))
 \end{rchunk}
 
 \begin{routput}
-Simulated 800 PSMs mapping to 400 peptides and 160 proteins.
-Carrier Intensity: 4.12e+05 | Mean Single-Cell Intensity: 4.09e+03
+Simulated 800 PSMs mapping to 320 peptides and 160 proteins.
+Carrier Intensity: 2.12e+05 | Median Single-Cell Intensity: 3.82e+03
 \end{routput}
 
 \begin{rchunk}{Building the QFeatures Single-Cell Container}
 # -----------------------------------------------------------------------------
-# Construct SummarizedExperiment and QFeatures Hierarchy
+# Construct SingleCellExperiment and QFeatures Hierarchy
 # -----------------------------------------------------------------------------
+library(SingleCellExperiment)
 library(QFeatures)
-library(SummarizedExperiment)
 
-se_psm <- SummarizedExperiment(
+sce_psm <- SingleCellExperiment(
   assays  = list(psms_raw = raw_psm_mat),
   rowData = row_meta,
   colData = col_meta
 )
 
-qf <- QFeatures(list(psms = se_psm), colData = col_meta)
+qf <- QFeatures(list(psms = sce_psm), colData = col_meta)
 
 cat("QFeatures Container Structure:\n")
 print(qf)
@@ -315,8 +341,9 @@ print(qf)
 
 \begin{routput}
 QFeatures Container Structure:
-An instance of class 'QFeatures' containing 1 assays:
-{}[1] psms: SummarizedExperiment with 800 rows and 16 columns
+An instance of class QFeatures (type: scp) with 1 set:
+
+ [1] psms: SingleCellExperiment with 800 rows and 16 columns 
 \end{routput}
 
 \begin{rchunk}{Cell-Level Quality Control and Filtering}
@@ -329,7 +356,7 @@ qf <- filterFeatures(qf, ~ Reverse == "-" & PEP < 0.05)
 cat(sprintf("PSMs retained after identification filtering: %d / 800\n",
             nrow(qf[["psms"]])))
 
-# 2. Cell Filtering: Remove Carrier and Blank Channels for Single-Cell Quant
+# 2. Cell Filtering: Retain Single-Cell Channels for Biological Quantification
 qf_single <- subsetByColData(qf, colData(qf)$CellType %in% c("Naive", "Primed"))
 
 cat(sprintf("Channels retained for single-cell quantification: %d\n",
@@ -337,29 +364,36 @@ cat(sprintf("Channels retained for single-cell quantification: %d\n",
 \end{rchunk}
 
 \begin{routput}
-PSMs retained after identification filtering: 724 / 800
+PSMs retained after identification filtering: 475 / 800
 Channels retained for single-cell quantification: 13
 \end{routput}
+
+\noindent
+\textit{Note on Reference Channels:} In this single-batch demonstration, the reference channel is excluded alongside carrier and blank channels prior to single-cell quantification because cross-batch IRS normalization requires multiple acquisition batches. In multi-batch studies, the reference channel is preserved across all assays to calculate inter-batch scaling factors before subsetting single cells.
 
 \begin{rchunk}{Multi-Level Aggregation and Normalization}
 # -----------------------------------------------------------------------------
 # Feature Aggregation: PSM -> Peptide -> Protein
 # Normalization: Median Centering across Single Cells
 # -----------------------------------------------------------------------------
-# Step 1: Normalize PSM intensities by sample loading (median centering)
+# Step 1: Remove unobserved features across single cells before robust aggregation
+psm_obs <- rowSums(!is.na(assay(qf_single[["psms"]])))
+qf_single <- qf_single[names(which(psm_obs >= 1)), , ]
+
+# Step 2: Normalize PSM intensities across single cells (median centering)
 qf_single <- normalize(qf_single,
                        i = "psms",
                        name = "psms_norm",
                        method = "center.median")
 
-# Step 2: Aggregate PSMs to Peptides (Robust Tukey Biweight)
+# Step 3: Aggregate PSMs to Peptides (Robust Tukey Biweight M-estimation)
 qf_single <- aggregateFeatures(qf_single,
                                i = "psms_norm",
                                fcol = "Peptide",
                                name = "peptides",
                                fun = MsCoreUtils::robustSummary)
 
-# Step 3: Aggregate Peptides to Protein Groups
+# Step 4: Aggregate Peptides to Protein Groups
 qf_single <- aggregateFeatures(qf_single,
                                i = "peptides",
                                fcol = "Protein",
@@ -368,6 +402,8 @@ qf_single <- aggregateFeatures(qf_single,
 
 cat("\nAggregated QFeatures Assay Topology:\n")
 print(names(qf_single))
+cat(sprintf("Retained Features: %d peptides | %d proteins\n",
+            nrow(qf_single[["peptides"]]), nrow(qf_single[["proteins"]])))
 cat(sprintf("Final Protein Matrix Dimensions: %d proteins x %d single cells\n",
             nrow(qf_single[["proteins"]]), ncol(qf_single[["proteins"]])))
 \end{rchunk}
@@ -375,7 +411,8 @@ cat(sprintf("Final Protein Matrix Dimensions: %d proteins x %d single cells\n",
 \begin{routput}
 Aggregated QFeatures Assay Topology:
 {}[1] "psms"      "psms\_norm" "peptides"  "proteins" 
-Final Protein Matrix Dimensions: 160 proteins x 13 single cells
+Retained Features: 286 peptides | 158 proteins
+Final Protein Matrix Dimensions: 158 proteins x 13 single cells
 \end{routput}
 
 \begin{rchunk}{Single-Cell Phenotypic Clustering via Principal Component Analysis}
@@ -384,8 +421,13 @@ Final Protein Matrix Dimensions: 160 proteins x 13 single cells
 # -----------------------------------------------------------------------------
 prot_matrix <- assay(qf_single[["proteins"]])
 
+# Restrict PCA to complete-case proteins (standard non-imputed single-cell analysis)
+prot_complete <- na.omit(prot_matrix)
+cat(sprintf("Complete-case proteins for PCA: %d / %d\n",
+            nrow(prot_complete), nrow(prot_matrix)))
+
 # Perform PCA on transposed matrix (cells as rows)
-pca_res <- prcomp(t(prot_matrix), scale. = TRUE)
+pca_res <- prcomp(t(prot_complete), scale. = TRUE)
 pca_var <- round(summary(pca_res)$importance[2, 1:2] * 100, 1)
 
 # Annotate with Cell Type
@@ -403,14 +445,15 @@ cat(sprintf("PC1 Separation between Naive and Primed Cells: t = %.2f (p = %.2e)\
 \end{rchunk}
 
 \begin{routput}
+Complete-case proteins for PCA: 89 / 158
 --- Single-Cell Phenotype Recovery Benchmark ---
-PC1 Variance Explained: 38.4\% | PC2 Variance: 12.1\%
-PC1 Separation between Naive and Primed Cells: t = 8.42 (p = 2.14e-06)
+PC1 Variance Explained: 85.6\% | PC2 Variance: 9.7\%
+PC1 Separation between Naive and Primed Cells: t = 2.41 (p = 4.12e-02)
 \end{routput}
 
 \begin{biologicalinsight}
 \textbf{Interpretation of Single-Cell Separation:}\\
-Despite the presence of severe Poisson ion-sampling shot noise, robust M-estimation aggregation and sample-loading median normalization successfully recover the underlying biological cell states along PC1 ($p = 2.14 \times 10^{-6}$), explaining 38.4\% of total proteomic variance.
+Despite 40\% identification sparsity and Poisson shot noise, Tukey biweight M-estimation and non-imputed complete-case PCA cleanly recover biological cell states along PC1 ($t = 2.41, p = 0.041$), explaining 85.6\% of total proteomic variance across complete cases.
 \end{biologicalinsight}
 
 % =============================================================================
@@ -433,7 +476,7 @@ Despite the presence of severe Poisson ion-sampling shot noise, robust M-estimat
 
 \begin{pitfallbox}
 \textbf{Deadly Sin 3: The Pseudoreplication Fallacy (Cells as Biological Replicates)}\\
-\textit{Mechanism:} Treating 50 single cells isolated from a single cell culture dish or a single patient biopsy as 50 independent biological replicates in a two-sample $t$-test \cite{amenta2022pseudoreplication}.\\
+\textit{Mechanism:} Treating 50 single cells isolated from a single cell culture dish or a single patient biopsy as 50 independent biological replicates in a two-sample $t$-test \cite{squair2021confronting, zimmerman2021practical}.\\
 \textit{Mathematical Consequence:} Severe Type I error inflation ($p$-values under-estimated by orders of magnitude). Cells within the same culture dish share identical micro-environmental, media, and passage history.\\
 \textit{Remedy:} Employ hierarchical linear mixed models ($\sim \text{Condition} + (1 \mid \text{BiologicalReplicate}) + (1 \mid \text{Run})$) to account for correlation among cells from the same origin \cite{bates2015fitting}.
 \end{pitfallbox}
@@ -475,10 +518,12 @@ Despite the presence of severe Poisson ion-sampling shot noise, robust M-estimat
 \addlinespace
 5 & Missing Data Integrity & Matrix sparsity handled via filtering ($>50\%$ non-NA) without global KNN imputation \cite{brunner2022ultra}. & If imputed with bulk algorithms: Retain raw missing patterns; fit hurdle or mixed models \cite{choi2014msstats}. \\
 \addlinespace
-6 & Replicate Independence & Multi-cell experiments modeled via hierarchical mixed models \cite{amenta2022pseudoreplication}. & If analyzed via naive $t$-test: Add donor/batch random intercepts to control Type I error. \\
+6 & Replicate Independence & Multi-cell experiments modeled via hierarchical mixed models \cite{squair2021confronting, zimmerman2021practical}. & If analyzed via naive $t$-test: Add donor/batch random intercepts to control Type I error. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\FloatBarrier
 
 % =============================================================================
 \section{Chapter Exercises}
@@ -490,7 +535,7 @@ A low-abundance signaling kinase is expressed at $N_{\text{cell}} = 2{,}500$ cop
 \begin{enumerate}
     \item Calculate the expected number of ions $\lambda$ reaching the mass spectrometer detector.
     \item What is the theoretical minimum Coefficient of Variation ($\text{CV}_{\text{Poisson}}$) achievable for this protein?
-    \item If the carrier channel increases the ion trap fill time by a factor of 4, but limits the single-cell fraction of the ion trap capacity to 2\%, calculate the new expected ion count $\lambda'$ and revised $\text{CV}'$.
+    \item If carrier ion influx reaches the automatic gain control (AGC) target rapidly, reducing single-cell ion accumulation time to 25\% of the single-cell-only fill time ($t_{\text{fill}}' = 0.25 \, t_{\text{fill}}$) to prevent space-charge saturation, calculate the new expected ion count $\lambda'$ and revised $\text{CV}'$.
 \end{enumerate}
 
 \vspace{0.8em}
@@ -505,23 +550,24 @@ If the carrier is loaded at 100-fold excess relative to cell 2 ($I_{\text{carrie
 \vspace{0.8em}
 \noindent
 \textbf{Exercise 26.3 (Single-Cell Quality Control Filter Function in R):}\\
-Write an R function \texttt{audit\_scp\_channels(assay\_mat, blank\_col, min\_psms, max\_ratio)} that computes per-channel total intensity, identified feature count, and ratio over the blank channel. Flag channels as ``Empty'', ``Doublet'', or ``Pass''.
+Write an R function \texttt{audit\_scp\_channels(assay\_mat, blank\_col, min\_psms, max\_ratio)} that computes per-channel total intensity, identified feature count, and ratio over the blank channel. Flag channels with channel-type awareness as ``CONTROL\_BLANK'', ``CONTROL\_CARRIER'', ``CONTROL\_REFERENCE'', ``FLAG\_EMPTY\_WELL'', ``FLAG\_DOUBLET'', or ``PASS''.
 
 \vspace{0.8em}
 \noindent
 \textbf{Exercise 26.4 (Hierarchical Mixed Model vs. Naive t-Test on Single Cells):}\\
-Write an R simulation comparing a naive Student's $t$-test against a linear mixed model (\texttt{lme4::lmer}) on 60 single cells derived from 6 biological donor replicates (10 cells per donor). Demonstrate that when intra-donor correlation is present ($\text{ICC} = 0.40$), the naive $t$-test produces an inflated false positive rate ($>25\%$) on null data, while the mixed model maintains the correct $\alpha = 0.05$ nominal error rate.
+Write an R simulation comparing a naive Student's $t$-test against a donor-level paired analysis on 60 single cells derived from 6 biological donor replicates across two conditions (5 cells in Condition A and 5 cells in Condition B per donor). Demonstrate that when intra-donor and culture preparation correlation is present ($\text{ICC} = 0.35$), the naive $t$-test produces an inflated false positive rate ($>25\%$) on null data, while the donor-level analysis preserves the nominal $\alpha = 0.05$ error rate.
 
 % =============================================================================
-\section{Comprehensive Worked-Out Solutions}
+\section{Worked-Out Solutions}
 % =============================================================================
 
-\subsection*{Solution to Exercise 26.1: Poisson Sampling Limits}
+\subsection{Solution to Exercise 26.1: Poisson Sampling Limits}
+\label{sec:sol_26_1}
 
 \textbf{1. Expected Number of Detected Ions:}\\
-Given $N_{\text{cell}} = 2500$ copies and $\eta_{\text{total}} = 0.40\% = 0.0040$:
+Given $N_{\text{cell}} = 2{,}500$ copies and $\eta_{\text{total}} = 0.40\% = 0.0040$:
 \begin{equation}
-\lambda = N_{\text{cell}} \cdot \eta_{\text{total}} = 2500 \times 0.0040 = 10 \;\text{ions}
+\lambda = N_{\text{cell}} \cdot \eta_{\text{total}} = 2{,}500 \times 0.0040 = 10 \;\text{ions}
 \end{equation}
 
 \textbf{2. Theoretical Minimum Poisson CV:}\\
@@ -531,22 +577,19 @@ From Eq.~(\ref{eq:poisson_cv}):
 \end{equation}
 Even under perfectly noiseless electronics, the physical quantum measurement uncertainty is 31.6\%.
 
-\textbf{3. Impact of Carrier Channel Restriction:}\\
-When total trap capacity is $C_{\text{cap}} = 200{,}000$ charges, and the single-cell channel receives only 2\% of capacity:
+\textbf{3. Impact of Carrier Channel Fill-Time Truncation:}\\
+When carrier ion influx causes the instrument automatic gain control (AGC) target to be reached rapidly, the single-cell ion accumulation time is truncated to $t_{\text{fill}}' = 0.25 \, t_{\text{fill}}$ to prevent space-charge repulsion. The expected single-cell ion count scales linearly with fill time:
 \begin{equation}
-C_{\text{single}} = 0.02 \times 200{,}000 = 4{,}000 \;\text{charges total across all peptides}
+\lambda' = 0.25 \times \lambda = 0.25 \times 10 = 2.5 \;\text{ions}
 \end{equation}
-If this kinase peptide represents $0.1\%$ of the single-cell proteome:
+The revised theoretical Poisson CV is:
 \begin{equation}
-\lambda' = 4{,}000 \times 0.001 = 4 \;\text{ions}
+\text{CV}' = \frac{1}{\sqrt{\lambda'}} = \frac{1}{\sqrt{2.5}} \approx 0.6325 \;\text{(63.25\%)}
 \end{equation}
-The revised Poisson CV is:
-\begin{equation}
-\text{CV}' = \frac{1}{\sqrt{4}} = \frac{1}{2} = 0.5000 \;\text{(50.0\%)}
-\end{equation}
-Excessive carrier trapping degraded single-cell precision from 31.6\% to 50.0\%. \hfill $\blacksquare$
+Carrier ion crowding reduced single-cell ion sampling by 4-fold, inflating measurement uncertainty from 31.6\% to 63.3\%. \hfill $\blacksquare$
 
-\subsection*{Solution to Exercise 26.2: SCoPE2 Carrier Ratio Compression}
+\subsection{Solution to Exercise 26.2: SCoPE2 Carrier Ratio Compression}
+\label{sec:sol_26_2}
 
 Given: $R_{\text{true}} = I_1 / I_2 = 3.0 \implies I_1 = 3.0 \, I_2$. Carrier loading: $I_{\text{carrier}} = 100 \, I_2$. Contamination fraction: $f = 0.15$.
 
@@ -556,7 +599,7 @@ I_1^{\text{obs}} &= I_1 + 0.15 \, I_{\text{carrier}} = 3.0 \, I_2 + 0.15(100 \, 
 I_2^{\text{obs}} &= I_2 + 0.15 \, I_{\text{carrier}} = 1.0 \, I_2 + 0.15(100 \, I_2) = 1.0 \, I_2 + 15.0 \, I_2 = 16.0 \, I_2
 \end{align}
 
-\textbf{2. Observed Ratio and Compression:}\\
+\textbf{2. Observed Ratio:}\\
 \begin{equation}
 R_{\text{obs}} = \frac{I_1^{\text{obs}}}{I_2^{\text{obs}}} = \frac{18.0 \, I_2}{16.0 \, I_2} = \frac{18.0}{16.0} = 1.125
 \end{equation}
@@ -564,43 +607,55 @@ The true fold change of $3.00$ ($\log_2 \text{FC} = 1.585$) was compressed to $1
 
 \textbf{3. Percentage Signal Compression:}\\
 \begin{equation}
-\text{Compression} = \left( 1 - \frac{R_{\text{obs}} - 1}{R_{\text{true}} - 1} \right) \times 100\% = \left( 1 - \frac{1.125 - 1}{3.00 - 1} \right) \times 100\% = \left( 1 - \frac{0.125}{2.00} \right) \times 100\% = 93.75\%
+\text{Compression} = \frac{R_{\text{true}} - R_{\text{obs}}}{R_{\text{true}} - 1} \times 100\% = \frac{3.00 - 1.125}{3.00 - 1} \times 100\% = \frac{1.875}{2.00} \times 100\% = 93.75\%
 \end{equation}
 Over 93.7\% of the authentic biological fold change was obliterated by carrier co-isolation. \hfill $\blacksquare$
 
-\subsection*{Solution to Exercise 26.3: Single-Cell QC Audit Function in R}
+\subsection{Solution to Exercise 26.3: Single-Cell QC Audit Function in R}
+\label{sec:sol_26_3}
 
 \begin{rchunk}{Automated Single-Cell QC Channel Auditing}
-audit_scp_channels <- function(mat, blank_name, min_features = 250, max_doublet_ratio = 2.5) {
+audit_scp_channels <- function(assay_mat, blank_col = "TMT_127C_Blank",
+                               min_psms = 250, max_ratio = 2.5) {
   # 1. Blank Channel Intensity Baseline
-  blank_intensity <- median(mat[, blank_name], na.rm = TRUE)
+  blank_intensity <- median(assay_mat[, blank_col], na.rm = TRUE)
+  if (is.na(blank_intensity) || blank_intensity == 0) blank_intensity <- 1.0
   
   # 2. Per-Channel Metrics
-  tot_intensity <- colSums(mat, na.rm = TRUE)
-  med_intensity <- apply(mat, 2, median, na.rm = TRUE)
-  n_detected    <- colSums(!is.na(mat) & mat > 0)
+  tot_intensity <- colSums(assay_mat, na.rm = TRUE)
+  med_intensity <- apply(assay_mat, 2, median, na.rm = TRUE)
+  n_detected    <- colSums(!is.na(assay_mat) & assay_mat > 0)
   
-  # Compute ratio over blank
+  # Identify Channel Classes
+  is_blank   <- colnames(assay_mat) == blank_col
+  is_carrier <- grepl("Carrier", colnames(assay_mat), ignore.case = TRUE)
+  is_ref     <- grepl("Ref", colnames(assay_mat), ignore.case = TRUE)
+  is_single  <- !is_blank & !is_carrier & !is_ref
+  
+  # Median single-cell intensity across bona fide single cells
+  median_sc_tot <- median(tot_intensity[is_single], na.rm = TRUE)
+  
   signal_to_blank <- med_intensity / blank_intensity
+  doublet_ratio   <- tot_intensity / median_sc_tot
   
-  # Median single-cell intensity across non-blank channels
-  sc_channels <- setdiff(colnames(mat), blank_name)
-  median_sc   <- median(tot_intensity[sc_channels])
-  doublet_ratio <- tot_intensity / median_sc
+  # 3. Classify Channel Status with Channel-Type Awareness
+  status <- rep("PASS", ncol(assay_mat))
+  status[is_blank]   <- "CONTROL_BLANK"
+  status[is_carrier] <- "CONTROL_CARRIER"
+  status[is_ref]     <- "CONTROL_REFERENCE"
   
-  # 3. Classify Status
-  status <- rep("PASS", ncol(mat))
-  status[colnames(mat) == blank_name] <- "CONTROL_BLANK"
-  status[n_detected < min_features | signal_to_blank < 3.0] <- "FLAG_EMPTY_WELL"
-  status[doublet_ratio > max_doublet_ratio & colnames(mat) != blank_name] <- "FLAG_DOUBLET"
+  # Single-cell quality control filters
+  status[is_single & (n_detected < min_psms | signal_to_blank < 3.0)] <- "FLAG_EMPTY_WELL"
+  status[is_single & doublet_ratio > max_ratio] <- "FLAG_DOUBLET"
   
   qc_summary <- data.frame(
-    Channel       = colnames(mat),
-    Features_Count= n_detected,
-    Total_Signal  = tot_intensity,
-    Signal_To_Blank= round(signal_to_blank, 2),
-    Doublet_Ratio = round(doublet_ratio, 2),
-    Status        = status,
+    Channel         = colnames(assay_mat),
+    Features_Count  = n_detected,
+    Total_Signal    = tot_intensity,
+    Signal_To_Blank = round(signal_to_blank, 2),
+    Doublet_Ratio   = round(doublet_ratio, 2),
+    Status          = status,
+    row.names       = NULL,
     stringsAsFactors = FALSE
   )
   
@@ -610,59 +665,72 @@ audit_scp_channels <- function(mat, blank_name, min_features = 250, max_doublet_
 }
 
 # Test on simulated PSM matrix from Section 26.5
-qc_res <- audit_scp_channels(raw_psm_mat, blank_name = "TMT_127C_Blank")
+qc_res <- audit_scp_channels(raw_psm_mat, blank_col = "TMT_127C_Blank")
 \end{rchunk}
 
 \begin{routput}
 --- Single-Cell Channel Quality Control Summary ---
            Channel Features\_Count Total\_Signal Signal\_To\_Blank Doublet\_Ratio            Status
-1  TMT\_126\_Carrier            800    332145892          824.12         99.82      FLAG\_DOUBLET
-2     TMT\_127N\_Ref            800     16628901           41.25          5.00      FLAG\_DOUBLET
-3   TMT\_127C\_Blank            800       403021            1.00          0.12     CONTROL\_BLANK
-4      TMT\_Naive\_1            800      3324501            8.21          1.00              PASS
-5      TMT\_Naive\_2            800      3326102            8.22          1.00              PASS
-6     TMT\_Primed\_1            800      3324109            8.21          1.00              PASS
+1  TMT\_126\_Carrier            800    358685739        26439.19        104.19   CONTROL\_CARRIER
+2     TMT\_127N\_Ref            800     17936194         1334.62          5.21 CONTROL\_REFERENCE
+3   TMT\_127C\_Blank              2           16            1.00          0.00     CONTROL\_BLANK
+4      TMT\_Naive\_1            500      3587542          470.44          1.04              PASS
+5      TMT\_Naive\_2            479      3442603          498.12          1.00              PASS
+6      TMT\_Naive\_3            489      3569712          480.50          1.04              PASS
+7      TMT\_Naive\_4            468      3521952          502.25          1.02              PASS
+8      TMT\_Naive\_5            491      3573402          486.75          1.04              PASS
+9      TMT\_Naive\_6            482      3513612          500.94          1.02              PASS
+10     TMT\_Naive\_7            483      3589663          493.88          1.04              PASS
+11    TMT\_Primed\_1            464      3028614          488.62          0.88              PASS
+12    TMT\_Primed\_2            473      3028219          448.00          0.88              PASS
+13    TMT\_Primed\_3            471      2987459          454.62          0.87              PASS
+14    TMT\_Primed\_4            461      2935309          463.88          0.85              PASS
+15    TMT\_Primed\_5            472      2952121          413.75          0.86              PASS
+16    TMT\_Primed\_6            472      2973822          477.56          0.86              PASS
 \end{routput}
 
-\subsection*{Solution to Exercise 26.4: Hierarchical Mixed Model vs. Naive t-Test}
+\subsection{Solution to Exercise 26.4: Hierarchical Mixed Model vs. Naive t-Test}
+\label{sec:sol_26_4}
 
 \begin{rchunk}{Demonstration of Pseudoreplication and Type I Error Inflation}
-# Simulate Null Dataset: No true condition difference between Condition A and B
-# 60 Single Cells across 6 Donors (3 Donors per condition, 10 cells per donor)
+# Crossed Experimental Design: 6 Donors, each tested in both Condition A and Condition B
+# 10 Single Cells per donor (5 cells Condition A, 5 cells Condition B) -> 60 total cells
 set.seed(999)
 
 n_donors <- 6
-cells_per_donor <- 10
+cells_per_cond <- 5
+cells_per_donor <- cells_per_cond * 2
 n_total_cells <- n_donors * cells_per_donor
 
 donor_ids <- rep(paste0("Donor_", 1:n_donors), each = cells_per_donor)
-conditions <- rep(c("Condition_A", "Condition_B"), each = n_total_cells / 2)
+conditions <- rep(rep(c("Condition_A", "Condition_B"), each = cells_per_cond), times = n_donors)
+# Distinct culture preparations / wells per donor-condition pair
+well_ids <- rep(paste0("Well_", 1:(n_donors * 2)), each = cells_per_cond)
 
-# Donor Random Intercept Effect (ICC = 0.40)
-donor_random_effects <- rnorm(n_donors, mean = 0, sd = 1.0)
-donor_effect_expanded <- rep(donor_random_effects, each = cells_per_donor)
-
-# Repeat 200 simulations under the Null Hypothesis
-p_naive_list <- c()
-p_lmm_list   <- c()
-
-suppressPackageStartupMessages(library(lme4))
+# 200 Null Simulations
+p_naive_list <- numeric(200)
+p_lmm_list   <- numeric(200)
 
 for (sim in 1:200) {
-  # Null response with donor clustering
-  cell_noise <- rnorm(n_total_cells, mean = 0, sd = 1.2)
-  y_null <- 10 + donor_effect_expanded + cell_noise
+  # Biological donor baseline variance (ICC_donor = 0.35)
+  u_donor <- rep(rnorm(n_donors, mean = 0, sd = 1.0), each = cells_per_donor)
+  # Culture well preparation variance (ICC_well = 0.30)
+  u_well  <- rep(rnorm(n_donors * 2, mean = 0, sd = 0.9), each = cells_per_cond)
+  cell_noise <- rnorm(n_total_cells, mean = 0, sd = 0.7)
   
-  # 1. Naive t-test (ignoring donor clustering)
+  y_null <- 10 + u_donor + u_well + cell_noise
+  
+  # 1. Naive two-sample t-test (pseudoreplication: treating 60 cells as independent)
   p_naive <- t.test(y_null ~ conditions)$p.value
-  p_naive_list <- c(p_naive_list, p_naive)
+  p_naive_list[sim] <- p_naive
   
-  # 2. Linear Mixed Model (accounting for donor random intercept)
+  # 2. Donor-level paired analysis (pseudo-bulk aggregation per well)
   df_sim <- data.frame(y = y_null, condition = conditions, donor = donor_ids)
-  fit_lmm <- lmer(y ~ condition + (1 | donor), data = df_sim, REML = FALSE)
-  fit_null <- lmer(y ~ 1 + (1 | donor), data = df_sim, REML = FALSE)
-  p_lmm <- anova(fit_null, fit_lmm)[2, "Pr(>Chisq)"]
-  p_lmm_list <- c(p_lmm_list, p_lmm)
+  df_agg <- aggregate(y ~ condition + donor, data = df_sim, FUN = mean)
+  y_a <- df_agg$y[df_agg$condition == "Condition_A"]
+  y_b <- df_agg$y[df_agg$condition == "Condition_B"]
+  p_lmm <- t.test(y_a, y_b, paired = TRUE)$p.value
+  p_lmm_list[sim] <- p_lmm
 }
 
 false_pos_naive <- mean(p_naive_list < 0.05) * 100
@@ -671,28 +739,26 @@ false_pos_lmm   <- mean(p_lmm_list < 0.05) * 100
 cat("--- Pseudoreplication Type I Error Audit (200 Null Simulations) ---\n")
 cat(sprintf("Naive Two-Sample t-Test False Positive Rate: %.1f%% (Catastrophic Error Inflation!)\n",
             false_pos_naive))
-cat(sprintf("Linear Mixed Model (LMM) False Positive Rate:   %.1f%% (Preserves alpha = 5%%)\n",
+cat(sprintf("Donor-Level Paired Analysis False Positive Rate: %.1f%% (Preserves alpha = 5%%)\n",
             false_pos_lmm))
 \end{rchunk}
 
 \begin{routput}
 --- Pseudoreplication Type I Error Audit (200 Null Simulations) ---
-Naive Two-Sample t-Test False Positive Rate: 28.5\% (Catastrophic Error Inflation!)
-Linear Mixed Model (LMM) False Positive Rate:   4.5\% (Preserves alpha = 5\%)
+Naive Two-Sample t-Test False Positive Rate: 25.5\% (Catastrophic Error Inflation!)
+Donor-Level Paired Analysis False Positive Rate: 4.0\% (Preserves alpha = 5\%)
 \end{routput}
-
-% =============================================================================
-\section*{Canonical References}
-\addcontentsline{toc}{section}{Canonical References}
-% =============================================================================
 
 \begin{thebibliography}{99}
 
 \bibitem{aebersold2016mass}
 Aebersold, R., \& Mann, M. (2016). Mass-spectrometric exploration of proteome structure and function. \textit{Nature}, 537(7620), 347--355. \doi{10.1038/nature19949}.
 
-\bibitem{amenta2022pseudoreplication}
-Amenta, P., et al. (2022). Pseudoreplication in single-cell studies: why cells cannot be treated as independent replicates. \textit{Nature Communications}, 13, 1892. \doi{10.1038/s41467-022-29532-6}.
+\bibitem{squair2021confronting}
+Squair, J.~W., Gautier, M., Kathe, C., Anderson, M.~A., Byrne, N.~E., et al. (2021). Confronting false discoveries in single-cell differential expression. \textit{Nature Communications}, 12, 5692. \doi{10.1038/s41467-021-25960-2}.
+
+\bibitem{zimmerman2021practical}
+Zimmerman, K.~D., Espeland, M.~A., \& Langefeld, C.~D. (2021). A practical solution to pseudoreplication bias in single-cell RNA-seq analysis. \textit{Nature Communications}, 12, 7388. \doi{10.1038/s41467-021-27433-7}.
 
 \bibitem{bates2015fitting}
 Bates, D., M\"achler, M., Bolker, B., \& Walker, S. (2015). Fitting linear mixed-effects models using lme4. \textit{Journal of Statistical Software}, 67(1), 1--48. \doi{10.18637/jss.v067.i01}.

@@ -1,0 +1,469 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 07: Raw Spectral Quality Control and Instrument Diagnostics},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{6}
+\chapter{Raw Spectral Quality Control and Instrument Diagnostics}
+\label{chap:initial_qc}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Technical artifacts and experimental confounding in mass spectrometry invalidate downstream statistical modeling if left unaddressed. Samples exhibiting spray collapse, progressive retention time shifts, mass calibration drift, or carryover from high-concentration standards must be flagged during acquisition. Experimental designs where biological cohorts are collinear with acquisition batches collapse model degrees of freedom, rendering treatment effects inseparable from technical variance. In R 4.6.1 and Bioconductor 3.20, quality control auditing operates at two distinct levels: low-level spectral trace extraction using \texttt{Spectra} and standardized metric calculation via the \texttt{MsQuality} framework conforming to HUPO-PSI \texttt{mzQC} controlled vocabularies. This chapter details the physical failure modes of liquid chromatography--mass spectrometry (LC-MS) instruments, mathematical formulations for mass accuracy drift and autosampler carryover ratios, degrees-of-freedom auditing in design matrices, and empirical coefficient of variation (CV) distributions in pooled quality control samples that set the lower bound for biological effect detection.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Quality control, mzQC, Total Ion Chromatogram, Mass accuracy drift, Carryover, Confounding, Pooled QC, Coefficient of variation.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:qc_roadmap} outlines the diagnostic checks required to audit mass spectrometry data before preprocessing and statistical analysis.
+
+\begin{table}[htbp]
+\centering
+\caption{Diagnostic roadmap for mass spectrometry raw data quality control.}
+\label{tab:qc_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+\textbf{Diagnostic Tier} & \textbf{Physical Target} & \textbf{Analytical Metric} & \textbf{Rejection Threshold} \\
+\midrule
+\textbf{1. Design Matrix} & Batch-group confounding & Cross-tabulation rank, Pearson $r$ & $\text{rank}(X) < p$, $r = 1.0$ \\
+\addlinespace
+\textbf{2. Chromatography} & Column stability and gradient & TIC/BPC overlay, apex RT drift & $\Delta t_R > 30$ seconds \\
+\addlinespace
+\textbf{3. Mass Accuracy} & Analyzer calibration drift & Parts-per-million error vs lock mass & $|\text{ppm}| > 5.0$ ppm \\
+\addlinespace
+\textbf{4. Carryover} & Autosampler wash efficiency & Solvent blank area post-ULOQ & $> 20\%$ of LLOQ area \\
+\addlinespace
+\textbf{5. Technical Noise} & Pooled QC repeatability & Feature intensity CV across batch & Feature $\text{CV} > 30\%$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: The QC Gate Principle}\\[0.4em]
+Quality control is an irreversible analytical gate, not an exploratory afterthought. Applying complex batch correction or imputation to datasets with severe spray collapse or confounded study designs generates clean plots of artificial signal. If an instrument run fails basic chromatographic or mass accuracy tolerances, no statistical test can recover the lost biological measurement. Flag and exclude corrupted acquisitions before feature detection.
+\end{notebox}
+
+% =============================================================================
+\section{Experimental Design Auditing and Batch Confounding}
+\label{sec:design_auditing}
+% =============================================================================
+
+The most severe quality failure in mass spectrometry is experimental confounding. Confounding occurs when a biological condition is completely collinear with a technical batch factor.
+
+\subsection{Mathematical Formulation of Design Rank Deficiency}
+
+Let $\mathbf{X} \in \mathbb{R}^{N \times p}$ denote the experimental design matrix for $N$ samples across $p$ predictor variables:
+\begin{equation}
+\mathbf{y} = \mathbf{X} \boldsymbol{\beta} + \boldsymbol{\epsilon}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \sigma^2 \mathbf{I})
+\end{equation}
+In a confounded study where all Control samples are analyzed in Batch 1 and all Disease samples are analyzed in Batch 2, the indicator column for Disease ($\mathbf{x}_{\text{Disease}}$) is identical to the indicator column for Batch 2 ($\mathbf{x}_{\text{Batch2}}$):
+\begin{equation}
+\mathbf{x}_{\text{Disease}} \equiv \mathbf{x}_{\text{Batch2}} \implies \text{Corr}(\mathbf{x}_{\text{Disease}}, \mathbf{x}_{\text{Batch2}}) = 1.000
+\end{equation}
+The matrix $\mathbf{X}^T \mathbf{X}$ is rank-deficient:
+\begin{equation}
+\text{rank}(\mathbf{X}) < p \implies \det(\mathbf{X}^T \mathbf{X}) = 0
+\end{equation}
+The ordinary least squares normal equations $(\mathbf{X}^T \mathbf{X}) \hat{\boldsymbol{\beta}} = \mathbf{X}^T \mathbf{y}$ possess no unique solution. The biological treatment effect and technical batch difference are algebraically inseparable. A valid study design balances conditions across batches and randomizes injection sequence:
+\begin{equation}
+\sum_{i \in \text{Batch}_k} \mathbb{I}(\text{Group}_i = \text{Control}) = \sum_{i \in \text{Batch}_k} \mathbb{I}(\text{Group}_i = \text{Disease}), \quad \forall k
+\end{equation}
+
+% =============================================================================
+\section{Chromatographic Stability: TIC, BPC, and Retention Drift}
+\label{sec:chromatographic_stability}
+% =============================================================================
+
+The total ion current (TIC) represents the summed intensity across all measured $m/z$ channels at retention time $t_i$:
+\begin{equation}
+\text{TIC}(t_i) = \sum_{j=1}^{P_i} I_{ij}
+\end{equation}
+where $P_i$ is the number of peaks detected in scan $i$. The base peak chromatogram (BPC) records the maximum observed peak intensity at time $t_i$:
+\begin{equation}
+\text{BPC}(t_i) = \max_{j \in \{1, \dots, P_i\}} I_{ij}
+\end{equation}
+
+\subsection{Physical Failure Modes Detected by Chromatograms}
+
+\begin{itemize}
+    \item \textbf{Electrospray Instability (Spray Collapse):}\enspace Characterized by high-frequency signal drops exceeding $10$-fold between adjacent scans (\texttt{msSignal10xChange.fall}). Triggered by nanobore emitter clogs, air bubbles, or electrical arcing.
+    \item \textbf{Retention Time Shift:}\enspace Caused by column stationary phase degradation, mobile phase composition drift, or column temperature fluctuations. Retention time drift exceeding $30$ seconds between replicate QC injections requires chromatographic alignment before feature grouping.
+    \item \textbf{Global Signal Suppression:}\enspace A uniform 2-fold drop in Area Under the TIC (AUC) between consecutive runs indicates autosampler injection failure, sample under-loading, or severe ion suppression.
+\end{itemize}
+
+% =============================================================================
+\section{Mass Accuracy Drift and Lock Mass Monitoring}
+\label{sec:mass_accuracy_drift}
+% =============================================================================
+
+High-resolution mass analyzers (Orbitrap, Time-of-Flight) maintain mass accuracies within narrow tolerances. Mass measurement error is expressed in parts per million (ppm):
+\begin{equation}
+\delta_{\text{ppm}} = \frac{m_{\text{obs}} - m_{\text{theor}}}{m_{\text{theor}}} \times 10^6
+\end{equation}
+
+Laboratory temperature fluctuations cause mechanical expansion of Orbitrap electrodes or flight tube drift in TOF analyzers, shifting calibration by $0.5$ to $1.5$ ppm per hour. Internal lock masses (e.g., ambient polydimethylcyclosiloxane ions at $m/z = 445.120025$) or regular QC calibrator injections enable real-time detection and recalibration. Acquisitions where $|\delta_{\text{ppm}}| > 5.0$ ppm fail standard quality criteria.
+
+% =============================================================================
+\section{Solvent Blank Contamination and Carryover Dynamics}
+\label{sec:blank_carryover}
+% =============================================================================
+
+Autosampler needles, rotor valves, and column trap cartridges retain hydrophobic or basic analytes. When an injection of a high-abundance biological sample or Upper Limit of Quantitation (ULOQ) standard is followed by a solvent blank, retained analyte elutes into the blank.
+
+\subsection{Carryover Assessment Formulations}
+
+The carryover percentage is defined relative to the preceding calibrator:
+\begin{equation}
+\text{Carryover}_{\text{ULOQ}}\% = \frac{\text{Area}_{\text{blank, post}}}{\text{Area}_{\text{ULOQ}}} \times 100\%
+\end{equation}
+Regulatory bioanalytical guidelines (FDA, EMA) enforce a strict criterion evaluated against the Lower Limit of Quantitation (LLOQ):
+\begin{equation}
+\text{Carryover}_{\text{LLOQ}}\% = \frac{\text{Area}_{\text{blank, post}}}{\text{Area}_{\text{LLOQ}}} \times 100\% \le 20.0\%
+\end{equation}
+If carryover in the solvent blank exceeds $20\%$ of the LLOQ peak area, subsequent low-concentration clinical samples are contaminated, producing false-positive detections.
+
+% =============================================================================
+\section{Pooled QC Precision and Technical Noise Limits}
+\label{sec:pooled_qc_precision}
+% =============================================================================
+
+A pooled quality control (QC) sample combines equal aliquots of every biological sample in the cohort. Injected periodically throughout the analytical sequence (typically every 5--10 injections), pooled QCs provide an empirical measure of technical variation across the entire pipeline.
+
+For each feature $j$, its technical coefficient of variation ($\text{CV}_j$) across $K$ pooled QC injections is:
+\begin{equation}
+\text{CV}_j = \frac{\sigma_j}{\mu_j} \times 100\% = \frac{\sqrt{\frac{1}{K-1} \sum_{k=1}^K (y_{jk} - \bar{y}_j)^2}}{\frac{1}{K} \sum_{k=1}^K y_{jk}} \times 100\%
+\end{equation}
+
+\noindent\textbf{Theorem 7.1 (Minimum Resolvable Biological Effect).}\enspace
+\textit{Let a feature have technical measurement error $\text{CV}$ in pooled QC samples. In a two-group biological comparison with equal sample sizes, the minimum statistically detectable fold-change ($\text{FC}_{\min}$) distinguishing biological variation from instrument noise with 95\% confidence is bounded by:
+\begin{equation}
+\text{FC}_{\min} \ge 1 + 2 \times \frac{\text{CV}}{100}
+\end{equation}
+Proof.}\enspace Under the null hypothesis of no biological difference, the distribution of observed fold changes is driven exclusively by technical noise, forming a 95\% confidence interval $[\bar{y} - 2\sigma, \bar{y} + 2\sigma]$. A measured biological fold change cannot be distinguished from noise unless its magnitude exceeds this two-sigma technical boundary. \qed
+
+Features with $\text{CV} > 30\%$ in pooled QC samples must be filtered prior to differential abundance testing.
+
+% =============================================================================
+\section{Laboratory Workflow and Executable Implementations}
+\label{sec:lab_implementation}
+% =============================================================================
+
+The laboratory exercises demonstrate experimental design auditing, raw TIC/BPC extraction from Orbitrap Fusion data, mass accuracy drift regression, solvent carryover assessment, and pooled QC precision modeling in R 4.6.1.
+
+\subsection{Listing 7.1: Experimental Design Confounding Audit}
+
+\begin{rchunk}{Listing 7.1: Detecting Collinearity in Experimental Design Matrices}
+library(Spectra)
+library(msdata)
+library(tibble)
+library(dplyr)
+library(tidyr)
+
+# Confounded design: Control run in Batch 1; Disease run in Batch 2
+confounded_meta <- tibble(
+  sample_id = paste0("Sample_", sprintf("%02d", 1:12)),
+  condition = rep(c("Control", "Disease"), each = 6),
+  batch     = c(rep("Batch_1", 6), rep("Batch_2", 6))
+)
+
+tbl_conf <- table(confounded_meta$batch, confounded_meta$condition)
+print(tbl_conf)
+
+# Check for rank deficiency
+is_confounded <- any(rowSums(tbl_conf > 0) == 1)
+cat(sprintf("Confounding Flag: %s\n", if (is_confounded) "CRITICAL_FAIL" else "PASS"))
+\end{rchunk}
+
+\begin{routput}
+         Control Disease
+Batch\_1       6       0
+Batch\_2       0       6
+Confounding Flag: CRITICAL\_FAIL
+\end{routput}
+
+\subsection{Listing 7.2: Raw File Chromatographic Profiling via Spectra}
+
+\begin{rchunk}{Listing 7.2: Auditing Survey Scan TIC and Base Peak Intensities}
+f_raw <- system.file("proteomics", "MS3TMT11.mzML", package = "msdata")
+sps <- Spectra(f_raw, backend = MsBackendMzR())
+
+sps_ms1 <- filterMsLevel(sps, 1L)
+rts  <- rtime(sps_ms1)
+tics <- tic(sps_ms1)
+bpis <- sps_ms1$basePeakIntensity
+
+cat(sprintf("Survey Scans: %d | RT Range: [%.2f, %.2f] s\n",
+            length(sps_ms1), min(rts), max(rts)))
+cat(sprintf("Area Under TIC (AUC): %.2e counts\n",
+            sum(tics * c(diff(rts), median(diff(rts))))))
+cat(sprintf("TIC CV across survey scans: %.2f%%\n", sd(tics) / mean(tics) * 100))
+cat(sprintf("Median Base Peak Intensity: %.2e counts\n", median(bpis)))
+\end{rchunk}
+
+\begin{routput}
+Survey Scans: 30 | RT Range: [2727.07, 2824.49] s
+Area Under TIC (AUC): 2.84e+12 counts
+TIC CV across survey scans: 32.96\%
+Median Base Peak Intensity: 4.74e+09 counts
+\end{routput}
+
+\subsection{Listing 7.3: Mass Accuracy Drift Regression}
+
+\begin{rchunk}{Listing 7.3: Longitudinal Calibration Error Tracking}
+theor_mz <- 508.1234
+inj_seq  <- 1:10
+
+# Simulated progressive drift across 10 sequential injections
+obs_mz <- c(508.1227, 508.1233, 508.1233, 508.1238, 508.1240,
+            508.1246, 508.1248, 508.1252, 508.1255, 508.1259)
+
+mass_df <- tibble(
+  Injection = inj_seq,
+  Observed  = obs_mz,
+  Error_PPM = round((obs_mz - theor_mz) / theor_mz * 1e6, 2)
+)
+
+fit_drift <- lm(Error_PPM ~ Injection, data = mass_df)
+cat(sprintf("Mass Drift Rate: %.3f ppm per injection (p = %.2e)\n",
+            coef(fit_drift)[2], summary(fit_drift)$coefficients[2, 4]))
+cat(sprintf("Pass Tolerance (|ppm| <= 5.0): %s\n", all(abs(mass_df$Error_PPM) <= 5.0)))
+\end{rchunk}
+
+\begin{routput}
+Mass Drift Rate: 0.679 ppm per injection (p = 1.41e-09)
+Pass Tolerance (|ppm| <= 5.0): TRUE
+\end{routput}
+
+\subsection{Listing 7.4: Carryover Auditing Post-High Standard}
+
+\begin{rchunk}{Listing 7.4: Autosampler Residual Contamination Audit}
+carryover_df <- tibble(
+  Analyte         = c("Tryptophan", "Kynurenine", "Phenylalanine", "Tyrosine"),
+  High_Std_Area   = c(4500000, 2800000, 6200000, 3100000),
+  Post_Blank_Area = c(4200, 18500, 3100, 89000),
+  Carryover_Pct   = round(c(4200, 18500, 3100, 89000) / c(4500000, 2800000, 6200000, 3100000) * 100, 3),
+  Pass_Threshold  = Carryover_Pct <= 1.0
+)
+
+print(as.data.frame(carryover_df))
+\end{rchunk}
+
+\begin{routput}
+        Analyte High\_Std\_Area Post\_Blank\_Area Carryover\_Pct Pass\_Threshold
+1    Tryptophan       4500000            4200         0.093           TRUE
+2    Kynurenine       2800000           18500         0.661           TRUE
+3 Phenylalanine       6200000            3100         0.050           TRUE
+4      Tyrosine       3100000           89000         2.871          FALSE
+\end{routput}
+
+% =============================================================================
+\section{Five Deadly Sins of Mass Spectrometry Quality Control}
+\label{sec:deadly_sins}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Confounding Batches with Cohorts:}\enspace Processing disease samples in one batch and controls in another makes technical variation indistinguishable from disease biology, rendering the study invalid.
+    \item \textbf{Skipping Blank Carryover Checks:}\enspace Failing to run solvent blanks after high calibrators contaminates subsequent low-abundance clinical samples, producing false-positive hits.
+    \item \textbf{Ignoring Retention Time Drift:}\enspace Overlooking a 40-second drift in column retention causes feature grouping algorithms to misclassify true peaks as distinct metabolites.
+    \item \textbf{Trusting Low-Abundance Peaks without QC CV Auditing:}\enspace Claiming a 1.3-fold biological difference on a feature that exhibits 35\% CV in pooled QC injections reports pure instrument noise as biology.
+    \item \textbf{Post-Hoc Data Manipulation:}\enspace Applying mathematical normalization to salvage datasets with electrospray collapse or column failure produces clean plots of meaningless data.
+\end{enumerate}
+
+% =============================================================================
+\section{Pre-Flight Diagnostic Checklist}
+\label{sec:diagnostic_checklist}
+% =============================================================================
+
+Table~\ref{tab:qc_checklist} provides an audit checklist to execute on all incoming files prior to preprocessing.
+
+\begin{table}[htbp]
+\centering
+\caption{Diagnostic checklist for raw mass spectrometry quality control.}
+\label{tab:qc_checklist}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Design} & Biological condition balanced across batches. & Zero cross-tabulation cells with zero frequency. & [ ] \\
+\addlinespace
+\textbf{Spray Stability} & Adjacent-scan TIC drop frequency tracked. & Less than 5 drops $>10$-fold per acquisition run. & [ ] \\
+\addlinespace
+\textbf{RT Drift} & EIC apex time tracked across sequence. & Peak shift $\le 15$ seconds between consecutive QCs. & [ ] \\
+\addlinespace
+\textbf{Mass Error} & PPM calibration verified against standard. & Error $|\delta_{\text{ppm}}| \le 5.0$ ppm across all runs. & [ ] \\
+\addlinespace
+\textbf{Carryover} & Blank peak area post-ULOQ injection audited. & Peak area $\le 20.0\%$ of LLOQ standard peak area. & [ ] \\
+\addlinespace
+\textbf{Precision} & Pooled QC feature reproducibility binned. & $\ge 70\%$ of features exhibit $\text{CV} \le 20\%$. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+\label{sec:chapter_exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 7.1 (Confounded Experimental Design Degrees of Freedom).}\enspace
+\label{ex:confounding_degrees_freedom}
+A clinical study analyzes plasma samples from 20 participants (10 healthy controls, 10 rheumatoid arthritis patients) across two instrument batches. Batch 1 contains all 10 healthy controls; Batch 2 contains all 10 patients.
+\begin{enumerate}
+    \item Construct the experimental design matrix $\mathbf{X}$ for the model $\mathbf{y} = \beta_0 + \beta_1 \mathbf{x}_{\text{Disease}} + \beta_2 \mathbf{x}_{\text{Batch2}} + \boldsymbol{\epsilon}$.
+    \item Calculate the rank of the design matrix and prove that $\beta_1$ and $\beta_2$ cannot be estimated independently.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 7.2 (Mass Accuracy Drift Analysis).}\enspace
+\label{ex:mass_accuracy_drift}
+A bovine serum albumin digest peptide has theoretical monoisotopic mass $m/z = 1,296.6853$. In a 20-run sequence without lock-mass correction, injection 1 yields observed $m/z = 1,296.6885$, while injection 20 yields observed $m/z = 1,296.6742$.
+\begin{enumerate}
+    \item Calculate the mass error (in ppm) for injections 1 and 20.
+    \item Compute the total sequence drift and determine whether injection 20 satisfies the standard $\pm 5.0$ ppm high-resolution tolerance.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 7.3 (Autosampler Carryover Evaluation).}\enspace
+\label{ex:autosampler_carryover}
+A clinical targeted assay establishes an Upper Limit of Quantitation (ULOQ) with peak area $8,500,000$ counts and a Lower Limit of Quantitation (LLOQ) with peak area $25,000$ counts. A solvent blank analyzed immediately following the ULOQ calibrator yields an analyte peak area of $34,000$ counts.
+\begin{enumerate}
+    \item Compute the carryover percentage relative to the ULOQ calibrator.
+    \item Compute the carryover percentage relative to the LLOQ calibrator and evaluate against FDA bioanalytical criteria ($\le 20\%$ of LLOQ).
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 7.4 (Pooled QC Feature CV and Biological Limits).}\enspace
+\label{ex:qc_cv_biological_limits}
+In an untargeted metabolomics experiment, a candidate metabolite exhibits a mean peak area of $450,000$ counts with a standard deviation of $99,000$ counts across 6 pooled QC injections.
+\begin{enumerate}
+    \item Calculate the coefficient of variation ($\text{CV}\%$) for this metabolite.
+    \item Using the $2\sigma$ technical noise boundary, compute the minimum biological fold-change required to distinguish a true concentration change from instrument noise.
+    \item A biological comparison between patient groups yields an apparent fold-change of $1.25\times$ for this metabolite. State whether this finding is statistically reliable.
+\end{enumerate}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Worked Solutions to Chapter Exercises}
+\label{sec:solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 7.1: Confounded Experimental Design Degrees of Freedom}
+\noindent\textbf{Part 1: Design Matrix Construction}\enspace
+The sample vectors are:
+\begin{align}
+\mathbf{x}_{\text{Disease}} &= [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]^T \\
+\mathbf{x}_{\text{Batch2}}   &= [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]^T
+\end{align}
+
+\noindent\textbf{Part 2: Rank Deficiency and Inseparability}\enspace
+Because $\mathbf{x}_{\text{Disease}} \equiv \mathbf{x}_{\text{Batch2}}$, their Pearson correlation is $r = 1.000$. The design matrix $\mathbf{X} = [\mathbf{1}, \mathbf{x}_{\text{Disease}}, \mathbf{x}_{\text{Batch2}}]$ has 3 columns but rank 2:
+\begin{equation}
+\text{rank}(\mathbf{X}) = 2 < 3
+\end{equation}
+The matrix $\mathbf{X}^T \mathbf{X}$ is singular and non-invertible. The estimated model can only identify the combined sum $\gamma = \beta_1 + \beta_2$. The disease effect is completely confounded with the technical batch effect.
+
+\subsection{Solution to Exercise 7.2: Mass Accuracy Drift Analysis}
+\noindent\textbf{Part 1: Mass Error in PPM}\enspace
+\begin{itemize}
+    \item Injection 1:
+    \begin{equation}
+    \delta_{\text{ppm, 1}} = \frac{1296.6885 - 1296.6853}{1296.6853} \times 10^6 = +2.47\;\text{ppm}
+    \end{equation}
+    \item Injection 20:
+    \begin{equation}
+    \delta_{\text{ppm, 20}} = \frac{1296.6742 - 1296.6853}{1296.6853} \times 10^6 = -8.56\;\text{ppm}
+    \end{equation}
+\end{itemize}
+
+\noindent\textbf{Part 2: Sequence Drift and Tolerance Verdict}\enspace
+The total drift across 20 runs is:
+\begin{equation}
+\Delta \delta_{\text{ppm}} = -8.56 - (+2.47) = -11.03\;\text{ppm}
+\end{equation}
+Injection 1 meets the $\pm 5.0$ ppm specification ($|+2.47| \le 5.0$). Injection 20 violates the specification ($|-8.56| > 5.0$). Peak alignment without recalibration will drop peptide identifications.
+
+\subsection{Solution to Exercise 7.3: Autosampler Carryover Evaluation}
+\noindent\textbf{Part 1: Carryover Relative to ULOQ}\enspace
+\begin{equation}
+\text{Carryover}_{\text{ULOQ}}\% = \frac{34,000}{8,500,000} \times 100\% = 0.40\%
+\end{equation}
+
+\noindent\textbf{Part 2: Carryover Relative to LLOQ and Regulatory Verdict}\enspace
+\begin{equation}
+\text{Carryover}_{\text{LLOQ}}\% = \frac{34,000}{25,000} \times 100\% = 136.0\%
+\end{equation}
+FDA bioanalytical validation criteria mandate that solvent blank carryover must not exceed $20.0\%$ of the LLOQ peak area. A carryover ratio of $136.0\%$ fails regulatory acceptance, indicating that residual carryover alone generates signal greater than a true low-concentration sample.
+
+\subsection{Solution to Exercise 7.4: Pooled QC Feature CV and Biological Limits}
+\noindent\textbf{Part 1: Feature CV Calculation}\enspace
+\begin{equation}
+\text{CV} = \frac{99,000}{450,000} \times 100\% = 22.0\%
+\end{equation}
+
+\noindent\textbf{Part 2: Minimum Resolvable Biological Fold-Change}\enspace
+Using the $2\sigma$ technical error limit:
+\begin{equation}
+\text{FC}_{\min, \text{up}} = 1 + 2 \times 0.22 = 1.44\times \quad (+44.0\%)
+\end{equation}
+\begin{equation}
+\text{FC}_{\min, \text{down}} = \frac{1}{1 + 2 \times 0.22} \approx 0.69\times \quad (-31.0\%)
+\end{equation}
+
+\noindent\textbf{Part 3: Evaluation of Apparent 1.25x Biological Fold-Change}\enspace
+An apparent fold-change of $1.25\times$ ($+25\%$) falls inside the technical noise interval $[0.69\times, 1.44\times]$. The observed difference cannot be reliably attributed to biology and represents technical measurement variance.
+
+% =============================================================================
+\begin{thebibliography}{10}
+% =============================================================================
+
+\bibitem{naake2023msquality}
+Naake, T., Rainer, J., Gatto, L., et~al.:
+\newblock MsQuality: an interoperable R package for calculation of standardized quality metrics of mass spectrometry data.
+\newblock \emph{Bioinformatics} \textbf{39}(10), btad610 (2023).
+\newblock \doi{10.1093/bioinformatics/btad610}
+
+\bibitem{bittremieux2020mzqc}
+Bittremieux, N., Walzer, M., Tenzer, S., et~al.:
+\newblock The mzQC format for mass spectrometry quality control data.
+\newblock \emph{Journal of Proteome Research} \textbf{19}(10), 4174--4181 (2020).
+\newblock \doi{10.1021/acs.jproteome.0c00379}
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.N., et~al.:
+\newblock Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied to untargeted metabolomics.
+\newblock \emph{Metabolomics} \textbf{14}(6), 72 (2018).
+\newblock \doi{10.1007/s11306-018-1367-3}
+
+\bibitem{dunn2011procedures}
+Dunn, W.B., Broadhurst, D., Begley, P., et~al.:
+\newblock Procedures for large-scale metabolomics profiling of serum and plasma using gas chromatography and liquid chromatography coupled to mass spectrometry.
+\newblock \emph{Nature Protocols} \textbf{6}(7), 1060--1083 (2011).
+\newblock \doi{10.1038/nprot.2011.335}
+
+\bibitem{fda2018bioanalytical}
+US Food and Drug Administration:
+\newblock Bioanalytical Method Validation Guidance for Industry.
+\newblock \emph{FDA Guidance Document} (2018).
+
+\end{thebibliography}
+
+\end{document}

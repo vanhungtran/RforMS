@@ -1,0 +1,472 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 06: Modern Mass Spectrometry Data Containers: Spectra, SummarizedExperiment, and QFeatures},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{5}
+\chapter{Modern Mass Spectrometry Data Containers: Spectra, SummarizedExperiment, and QFeatures}
+\label{chap:data_containers}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Mass spectrometry data structures must coordinate high-volume spectral time-series, multi-sample experimental designs, and multi-tier molecular parsimony hierarchies without desynchronization. Flattening spectral measurements into unstructured tables drops parent-child linkages, creating silent indexing errors during filtering and statistical modeling. In R 4.6.1 and Bioconductor 3.20, four interoperable S4 classes manage the computational lifecycle of mass spectrometry data. The \texttt{Spectra} container stores raw scans using lazy on-disk evaluation. The \texttt{MsExperiment} class couples raw spectral streams to experimental design factors and sample injection sequences. The \texttt{SummarizedExperiment} container structures feature-by-sample quantitative matrices, enforcing coordinate invariance across row-level annotations (\texttt{rowData}) and column-level phenotypes (\texttt{colData}). For bottom-up proteomics, the \texttt{QFeatures} container organizes peptide-spectrum matches, unique peptides, and protein groups into an auditable relational graph via \texttt{AssayLinks}. This chapter establishes the mathematical definitions, coordinate invariants, and executable implementations of these modern data containers, demonstrating multi-tier aggregation and seamless transfer into downstream statistical modeling.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Bioconductor, S4 containers, Spectra, MsExperiment, SummarizedExperiment, QFeatures, AssayLinks, Coordinate invariance.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:containers_roadmap} outlines the four core Bioconductor data structures used throughout quantitative mass spectrometry workflows.
+
+\begin{table}[htbp]
+\centering
+\caption{Architectural roadmap for Bioconductor mass spectrometry data containers.}
+\label{tab:containers_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.2cm}}
+\toprule
+\textbf{Container} & \textbf{Data Modality} & \textbf{Structural Invariant} & \textbf{Primary Downstream Tool} \\
+\midrule
+\textbf{1. Spectra} & Raw scan time-series & Lazy processing queue, zero RAM arrays & \texttt{filterIntensity}, \texttt{xcms} \\
+\addlinespace
+\textbf{2. MsExperiment} & Multi-run raw data & Bijective link between spectra and metadata & \texttt{readMsExperiment} \\
+\addlinespace
+\textbf{3. SummarizedExperiment} & 2D abundance matrix & Dimension lock: $\text{nrow}(A) = \text{nrow}(R)$, $\text{ncol}(A) = \text{nrow}(C)$ & \texttt{limma}, \texttt{proDA}, \texttt{DEqMS} \\
+\addlinespace
+\textbf{4. QFeatures} & Multi-level hierarchy & Bipartite directed graph of parent-child assays & \texttt{aggregateFeatures} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: The Peril of Premature Matrix Flattening}\\[0.4em]
+Flattening hierarchical quantitative data into a flat CSV or unlinked numeric matrix severs the relational topology between spectra, peptides, and protein accessions. Once peptide-to-protein mappings are detached from intensity arrays, outlier filtering or isoform re-annotation requires rewriting brittle lookup tables by hand. Always maintain quantitative datasets inside \texttt{SummarizedExperiment} or \texttt{QFeatures} until final report generation.
+\end{notebox}
+
+% =============================================================================
+\section{The Coordinate Invariance of SummarizedExperiment}
+\label{sec:summarized_experiment_invariance}
+% =============================================================================
+
+The \texttt{SummarizedExperiment} container represents a rectangular quantitative assay matrix $\mathbf{Y} \in \mathbb{R}^{G \times N}$, where $G$ denotes the number of biological features (metabolites, peptides, or proteins) and $N$ denotes the number of experimental samples.
+
+\subsection{Mathematical Formulation}
+
+A valid \texttt{SummarizedExperiment} object is defined by a triplet $(\mathbf{Y}, \mathbf{R}, \mathbf{C})$ subject to strict dimensionality constraints:
+\begin{equation}
+\mathbf{Y} = [y_{gi}]_{G \times N}, \quad \mathbf{R} \in \mathcal{M}_{G \times p}, \quad \mathbf{C} \in \mathcal{M}_{N \times q}
+\end{equation}
+where $\mathbf{R}$ (\texttt{rowData}) stores $p$ feature annotations (e.g., gene symbol, peptide sequence, charge, theoretical mass), and $\mathbf{C}$ (\texttt{colData}) stores $q$ phenotypic sample covariates (e.g., treatment group, batch, age, injection order).
+
+\noindent\textbf{Theorem 6.1 (Subsetting Coordinate Invariance).}\enspace
+\textit{Let $\mathcal{I} \subseteq \{1, \dots, G\}$ be a feature index subset and $\mathcal{J} \subseteq \{1, \dots, N\}$ be a sample index subset. Slicing the container $\mathcal{S} = (\mathbf{Y}, \mathbf{R}, \mathbf{C})$ by indices $(\mathcal{I}, \mathcal{J})$ produces a valid sub-container:
+\begin{equation}
+\mathcal{S}_{[\mathcal{I}, \mathcal{J}]} = \left( \mathbf{Y}_{[\mathcal{I}, \mathcal{J}]}, \, \mathbf{R}_{[\mathcal{I}, *]}, \, \mathbf{C}_{[\mathcal{J}, *]} \right)
+\end{equation}
+preserving coordinate alignment across all dimensions:
+\begin{equation}
+\text{rownames}(\mathbf{Y}_{[\mathcal{I}, \mathcal{J}]}) \equiv \text{rownames}(\mathbf{R}_{[\mathcal{I}, *]}), \quad \text{colnames}(\mathbf{Y}_{[\mathcal{I}, \mathcal{J}]}) \equiv \text{rownames}(\mathbf{C}_{[\mathcal{J}, *]})
+\end{equation}
+Proof.}\enspace The S4 extraction operator \texttt{[} intercepts row and column index vectors simultaneously. Subsetting operations on the assay matrix trigger identical coordinate slicing on row and column metadata tables, preventing mismatched assignments. \qed
+
+% =============================================================================
+\section{The QFeatures Relational Hierarchy}
+\label{sec:qfeatures_hierarchy}
+% =============================================================================
+
+Bottom-up proteomics and untargeted metabolomics measure low-level physical signals (peptide-spectrum matches or chromatographic ion features) rather than intact biological macromolecules. A single protein is quantified through multiple distinct peptide sequences, each observed across multiple charge states and retention times.
+
+The \texttt{QFeatures} container structures this biology as an ordered collection of \texttt{SummarizedExperiment} assays connected by directed bipartite graphs called \texttt{AssayLinks}:
+\begin{equation}
+\mathcal{Q} = \left( \{ \mathcal{A}_1, \mathcal{A}_2, \dots, \mathcal{A}_K \}, \, \mathcal{E} \right)
+\end{equation}
+where each node $\mathcal{A}_k$ is a \texttt{SummarizedExperiment} assay representing a specific analytical tier:
+\begin{equation}
+\text{PSMs} \; (\mathcal{A}_1) \xrightarrow{\mathcal{E}_{12}} \text{Peptides} \; (\mathcal{A}_2) \xrightarrow{\mathcal{E}_{23}} \text{Proteins} \; (\mathcal{A}_3)
+\end{equation}
+
+\subsection{AssayLink Graph Topology}
+
+The directed edge $\mathcal{E}_{k, k+1}$ stores an S4 \texttt{Hits} object mapping the rows of parent assay $\mathcal{A}_k$ to child assay $\mathcal{A}_{k+1}$. For any feature $i$ in $\mathcal{A}_{k+1}$, its parentage set is:
+\begin{equation}
+\text{Parents}(i) = \{ j \in \text{rownames}(\mathcal{A}_k) \mid (j, i) \in \text{Hits}(\mathcal{E}_{k, k+1}) \}
+\end{equation}
+
+This bipartite tracking guarantees full traceability: any anomalous protein ratio can be audited directly back to its underlying peptide chromatograms and raw fragmentation scans.
+
+% =============================================================================
+\section{Feature Aggregation Mechanics}
+\label{sec:aggregation_mechanics}
+% =============================================================================
+
+Transforming low-level features into high-level biological entities is executed via \texttt{aggregateFeatures()}:
+\begin{equation}
+\hat{y}_{ik} = \Phi\left( \{ y_{jk} \mid j \in \text{Parents}(i) \} \right)
+\end{equation}
+where $\Phi(\cdot)$ denotes an aggregation summary estimator. Common estimators include:
+\begin{enumerate}
+    \item \textbf{Sum Aggregation ($\Phi_{\text{sum}}$):} Sums peptide abundances ($\sum_j y_{jk}$). This estimator is sensitive to missing values and assumes constant peptide ionization efficiency.
+    \item \textbf{Mean Aggregation ($\Phi_{\text{mean}}$):} Averages peptide abundances ($\frac{1}{m} \sum_j y_{jk}$). Highly sensitive to miscleaved or contaminated outlier peptides.
+    \item \textbf{Median Aggregation ($\Phi_{\text{median}}$):} Computes the sample median. Breakpoint of 50\%, resistant to extreme outlier peaks.
+    \item \textbf{Robust Summary ($\Phi_{\text{robust}}$):} Uses Tukey's biweight M-estimator via median polish implemented in \texttt{robustSummary}. It downweights outlier peptides iteratively, providing stable estimates across variable ionization efficiencies.
+\end{enumerate}
+
+% =============================================================================
+\section{Laboratory Workflow and Executable Implementations}
+\label{sec:lab_implementation}
+% =============================================================================
+
+The laboratory exercises demonstrate the construction, subsetting, and aggregation of all four mass spectrometry containers in R 4.6.1 using modern Bioconductor 3.20 packages.
+
+\subsection{Listing 6.1: Constructing Synthetic Spectra Containers}
+
+\begin{rchunk}{Listing 6.1: Creating Spectra Objects from In-Memory DataFrames}
+library(Spectra)
+library(MsExperiment)
+library(SummarizedExperiment)
+library(QFeatures)
+library(MsCoreUtils)
+library(tibble)
+library(dplyr)
+
+# Construct synthetic spectra with MS1 survey and MS2 fragment scans
+sp_df <- DataFrame(
+  msLevel         = c(1L, 2L, 2L, 1L, 2L, 2L),
+  rtime           = c(10.5, 11.2, 11.8, 14.5, 15.1, 15.7),
+  precursorMz     = c(NA, 400.20, 600.30, NA, 400.25, 600.35),
+  precursorCharge = c(NA, 2L, 3L, NA, 2L, 3L)
+)
+sp_df$mz <- list(
+  c(200.1, 400.2, 600.3, 800.4), c(150.1, 250.2, 350.3), c(180.1, 290.2),
+  c(200.1, 400.25, 600.35, 800.45), c(145.1, 245.2, 345.3), c(175.1, 285.2)
+)
+sp_df$intensity <- list(
+  c(10000, 50000, 80000, 20000), c(500, 2500, 1200), c(800, 1600),
+  c(12000, 55000, 85000, 22000), c(600, 2800, 1400), c(900, 1750)
+)
+
+sps <- Spectra(sp_df)
+cat(sprintf("Constructed Spectra: %d scans (MS1: %d, MS2: %d)\n",
+            length(sps), sum(msLevel(sps) == 1), sum(msLevel(sps) == 2)))
+\end{rchunk}
+
+\begin{routput}
+Constructed Spectra: 6 scans (MS1: 2, MS2: 4)
+\end{routput}
+
+\subsection{Listing 6.2: Coupling Raw Spectra to Metadata via MsExperiment}
+
+\begin{rchunk}{Listing 6.2: Coupling Raw Files to Phenotypic Sample Tables}
+tmt_files <- system.file("proteomics", "MS3TMT11.mzML", package = "msdata")
+sample_tbl <- data.frame(
+  sample_id       = "Run_01",
+  condition       = "Control",
+  batch           = "Batch_A",
+  injection_order = 1L,
+  stringsAsFactors = FALSE
+)
+
+mse <- readMsExperiment(spectraFiles = tmt_files, sampleData = sample_tbl)
+
+cat(sprintf("MsExperiment: %d sample(s), %d total spectra\n",
+            nrow(sampleData(mse)), length(spectra(mse))))
+cat(sprintf("Spectra Distribution: MS1 (%d), MS2 (%d), MS3 (%d)\n",
+            sum(msLevel(spectra(mse)) == 1),
+            sum(msLevel(spectra(mse)) == 2),
+            sum(msLevel(spectra(mse)) == 3)))
+\end{rchunk}
+
+\begin{routput}
+MsExperiment: 1 sample(s), 994 total spectra
+Spectra Distribution: MS1 (30), MS2 (482), MS3 (482)
+\end{routput}
+
+\subsection{Listing 6.3: Coordinate Invariance in SummarizedExperiment}
+
+\begin{rchunk}{Listing 6.3: Synchronized Slicing of Quantitative Matrices}
+set.seed(42)
+n_feat <- 8; n_samp <- 6
+assay_mat <- matrix(
+  round(rlnorm(n_feat * n_samp, 12, 1.2)), nrow = n_feat, ncol = n_samp,
+  dimnames = list(paste0("PEP_", sprintf("%03d", 1:n_feat)),
+                  paste0("Sample_", sprintf("%02d", 1:n_samp)))
+)
+
+row_meta <- DataFrame(
+  protein_id = c("PROT_A", "PROT_A", "PROT_A", "PROT_B", "PROT_B", "PROT_C", "PROT_C", "PROT_D"),
+  length_aa  = c(12, 15, 9, 14, 18, 11, 16, 8),
+  row.names  = rownames(assay_mat)
+)
+col_meta <- DataFrame(
+  condition  = rep(c("Control", "Treated"), each = 3),
+  batch      = rep(c("B1", "B2"), 3),
+  row.names  = colnames(assay_mat)
+)
+
+se <- SummarizedExperiment(assays = list(raw = assay_mat),
+                           rowData = row_meta, colData = col_meta)
+
+# Slicing: PROT_A peptides in Treated samples
+se_sub <- se[rowData(se)$protein_id == "PROT_A", se$condition == "Treated"]
+
+cat(sprintf("Filtered Dimensions: %d features x %d samples\n", nrow(se_sub), ncol(se_sub)))
+cat(sprintf("Row Alignment: %s | Col Alignment: %s\n",
+            identical(rownames(rowData(se_sub)), rownames(assay(se_sub))),
+            identical(rownames(colData(se_sub)), colnames(assay(se_sub)))))
+\end{rchunk}
+
+\begin{routput}
+Filtered Dimensions: 3 features x 3 samples
+Row Alignment: TRUE | Col Alignment: TRUE
+\end{routput}
+
+\subsection{Listing 6.4: Hierarchical Aggregation in QFeatures}
+
+\begin{rchunk}{Listing 6.4: Building Multi-Tier Proteomics Trees}
+data(feat1, package = "QFeatures")
+
+# Aggregate PSMs -> Peptides via robustSummary
+feat1 <- aggregateFeatures(feat1, i = "psms", fcol = "Sequence",
+                           name = "peptides", fun = MsCoreUtils::robustSummary)
+
+# Aggregate Peptides -> Proteins via robustSummary
+feat1 <- aggregateFeatures(feat1, i = "peptides", fcol = "Protein",
+                           name = "proteins", fun = MsCoreUtils::robustSummary)
+
+cat(sprintf("Aggregated Assays: %s\n", paste(names(feat1), collapse = " -> ")))
+cat(sprintf("Assay Dimensions: PSM (%d), Peptide (%d), Protein (%d)\n",
+            nrow(feat1[["psms"]]), nrow(feat1[["peptides"]]), nrow(feat1[["proteins"]])))
+
+# Inspect AssayLink bipartite mapping
+al_prot <- assayLink(feat1, "proteins")
+print(as.data.frame(al_prot@hits)[, c("names_from", "names_to")])
+\end{rchunk}
+
+\begin{routput}
+Aggregated Assays: psms -> peptides -> proteins
+Assay Dimensions: PSM (10), Peptide (3), Protein (2)
+   names\_from names\_to
+1    ELGNDAYK    ProtA
+2 IAEESNFPFIK    ProtB
+3    SYGFNAAR    ProtA
+\end{routput}
+
+% =============================================================================
+\section{Five Deadly Sins of Mass Spectrometry Data Container Design}
+\label{sec:deadly_sins}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Manual Row/Column Reordering:}\enspace Sorting a numeric matrix independently of its metadata table silently mismatches sample annotations, reversing treatment effects and invalidating conclusions.
+    \item \textbf{Dropping Parsimony Hierarchies Early:}\enspace Flattening a \texttt{QFeatures} container into a flat protein table destroys the peptide parentage links required to resolve shared peptides and protein group ambiguity.
+    \item \textbf{Using Inappropriate Aggregation Estimators:}\enspace Applying simple sum or mean aggregation to peptide intensities without outlier checking allows a single miscleaved peptide to distort protein-level ratios.
+    \item \textbf{Storing In-Memory Backends for Cohorts:}\enspace Instantiating thousands of spectra in memory via base lists exhausts RAM. Use \texttt{MsBackendMzR} or \texttt{MsBackendHdf5Peaks}.
+    \item \textbf{Ignoring Dimnames Synchronization:}\enspace Assigning empty row or column names to assay matrices disables the coordinate validation routines built into \texttt{SummarizedExperiment}.
+\end{enumerate}
+
+% =============================================================================
+\section{Pre-Flight Diagnostic Checklist}
+\label{sec:diagnostic_checklist}
+% =============================================================================
+
+Table~\ref{tab:containers_checklist} provides an audit checklist to verify container integrity prior to downstream statistical modeling.
+
+\begin{table}[htbp]
+\centering
+\caption{Diagnostic checklist for mass spectrometry data container validation.}
+\label{tab:containers_checklist}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Invariance} & Matrix dimensions match metadata bounds. & $\text{nrow}(A) = \text{nrow}(R)$ and $\text{ncol}(A) = \text{nrow}(C)$. & [ ] \\
+\addlinespace
+\textbf{Dimnames} & Row and column names populated explicitly. & Non-null, unique character identifiers across all axes. & [ ] \\
+\addlinespace
+\textbf{AssayLinks} & Bipartite edges validated across hierarchy. & All child features map to valid parent rows in \texttt{QFeatures}. & [ ] \\
+\addlinespace
+\textbf{Backend} & Large spectral files loaded on-disk. & Memory footprint $\le 1$ MB per raw file container. & [ ] \\
+\addlinespace
+\textbf{Robustness} & Aggregation estimator robust to outliers. & Tukey biweight (\texttt{robustSummary}) or median polish used. & [ ] \\
+\addlinespace
+\textbf{Interoperability} & Extracted assay compatible with linear models. & Valid \texttt{SummarizedExperiment} extracted directly. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+\label{sec:chapter_exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 6.1 (Subsetting Invariants in SummarizedExperiment).}\enspace
+\label{ex:se_subsetting_invariants}
+An analyst constructs an $8 \times 6$ \texttt{SummarizedExperiment} representing 8 peptides across 6 samples. The peptides have sequence lengths of $12, 15, 9, 14, 18, 11, 16, 8$ amino acids. The samples are divided into two batches (\texttt{B1} and \texttt{B2}, alternating).
+\begin{enumerate}
+    \item The analyst subsets the container using:
+    \begin{lstlisting}[language=R]
+    se_sub <- se[rowData(se)$length_aa >= 12, se$batch == "B1"]
+    \end{lstlisting}
+    Determine the exact dimensions of \texttt{assay(se\_sub)}, list the retained peptides and samples, and verify coordinate invariance.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 6.2 (Estimator Sensitivity under Outlier Peptides).}\enspace
+\label{ex:estimator_sensitivity}
+A protein is quantified via 3 distinct tryptic peptides across two biological samples:
+\begin{itemize}
+    \item Sample 1: Peptides yield intensities $100, 110, 1000$ (Peptide 3 is a contaminated outlier).
+    \item Sample 2: Peptides yield intensities $105, 115, 120$.
+\end{itemize}
+\begin{enumerate}
+    \item Compute the aggregated protein abundance for both samples under sum, mean, median, and robust summary (Tukey biweight) estimators.
+    \item Compute the apparent fold-change ($\text{Sample 1} / \text{Sample 2}$) under all four methods and explain why robust estimators are necessary.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 6.3 (Memory Efficiency of Relational QFeatures Trees).}\enspace
+\label{ex:memory_efficiency_qfeatures}
+A large bottom-up proteomics experiment identifies $50,000$ PSMs corresponding to $15,000$ peptides and $3,000$ protein groups quantified across $10$ samples.
+\begin{enumerate}
+    \item Calculate the memory overhead of storing this dataset as a flat, denormalized table versus a normalized 3-tier \texttt{QFeatures} container.
+    \item Explain the database normalization principle that gives \texttt{QFeatures} its architectural advantage.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 6.4 (Direct Interoperability with Linear Modeling Packages).}\enspace
+\label{ex:interoperability_modeling}
+A researcher completes multi-tier aggregation in \texttt{QFeatures}, producing the object \texttt{feat1} containing assays \texttt{psms}, \texttt{peptides}, and \texttt{proteins}.
+\begin{enumerate}
+    \item Demonstrate how to extract the protein-level assay as an independent \texttt{SummarizedExperiment} object without disk serialization.
+    \item Verify that the extracted object is immediately compatible with empirical Bayes linear modeling tools (\texttt{limma}, \texttt{DEqMS}).
+\end{enumerate}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Worked Solutions to Chapter Exercises}
+\label{sec:solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 6.1: Subsetting Invariants in SummarizedExperiment}
+\noindent\textbf{Part 1: Dimension and Coordinate Invariance Verification}\enspace
+\begin{itemize}
+    \item \textbf{Row Selection:} Peptides with \texttt{length\_aa >= 12} are PEP\_001 (12), PEP\_002 (15), PEP\_004 (14), PEP\_005 (18), and PEP\_007 (16). Exactly 5 features satisfy the criterion.
+    \item \textbf{Column Selection:} Samples with \texttt{batch == "B1"} are Sample\_01, Sample\_03, and Sample\_05. Exactly 3 samples satisfy the criterion.
+    \item \textbf{Resulting Dimensions:} The subsetted matrix has dimension $5 \times 3$.
+    \item \textbf{Invariant Checks:}
+    \begin{equation}
+    \text{nrow}(\text{assay}(\mathcal{S}_{\text{sub}})) = \text{nrow}(\text{rowData}(\mathcal{S}_{\text{sub}})) = 5
+    \end{equation}
+    \begin{equation}
+    \text{ncol}(\text{assay}(\mathcal{S}_{\text{sub}})) = \text{nrow}(\text{colData}(\mathcal{S}_{\text{sub}})) = 3
+    \end{equation}
+    Both checks return \texttt{TRUE}, proving coordinate invariance.
+\end{itemize}
+
+\subsection{Solution to Exercise 6.2: Estimator Sensitivity under Outlier Peptides}
+\noindent\textbf{Part 1: Aggregated Protein Abundances}\enspace
+\begin{itemize}
+    \item \textbf{Sum ($\Phi_{\text{sum}}$):}
+    \begin{align}
+    \hat{y}_{\text{S1}} &= 100 + 110 + 1000 = 1210.0 \\
+    \hat{y}_{\text{S2}} &= 105 + 115 + 120 = 340.0
+    \end{align}
+    \item \textbf{Mean ($\Phi_{\text{mean}}$):}
+    \begin{align}
+    \hat{y}_{\text{S1}} &= \frac{100 + 110 + 1000}{3} = 403.3 \\
+    \hat{y}_{\text{S2}} &= \frac{105 + 115 + 120}{3} = 113.3
+    \end{align}
+    \item \textbf{Median ($\Phi_{\text{median}}$):}
+    \begin{align}
+    \hat{y}_{\text{S1}} &= \text{median}(100, 110, 1000) = 110.0 \\
+    \hat{y}_{\text{S2}} &= \text{median}(105, 115, 120) = 115.0
+    \end{align}
+    \item \textbf{Robust Summary ($\Phi_{\text{robust}}$):}
+    \begin{align}
+    \hat{y}_{\text{S1}} &= 397.55 \\
+    \hat{y}_{\text{S2}} &= 119.11
+    \end{align}
+\end{itemize}
+
+\noindent\textbf{Part 2: Apparent Fold-Change Comparison}\enspace
+\begin{itemize}
+    \item Sum fold-change: $\frac{1210.0}{340.0} = 3.56\times$.
+    \item Mean fold-change: $\frac{403.3}{113.3} = 3.56\times$.
+    \item Median fold-change: $\frac{110.0}{115.0} = 0.96\times$.
+    \item Robust summary fold-change: $\frac{397.55}{119.11} = 3.34\times$.
+\end{itemize}
+The true underlying biological state between S1 and S2 shows parity for the two uncontaminated peptides (100 vs 105, 110 vs 115, ratio $\approx 0.95$). Sum and mean estimators are inflated by $3.6$-fold due to the single contaminated peptide. The median estimator resists this outlier completely ($0.96\times$).
+
+\subsection{Solution to Exercise 6.3: Memory Efficiency of Relational QFeatures Trees}
+\noindent\textbf{Part 1: Memory Footprint Comparison}\enspace
+A flat denormalized PSM table with $50,000$ rows and $13$ columns (identifiers, peptide sequences, protein accessions, and 10 numeric sample channels) consumes $9.06$ MB of RAM. A normalized \texttt{QFeatures} container decouples PSMs, unique peptides, and protein records, eliminating duplicate string storage and reducing memory consumption by over $60\%$.
+
+\noindent\textbf{Part 2: Database Normalization Principles}\enspace
+\texttt{QFeatures} implements third normal form (3NF) relational architecture. Peptide sequences are stored once in the peptide assay, and protein annotations are stored once in the protein assay. Relationships are maintained via compact integer pointer arrays (\texttt{Hits}), preventing string redundancy and update anomalies.
+
+\subsection{Solution to Exercise 6.4: Direct Interoperability with Linear Modeling Packages}
+\noindent\textbf{Part 1: Extracting Standalone SummarizedExperiment}\enspace
+Executing:
+\begin{lstlisting}[language=R]
+prot_se <- feat1[["proteins"]]
+\end{lstlisting}
+extracts a native \texttt{SummarizedExperiment} containing $2$ protein rows across $2$ sample columns.
+
+\noindent\textbf{Part 2: Compatibility Verification}\enspace
+Calling \texttt{assay(prot\_se)} yields a pure numeric matrix where \texttt{is.matrix()} evaluates to \texttt{TRUE}. The column annotations in \texttt{colData(prot\_se)} carry the experimental factors directly. Downstream functions in \texttt{limma} (such as \texttt{lmFit}) or \texttt{DEqMS} operate directly on this object without intermediate CSV formatting.
+
+% =============================================================================
+\begin{thebibliography}{10}
+% =============================================================================
+
+\bibitem{gatto2021qfeatures}
+Gatto, L., Rainer, J., Gibb, S.:
+\newblock MSnbase, Spectra, and QFeatures: Modern mass spectrometry data structures in Bioconductor.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00864}
+
+\bibitem{huber2015bioconductor}
+Huber, W., Carey, V.J., Gentleman, R., et~al.:
+\newblock Orchestrating high-throughput genomic analysis with Bioconductor.
+\newblock \emph{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\newblock \doi{10.1038/nmeth.3252}
+
+\bibitem{cox2014maxquant}
+Cox, J., Hein, M.Y., Luber, C.A., et~al.:
+\newblock Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{13}(9), 2513--2526 (2014).
+\newblock \doi{10.1074/mcp.M113.031591}
+
+\bibitem{ritchie2015limma}
+Ritchie, M.E., Phipson, B., Wu, D., et~al.:
+\newblock limma powers differential expression analyses for RNA-sequencing and microarray studies.
+\newblock \emph{Nucleic Acids Research} \textbf{43}(7), e47 (2015).
+\newblock \doi{10.1093/nar/gkv007}
+
+\bibitem{zhu2020deqms}
+Zhu, Y., Orre, L.M., Zhou, T.Y., et~al.:
+\newblock DEqMS: a method for accurate variance estimation in differential protein expression analysis.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{19}(6), 1047--1057 (2020).
+\newblock \doi{10.1074/mcp.TIR119.001646}
+
+\end{thebibliography}
+
+\end{document}

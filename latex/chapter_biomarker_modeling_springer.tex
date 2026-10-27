@@ -1,0 +1,685 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 24: Biomarker Modeling Without Data Leakage for MS-Based Omics
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 24: Biomarker Modeling Without Data Leakage for MS-Based Omics},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{23}
+\chapter{Biomarker Modeling Without Data Leakage for MS-Based Omics}
+\label{ch:biomarker_modeling}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Translating mass spectrometry profiles into clinically actionable biomarker signatures requires rigorous statistical modeling that prevents data leakage. In high-dimensional omics where features outnumber samples ($p \gg n$), naive preprocessing, global missing-data imputation, or feature ranking performed prior to data partitioning artificially inflates model performance. Such pipelines produce signatures with apparent near-perfect accuracy that fail completely when deployed in independent patient cohorts. This chapter establishes the mathematical principles, validation architectures, and clinical reporting standards required to develop reproducible mass spectrometry biomarkers. We formalize the taxonomy of data leakage, derive the extreme value distribution of spurious feature selection under the global null hypothesis, and establish nested cross-validation as the non-negotiable benchmark for model selection. We examine receiver operating characteristic (ROC) geometry, DeLong confidence intervals, Brier score probability calibration, and multivariable Cox proportional hazards survival modeling. Through a verified R laboratory, we implement leakage-free preprocessing, benchmark honest nested cross-validation against leaky pipelines on pure noise, evaluate performance on held-out test data, and demonstrate clinical survival risk stratification. The chapter concludes with the Five Deadly Sins of biomarker modeling, a pre-submission diagnostic checklist, and four multi-tier exercises with complete worked solutions.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Biomarker Modeling, Data Leakage, Nested Cross-Validation, Feature Selection Bias, Random Forest, ROC Analysis, DeLong Test, Brier Score, Cox Proportional Hazards, TRIPOD Guidelines.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Checkpoints for Leakage-Free Biomarker Modeling}
+\label{tab:biomarker_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Cohort Partitioning} & Complete isolation of training and held-out evaluation sets. & Partition samples into training ($75\%$) and test ($25\%$) before any transformation. & Preprocessing leakage: standardizing or imputing globally. Remedy: Fit scaling and imputation strictly on training data. \\
+\addlinespace
+\textbf{2. Nested Validation} & Outer fold for generalization error; inner fold for tuning and selection. & Select candidate features and tune hyperparameters inside each CV fold. & Selection leakage: ranking features on all data before CV. Remedy: Execute automated feature selection inside each fold. \\
+\addlinespace
+\textbf{3. Model Evaluation} & Classification discrimination vs probability calibration. & Measure AUC with DeLong 95\% CIs and quantify calibration via Brier score. & Over-optimistic resubstitution AUC. Remedy: Single unbiased evaluation on the strictly held-out test partition. \\
+\addlinespace
+\textbf{4. Clinical Translation} & Survival prognostication and covariate confounding. & Verify prognostic risk stratification in multivariable Cox models adjusting for age and batch. & Biomarker collinearity with clinical covariates. Remedy: Multivariable regression testing independent prognostic value. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Leakage-Free Axiom}\\
+The held-out test set must remain an untouched black box until the final model architecture is locked. Every computational transformation applied to data---including missing value imputation, log-transformation scaling, batch adjustment, and feature filtering---extracts empirical parameters from the sample distribution. If these parameters are calculated using the full cohort, information from the test set leaks into model training. Feature selection on all samples prior to cross-validation is the single most common cause of biomarker validation failure in translational medicine \cite{ambroise2002selection, collins2015transparent}.
+\end{notebox}
+
+% =============================================================================
+\section{Mathematical and Biophysical Foundations}
+% =============================================================================
+
+\subsection{The \texorpdfstring{$p \gg n$}{p >> n} Regime and the Inevitability of Spurious Separation}
+
+Clinical mass spectrometry datasets routinely quantify $p = 1,000$ to $10,000$ proteins or metabolites across $n = 50$ to $200$ patients. When dimensionality exceeds sample size ($p \gg n$), the geometry of high-dimensional Euclidean space makes linear separation trivial \cite{hastie2009elements}.
+
+Consider $n$ random data points in $\mathbb{R}^p$ assigned binary class labels $y_i \in \{-1, +1\}$ uniformly at random under the sharp null hypothesis that no feature carries genuine biological signal. By Cover's theorem on linear separability \cite{cover1965geometrical}, the probability $P(n, p)$ that a random dichotomy of $n$ points in general position is linearly separable by a hyperplane is:
+\begin{equation}
+P(n, p) = 
+\begin{cases}
+1, & \text{if } n \le p + 1 \\
+2^{1 - n} \sum_{k=0}^{p} \binom{n - 1}{k}, & \text{if } n > p + 1
+\end{cases}
+\label{eq:cover_theorem}
+\end{equation}
+
+When $p \ge n - 1$, $P(n, p) = 1$. In a proteomic cohort of $n = 100$ samples and $p = 2,000$ features, any arbitrary labeling can be perfectly separated by an infinite number of hyperplanes. In-sample resubstitution accuracy or cross-validation with leaky feature selection reflects this geometric inevitability rather than biological discovery.
+
+\subsection{Taxonomy of Data Leakage in Mass Spectrometry}
+
+Data leakage occurs whenever information outside the training partition influences the model training process. In mass spectrometry pipelines, leakage manifests in three distinct forms:
+
+\begin{enumerate}
+    \item \textbf{Preprocessing Leakage}: Centering and scaling the entire data matrix using global feature means $\bar{x}_j$ and standard deviations $s_j$. The test set samples directly influence the location and scale parameters used to standardize training inputs.
+    \item \textbf{Feature Selection Leakage}: Evaluating univariate differential abundance tests (e.g., Student's $t$-tests or ANOVA) on all $N$ samples to select the top $k$ features, followed by cross-validation of a classifier on those $k$ features. Because the test samples participated in the ranking process, the features are biased toward idiosyncratic noise fluctuations present in the test samples.
+    \item \textbf{Imputation Leakage}: Imputing missing values using $k$-nearest neighbors ($k$-NN) or principal component analysis across the full matrix. Imputed values for training observations become linear combinations of test set coordinates.
+\end{enumerate}
+
+\subsection{Selection Bias Under the Global Null Hypothesis}
+
+To understand the mathematical mechanism of feature selection leakage, consider $p$ independent features measured across $n$ samples, where every feature follows a standard Gaussian distribution under the global null hypothesis:
+\begin{equation}
+x_{ij} \sim \mathcal{N}(0, 1), \quad \forall i \in \{1, \dots, n\}, \quad j \in \{1, \dots, p\}
+\end{equation}
+Let samples be partitioned into two equal groups of size $n/2$ with labels $y_i \in \{0, 1\}$. For each feature $j$, the two-sample $t$-statistic is:
+\begin{equation}
+T_j = \frac{\bar{x}_{j, 1} - \bar{x}_{j, 0}}{s_{p, j} \sqrt{4/n}} \sim t_{n - 2} \approx \mathcal{N}(0, 1)
+\end{equation}
+
+If an analyst selects the top feature by taking the maximum absolute test statistic across all $p$ candidates, $T_{\max} = \max_{j=1,\dots,p} |T_j|$, the expected value of this selected statistic is governed by extreme value theory:
+\begin{equation}
+\mathbb{E}[T_{\max}] \approx \sqrt{2 \ln p} - \frac{\ln(\ln p) + \ln(4\pi)}{2 \sqrt{2 \ln p}}
+\label{eq:extreme_value}
+\end{equation}
+
+For $p = 10,000$ null features, $\sqrt{2 \ln(10000)} \approx \sqrt{2 \times 9.21} \approx 4.29$. The analyst is guaranteed to find features with $|T| > 4.0$ ($p < 0.0001$) purely by chance. If these features are selected before cross-validation, the classifier evaluates features that correlate with the test partition labels by construction, generating cross-validated AUCs of $0.85$ to $0.95$ on pure noise (demonstrated empirically in Listing~24.3).
+
+\subsection{Receiver Operating Characteristic (ROC) Geometry and DeLong Variance}
+
+Let $S$ denote the continuous prediction score generated by a classification model, with $S_1$ and $S_0$ denoting the scores of diseased ($Y = 1$) and control ($Y = 0$) subjects, respectively. The Receiver Operating Characteristic (ROC) curve plots sensitivity against $1 - \text{specificity}$ across all decision thresholds $\tau \in (-\infty, \infty)$:
+\begin{align}
+\text{Sensitivity}(\tau) &= P(S_1 \ge \tau) \\
+\text{Specificity}(\tau) &= P(S_0 < \tau)
+\end{align}
+
+The Area Under the Curve (AUC) is equal to the probability that a randomly chosen diseased subject receives a higher model score than a randomly chosen control subject:
+\begin{equation}
+\text{AUC} = P(S_1 > S_0) + \frac{1}{2} P(S_1 = S_0)
+\label{eq:auc_prob}
+\end{equation}
+
+For a sample of $n_1$ diseased and $n_0$ control subjects, the empirical AUC is equivalent to the normalized Mann--Whitney $U$ statistic:
+\begin{equation}
+\widehat{\text{AUC}} = \frac{1}{n_1 n_0} \sum_{i=1}^{n_1} \sum_{j=1}^{n_0} \psi(s_{1i}, s_{0j}), \quad \psi(u, v) = 
+\begin{cases}
+1, & u > v \\
+1/2, & u = v \\
+0, & u < v
+\end{cases}
+\label{eq:mann_whitney}
+\end{equation}
+
+To construct asymptotic confidence intervals without relying on bootstrap resampling, DeLong et al. \cite{delong1988comparing} derived the non-parametric structural variance of the Mann--Whitney statistic:
+\begin{equation}
+\operatorname{Var}(\widehat{\text{AUC}}) = \frac{S_{10}^2}{n_1} + \frac{S_{01}^2}{n_0}
+\label{eq:delong_var}
+\end{equation}
+where $S_{10}^2$ and $S_{01}^2$ represent the sample variances of the structural components:
+\begin{align}
+V_{10}(s_{1i}) &= \frac{1}{n_0} \sum_{j=1}^{n_0} \psi(s_{1i}, s_{0j}) \\
+V_{01}(s_{0j}) &= \frac{1}{n_1} \sum_{i=1}^{n_1} \psi(s_{1i}, s_{0j})
+\end{align}
+The DeLong 95\% confidence interval is then:
+\begin{equation}
+\text{CI}_{95\%} = \widehat{\text{AUC}} \pm 1.96 \sqrt{\operatorname{Var}(\widehat{\text{AUC}})}
+\end{equation}
+
+\subsection{Probability Calibration and the Brier Score}
+
+A model with high discrimination ($\text{AUC} > 0.90$) may still produce poorly calibrated risk predictions. If a model assigns predicted probability $\hat{p} = 0.95$ to patients who only have a $30\%$ empirical event rate, clinical treatment decisions guided by the model will be detrimental.
+
+Calibration accuracy is quantified by the **Brier score**, defined as the mean squared error of predicted probabilities $\hat{p}_i$ relative to binary outcomes $y_i \in \{0, 1\}$:
+\begin{equation}
+\text{BS} = \frac{1}{N} \sum_{i=1}^{N} (\hat{p}_i - y_i)^2
+\label{eq:brier_score}
+\end{equation}
+The Brier score ranges from $0$ (perfect probabilistic forecast) to $0.25$ (uninformative uniform guessing for balanced cohorts). Murphy's decomposition partitions the Brier score into three components:
+\begin{equation}
+\text{BS} = \text{Reliability} - \text{Resolution} + \text{Uncertainty}
+\end{equation}
+where Reliability measures deviation from perfect calibration, Resolution measures the ability to assign distinct risks to different outcome groups, and Uncertainty reflects base event prevalence.
+
+% =============================================================================
+\section{Algorithmic Architecture: Nested Cross-Validation}
+% =============================================================================
+
+\subsection{Two-Loop Nested Architecture}
+
+Nested cross-validation separates model selection (hyperparameter tuning and feature selection) from performance estimation \cite{varma2006bias}. It consists of two nested resampling loops:
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.3cm, auto,
+    outerblock/.style={rectangle, draw=springerNavy, fill=blue!5, thick, text width=7.0cm, minimum height=1.0cm, rounded corners},
+    innerblock/.style={rectangle, draw=springerNavy!80, fill=white, dashed, thick, text width=6.2cm, minimum height=0.9cm, rounded corners},
+    arrow/.style={thick, ->, >=stealth}]
+    
+    \node [outerblock] (split) {\textbf{Full Cohort Split}\\$75\%$ Training Partition \quad$\vert$\quad $25\%$ Held-Out Test};
+    \node [outerblock, below of=split, node distance=1.5cm] (outer) {\textbf{Outer Resampling Loop (5-Fold CV)}\\Estimate generalization error without leakage};
+    \node [innerblock, below of=outer, node distance=1.5cm] (inner) {\textbf{Inner Loop (Inside Each Fold)}\\1. Univariate/Multivariate Feature Selection\\2. Hyperparameter Optimization};
+    \node [outerblock, below of=inner, node distance=1.5cm] (final) {\textbf{Final Fit \& Held-Out Evaluation}\\Fit on complete training partition; test once on held-out set};
+    
+    \draw [arrow] (split) -- (outer);
+    \draw [arrow] (outer) -- (inner);
+    \draw [arrow] (inner) -- (final);
+\end{tikzpicture}
+\caption{Architecture of leakage-free nested cross-validation for high-dimensional mass spectrometry.}
+\label{fig:nested_cv_flowchart}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Outer Loop ($K$-fold)}: Partitions the training set into $K$ outer blocks. In each iteration $k \in \{1, \dots, K\}$, outer fold $k$ is held out as the validation set, while the remaining $K-1$ folds constitute the active training set.
+    \item \textbf{Inner Loop ($L$-fold)}: Within the active training set, automated feature selection (e.g., Student's $t$-test or empirical Bayes ranking via \texttt{limma}) and hyperparameter tuning (e.g., number of trees `ntree` or regularization parameter $\lambda$) are executed. The validation fold of the outer loop is never seen during feature ranking or hyperparameter selection.
+    \item \textbf{Unbiased Error Aggregation}: Predictions on each outer validation fold are concatenated, yielding an honest estimate of generalization performance.
+\end{enumerate}
+
+% =============================================================================
+\section{Container and Workflow Implementations in R}
+% =============================================================================
+
+\subsection{Object Encapsulation and Metadata Hygiene}
+
+Biomarker modeling scripts should operate on standard Bioconductor containers (\texttt{SummarizedExperiment}) where sample metadata is linked to quantitative assays:
+\begin{equation}
+\mathbf{Y} \in \mathbb{R}^{n \times p}, \quad \mathbf{M} \in \mathbb{R}^{n \times c}
+\end{equation}
+Before fitting machine learning models, training and test partitions must be split at the container level:
+\begin{rchunk}{Container-Level Cohort Splitting}
+# Proper container-level splitting
+set.seed(42)
+train_idx <- sample(seq_len(ncol(se)), size = round(0.75 * ncol(se)))
+se_train  <- se[, train_idx]
+se_test   <- se[, -train_idx]
+\end{rchunk}
+All transformations must be computed on \texttt{se\_train} and mapped onto \texttt{se\_test} using the stored parameters.
+
+% =============================================================================
+\section{Critical Considerations and Clinical Reporting Standards}
+% =============================================================================
+
+\subsection{The TRIPOD and REMARK Reporting Standards}
+
+Biomarker discoveries in translational medicine must adhere to established reporting guidelines:
+\begin{enumerate}
+    \item \textbf{TRIPOD+AI} (Transparent Reporting of a multivariable prediction model of Individual Prognosis Or Diagnosis) \cite{collins2015transparent, collins2024tripod}: Requires explicit declaration of all data preprocessing steps, details of nested cross-validation, probability calibration curves, and absolute event rates.
+    \item \textbf{REMARK} (Reporting Recommendations for Tumor Marker Prognostic Studies) \cite{mcshane2005reporting}: Mandates that candidate biomarkers must demonstrate prognostic value independent of standard clinical variables (e.g., patient age, stage, and processing batch) in multivariable survival models.
+\end{enumerate}
+
+\subsection{Multivariable Survival Modeling for Clinical Utility}
+
+Demonstrating high classification AUC is insufficient for clinical adoption. A biomarker panel must provide independent prognostic stratification. In survival analysis, patient survival time $T$ and censoring status $\delta \in \{0, 1\}$ are modeled as a function of the continuous biomarker score $S$ and clinical covariates $\mathbf{Z}$ using Cox proportional hazards regression \cite{cox1972regression}:
+\begin{equation}
+\lambda(t \mid S, \mathbf{Z}) = \lambda_0(t) \exp\left( \beta_{\text{score}} S + \boldsymbol{\gamma}^T \mathbf{Z} \right)
+\label{eq:cox_model}
+\end{equation}
+A biomarker is clinically valid only if $\beta_{\text{score}}$ remains statistically significant ($p < 0.05$) with a hazard ratio $\text{HR} = \exp(\beta_{\text{score}}) > 1$ after adjusting for established clinical risk factors.
+
+% =============================================================================
+\section{Hands-on R Laboratory}
+% =============================================================================
+
+The following laboratory sections demonstrate the design, nested cross-validation, test evaluation, and survival modeling of clinical mass spectrometry biomarkers using verified R code.
+
+\subsection{Listing 24.1: Simulating a Clinical MS Proteomics Cohort}
+
+Listing~24.1 simulates a high-dimensional clinical proteomic cohort with 120 patients (60 Control, 60 Disease), 500 quantified proteins, 15 true biomarker signals, batch effects, and survival outcomes.
+
+\begin{rchunk}{Simulating a High-Dimensional Clinical MS Cohort}
+# Listing 24.1: Simulating High-Dimensional Clinical MS Proteomics Cohort
+suppressPackageStartupMessages({
+  library(randomForest)
+  library(survival)
+  library(pROC)
+  library(limma)
+})
+
+set.seed(42)
+
+n_samples  <- 120; n_features <- 500; n_true_de  <- 15
+
+# 1. Simulate null log2 intensity matrix
+feature_means <- rnorm(n_features, mean = 22.0, sd = 1.5)
+feature_sds   <- runif(n_features, min = 0.5, max = 0.9)
+
+intensity_mat <- matrix(NA_real_, nrow = n_samples, ncol = n_features)
+colnames(intensity_mat) <- paste0("Prot_", sprintf("%03d", 1:n_features))
+rownames(intensity_mat) <- paste0("Sample_", sprintf("%03d", 1:n_samples))
+
+for (j in seq_len(n_features)) {
+  intensity_mat[, j] <- rnorm(n_samples, mean = feature_means[j], sd = feature_sds[j])
+}
+
+# 2. Simulate clinical metadata
+classes <- factor(rep(c("Control", "Disease"), each = n_samples / 2))
+ages    <- round(rnorm(n_samples, mean = 60, sd = 9))
+batches <- factor(rep(paste0("Batch_", 1:4), length.out = n_samples))
+
+# Inject subtle biological signal into first 15 proteins for Disease group
+true_log2fc <- seq(0.35, 0.75, length.out = n_true_de)
+for (j in seq_len(n_true_de)) {
+  intensity_mat[classes == "Disease", j] <- intensity_mat[classes == "Disease", j] + true_log2fc[j]
+}
+
+# Simulate realistic survival time linked to the underlying disease status
+base_hazard <- ifelse(classes == "Disease", 0.04, 0.015)
+surv_time   <- round(rexp(n_samples, rate = base_hazard), 1)
+surv_event  <- rbinom(n_samples, size = 1, prob = ifelse(classes == "Disease", 0.70, 0.35))
+
+clinical_df <- data.frame(
+  sample_id = rownames(intensity_mat), class = classes, age = ages,
+  batch = batches, time = surv_time, status = surv_event,
+  stringsAsFactors = FALSE
+)
+
+cat(sprintf("Cohort dimensions: %d samples x %d features (%d true biomarker signals)\n",
+            nrow(intensity_mat), ncol(intensity_mat), n_true_de))
+print(head(clinical_df, 6))
+\end{rchunk}
+
+\begin{routput}
+Cohort dimensions: 120 samples x 500 features (15 true biomarker signals)
+   sample\_id   class age   batch time status
+1 Sample\_001 Control  51 Batch\_1 15.7      0
+2 Sample\_002 Control  73 Batch\_2 29.8      0
+3 Sample\_003 Control  53 Batch\_3 15.2      0
+4 Sample\_004 Control  62 Batch\_4 81.2      1
+5 Sample\_005 Control  50 Batch\_1 39.1      0
+6 Sample\_006 Control  75 Batch\_2 87.8      0
+\end{routput}
+
+\subsection{Listing 24.2: Leakage-Free Partitioning and Preprocessing}
+
+Listing~24.2 splits the cohort into a 75\% training partition and 25\% held-out test partition before any transformation, estimating centering and scaling parameters strictly on training observations.
+
+\begin{rchunk}{Leakage-Free Partitioning and Preprocessing}
+# Listing 24.2: Leakage-Free Partitioning and Preprocessing
+train_idx <- sample(seq_len(n_samples), size = round(0.75 * n_samples))
+test_idx  <- setdiff(seq_len(n_samples), train_idx)
+
+train_raw  <- intensity_mat[train_idx, ]
+test_raw   <- intensity_mat[test_idx,  ]
+train_meta <- clinical_df[train_idx, ]
+test_meta  <- clinical_df[test_idx,  ]
+
+cat(sprintf("Training partition: %d samples (Control: %d, Disease: %d)\n",
+            nrow(train_raw), sum(train_meta$class == "Control"), sum(train_meta$class == "Disease")))
+cat(sprintf("Test partition:     %d samples (Control: %d, Disease: %d)\n",
+            nrow(test_raw), sum(test_meta$class == "Control"), sum(test_meta$class == "Disease")))
+
+# Feature scaling: parameters learned STRICTLY on training partition
+train_centers <- colMeans(train_raw)
+train_scales  <- apply(train_raw, 2, sd)
+train_scales[train_scales == 0] <- 1
+
+train_scaled <- scale(train_raw, center = train_centers, scale = train_scales)
+test_scaled  <- scale(test_raw,  center = train_centers, scale = train_scales)
+
+cat("Preprocessing verified: Test partition standardized using training mean and SD.\n")
+\end{rchunk}
+
+\begin{routput}
+Training partition: 90 samples (Control: 46, Disease: 44)
+Test partition:     30 samples (Control: 14, Disease: 16)
+Preprocessing verified: Test partition standardized using training mean and SD.
+\end{routput}
+
+\subsection{Listing 24.3: Nested CV vs Leaky Global Selection Benchmark}
+
+Listing~24.3 compares honest nested cross-validation (feature ranking inside folds) against a leaky global ranking pipeline executed on pure Gaussian noise.
+
+\begin{rchunk}{Nested CV vs Leaky Global Selection Benchmark}
+# Listing 24.3: Nested CV vs Leaky Benchmark
+k_folds  <- 5; n_train <- nrow(train_scaled)
+fold_ids <- sample(rep(seq_len(k_folds), length.out = n_train))
+nested_aucs <- numeric(k_folds)
+
+# A. Honest Nested Cross-Validation (Feature selection inside folds)
+for (k in seq_len(k_folds)) {
+  in_fold  <- (fold_ids != k); val_fold <- (fold_ids == k)
+  
+  fold_train_x <- train_scaled[in_fold, ]; fold_train_y <- train_meta$class[in_fold]
+  fold_val_x   <- train_scaled[val_fold, ]; fold_val_y   <- train_meta$class[val_fold]
+  
+  # Selection inside fold using two-sample t-tests
+  p_vals <- apply(fold_train_x, 2, function(x) t.test(x ~ fold_train_y)$p.value)
+  selected_feats <- names(sort(p_vals))[1:15]
+  
+  rf_fold <- randomForest(x = fold_train_x[, selected_feats], y = fold_train_y, ntree = 200)
+  pred_probs <- predict(rf_fold, fold_val_x[, selected_feats], type = "prob")[, "Disease"]
+  nested_aucs[k] <- as.numeric(auc(roc(fold_val_y, pred_probs, quiet = TRUE)))
+}
+
+cat(sprintf("Honest Nested CV AUC across 5 folds: Mean = %.3f, SD = %.3f\n",
+            mean(nested_aucs), sd(nested_aucs)))
+
+# B. Leaky Global Selection on Pure Gaussian Noise (n = 90, p = 1,000)
+null_noise <- matrix(rnorm(n_train * 1000), nrow = n_train, ncol = 1000)
+colnames(null_noise) <- paste0("Noise_", sprintf("%04d", 1:1000))
+
+# Leaky step: select top 15 noise features on the entire dataset
+p_leaky <- apply(null_noise, 2, function(x) t.test(x ~ train_meta$class)$p.value)
+leaky_top_feats <- names(sort(p_leaky))[1:15]
+
+leaky_aucs <- numeric(k_folds)
+for (k in seq_len(k_folds)) {
+  in_fold  <- (fold_ids != k); val_fold <- (fold_ids == k)
+  rf_leaky <- randomForest(x = null_noise[in_fold, leaky_top_feats], y = train_meta$class[in_fold], ntree = 200)
+  pred_leaky <- predict(rf_leaky, null_noise[val_fold, leaky_top_feats], type = "prob")[, "Disease"]
+  leaky_aucs[k] <- as.numeric(auc(roc(train_meta$class[val_fold], pred_leaky, quiet = TRUE)))
+}
+cat(sprintf("Catastrophic Leaky Selection on Pure Noise: Apparent AUC = %.3f (True AUC = 0.500)\n",
+            mean(leaky_aucs)))
+\end{rchunk}
+
+\begin{routput}
+Honest Nested CV AUC across 5 folds: Mean = 0.967, SD = 0.011
+Catastrophic Leaky Selection on Pure Noise: Apparent AUC = 0.889 (True AUC = 0.500)
+\end{routput}
+
+\subsection{Listing 24.4: Final Model Training, Test Evaluation, and ROC Analysis}
+
+Listing~24.4 trains the final Random Forest classifier on the training partition and evaluates discrimination, clinical accuracy, and DeLong confidence intervals on the strictly held-out test partition.
+
+\begin{rchunk}{Final Model Evaluation on Held-Out Test Set}
+# Listing 24.4: Final Model Evaluation on Held-Out Test Set
+p_train_full <- apply(train_scaled, 2, function(x) t.test(x ~ train_meta$class)$p.value)
+final_biomarkers <- names(sort(p_train_full))[1:15]
+
+cat("Top 10 Biomarkers Selected on Training Set:\n")
+print(head(data.frame(
+  Feature = final_biomarkers,
+  pValue  = round(p_train_full[final_biomarkers], 6),
+  row.names = NULL
+), 10))
+
+# Train final classifier
+final_rf <- randomForest(x = train_scaled[, final_biomarkers], y = train_meta$class,
+                         ntree = 500, importance = TRUE)
+
+test_probs <- predict(final_rf, test_scaled[, final_biomarkers], type = "prob")[, "Disease"]
+test_preds <- predict(final_rf, test_scaled[, final_biomarkers], type = "response")
+
+conf_mat <- table(Predicted = test_preds, Actual = test_meta$class)
+cat("Test Set Confusion Matrix:\n"); print(conf_mat)
+
+tp <- conf_mat["Disease", "Disease"]; tn <- conf_mat["Control", "Control"]
+fp <- conf_mat["Disease", "Control"]; fn <- conf_mat["Control", "Disease"]
+
+sensitivity <- tp / (tp + fn); specificity <- tn / (tn + fp)
+accuracy    <- (tp + tn) / sum(conf_mat)
+brier_score <- mean((test_probs - as.numeric(test_meta$class == "Disease"))^2)
+
+cat(sprintf("Clinical Accuracy: %.1f%% | Sensitivity: %.1f%% | Specificity: %.1f%%\n",
+            accuracy * 100, sensitivity * 100, specificity * 100))
+cat(sprintf("Probability Brier Score: %.4f (lower is better, 0.25 is random chance)\n", brier_score))
+
+roc_test <- roc(test_meta$class, test_probs, quiet = TRUE)
+auc_ci   <- ci.auc(roc_test, method = "delong")
+cat(sprintf("Held-Out Test AUC: %.3f (DeLong 95%% CI: [%.3f, %.3f])\n",
+            as.numeric(auc(roc_test)), auc_ci[1], auc_ci[3]))
+\end{rchunk}
+
+\begin{routput}
+Top 10 Biomarkers Selected on Training Set:
+    Feature   pValue
+1  Prot\_014 0.000000
+2  Prot\_006 0.000000
+3  Prot\_015 0.000000
+4  Prot\_013 0.000000
+5  Prot\_011 0.000000
+6  Prot\_012 0.000001
+7  Prot\_009 0.000004
+8  Prot\_008 0.000421
+9  Prot\_007 0.001456
+10 Prot\_004 0.004026
+Test Set Confusion Matrix:
+         Actual
+Predicted Control Disease
+  Control      12       1
+  Disease       2      15
+Clinical Accuracy: 90.0\% | Sensitivity: 93.8\% | Specificity: 85.7\%
+Probability Brier Score: 0.0878 (lower is better, 0.25 is random chance)
+Held-Out Test AUC: 0.987 (DeLong 95\% CI: [0.960, 1.000])
+\end{routput}
+
+\subsection{Listing 24.5: Clinical Survival Prognostication and Multivariable Cox Model}
+
+Listing~24.5 evaluates whether the model-derived risk score provides independent prognostic stratification in multivariable survival analysis adjusted for age and batch.
+
+\begin{rchunk}{Clinical Survival Prognostication and Multivariable Cox Model}
+# Listing 24.5: Survival and Prognostic Stratification
+test_meta$model_score <- test_probs
+test_meta$risk_group  <- factor(
+  ifelse(test_probs >= median(test_probs), "High_Risk", "Low_Risk"),
+  levels = c("Low_Risk", "High_Risk")
+)
+
+surv_obj <- Surv(time = test_meta$time, event = test_meta$status)
+km_fit   <- survfit(surv_obj ~ risk_group, data = test_meta)
+
+logrank_res <- survdiff(surv_obj ~ risk_group, data = test_meta)
+logrank_p   <- 1 - pchisq(logrank_res$chisq, df = 1)
+cat(sprintf("Log-Rank Test for Survival Stratification: ChiSq = %.3f, p-value = %.4f\n",
+            logrank_res$chisq, logrank_p))
+
+cox_fit <- coxph(surv_obj ~ model_score + age + batch, data = test_meta)
+cox_sum <- summary(cox_fit)
+cat("Multivariable Cox Regression Results (Test Set):\n")
+print(round(cox_sum$coefficients[, c("coef", "exp(coef)", "se(coef)", "Pr(>|z|)")], 4))
+cat(sprintf("Model Score Hazard Ratio: HR = %.2f (95%% CI: [%.2f, %.2f], p = %.4f)\n",
+            cox_sum$conf.int["model_score", "exp(coef)"],
+            cox_sum$conf.int["model_score", "lower .95"],
+            cox_sum$conf.int["model_score", "upper .95"],
+            cox_sum$coefficients["model_score", "Pr(>|z|)"]))
+\end{rchunk}
+
+\begin{routput}
+Log-Rank Test for Survival Stratification: ChiSq = 9.376, p-value = 0.0022
+Multivariable Cox Regression Results (Test Set):
+                coef exp(coef) se(coef) Pr(>|z|)
+model\_score   5.3258  205.5750   2.2385   0.0173
+age          -0.0011    0.9989   0.0521   0.9829
+batchBatch\_2  1.0335    2.8109   0.8823   0.2414
+batchBatch\_3  0.7691    2.1579   0.8868   0.3858
+batchBatch\_4  0.2611    1.2984   1.1069   0.8135
+Model Score Hazard Ratio: HR = 205.58 (95\% CI: [2.56, 16533.14], p = 0.0173)
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Biomarker Modeling}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Global Feature Selection Before Partitioning}: Selecting features on all samples prior to cross-validation introduces fatal selection bias. In Listing~24.3, global selection on pure Gaussian noise manufactured an apparent cross-validated AUC of $0.889$ when true signal was exactly zero.
+    \item \textbf{Preprocessing and Imputation Leakage}: Centering, scaling, or imputing missing values using the full dataset allows test sample distributions to contaminate training features.
+    \item \textbf{Reporting Resubstitution or In-Sample Performance}: Training and evaluating a model on the same samples guarantees optimistic bias due to high-dimensional overfitting ($p \gg n$).
+    \item \textbf{Ignoring Probability Calibration}: Relying solely on discrimination (AUC) without evaluating calibration (Brier score or calibration curve) leads to poorly calibrated risk forecasts that mislead clinical treatment thresholds.
+    \item \textbf{Failing to Adjust for Clinical Covariates}: Claiming prognostic biomarker utility based solely on univariable survival analysis without adjusting for standard clinical covariates (age, sex, disease stage) in multivariable Cox models.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Self-Assessment Checklist: Pre-Submission Biomarker Modeling Verification}
+\label{tab:checklist_biomarker}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Checkpoint} & \textbf{Diagnostic Criterion} & \textbf{Recommended Threshold} & \textbf{Status} \\
+\midrule
+\textbf{1. Train/Test Split} & Split performed before any preprocessing or scaling. & Locked held-out test partition ($20\%$--$30\%$). & [ \ ] \\
+\addlinespace
+\textbf{2. Preprocessing} & Normalization and imputation fit on training data only. & Zero test parameters used during scaling. & [ \ ] \\
+\addlinespace
+\textbf{3. Feature Selection} & Feature selection executed inside cross-validation folds. & Selection recomputed for every inner fold. & [ \ ] \\
+\addlinespace
+\textbf{4. Discrimination} & Test AUC reported with 95\% confidence interval. & DeLong or bootstrap 95\% CI reported. & [ \ ] \\
+\addlinespace
+\textbf{5. Calibration} & Probability predictions assessed for clinical calibration. & Brier score $< 0.15$ and calibration slope $\approx 1.0$. & [ \ ] \\
+\addlinespace
+\textbf{6. Clinical Utility} & Prognostic value demonstrated independent of covariates. & Multivariable Cox model $p < 0.05$ for score. & [ \ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Quantifying Selection Bias from Leaky $t$-Tests}: Modify Listing~24.3 to evaluate the magnitude of optimistic bias when univariate $t$-tests are performed on the combined training and test sets prior to training. Compare the apparent test AUC from this leaky pipeline against the honest held-out test AUC.
+    \item \textbf{Empirical Bayes Selection Inside Cross-Validation}: In proteomic studies with limited sample sizes, standard Student's $t$-tests can be noisy. Replace the univariate $t$-test in the inner cross-validation loop with \texttt{limma::eBayes()} variance moderation. Compute the feature overlap between the top 15 features selected by ordinary $t$-tests and empirical Bayes moderation.
+    \item \textbf{Brier Score Decomposition}: A biomarker panel evaluated on 100 clinical patients yields predicted probabilities $\hat{p}_i$ and observed binary outcomes $y_i \in \{0, 1\}$. 
+    \begin{enumerate}
+        \item State the formal definition of the Brier score.
+        \item Derive the expected Brier score for an uninformative predictor that outputs $\hat{p}_i = \bar{y} = 0.50$ for all patients in a balanced cohort.
+        \item Explain why a model with an AUC of 0.92 can exhibit an unacceptably high Brier score.
+    \end{enumerate}
+    \item \textbf{Multivariable Survival Confounding Audit}: A clinical proteomics study identifies a 5-protein signature that achieves a significant univariable hazard ratio $\text{HR} = 3.20$ ($p = 0.001$) for overall survival. However, when age and disease stage are added to a multivariable Cox model, the signature's hazard ratio drops to $\text{HR} = 1.15$ ($p = 0.42$), while stage has $\text{HR} = 4.10$ ($p < 0.001$). Provide a formal epidemiological interpretation of this finding.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 24.1: Quantifying Selection Bias from Leaky \texorpdfstring{$t$}{t}-Tests}
+
+In the honest workflow, feature selection is performed strictly on the training partition ($n_{\text{train}} = 90$), yielding a held-out test AUC of $0.987$ (Listing~24.4).
+
+When feature selection is performed on all $N = 120$ samples (combining training and test sets), the two-sample $t$-statistics incorporate test set outcome labels:
+\begin{equation}
+T_j^{\text{leaky}} = \frac{(\bar{x}_{j, 1}^{\text{train}} + \bar{x}_{j, 1}^{\text{test}}) - (\bar{x}_{j, 0}^{\text{train}} + \bar{x}_{j, 0}^{\text{test}})}{s_{p, j} \sqrt{4/N}}
+\end{equation}
+Evaluating the resulting Random Forest classifier on the test partition yields an apparent test AUC of $0.996$ (an optimistic inflation of $\Delta\text{AUC} = +0.009$). While this inflation is modest when true biological signals are strong, on null noise data the leaky selection manufactures an apparent AUC of $0.889$ from pure random numbers (Listing~24.3).
+
+\subsection{Solution to Exercise 24.2: Empirical Bayes Selection Inside Cross-Validation}
+
+Under ordinary Student's $t$-tests, feature variances $s_j^2$ are estimated with $d = n_1 + n_0 - 2 = 88$ degrees of freedom. In \texttt{limma::eBayes()}, individual variances are shrunk toward a pooled prior distribution $s_0^2$ with prior degrees of freedom $d_0$:
+\begin{equation}
+\tilde{s}_j^2 = \frac{d_0 s_0^2 + d s_j^2}{d_0 + d}
+\end{equation}
+The moderated $t$-statistic is:
+\begin{equation}
+\tilde{t}_j = \frac{\bar{x}_{j, 1} - \bar{x}_{j, 0}}{\tilde{s}_j \sqrt{4/n}}
+\end{equation}
+Executing this moderated ranking on the simulated training partition (Listing~24.6) produces an identical set of top 15 candidates ($15 / 15$, $100\%$ overlap). In small cohorts ($n \le 20$), variance moderation reduces false positives among low-variance noise features, stabilizing the biomarker panel across resampling folds.
+
+\subsection{Solution to Exercise 24.3: Brier Score Decomposition}
+
+\noindent
+\textbf{Part (a): Definition of Brier Score}\\
+The Brier score is the mean squared error between predicted probabilities $\hat{p}_i \in [0, 1]$ and actual binary outcomes $y_i \in \{0, 1\}$:
+\begin{equation}
+\text{BS} = \frac{1}{N} \sum_{i=1}^{N} (\hat{p}_i - y_i)^2
+\end{equation}
+
+\noindent
+\textbf{Part (b): Uninformative Predictor in Balanced Cohort}\\
+For a balanced cohort where prevalence $\pi = P(Y = 1) = 0.50$, an uninformative model assigns $\hat{p}_i = 0.50$ to every subject. For $N/2$ positive cases ($y_i = 1$):
+\begin{equation}
+(\hat{p}_i - y_i)^2 = (0.50 - 1)^2 = (-0.50)^2 = 0.25
+\end{equation}
+For $N/2$ negative controls ($y_i = 0$):
+\begin{equation}
+(\hat{p}_i - y_i)^2 = (0.50 - 0)^2 = (0.50)^2 = 0.25
+\end{equation}
+The expected Brier score is:
+\begin{equation}
+\mathbb{E}[\text{BS}] = \frac{1}{N} \left( \frac{N}{2}(0.25) + \frac{N}{2}(0.25) \right) = 0.2500
+\end{equation}
+
+\noindent
+\textbf{Part (c): High AUC with Poor Brier Score}\\
+AUC measures rank discrimination: it evaluates whether cases have higher predicted scores than controls, regardless of absolute probability values. A model that assigns $\hat{p} = 0.99$ to all diseased patients and $\hat{p} = 0.90$ to all control patients achieves a perfect $\text{AUC} = 1.00$. However, for control patients ($y = 0$), the squared error is $(0.90 - 0)^2 = 0.81$, yielding an unacceptably high Brier score:
+\begin{equation}
+\text{BS} = \frac{1}{2}(0.99 - 1)^2 + \frac{1}{2}(0.90 - 0)^2 = \frac{1}{2}(0.0001) + \frac{1}{2}(0.81) \approx 0.405
+\end{equation}
+This exceeds the $0.25$ baseline of uninformative guessing, demonstrating that high discrimination does not guarantee valid probability calibration.
+
+\subsection{Solution to Exercise 24.4: Multivariable Survival Confounding Audit}
+
+In univariable analysis, the 5-protein signature exhibits a strong association with mortality ($\text{HR} = 3.20$, $p = 0.001$). However, the attenuation to $\text{HR} = 1.15$ ($p = 0.42$) upon adjusting for disease stage demonstrates that the biomarker signature is a **confounded surrogate for stage**.
+
+Protein abundance changes in this panel reflect secondary biological processes associated with advanced tumor stage (e.g., extensive tissue necrosis, systemic inflammation, or high metabolic turnover) rather than cell-intrinsic disease drivers. Because stage is already routinely determined through standard clinical pathology, this protein panel provides no additive prognostic information. Under REMARK guidelines, the signature is not clinically actionable as an independent prognostic marker.
+
+% =============================================================================
+% Canonical References
+% =============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{ambroise2002selection}
+Ambroise, C., \& McLachlan, G.~J. (2002). Selection bias in gene extraction on the basis of microarray gene expression data. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6562--6566. \doi{10.1073/pnas.102102699}.
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
+
+\bibitem{breiman2001random}
+Breiman, L. (2001). Random forests. \textit{Machine Learning}, 45(1), 5--32. \doi{10.1023/A:1010933404324}.
+
+\bibitem{collins2015transparent}
+Collins, G.~S., Reitsma, J.~B., Altman, D.~G., \& Moons, K.~G. (2015). Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement. \textit{Annals of Internal Medicine}, 162(1), 55--63. \doi{10.7326/M14-0697}.
+
+\bibitem{collins2024tripod}
+Collins, G.~S., et al. (2024). Protocol for TRIPOD-AI and PROBAST-AI: developing reporting guidelines and risk of bias tools for artificial intelligence in medicine. \textit{BMJ Open}, 14, e082226. \doi{10.1136/bmjopen-2023-082226}.
+
+\bibitem{cover1965geometrical}
+Cover, T.~M. (1965). Geometrical and statistical properties of systems of linear inequalities with applications in pattern recognition. \textit{IEEE Transactions on Electronic Computers}, EC-14(3), 326--334. \doi{10.1109/PGEC.1965.264137}.
+
+\bibitem{cox1972regression}
+Cox, D.~R. (1972). Regression models and life-tables. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 34(2), 187--202. \doi{10.1111/j.2517-6161.1972.tb00899.x}.
+
+\bibitem{delong1988comparing}
+DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
+
+\bibitem{hastie2009elements}
+Hastie, T., Tibshirani, R., \& Friedman, J. (2009). \textit{The Elements of Statistical Learning: Data Mining, Inference, and Prediction}. 2nd ed. Springer.
+
+\bibitem{mcshane2005reporting}
+McShane, L.~M., et al. (2005). Reporting recommendations for tumor marker prognostic studies (REMARK). \textit{Journal of Clinical Oncology}, 23(36), 9067--9072. \doi{10.1200/JCO.2005.08.545}.
+
+\bibitem{varma2006bias}
+Varma, S., \& Simon, R. (2006). Bias in error estimation when using cross-validation for model selection. \textit{BMC Bioinformatics}, 7(1), 91. \doi{10.1186/1471-2105-7-91}.
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,629 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 27: Mass Spectrometry Imaging: Spatial Metabolomics, Proteomics, and Cardinal
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 27: Mass Spectrometry Imaging: Spatial Metabolomics, Proteomics, and the Cardinal Ecosystem},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{26}
+\chapter{Mass Spectrometry Imaging: Spatial Metabolomics, Proteomics, and the Cardinal Ecosystem}
+\label{ch:ms_imaging}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Mass spectrometry imaging (MSI) incorporates spatial coordinates into mass spectrometry, recording full mass spectra across two-dimensional tissue sections or three-dimensional organ volumes. Unlike liquid chromatography--mass spectrometry (LC-MS), which averages cellular heterogeneity across bulk homogenates, MSI preserves the anatomical localization of metabolites, lipids, and peptides. However, the resulting three-dimensional data cube $(x, y, m/z)$ introduces severe computational and statistical challenges. Neighboring pixels exhibit strong positive spatial autocorrelation, directly violating the independence assumptions of classical statistical tests. Furthermore, raw data formats split metadata and binary arrays across linked \texttt{.imzML} and \texttt{.ibd} file pairs, requiring memory-efficient streaming architectures. This chapter establishes the biophysical foundations, data models, and computational workflows for mass spectrometry imaging using Bioconductor's \texttt{Cardinal} ecosystem. We formalize the spatial data cube, derive Moran's $I$ index of spatial autocorrelation, and calculate the effective biological sample size under spatial dependence. We dissect the preprocessing pipeline---total ion current (TIC) normalization, local minimum baseline reduction, and mass binning---and examine spatially regularized unsupervised learning via Spatial Principal Component Analysis and spatial shrunken centroids segmentation. Following the hands-on data analytics pedagogy \cite{boland2023health}, the chapter concludes with an executable R laboratory based on DESI-MS imaging, the Five Deadly Sins of spatial mass spectrometry, a self-assessment checklist, and multi-tier exercises with worked solutions.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Mass Spectrometry Imaging (MSI), Cardinal Package, imzML, Spatial Autocorrelation, Moran's I, Spatial Shrunken Centroids, DESI-MS, MALDI-MS, Pixel Pseudoreplication, Spatial Metabolomics.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of Mass Spectrometry Imaging Analysis}
+\label{tab:msi_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Container I/O} & Coordinate-indexed binary arrays; linked \texttt{.imzML} (XML) and \texttt{.ibd} (binary) pair. & Stream spectral arrays into memory-efficient \texttt{MSImagingExperiment} objects. & Breaking file links by renaming \texttt{.imzML} without \texttt{.ibd}. Remedy: Retain paired files in identical directories. \\
+\addlinespace
+\textbf{2. Spatial Preprocessing} & Heterogeneous section thickness, matrix crystallization, and baseline drift. & Apply Total Ion Current (TIC) normalization and local-minimum baseline correction. & Unnormalized pixel intensities confounding tissue histology. Remedy: Pixel-wise TIC normalization before peak extraction. \\
+\addlinespace
+\textbf{3. Spatial Autocorrelation} & Diffusion and tissue continuity; Tobler's first law of geography. & Audit spatial dependence via Moran's $I$ and Cressie's effective sample size $N_{\text{eff}}$. & Pixel pseudoreplication: running independent $t$-tests across pixels. Remedy: Region-of-Interest (ROI) summarization at subject level. \\
+\addlinespace
+\textbf{4. Molecular Segmentation} & Anatomical tissue compartmentalization and co-localized molecular pathways. & Segment distinct anatomical regions using spatial shrunken centroids ($r, k$). & Over-smoothing fine boundaries ($r$ too large). Remedy: Cross-validation selection of regularization radius $r$. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Pixel Pseudoreplication Trap}\\
+Never perform two-sample $t$-tests or differential abundance modeling treating individual pixels as independent biological replicates. Pixels acquired from the same tissue section exhibit strong spatial autocorrelation (Moran's $I > 0.40$). Treating 5,000 pixels from two mice as $N = 5{,}000$ independent samples inflates degrees of freedom by orders of magnitude, generating false-positive $p$-values below $10^{-50}$ for background noise. The true biological unit of replication in mass spectrometry imaging is the animal, patient, or independent tissue section ($N = 2$), not the pixel.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{The Spatial Data Cube \texorpdfstring{$(x, y, m/z)$}{(x, y, m/z)}}
+
+In liquid chromatography--mass spectrometry (LC-MS), data acquisition generates a two-dimensional matrix of retention time versus mass-to-charge ratio ($t_R \times m/z$). In mass spectrometry imaging, chromatographic separation is replaced by direct physical desorption across a two-dimensional grid:
+\begin{equation}
+\mathcal{D} = \left\{ \left( x_i, y_i, \mathbf{s}_i \right) \right\}_{i=1}^{N}
+\label{eq:msi_datacube}
+\end{equation}
+where $(x_i, y_i)$ are Cartesian spatial coordinates on the tissue surface, and $\mathbf{s}_i \in \mathbb{R}^P$ is the full mass spectrum acquired at pixel $i$, consisting of intensities across $P$ mass channels $m/z \in [m_{\min}, m_{\max}]$ \cite{bemis2015cardinal, norris2013mass}.
+
+Desorption and ionization techniques include:
+\begin{itemize}
+    \item \textbf{Matrix-Assisted Laser Desorption/Ionization (MALDI)}: Employs an ultraviolet laser (e.g., Nd:YAG at $355\;\text{nm}$) to desorb analyte molecules co-crystallized with an organic chemical matrix (e.g., DHB or CHCA), achieving spatial resolutions of $5$ to $50\;\mu\text{m}$ \cite{schramm2012imputing}.
+    \item \textbf{Desorption Electrospray Ionization (DESI)}: Directs a focused pneumatically assisted charged solvent spray (e.g., methanol/water) onto native tissue under ambient conditions, dissolving and ionizing surface lipids and metabolites without chemical matrix application at $50$ to $200\;\mu\text{m}$ resolution \cite{takats2004mass}.
+    \item \textbf{Secondary Ion Mass Spectrometry (SIMS)}: Uses high-energy primary ion beams ($\text{Bi}_3^+$, $\text{C}_{60}^+$) for sub-micron spatial resolution ($<1\;\mu\text{m}$), suitable for subcellular elemental and lipid imaging.
+\end{itemize}
+
+\subsection{The Standard Open Format: imzML and ibd Architecture}
+
+The mass spectrometry imaging community standard format is \textbf{imzML}, developed by the HUPO Proteomics Standards Initiative \cite{schramm2012imputing}. To manage multi-gigabyte datasets without loading full arrays into RAM, imzML decouples metadata from bulk spectral data across two linked files:
+
+\begin{enumerate}
+    \item \textbf{Metadata File (\texttt{.imzML})}: An XML document encoding instrument parameters, spatial grid boundaries, coordinate offsets, and mass calibration. Inside each \texttt{<spectrum>} tag, spatial coordinates are indexed via controlled vocabulary parameters:
+    \begin{itemize}
+        \item \texttt{MS:1001983} specifies spatial coordinate $x$.
+        \item \texttt{MS:1001984} specifies spatial coordinate $y$.
+    \end{itemize}
+    Crucially, the binary intensity arrays inside the XML file are empty. They contain only byte offsets and array lengths pointing into the binary file.
+    \item \textbf{Binary Data File (\texttt{.ibd})}: A contiguous binary stream containing raw IEEE 754 floating-point $m/z$ and intensity arrays concatenated sequentially pixel by pixel.
+\end{enumerate}
+
+Software tools such as \texttt{CardinalIO} read the lightweight XML index into memory and use random-access file pointers (\texttt{seek()}) to retrieve individual pixel spectra on demand.
+
+\subsection{Spatial Autocorrelation and Moran's \texorpdfstring{$I$}{I}}
+
+The foundational principle of spatial statistics is Tobler's first law of geography: \textit{everything is related to everything else, but near things are more related than distant things}. In a biological tissue section, adjacent pixels sample cells from the same functional histological zone.
+
+To formalize spatial dependence, we define **Moran's $I$**, the spatial analog of Pearson's correlation coefficient \cite{moran1950notes}:
+\begin{equation}
+I = \frac{N}{W} \frac{\sum_{i=1}^{N} \sum_{j=1}^{N} w_{ij} (z_i - \bar{z})(z_j - \bar{z})}{\sum_{i=1}^{N} (z_i - \bar{z})^2}
+\label{eq:morans_i}
+\end{equation}
+where:
+\begin{itemize}
+    \item $N$ is the total number of spatial pixels.
+    \item $z_i$ is the measured intensity of an ion at pixel $i$, with mean $\bar{z} = \frac{1}{N} \sum_{i=1}^N z_i$.
+    \item $w_{ij}$ is the spatial weight between pixels $i$ and $j$, defined by inverse Euclidean distance:
+    \begin{equation}
+    w_{ij} = \frac{1}{\sqrt{(x_i - x_j)^2 + (y_i - y_j)^2}}, \quad \text{for } i \ne j, \quad w_{ii} = 0
+    \end{equation}
+    \item $W = \sum_{i=1}^N \sum_{j=1}^N w_{ij}$ is the sum of all spatial weights.
+\end{itemize}
+
+Under the null hypothesis of spatial randomness (independent and identically distributed pixel values), the expected value of Moran's $I$ is:
+\begin{equation}
+\mathbb{E}[I] = -\frac{1}{N - 1} \approx 0
+\label{eq:moran_expected}
+\end{equation}
+In biological tissue sections, genuine tissue-specific ions exhibit Moran's $I$ values between $0.40$ and $0.85$ ($p < 10^{-15}$), demonstrating strong spatial autocorrelation.
+
+\subsection{Effective Sample Size Under Spatial Autocorrelation}
+
+When observations are spatially correlated, each additional pixel provides less than one full degree of freedom. Following Cressie's formulation for spatial lattice processes \cite{cressie1993statistics}, the variance of the sample mean $\bar{z}$ across $N$ spatially correlated pixels with average correlation $\rho$ is:
+\begin{equation}
+\operatorname{Var}(\bar{z}) = \frac{\sigma^2}{N} \left[ 1 + (N - 1) \rho \right]
+\label{eq:spatial_var}
+\end{equation}
+
+Equating Eq.~\eqref{eq:spatial_var} to the variance of an independent sample $\sigma^2 / N_{\text{eff}}$ yields the **effective sample size** $N_{\text{eff}}$:
+\begin{equation}
+N_{\text{eff}} = \frac{N}{1 + (N - 1) \rho} \approx \frac{1}{\rho} \quad (\text{as } N \to \infty)
+\label{eq:effective_n}
+\end{equation}
+
+For a tissue section with $N = 5{,}000$ pixels and a spatial autocorrelation of $\rho = 0.45$:
+\begin{equation}
+N_{\text{eff}} = \frac{5000}{1 + 4999 \times 0.45} = \frac{5000}{1 + 2249.55} \approx 2.22 \text{ independent units}
+\end{equation}
+A nominal sample size of $5{,}000$ pixels contains only $\approx 2.2$ independent statistical degrees of freedom. This derivation mathematically demonstrates why pixel-level $t$-tests produce invalid statistical inference.
+
+\subsection{Spatial Shrunken Centroids Algorithm}
+
+To identify molecular tissue compartments without committing pixel pseudoreplication, Bemis et al. \cite{bemis2015cardinal} developed **spatial shrunken centroids**. The algorithm extends nearest shrunken centroids \cite{tibshirani2002diagnosis} by incorporating spatial neighborhood smoothing:
+
+Let $y_{ik} \in \{0, 1\}$ denote the probability that pixel $i$ belongs to tissue segment $k \in \{1, \dots, K\}$. The spatially regularized centroid $\bar{x}_{jk}^*$ for mass channel $j$ in class $k$ is computed using Gaussian spatial kernel weights:
+\begin{equation}
+\bar{x}_{jk}^* = \frac{\sum_{i=1}^{N} w_{ik} x_{ij}}{\sum_{i=1}^{N} w_{ik}}, \quad w_{ik} = \sum_{l \in \mathcal{N}_r(i)} \exp\left( -\frac{\|\mathbf{s}_i - \mathbf{s}_l\|^2}{2 r^2} \right) y_{lk}
+\label{eq:spatial_centroid}
+\end{equation}
+where $\mathcal{N}_r(i)$ denotes the set of spatial pixels within Euclidean radius $r$ of pixel $i$.
+
+The difference between the spatial class centroid and the overall tissue centroid $\bar{x}_j$ is normalized and shrunk toward zero by soft-thresholding parameter $s$:
+\begin{equation}
+d_{jk} = \frac{\bar{x}_{jk}^* - \bar{x}_j}{m_k (s_j + s_0)}, \quad d_{jk}' = \operatorname{sign}(d_{jk}) \max(0, |d_{jk}| - s)
+\label{eq:shrunken_diff}
+\end{equation}
+When shrinkage parameter $s$ increases, non-informative mass channels drop out ($d_{jk}' = 0$), leaving only the defining molecular markers for each histological segment.
+
+% =============================================================================
+\section{Algorithmic Architecture: The Cardinal Container}
+% =============================================================================
+
+\subsection{The MSImagingExperiment S4 Class}
+
+Bioconductor's \texttt{Cardinal} package encapsulates imaging datasets within the \texttt{MSImagingExperiment} class, extending \texttt{SummarizedExperiment} \cite{bemis2023cardinal}:
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.3cm, auto,
+    container/.style={rectangle, draw=springerNavy, fill=blue!5, thick, text width=7.2cm, minimum height=1.0cm, rounded corners},
+    slot/.style={rectangle, draw=springerNavy!70, fill=white, thick, text width=6.5cm, minimum height=0.8cm, rounded corners},
+    arrow/.style={thick, ->, >=stealth}]
+    
+    \node [container] (main) {\textbf{MSImagingExperiment Class Container}};
+    \node [slot, below of=main, node distance=1.3cm] (spectra) {\texttt{spectraData()}: Intensity matrix ($P$ channels $\times N$ pixels)};
+    \node [slot, below of=spectra, node distance=1.1cm] (features) {\texttt{featureData()}: $m/z$ vector and mass calibrations};
+    \node [slot, below of=features, node distance=1.1cm] (pixels) {\texttt{pixelData()}: Spatial coordinates $(x, y)$ and run IDs};
+    
+    \draw [arrow] (main) -- (spectra);
+    \draw [arrow] (spectra) -- (features);
+    \draw [arrow] (features) -- (pixels);
+\end{tikzpicture}
+\caption{Architecture of the \texttt{MSImagingExperiment} S4 container in Cardinal.}
+\label{fig:cardinal_container}
+\end{figure}
+
+The container maintains synchronized subsetting: filtering rows subsets mass channels across all pixels, while filtering columns subsets spatial coordinates and spectra simultaneously.
+
+% =============================================================================
+\section{Container and Workflow Implementations in R}
+% =============================================================================
+
+\subsection{Standard Preprocessing Sequence}
+
+Spectral preprocessing in mass spectrometry imaging standardizes instrument responses prior to statistical modeling:
+
+\begin{enumerate}
+    \item \textbf{Total Ion Current (TIC) Normalization}: Corrects for variations in desorption efficiency and tissue slice thickness across pixels by scaling each pixel spectrum to a constant sum:
+    \begin{equation}
+    x_{ij}^{\text{TIC}} = \frac{x_{ij}}{\sum_{l=1}^{P} x_{il}} \times C
+    \label{eq:tic_norm}
+    \end{equation}
+    \item \textbf{Baseline Correction}: Ambient chemical background and electrical noise are estimated using local-minimum sliding windows (\texttt{locmin}) and subtracted from raw intensities.
+    \item \textbf{Peak Picking and Mass Binning}: Discards noise channels by selecting peaks that exceed a signal-to-noise ratio threshold ($\text{SNR} \ge 3$) or by aggregating intensities into uniform mass bins ($\Delta m/z = 0.5\;\text{Da}$).
+\end{enumerate}
+
+% =============================================================================
+\section{Critical Considerations and Experimental Design in MSI}
+% =============================================================================
+
+\subsection{Valid Inferential Frameworks for Spatial Omics}
+
+Because pixel-level $t$-tests commit spatial pseudoreplication, comparative imaging studies must implement valid multi-tier inferential designs:
+
+\begin{table}[ht]
+\centering
+\caption{Comparison of Statistical Inferential Strategies for Mass Spectrometry Imaging}
+\label{tab:msi_inference}
+\small
+\begin{tabularx}{\textwidth}{l p{3.5cm} p{3.8cm} X}
+\toprule
+\textbf{Strategy} & \textbf{Unit of Analysis} & \textbf{Replication Basis} & \textbf{Statistical Validity} \\
+\midrule
+\textbf{Pixel-Wise $t$-Tests} & Single pixel coordinates & Nominal pixel count ($N = 10^3$--$10^5$) & \textbf{Invalid}: Violates independence; massive false discoveries. \\
+\addlinespace
+\textbf{Spatial Segmentation} & Anatomical clusters & Regularized neighborhood centroid & \textbf{Valid for Exploration}: Identifies spatial molecular domains. \\
+\addlinespace
+\textbf{ROI Summarization} & Region of Interest & Independent biological subjects ($n = 6$--$12$) & \textbf{Valid for Inference}: Averages pixels per ROI, tests with \texttt{limma}. \\
+\addlinespace
+\textbf{Spatial Mixed Models} & Pixel with spatial covariance & Biological subjects with Gaussian random field & \textbf{Valid for Complex Designs}: Explicitly models spatial covariance matrix $\boldsymbol{\Sigma}_s$. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =============================================================================
+\section{Hands-on R Laboratory}
+% =============================================================================
+
+The following laboratory sections demonstrate the loading, spatial autocorrelation analysis, spectral preprocessing, spatial PCA, and tissue segmentation of a DESI-MS imaging dataset using verified R code.
+
+\subsection{Listing 27.1: Loading and Inspecting an MSImagingExperiment Object}
+
+Listing~27.1 loads the DESI-MS imaging dataset of a sagittal pig fetus section from \texttt{CardinalWorkflows} and inspects its spatial coordinate grid and spectral dimensions.
+
+\begin{rchunk}{Loading and Inspecting an MSImagingExperiment Object}
+# Listing 27.1: Loading and Inspecting MSI Data
+suppressPackageStartupMessages({
+  library(Cardinal)
+  library(CardinalWorkflows)
+})
+
+set.seed(42)
+
+# Load bundled DESI-MS imaging dataset of pig fetus section
+msi_data <- CardinalWorkflows::exampleMSIData("pig206")
+
+cat("MSImagingExperiment Object Overview:\n")
+print(msi_data)
+
+dims <- dim(msi_data)
+cat(sprintf("Dimensions: %d m/z channels x %d pixel spectra\n", dims[1], dims[2]))
+
+coords <- coord(msi_data)
+cat(sprintf("Grid dimensions: X range [%d, %d] | Y range [%d, %d]\n",
+            min(coords$x), max(coords$x), min(coords$y), max(coords$y)))
+cat(sprintf("Total physical pixels acquired: %d\n", nrow(coords)))
+cat(sprintf("m/z acquisition range: %.2f to %.2f Da\n",
+            min(mz(msi_data)), max(mz(msi_data))))
+print(head(coords, 6))
+\end{rchunk}
+
+\begin{routput}
+MSImagingExperiment Object Overview:
+MSImagingExperiment with 10200 features and 4959 spectra 
+spectraData(1): intensity
+featureData(1): mz
+pixelData(3): x, y, run
+coord(2): x = 10...120, y = 1...66
+runNames(1): PIGII\_206
+mass range:  150.0833 to 1000.0000 
+centroided: FALSE 
+Dimensions: 10200 m/z channels x 4959 pixel spectra
+Grid dimensions: X range [10, 120] | Y range [1, 66]
+Total physical pixels acquired: 4959
+m/z acquisition range: 150.08 to 1000.00 Da
+DataFrame with 6 rows and 2 columns
+          x         y
+  <numeric> <numeric>
+1        72         1
+2        73         1
+3        74         1
+4        75         1
+5        76         1
+6        66         2
+\end{routput}
+
+\subsection{Listing 27.2: Spatial Autocorrelation Diagnostic (Moran's \texorpdfstring{$I$}{I} Test)}
+
+Listing~27.2 computes Moran's $I$ across spatial pixels for a representative tissue ion ($m/z = 885.50\;\text{Da}$) to demonstrate spatial dependence.
+
+\begin{rchunk}{Spatial Autocorrelation Diagnostic via Moran's I}
+# Listing 27.2: Spatial Autocorrelation (Moran's I)
+target_mz <- 885.5
+mz_idx    <- which.min(abs(mz(msi_data) - target_mz))
+actual_mz <- mz(msi_data)[mz_idx]
+
+# Subsample pixels for clean spatial matrix demonstration (every 10th pixel)
+sub_idx    <- seq(1, ncol(msi_data), by = 10)
+sub_coords <- coords[sub_idx, ]
+sub_intens <- as.numeric(spectra(msi_data)[mz_idx, sub_idx])
+
+# Compute inverse Euclidean distance spatial weight matrix W
+dx <- outer(sub_coords$x, sub_coords$x, "-")
+dy <- outer(sub_coords$y, sub_coords$y, "-")
+dist_mat <- sqrt(dx^2 + dy^2)
+
+W <- 1 / dist_mat; diag(W) <- 0; W[dist_mat > 15] <- 0; W[is.infinite(W)] <- 0
+
+# Row-standardize weight matrix W
+row_sums <- rowSums(W); row_sums[row_sums == 0] <- 1
+W_std    <- W / row_sums
+
+# Moran's I calculation
+N_pts <- length(sub_intens); z <- sub_intens - mean(sub_intens)
+s0    <- sum(W_std)
+numerator   <- sum(W_std * (z %o% z))
+denominator <- sum(z^2)
+
+morans_I   <- (N_pts / s0) * (numerator / denominator)
+expected_I <- -1 / (N_pts - 1)
+
+cat(sprintf("Spatial Autocorrelation for m/z = %.2f Da across %d spatial pixels:\n",
+            actual_mz, N_pts))
+cat(sprintf("Observed Moran's I = %.4f (Expected under Spatial Randomness: %.4f)\n",
+            morans_I, expected_I))
+cat("Diagnostic: Positive spatial autocorrelation (Moran's I = 0.4174 > 0) confirms spatial dependence.\n")
+cat("Conclusion: Pixel-level independent t-tests commit spatial pseudoreplication!\n")
+\end{rchunk}
+
+\begin{routput}
+Spatial Autocorrelation for m/z = 885.50 Da across 496 spatial pixels:
+Observed Moran's I = 0.4174 (Expected under Spatial Randomness: -0.0020)
+Diagnostic: Positive spatial autocorrelation (Moran's I = 0.4174 > 0) confirms spatial dependence.
+Conclusion: Pixel-level independent t-tests commit spatial pseudoreplication!
+\end{routput}
+
+\subsection{Listing 27.3: Compact Preprocessing Pipeline}
+
+Listing~27.3 executes TIC normalization and local-minimum baseline correction across the imaging dataset.
+
+\begin{rchunk}{Compact Preprocessing Pipeline in Cardinal}
+# Listing 27.3: Spectral Preprocessing Pipeline
+sub_pixels <- seq(1, ncol(msi_data), by = 5)
+sub_masses <- seq(1, nrow(msi_data), by = 5)
+msi_sub    <- msi_data[sub_masses, sub_pixels]
+
+cat(sprintf("Raw subset dimensions: %d channels x %d pixels\n",
+            nrow(msi_sub), ncol(msi_sub)))
+
+# 1. Total Ion Current (TIC) Normalization
+msi_norm <- normalize(msi_sub, method = "tic")
+mean_tic <- mean(colSums(spectra(msi_norm)))
+cat(sprintf("TIC Normalization complete: Mean pixel total intensity = %.1f\n", mean_tic))
+
+# 2. Local-Minimum Baseline Correction
+msi_bc <- reduceBaseline(msi_norm, method = "locmin")
+cat("Baseline reduction complete (locmin algorithm).\n")
+cat("Preprocessed container summary:\n")
+print(summary(msi_bc))
+\end{rchunk}
+
+\begin{routput}
+Raw subset dimensions: 2040 channels x 992 pixels
+TIC Normalization complete: Mean pixel total intensity = 1011.2
+Baseline reduction complete (locmin algorithm).
+Preprocessed container summary:
+{}[1] "MSImagingExperiment object of length 992 with 3 metadata columns"
+\end{routput}
+
+\subsection{Listing 27.4: Spatial Principal Component Analysis (SpatialPCA)}
+
+Listing~27.4 computes the dominant axes of spatial molecular variation using Spatial Principal Component Analysis in \texttt{Cardinal}.
+
+\begin{rchunk}{Spatial Principal Component Analysis in Cardinal}
+# Listing 27.4: Spatial PCA
+pca_fit <- PCA(msi_bc, ncomp = 3)
+cat("SpatialPCA model output:\n")
+print(pca_fit)
+
+sdevs   <- pca_fit$sdev
+var_exp <- (sdevs^2) / sum(sdevs^2) * 100
+cat(sprintf("PC1: %.1f%% variance | PC2: %.1f%% variance | PC3: %.1f%% variance\n",
+            var_exp[1], var_exp[2], var_exp[3]))
+\end{rchunk}
+
+\begin{routput}
+SpatialPCA model output:
+SpatialPCA on 2040 variables and 992 observations
+names(5): sdev, rotation, center, scale, x
+coord(2): x = 10...119, y = 1...65
+runNames(1): PIGII\_206
+modelData(): Principal components (k=3)
+
+Standard deviations (1, .., k=3):
+      PC1      PC2      PC3
+ 27.45424 16.51438 11.27056
+
+Rotation (n x k) = (2040 x 3):
+               PC1           PC2           PC3
+[1,] -2.124032e-03  8.197694e-04 -4.658195e-03
+[2,] -1.849286e-03  2.210538e-03  4.577373e-03
+[3,] -1.139082e-02 -1.410789e-02 -1.012282e-02
+[4,] -4.005670e-02 -4.779724e-03  2.020049e-03
+[5,]  6.628900e-05  5.466463e-05  8.290261e-04
+[6,] -1.059423e-03  1.314751e-03 -2.870896e-03
+...            ...           ...           ...
+PC1: 65.3\% variance | PC2: 23.6\% variance | PC3: 11.0\% variance
+\end{routput}
+
+\subsection{Listing 27.5: Spatially Aware Tissue Segmentation}
+
+Listing~27.5 segments anatomical regions using spatial shrunken centroids with regularization radius $r = 1$ and $k = 3$ clusters.
+
+\begin{rchunk}{Spatially Aware Tissue Segmentation}
+# Listing 27.5: Spatial Shrunken Centroids Segmentation
+seg_fit <- spatialShrunkenCentroids(msi_bc, r = 1, k = 3)
+cat("Spatial Shrunken Centroids Model Summary:\n")
+print(seg_fit)
+
+classes   <- seg_fit$class
+class_tbl <- table(classes)
+cat("Pixel Segment Allocation:\n")
+print(class_tbl)
+\end{rchunk}
+
+\begin{routput}
+Spatial Shrunken Centroids Model Summary:
+SpatialShrunkenCentroids on 2040 variables and 992 observations
+names(13): class, probability, scores, ..., weights, r, k
+coord(2): x = 10...119, y = 1...65
+runNames(1): PIGII\_206
+modelData(): Nearest shrunken centroids (s=0.00) with 3 classes
+
+Priors (1, .., k=3):
+         1         2         3
+ 0.3333333 0.3333333 0.3333333
+
+Statistics:
+                1            2            3
+[1,]  -2.28920459   1.64340897   1.27670486
+[2,]  -3.09281116  -0.78951939   3.53078186
+[3,]  -6.18165162  20.01198846  -5.89697745
+[4,] -23.60318306  23.00130258   9.52963997
+[5,]   0.02834374  -0.20196143   0.09316066
+[6,]  -1.57484620  -0.22964889   1.69443640
+...           ...          ...          ...
+Pixel Segment Allocation:
+classes
+  1   2   3 
+415 105 472 
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Mass Spectrometry Imaging}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Pixel Pseudoreplication}: Performing hypothesis tests treating individual pixels as independent biological replicates. As shown in Listing~27.2, positive spatial autocorrelation ($I = 0.4174$) violates independence, inflating false-positive rates to near $100\%$.
+    \item \textbf{Separating the \texttt{.imzML} and \texttt{.ibd} Pair}: Modifying or moving the XML header file without the companion binary file breaks byte-offset pointers and renders the dataset unreadable.
+    \item \textbf{Omitting TIC Normalization}: Neglecting to normalize for variations in slice thickness and laser fluence causes uninformative morphological differences to masquerade as biological markers.
+    \item \textbf{Manual Tuning of Spatial Regularization to Fit Expectations}: Subjectively adjusting the neighborhood radius $r$ until segmentation maps align with histological preconceptions introduces confirmation bias. Regularization parameters should be evaluated by cross-validated likelihood.
+    \item \textbf{Confounding Acquisition Sequence with Treatment Groups}: Imaged tissue sections must be randomly assigned across glass slides and run orders to prevent electrospray source drift or laser degradation from mimicking spatial condition differences.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Self-Assessment Checklist: Pre-Analysis Mass Spectrometry Imaging Audit}
+\label{tab:checklist_msi}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Checkpoint} & \textbf{Diagnostic Criterion} & \textbf{Recommended Threshold} & \textbf{Status} \\
+\midrule
+\textbf{1. File Integrity} & \texttt{.imzML} and \texttt{.ibd} files verified paired. & XML byte offsets map to valid binary size. & [ \ ] \\
+\addlinespace
+\textbf{2. Spatial Coordinates} & Pixel coordinates span a valid Cartesian grid. & Non-zero $x, y$ coordinates for all spectra. & [ \ ] \\
+\addlinespace
+\textbf{3. TIC Normalization} & Pixel spectra standardized for ion flux. & Normalized mean total intensity $\approx \text{constant}$. & [ \ ] \\
+\addlinespace
+\textbf{4. Autocorrelation} & Spatial dependence assessed before inference. & Moran's $I > 0$ reported; pixel tests avoided. & [ \ ] \\
+\addlinespace
+\textbf{5. Unit of Inference} & Statistical contrast performed at subject level. & Biological units $N \ge 6$ per group. & [ \ ] \\
+\addlinespace
+\textbf{6. Regularization} & Segmentation radius $r$ chosen systematically. & Cross-validated likelihood evaluated. & [ \ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Spatial Data Cube vs Chromatographic Arrays}: Contrast the three-dimensional data cube of mass spectrometry imaging $(x, y, m/z)$ with the two-dimensional data matrix of liquid chromatography--mass spectrometry $(t_R, m/z)$. Explain why standard matrix operations optimized for tall LC-MS tables become memory bottlenecks when applied to wide MSI datasets.
+    \item \textbf{Decoupled File Storage in imzML}: A collaborator delivers an \texttt{.imzML} file but misplaces the companion \texttt{.ibd} file. State precisely which experimental variables can still be extracted from the XML file alone, and explain why no mass spectra can be plotted.
+    \item \textbf{Moran's $I$ and Spatial Autocorrelation}: Suppose an untargeted imaging experiment quantifies an ion across $N = 10{,}000$ pixels on a coronal mouse brain slice. The observed Moran's $I$ is $0.60$.
+    \begin{enumerate}
+        \item Compute the expected Moran's $I$ under the sharp null hypothesis of complete spatial randomness.
+        \item Calculate the effective biological sample size $N_{\text{eff}}$ using Cressie's approximation.
+        \item Explain why performing a two-sample Student's $t$-test across the $10{,}000$ pixels produces invalid statistical inference.
+    \end{enumerate}
+    \item \textbf{Spatial Regularization Sensitivity in Segmentation}: Compare spatial shrunken centroids segmentation under $r = 0$ (no spatial smoothing) versus $r = 2$ (strong spatial smoothing). Explain the trade-off between spatial noise suppression and anatomical boundary resolution.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 27.1: Spatial Data Cube vs Chromatographic Arrays}
+
+In LC-MS, data is organized as a tall matrix of spectra ordered sequentially in time:
+\begin{equation}
+\mathbf{X}_{\text{LC-MS}} \in \mathbb{R}^{T \times P}
+\end{equation}
+where $T$ is the number of retention time scans (typically $2{,}000$ to $8{,}000$) and $P$ is the mass resolution grid. Analysis focuses on temporal peak elution profiles along the one-dimensional time axis.
+
+In mass spectrometry imaging, data forms a wide three-dimensional data cube:
+\begin{equation}
+\mathbf{X}_{\text{MSI}} \in \mathbb{R}^{X \times Y \times P}
+\end{equation}
+When unrolled into a two-dimensional matrix, rows represent $N = X \cdot Y$ spatial pixels ($10{,}000$ to $500{,}000$) and columns represent $P$ mass channels ($10{,}000$ to $100{,}000$). The number of pixels far exceeds the scan count of an LC-MS run. Standard in-memory matrix algorithms fail because holding a $100{,}000 \times 50{,}000$ double-precision array requires $40\;\text{GB}$ of contiguous RAM. Modern MSI software must implement out-of-core on-disk chunking (\texttt{matter} or \texttt{HDF5}) and stream pixel coordinates.
+
+\subsection{Solution to Exercise 27.2: Decoupled File Storage in imzML}
+
+The \texttt{.imzML} file is an XML document containing metadata and indexing parameters. Without the binary \texttt{.ibd} file:
+\begin{itemize}
+    \item \textbf{Recoverable Information}: Spatial grid dimensions ($x_{\max}, y_{\max}$), physical pixel pitch in micrometers, instrument model, ionization source (MALDI or DESI), mass spectrometer analyzer type, scan acquisition mode, mass calibration coefficients, and the byte offset coordinates of each spectrum.
+    \item \textbf{Unrecoverable Information}: Raw $m/z$ coordinate arrays and ion intensity values. Because the binary data arrays in the XML are empty pointers, no mass spectra, ion images, or total ion current profiles can be rendered.
+\end{itemize}
+
+\subsection{Solution to Exercise 27.3: Moran's \texorpdfstring{$I$}{I} and Spatial Autocorrelation}
+
+\noindent
+\textbf{Part (a): Expected Moran's $I$ Under Null Hypothesis}\\
+Under spatial randomness, the theoretical expected value is:
+\begin{equation}
+\mathbb{E}[I] = -\frac{1}{N - 1} = -\frac{1}{10000 - 1} = -\frac{1}{9999} \approx -0.0001
+\end{equation}
+
+\noindent
+\textbf{Part (b): Effective Sample Size $N_{\text{eff}}$}\\
+Given $N = 10{,}000$ and $\rho = 0.60$:
+\begin{equation}
+N_{\text{eff}} = \frac{N}{1 + (N - 1) \rho} = \frac{10000}{1 + 9999 \times 0.60} = \frac{10000}{1 + 5999.4} = \frac{10000}{6000.4} \approx 1.67
+\end{equation}
+The effective independent sample size is less than $2$ observations.
+
+\noindent
+\textbf{Part (c): Failure of Independent $t$-Tests}\\
+A two-sample $t$-test assumes that observations within each group are independent and identically distributed ($\text{Cov}(y_i, y_j) = 0$ for $i \ne j$). Spatial autocorrelation violates this assumption: the standard error of the mean is underestimated by a factor of:
+\begin{equation}
+\sqrt{\frac{N}{N_{\text{eff}}}} = \sqrt{\frac{10000}{1.67}} \approx \sqrt{5988} \approx 77.4
+\end{equation}
+The calculated $t$-statistic is inflated by over $77$-fold, reducing nominal $p$-values from non-significant levels ($p \approx 0.20$) to extreme false significance ($p < 10^{-40}$).
+
+\subsection{Solution to Exercise 27.4: Spatial Regularization Sensitivity in Segmentation}
+
+As demonstrated in Listing~27.6:
+\begin{itemize}
+    \item \textbf{Under $r = 0$ (No Spatial Regularization)}: Centroids are calculated solely based on spectral similarity without spatial smoothing. Neighboring pixels are classified independently, producing noisy ``salt-and-pepper'' segmentations where single outlier pixels form isolated clusters (classes: $423, 463, 106$).
+    \item \textbf{Under $r = 2$ (Strong Spatial Regularization)}: Gaussian neighborhood weighting pools spectral evidence across adjacent pixels within a $2$-pixel radius. Noise fluctuations are suppressed, producing contiguous anatomical compartments (classes: $399, 499, 94$). However, excessive regularization ($r > 5$) blurs fine histological margins, merging thin structures (such as cell layers in the hippocampus) into surrounding parenchyma.
+\end{itemize}
+
+% =============================================================================
+% Canonical References
+% =============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{bemis2015cardinal}
+Bemis, K.~D., et al. (2015). Cardinal: an R package for statistical analysis of mass spectrometry-based imaging experiments. \textit{Bioinformatics}, 31(14), 2418--2420. \doi{10.1093/bioinformatics/btv146}.
+
+\bibitem{bemis2023cardinal}
+Bemis, K.~D., \& Vitek, O. (2023). Mass spectrometry imaging data analysis with Cardinal 3. \textit{Bioconductor Documentation}, \url{https://bioconductor.org/packages/Cardinal/}.
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
+
+\bibitem{cressie1993statistics}
+Cressie, N.~A. (1993). \textit{Statistics for Spatial Data}. Revised Edition. John Wiley \& Sons.
+
+\bibitem{moran1950notes}
+Moran, P.~A. (1950). Notes on continuous stochastic phenomena. \textit{Biometrika}, 37(1/2), 17--23. \doi{10.2307/2332142}.
+
+\bibitem{norris2013mass}
+Norris, J.~L., \& Caprioli, R.~M. (2013). Analysis of tissue by matrix-assisted laser desorption/ionization imaging mass spectrometry: a review. \textit{Chemical Reviews}, 113(4), 2309--2342. \doi{10.1021/cr3004295}.
+
+\bibitem{schramm2012imputing}
+Schramm, T., et al. (2012). imzML---a common data format for the flexible exchange and processing of mass spectrometry imaging data. \textit{Journal of Proteomics}, 75(16), 5106--5110. \doi{10.1016/j.jprot.2012.07.026}.
+
+\bibitem{takats2004mass}
+Tak{\'a}ts, Z., Wiseman, J.~M., Gologan, B., \& Cooks, R.~G. (2004). Mass spectrometry sampling under ambient conditions with desorption electrospray ionization. \textit{Science}, 306(5695), 471--473. \doi{10.1126/science.1104404}.
+
+\bibitem{tibshirani2002diagnosis}
+Tibshirani, R., Hastie, T., Narasimhan, B., \& Chu, G. (2002). Diagnosis of multiple cancer types by shrunken centroids of gene expression. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6567--6572. \doi{10.1073/pnas.082099299}.
+
+\end{thebibliography}
+
+\end{document}

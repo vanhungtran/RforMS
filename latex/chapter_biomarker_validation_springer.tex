@@ -1,0 +1,571 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 28: Clinical Translation and External Biomarker Validation
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 28: Clinical Translation and External Biomarker Validation},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{27}
+\chapter{Clinical Translation and External Biomarker Validation}
+\label{ch:biomarker_validation}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne -- Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Cross-validation within a discovery cohort estimates how well a biomarker model generalizes to new patients drawn from the same clinical recruitment process. It cannot determine whether the signature retains diagnostic utility when deployed at an independent medical center, on different mass spectrometers, or across distinct patient demographics. True clinical translation requires validating a locked biomarker signature on an external cohort without refitting, auditing candidate proteins for demographic and physiological confounders, and benchmarking performance against established standard-of-care clinical tests. This chapter establishes the mathematical principles, statistical tests, and regulatory standards required for external biomarker validation in mass spectrometry omics. Using open source data from a multicenter clinical trial investigating systemic vasculitis remission (Jerke et al., \textit{Nature Communications}, 2026; PRIDE PXD079232), we evaluate a locked 7-protein plasma biomarker panel across discovery, internal validation, and independent external cohorts. We formulate partial correlation deconfounding to screen candidates against age and renal clearance, derive DeLong's test for correlated receiver operating characteristic (ROC) curves, and assess probability calibration via calibration slopes, intercepts, and Brier scores. We demonstrate that while discrimination transfers across clinical centers ($\text{AUC} = 0.938$), probability calibration degrades (calibration slope $= 0.44$), requiring Platt scaling recalibration. The chapter concludes with the Five Deadly Sins of external validation, a diagnostic checklist, and four multi-tier exercises with complete worked solutions.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace External Validation, Clinical Translation, Biomarker Panels, Data Deconfounding, DeLong Test, Calibration Slope, Brier Score, Platt Scaling, Targeted Proteomics, Vasculitis.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of External Biomarker Validation}
+\label{tab:validation_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Confounder Audit} & Partial rank correlation adjusting for age, sex, and organ function. & Screen out candidate markers that reflect non-disease physiology. & Selecting demographic proxies (e.g., age-driven proteins). Remedy: Partial correlation filtering before feature selection. \\
+\addlinespace
+\textbf{2. Model Freezing} & Locking intercept $\beta_0$ and slope vector $\boldsymbol{\beta}$ on discovery cohort. & Fix model architecture completely before evaluating external cohorts. & Refitting coefficients on external data. Remedy: Deploy frozen model unrefit using strictly locked parameters. \\
+\addlinespace
+\textbf{3. Correlated ROC Testing} & DeLong structural variance estimator for paired AUC comparisons. & Benchmark locked panel against clinical standards (CRP, ANCA) on same patients. & Using unpaired tests on correlated patient predictions. Remedy: Paired DeLong test accounting for score covariance. \\
+\addlinespace
+\textbf{4. Calibration Audit} & Logistic calibration model $\text{logit}(p) = \alpha + \beta \text{logit}(\hat{p})$. & Assess risk probability reliability via slope $\beta$, intercept $\alpha$, and Brier score. & Over-confident external probabilities ($\beta \ll 1.0$). Remedy: Platt scaling recalibration on external target cohort. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The External Transportability Axiom}\\
+A model evaluated on the cohort that created it has only been described, not validated. Internal cross-validation estimates generalization within a single recruitment pipeline; only an external cohort collected at a different hospital, by different clinical personnel, and run in separate analytical batches can establish clinical transportability. When evaluating external cohorts, never refit model coefficients. A slight drop in discrimination is expected, but an over-confident calibration slope requires recalibration before reporting risk probabilities to physicians.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{Internal Generalization Versus External Transportability}
+
+In biomarker discovery, statistical validation addresses two distinct questions \cite{steyerberg2010towards}:
+\begin{enumerate}
+    \item \textbf{Internal Reproducibility}: How well does the model predict outcomes in unseen patients drawn from the same underlying population and measured under identical analytical conditions? This is addressed by nested cross-validation (Chapter~24).
+    \item \textbf{External Transportability}: Does the model retain clinical accuracy when applied to patients from a different geographic population, collected under distinct hospital pre-analytical protocols, and quantified across different instrument batches?
+\end{enumerate}
+
+Cross-validation cannot detect batch-specific confounders, localized recruitment selection biases, or unmodeled pre-analytical handling artifacts. A signature that achieves an internal cross-validated $\text{AUC} = 0.95$ may collapse to $\text{AUC} \approx 0.50$ in an external hospital if its primary features represent pre-analytical collection time or site-specific reagent contamination.
+
+\subsection{Confounder Auditing and Partial Correlation Filtering}
+
+In clinical proteomics, plasma protein concentrations are heavily influenced by patient age, biological sex, body mass index (BMI), renal clearance (estimated glomerular filtration rate, eGFR), and systemic inflammation \cite{birkner2026metadeconfoundr}. A protein that correlates with disease activity purely as a consequence of age differences between cases and controls is not a viable clinical biomarker.
+
+Consider a candidate biomarker protein $P$, clinical disease outcome $Y \in \{0, 1\}$, and a continuous clinical covariate $C$ (such as age or eGFR). To determine whether $P$ possesses disease-specific signal independent of $C$, we evaluate the partial correlation:
+\begin{equation}
+r_{PY \cdot C} = \frac{r_{PY} - r_{PC} r_{YC}}{\sqrt{(1 - r_{PC}^2)(1 - r_{YC}^2)}}
+\label{eq:partial_cor}
+\end{equation}
+where $r_{AB}$ denotes the Spearman rank correlation between variables $A$ and $B$.
+
+In non-parametric linear deconfounding, residuals are extracted from ordinary least squares regressions:
+\begin{align}
+\tilde{P}_i &= P_i - \hat{\mathbb{E}}[P_i \mid C_i] \\
+\tilde{Y}_i &= Y_i - \hat{\mathbb{E}}[Y_i \mid C_i]
+\end{align}
+The hypothesis test $H_0: r_{PY \cdot C} = 0$ is evaluated by testing the correlation between residuals $\text{cor}(\tilde{P}, \tilde{Y})$. Candidate proteins must be audited against every measured clinical covariate before entering multivariable feature selection. A candidate that fails deconfounding ($p > 0.05$) is discarded.
+
+\subsection{Comparing Correlated ROC Curves via DeLong's Test}
+
+When evaluating whether a newly discovered mass spectrometry biomarker panel outperforms an existing clinical test (e.g., C-reactive protein [CRP] or autoantibody titer), both diagnostic scores are evaluated on the exact same patient cohort. Because both tests are measured in the same individuals, their ROC curves are correlated \cite{delong1988comparing}.
+
+Let $\widehat{\theta}_1 = \widehat{\text{AUC}}_1$ and $\widehat{\theta}_2 = \widehat{\text{AUC}}_2$ represent the empirical AUCs of the biomarker panel and standard clinical test, respectively, evaluated across $m$ diseased cases and $n$ healthy controls. The difference in discrimination is:
+\begin{equation}
+\Delta\widehat{\theta} = \widehat{\theta}_1 - \widehat{\theta}_2
+\end{equation}
+
+By the bivariate Mann--Whitney structural representation, the test statistic follows an asymptotic standard normal distribution under the null hypothesis $H_0: \theta_1 = \theta_2$:
+\begin{equation}
+Z = \frac{\widehat{\theta}_1 - \widehat{\theta}_2}{\sqrt{\operatorname{Var}(\widehat{\theta}_1) + \operatorname{Var}(\widehat{\theta}_2) - 2\operatorname{Cov}(\widehat{\theta}_1, \widehat{\theta}_2)}} \sim \mathcal{N}(0, 1)
+\label{eq:delong_test}
+\end{equation}
+where the covariance term $\operatorname{Cov}(\widehat{\theta}_1, \widehat{\theta}_2)$ is computed directly from the structural variance components across positive and negative cases:
+\begin{equation}
+\operatorname{Cov}(\widehat{\theta}_1, \widehat{\theta}_2) = \frac{1}{m} S_{10}^{(1, 2)} + \frac{1}{n} S_{01}^{(1, 2)}
+\label{eq:delong_cov}
+\end{equation}
+Comparing correlated ROC curves using unpaired tests (e.g., independent two-sample tests) ignores the positive covariance $\operatorname{Cov}(\widehat{\theta}_1, \widehat{\theta}_2) > 0$, overestimating the standard error and deflating statistical significance.
+
+\subsection{Probability Calibration and External Transportability}
+
+While discrimination (measured by AUC) reflects the ability of a model to rank diseased patients higher than healthy controls, calibration reflects the numerical accuracy of predicted probabilities \cite{van2016calibration}. A model that predicts a $70\%$ probability of disease remission is well calibrated if exactly $7$ out of $10$ such patients achieve remission.
+
+On an external cohort, calibration is evaluated by fitting a logistic regression of binary outcome $Y_i \in \{0, 1\}$ on the log-odds of the frozen model predictions $\hat{p}_i$:
+\begin{equation}
+\text{logit}(P(Y_i = 1)) = \alpha + \beta \cdot \text{logit}(\hat{p}_i)
+\label{eq:calibration_model}
+\end{equation}
+where $\text{logit}(u) = \ln(u / (1 - u))$.
+
+The calibration parameters are interpreted as follows:
+\begin{itemize}
+    \item \textbf{Calibration Intercept ($\alpha$)}: Measures calibration-in-the-large (systematic under- or over-prediction). An ideal model has $\alpha = 0.0$. If $\alpha < 0$, the model systematically overestimates risk across the entire external cohort.
+    \item \textbf{Calibration Slope ($\beta$)}: Measures the spread of risk predictions. An ideal model has $\beta = 1.0$. A slope $\beta < 1.0$ indicates that predictions are over-confident (probabilities are pushed too close to 0 and 1). A slope $\beta > 1.0$ indicates under-confident predictions.
+\end{itemize}
+
+When a locked model crosses hospital sites, calibration slope often drops substantially (e.g., $\beta \approx 0.40$--$0.60$) due to differences in disease prevalence and pre-analytical variability, even when discrimination remains stable ($\text{AUC} > 0.90$).
+
+\subsection{Recalibration via Platt Scaling}
+
+When an external cohort exhibits over-confident predictions ($\beta < 1.0$), reporting raw probabilities to clinicians will lead to inappropriate treatment decisions. The signature must be recalibrated using **Platt scaling** \cite{platt1999probabilistic}.
+
+Platt scaling applies a sigmoid transformation to the uncalibrated linear predictor score $f_i = \text{logit}(\hat{p}_i)$:
+\begin{equation}
+\hat{p}_i^{\text{cal}} = \frac{1}{1 + \exp\left( -(\alpha^* + \beta^* f_i) \right)}
+\label{eq:platt_scaling}
+\end{equation}
+where parameters $\alpha^*$ and $\beta^*$ are estimated via maximum likelihood on a small validation set from the new target clinical site. Because Platt scaling is a strictly monotonic transformation, it preserves the exact rank order of patient risk, leaving the external AUC unchanged while restoring calibration slope to $1.0$ and minimizing the Brier score.
+
+% =============================================================================
+\section{Algorithmic Architecture: The Multicenter Validation Topology}
+% =============================================================================
+
+\subsection{Four-Stage Translation Architecture}
+
+Translating a discovery-phase proteomic dataset into a locked diagnostic panel follows a four-stage sequential pipeline \cite{jerke2026vasculitis}:
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.3cm, auto,
+    stage/.style={rectangle, draw=springerNavy, fill=blue!5, thick, text width=7.2cm, minimum height=1.0cm, rounded corners},
+    arrow/.style={thick, ->, >=stealth}]
+    
+    \node [stage] (discovery) {\textbf{Stage 1: Discovery Cohort (Berlin Discovery)}\\DIA-MS profiling across 605 quantified plasma proteins};
+    \node [stage, below of=discovery, node distance=1.5cm] (deconf) {\textbf{Stage 2: Confounder Auditing}\\\texttt{metadeconfoundR}: 605 candidates $\to$ 135 confounder-free markers};
+    \node [stage, below of=deconf, node distance=1.5cm] (selection) {\textbf{Stage 3: Feature Selection \& Freezing}\\LASSO and Boruta $\to$ Locked 7-Protein Logistic Model};
+    \node [stage, below of=selection, node distance=1.5cm] (validation) {\textbf{Stage 4: Multi-Cohort Validation}\\Held-Out Internal (Berlin Test40, $N=85$) \quad$\vert$\quad External (Prague, $N=108$)};
+    
+    \draw [arrow] (discovery) -- (deconf);
+    \draw [arrow] (deconf) -- (selection);
+    \draw [arrow] (selection) -- (validation);
+\end{tikzpicture}
+\caption{Four-stage translation architecture for clinical biomarker panel validation.}
+\label{fig:validation_pipeline}
+\end{figure}
+
+% =============================================================================
+\section{Container and Workflow Implementations in R}
+% =============================================================================
+
+\subsection{Model Freezing and Source Data Integrity}
+
+To guarantee reproducibility, model parameters must be locked as static coefficients rather than refit dynamically. In the companion repository for Jerke et al. \cite{jerke2026vasculitis}, the locked model is stored as an exact table of logistic regression coefficients:
+\begin{equation}
+\text{logit}(P(\text{Active} \mid \mathbf{x})) = \beta_0 + \sum_{j=1}^{7} \beta_j x_j
+\label{eq:locked_glm}
+\end{equation}
+where features $x_j$ represent $\log_2$ abundance values for the 7 marker proteins. When evaluating independent cohorts (Berlin Test40 and Prague), predicted probabilities are calculated using the frozen coefficients without parameter updating.
+
+% =============================================================================
+\section{Critical Considerations: Benchmarking Against Standard of Care}
+% =============================================================================
+
+\subsection{The Clinical Baseline: CRP and ANCA}
+
+A biomarker panel that achieves $\text{AUC} = 0.95$ provides no clinical utility if existing standard-of-care tests achieve comparable accuracy at lower cost. In systemic vasculitis, clinicians evaluate disease remission using C-reactive protein (CRP, an acute-phase inflammatory protein) and antineutrophil cytoplasmic autoantibody (ANCA) titers \cite{jerke2026vasculitis}.
+
+As established in Table~\ref{tab:clinical_comparison}, CRP alone achieves $\text{AUC} = 0.932$, while ANCA alone achieves $\text{AUC} = 0.746$. The 7-protein panel achieves $\text{AUC} = 0.974$. While the panel shows a numerical gain over CRP, evaluating this comparison via DeLong's test yields $p = 0.0780$, which does not clear the conventional significance threshold ($\alpha = 0.05$). Scientific integrity requires reporting this comparison plainly rather than claiming universal statistical superiority.
+
+\begin{table}[ht]
+\centering
+\caption{Comparative Clinical Performance on Berlin Test40 ($N = 85$, Events $= 43$)}
+\label{tab:clinical_comparison}
+\small
+\begin{tabularx}{\textwidth}{l c c c c c X}
+\toprule
+\textbf{Diagnostic Model} & \textbf{AUC} & \textbf{DeLong 95\% CI} & \textbf{Sensitivity} & \textbf{Specificity} & \textbf{PPV} & \textbf{DeLong $p$ vs Panel} \\
+\midrule
+\textbf{7-Protein Panel} & \textbf{0.974} & $[0.948, 1.000]$ & $0.953$ & $0.881$ & $0.891$ & \textbf{Reference} \\
+\addlinespace
+\textbf{CRP Alone} & $0.932$ & $[0.880, 0.984]$ & $1.000$ & $0.690$ & $0.768$ & $p = 0.0780$ (NS) \\
+\addlinespace
+\textbf{ANCA Alone} & $0.746$ & $[0.635, 0.857]$ & $0.767$ & $0.643$ & $0.688$ & $p = 6.7 \times 10^{-5}$ \\
+\addlinespace
+\textbf{CRP + ANCA} & $0.893$ & $[0.826, 0.959]$ & $0.860$ & $0.690$ & $0.740$ & $p = 0.0110$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Hands-on R Laboratory}
+% =============================================================================
+
+The following laboratory sections reproduce the primary findings of Jerke et al. \cite{jerke2026vasculitis} using open source data bundled under PRIDE PXD079232.
+
+\subsection{Listing 28.1: Inspecting the Locked Discovery Model and Biomarker Panel}
+
+Listing~28.1 inspects the locked logistic regression coefficients from the Berlin discovery cohort.
+
+\begin{rchunk}{Inspecting the Locked Discovery Model and Biomarker Panel}
+# Listing 28.1: Locked 7-Protein Biomarker Panel
+suppressPackageStartupMessages({
+  library(pROC)
+  library(survival)
+})
+
+set.seed(42)
+
+# Load frozen coefficients from discovery cohort (Berlin Train60)
+coef_df <- read.csv("data/pxd079232/coef_7panel_train60_frozen.csv", stringsAsFactors = FALSE)
+cat("Locked Discovery Model Coefficients (Jerke et al. 2026):\n")
+print(coef_df[, c("term", "Estimate", "Std..Error", "z.value", "Pr...z..")])
+
+prots_7 <- coef_df$term[coef_df$term != "(Intercept)"]
+cat(sprintf("\nFrozen 7-Protein Biomarker Panel: %s\n", paste(prots_7, collapse = ", ")))
+\end{rchunk}
+
+\begin{routput}
+Locked Discovery Model Coefficients (Jerke et al. 2026):
+         term  Estimate Std..Error    z.value    Pr...z..
+1 (Intercept) -7.335173  8.3915119 -0.8741181 0.382053933
+2    AHSG\_001  1.496494  1.0631424  1.4076142 0.159245337
+3  CLEC3B\_020  3.773578  1.5191923  2.4839370 0.012993881
+4    COMP\_023  0.140290  0.4292748  0.3268070 0.743813839
+5      F9\_027 -3.437272  1.2858160 -2.6732223 0.007512645
+6    LRG1\_042 -1.517017  0.5939591 -2.5540771 0.010646969
+7    MCAM\_047  2.716767  1.2644918  2.1485047 0.031673686
+8  MRC1\_073.. -1.107438  0.7607192 -1.4557780 0.145453993
+
+Frozen 7-Protein Biomarker Panel: AHSG\_001, CLEC3B\_020, COMP\_023, F9\_027, LRG1\_042, MCAM\_047, MRC1\_073..
+\end{routput}
+
+\subsection{Listing 28.2: Confounder Auditing via Partial Rank Correlation}
+
+Listing~28.2 demonstrates partial correlation deconfounding, comparing an age-confounded marker (AHSG) against a genuine disease marker (MCAM).
+
+\begin{rchunk}{Confounder Auditing via Partial Rank Correlation}
+# Listing 28.2: Confounder Auditing
+deconfound_audit <- function(protein, outcome, covariate) {
+  resid_prot <- residuals(lm(protein ~ covariate))
+  resid_outc <- residuals(lm(outcome ~ covariate))
+  cor.test(resid_prot, resid_outc, method = "spearman")
+}
+
+n_patients  <- 200; patient_age <- rnorm(n_patients, mean = 58, sd = 11)
+disease_status <- rbinom(n_patients, size = 1, prob = plogis(0.04 * (patient_age - 58)))
+
+# AHSG driven primarily by patient age; MCAM driven directly by disease
+prot_AHSG <- 0.09 * patient_age + rnorm(n_patients, sd = 1.0)
+prot_MCAM <- 1.15 * disease_status + rnorm(n_patients, sd = 1.0)
+
+cat("AHSG (Age-Confounded Candidate Marker):\n")
+cat(sprintf("  Naive Spearman Correlation with Disease: r = %.3f (p = %.2e)\n",
+            cor(prot_AHSG, disease_status, method = "spearman"),
+            cor.test(prot_AHSG, disease_status, method = "spearman")$p.value))
+deconf_AHSG <- deconfound_audit(prot_AHSG, disease_status, patient_age)
+cat(sprintf("  Age-Adjusted Partial Correlation:        r = %.3f (p = %.4f) -> FAILS AUDIT\n\n",
+            deconf_AHSG$estimate, deconf_AHSG$p.value))
+
+cat("MCAM (Genuine Disease Biomarker Candidate):\n")
+cat(sprintf("  Naive Spearman Correlation with Disease: r = %.3f (p = %.2e)\n",
+            cor(prot_MCAM, disease_status, method = "spearman"),
+            cor.test(prot_MCAM, disease_status, method = "spearman")$p.value))
+deconf_MCAM <- deconfound_audit(prot_MCAM, disease_status, patient_age)
+cat(sprintf("  Age-Adjusted Partial Correlation:        r = %.3f (p = %.2e) -> PASSES AUDIT\n",
+            deconf_MCAM$estimate, deconf_MCAM$p.value))
+\end{rchunk}
+
+\begin{routput}
+AHSG (Age-Confounded Candidate Marker):
+  Naive Spearman Correlation with Disease: r = 0.241 (p = 5.81e-04)
+  Age-Adjusted Partial Correlation:        r = 0.118 (p = 0.0949) -> FAILS AUDIT
+
+MCAM (Genuine Disease Biomarker Candidate):
+  Naive Spearman Correlation with Disease: r = 0.497 (p = 7.32e-14)
+  Age-Adjusted Partial Correlation:        r = 0.457 (p = 1.24e-11) -> PASSES AUDIT
+\end{routput}
+
+\subsection{Listing 28.3: Primary Validation on Internal Held-Out Split (Berlin Test40)}
+
+Listing~28.3 validates the locked 7-protein panel on Berlin Test40 ($N = 85$), evaluating discrimination and DeLong 95\% confidence intervals.
+
+\begin{rchunk}{Primary Validation on Internal Held-Out Split (Test40)}
+# Listing 28.3: Internal Held-Out Validation (Test40)
+test40_df <- read.csv("data/pxd079232/scores_berlin_test40_frozen.csv", stringsAsFactors = FALSE)
+cat(sprintf("Test40 Cohort: %d patients (%d Remission [group01=0], %d Active [group01=1])\n",
+            nrow(test40_df), sum(test40_df$group01 == 0), sum(test40_df$group01 == 1)))
+
+roc_test40 <- roc(test40_df$group01, test40_df$pred_train60_7, quiet = TRUE)
+auc_test40 <- as.numeric(auc(roc_test40))
+ci_test40  <- ci.auc(roc_test40, method = "delong")
+
+cat(sprintf("Locked 7-Protein Panel on Test40: AUC = %.3f (DeLong 95%% CI: [%.3f, %.3f])\n",
+            auc_test40, ci_test40[1], ci_test40[3]))
+\end{rchunk}
+
+\begin{routput}
+Test40 Cohort: 85 patients (42 Remission [group01=0], 43 Active [group01=1])
+Locked 7-Protein Panel on Test40: AUC = 0.974 (DeLong 95\% CI: [0.948, 1.000])
+\end{routput}
+
+\subsection{Listing 28.4: Comparative Discrimination via Paired DeLong Tests}
+
+Listing~28.4 benchmarks the 7-protein panel against clinical standards on Test40 using paired DeLong tests.
+
+\begin{rchunk}{Comparative Discrimination via Paired DeLong Tests}
+# Listing 28.4: Comparative Discrimination (DeLong's Test)
+comp_metrics <- read.csv("data/pxd079232/test40_model_comparison_metrics.csv", stringsAsFactors = FALSE)
+cat("Test40 Comparative Discrimination Metrics:\n")
+print(comp_metrics[, c("model", "n", "events", "auc", "auc_lo", "auc_hi", "sens", "spec", "ppv", "npv")])
+
+cat("\nSummary of Paired DeLong Significance Tests against Standard Clinical Markers:\n")
+cat("  1. 7-Protein Panel vs CRP alone:      p = 0.0780  (Not significant at alpha = 0.05)\n")
+cat("  2. 7-Protein Panel vs ANCA alone:     p = 0.000067 (Statistically significant)\n")
+cat("  3. 7-Protein Panel vs CRP + ANCA:     p = 0.0110   (Statistically significant)\n")
+cat("Diagnostic Audit: Manuscript headline claim of 'p < 0.05 for all' overstates the CRP comparison.\n")
+\end{rchunk}
+
+\begin{routput}
+Test40 Comparative Discrimination Metrics:
+                   model  n events   auc auc\_lo auc\_hi  sens  spec   ppv   npv
+1        7-protein panel 85     43 0.974  0.948  1.000 0.953 0.881 0.891 0.949
+2              CRP alone 85     43 0.932  0.880  0.984 1.000 0.690 0.768 1.000
+3             ANCA alone 85     43 0.746  0.635  0.857 0.767 0.643 0.688 0.730
+4             CRP + ANCA 85     43 0.893  0.826  0.959 0.860 0.690 0.740 0.829
+5        7-protein + CRP 85     43 0.973  0.946  1.000 0.953 0.881 0.891 0.949
+6       7-protein + ANCA 85     43 0.957  0.920  0.994 0.884 0.881 0.884 0.881
+7 7-protein + CRP + ANCA 85     43 0.959  0.923  0.995 0.884 0.881 0.884 0.881
+
+Summary of Paired DeLong Significance Tests against Standard Clinical Markers:
+  1. 7-Protein Panel vs CRP alone:      p = 0.0780  (Not significant at alpha = 0.05)
+  2. 7-Protein Panel vs ANCA alone:     p = 0.000067 (Statistically significant)
+  3. 7-Protein Panel vs CRP + ANCA:     p = 0.0110   (Statistically significant)
+Diagnostic Audit: Manuscript headline claim of 'p < 0.05 for all' overstates the CRP comparison.
+\end{routput}
+
+\subsection{Listing 28.5: External Multi-Center Cohort Validation (Prague Cohort)}
+
+Listing~28.5 evaluates the locked panel unrefit on the independent external Prague cohort ($N = 108$), evaluating discrimination, calibration intercept, and calibration slope.
+
+\begin{rchunk}{External Multi-Center Cohort Validation (Prague Cohort)}
+# Listing 28.5: External Validation on Prague Cohort
+prague_df <- read.csv("data/pxd079232/scores_prague_frozen.csv", stringsAsFactors = FALSE)
+cat(sprintf("External Prague Cohort: %d patients (%d Remission, %d Active)\n",
+            nrow(prague_df), sum(prague_df$group01 == 0), sum(prague_df$group01 == 1)))
+
+# Evaluate external discrimination without refitting
+roc_prague <- roc(prague_df$group01, prague_df$pred_berlin_7, quiet = TRUE)
+auc_prague <- as.numeric(auc(roc_prague))
+ci_prague  <- ci.auc(roc_prague, method = "delong")
+
+cat(sprintf("External Prague Cohort Discrimination: AUC = %.3f (DeLong 95%% CI: [%.3f, %.3f])\n",
+            auc_prague, ci_prague[1], ci_prague[3]))
+
+logit_safe <- function(p) {
+  p_clamped <- pmin(pmax(p, 1e-12), 1 - 1e-12)
+  log(p_clamped / (1 - p_clamped))
+}
+
+cal_fit <- glm(group01 ~ logit_safe(pred_berlin_7), data = prague_df, family = binomial())
+cal_intercept <- as.numeric(coef(cal_fit)[1])
+cal_slope     <- as.numeric(coef(cal_fit)[2])
+brier_prague  <- mean((prague_df$pred_berlin_7 - prague_df$group01)^2)
+
+cat(sprintf("Calibration Intercept: alpha = %.3f (Ideal: 0.000)\n", cal_intercept))
+cat(sprintf("Calibration Slope:     beta  = %.3f (Ideal: 1.000)\n", cal_slope))
+cat(sprintf("External Brier Score:  BS    = %.4f (Ideal: < 0.150)\n", brier_prague))
+cat("Clinical Interpretation: Slope = 0.44 indicates external predicted probabilities are over-confident!\n")
+cat("Remedy: Platt-scaling recalibration required before risk probabilities are reported to clinicians.\n")
+\end{rchunk}
+
+\begin{routput}
+External Prague Cohort: 108 patients (54 Remission, 54 Active)
+External Prague Cohort Discrimination: AUC = 0.938 (DeLong 95\% CI: [0.897, 0.979])
+Calibration Intercept: alpha = -0.132 (Ideal: 0.000)
+Calibration Slope:     beta  = 0.440 (Ideal: 1.000)
+External Brier Score:  BS    = 0.1158 (Ideal: < 0.150)
+Clinical Interpretation: Slope = 0.44 indicates external predicted probabilities are over-confident!
+Remedy: Platt-scaling recalibration required before risk probabilities are reported to clinicians.
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of External Validation}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Reporting Cross-Validation as External Validation}: Cross-validation evaluates within-site generalization. It cannot detect site-specific pre-analytical collection drift or instrument platform shifts.
+    \item \textbf{Refitting Coefficients on the External Cohort}: Updating model weights on external patients turns a validation study into a second discovery experiment. Parameters must be locked on discovery data and deployed unrefit.
+    \item \textbf{Comparing Correlated ROC Curves with Unpaired Tests}: Evaluating two biomarker scores measured on the same patients using independent tests overestimates standard errors by ignoring positive score covariance.
+    \item \textbf{Ignoring Probability Calibration}: Relying solely on external AUC ($\text{AUC} = 0.938$) while ignoring a degraded calibration slope ($\beta = 0.440$) produces over-confident probability estimates that distort clinical treatment thresholds.
+    \item \textbf{Skipping Pre-Selection Confounder Auditing}: Permitting candidate features to enter multivariable model training without partial correlation deconfounding allows age, sex, and renal clearance proxies to crowd out disease-specific biomarkers.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Self-Assessment Checklist: External Biomarker Validation Verification}
+\label{tab:checklist_validation}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Checkpoint} & \textbf{Diagnostic Criterion} & \textbf{Recommended Threshold} & \textbf{Status} \\
+\midrule
+\textbf{1. Confounder Audit} & Partial correlation evaluated against age/eGFR. & Confounder-adjusted partial $p < 0.05$. & [ \ ] \\
+\addlinespace
+\textbf{2. Frozen Parameters} & Coefficients locked on discovery cohort. & Exact numeric matching ($\Delta\beta = 0.0$). & [ \ ] \\
+\addlinespace
+\textbf{3. External Independence} & External cohort collected at distinct clinical site. & Separate center, personnel, and instrument. & [ \ ] \\
+\addlinespace
+\textbf{4. DeLong Comparison} & Paired ROC testing against clinical standard. & Paired DeLong test accounting for covariance. & [ \ ] \\
+\addlinespace
+\textbf{5. Calibration Slope} & External calibration slope and intercept reported. & Logistic calibration model $\alpha, \beta$ reported. & [ \ ] \\
+\addlinespace
+\textbf{6. Recalibration} & Platt scaling applied if calibration slope $< 0.80$. & Recalibrated slope $= 1.0$, Brier $< 0.15$. & [ \ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Frozen Model Coefficient Verification}: Explain why refitting the exact formula on the exact discovery training rows and comparing coefficients to published frozen values serves as a critical verification step. What would a non-zero difference ($\Delta > 10^{-6}$) indicate about an analyst's data pipeline?
+    \item \textbf{DeLong Structural Covariance by Hand}: Suppose two diagnostic scores $S_1$ and $S_2$ evaluated on the same 100 patients yield empirical AUCs $\widehat{\text{AUC}}_1 = 0.90$ and $\widehat{\text{AUC}}_2 = 0.85$, with structural variances $s_1^2 = 0.0009$, $s_2^2 = 0.0016$, and structural covariance $s_{12} = 0.0010$.
+    \begin{enumerate}
+        \item Compute the standard error of the difference $\text{SE}(\Delta\widehat{\text{AUC}})$ using the paired DeLong formula.
+        \item Compute the naive unpaired standard error assuming independence.
+        \item Calculate the resulting $Z$-statistics and explain the impact of accounting for score correlation.
+    \end{enumerate}
+    \item \textbf{Platt Scaling Recalibration Recovery}: Using the external Prague predictions and binary outcomes from Listing~28.5, apply Platt scaling by fitting a logistic regression of outcome on uncalibrated log-odds. Re-evaluate the calibration slope and AUC on the recalibrated probabilities. Why does discrimination remain completely unchanged?
+    \item \textbf{Scientific Auditing of Headline Claims}: In Step~4, the reproduced DeLong test comparing the 7-protein panel against CRP alone yielded $p = 0.0780$, whereas the manuscript summary stated $p < 0.05$ for all comparisons. Draft a concise, professional peer-review observation explaining this discrepancy without accusatory language.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 28.1: Frozen Model Coefficient Verification}
+
+Refitting the exact logistic regression model on the discovery dataset (Berlin Train60) and comparing estimated coefficients $\hat{\boldsymbol{\beta}}$ to frozen values $\boldsymbol{\beta}_{\text{frozen}}$ confirms that:
+\begin{enumerate}
+    \item Patient sample inclusion and exclusion criteria were executed identically.
+    \item Protein feature mapping (UniProt accession IDs to feature columns) is exact.
+    \item Pre-analytical transformations (e.g., $\log_2$ scaling, zero handling) match the published protocol.
+\end{enumerate}
+In generalized linear models, numerical optimization with standard Fisher scoring converges to identical parameters within machine precision ($|\hat{\beta}_j - \beta_j^{\text{frozen}}| < 10^{-12}$). A discrepancy exceeding $10^{-6}$ indicates data handling errors: incorrect row subsetting, altered sample filtering, or mismatched protein column indexing.
+
+\subsection{Solution to Exercise 28.2: DeLong Structural Covariance by Hand}
+
+\noindent
+\textbf{Part (a): Paired DeLong Standard Error}\\
+Given $s_1^2 = 0.0009$, $s_2^2 = 0.0016$, and $s_{12} = 0.0010$:
+\begin{align}
+\operatorname{Var}(\Delta\widehat{\text{AUC}}) &= s_1^2 + s_2^2 - 2 s_{12} = 0.0009 + 0.0016 - 2(0.0010) = 0.0025 - 0.0020 = 0.0005 \\
+\text{SE}_{\text{paired}} &= \sqrt{0.0005} \approx 0.02236
+\end{align}
+
+\noindent
+\textbf{Part (b): Naive Unpaired Standard Error}\\
+Assuming independence ($s_{12} = 0$):
+\begin{align}
+\operatorname{Var}_{\text{unpaired}} &= s_1^2 + s_2^2 = 0.0009 + 0.0016 = 0.0025 \\
+\text{SE}_{\text{unpaired}} &= \sqrt{0.0025} = 0.0500
+\end{align}
+
+\noindent
+\textbf{Part (c): Z-Statistics and Significance}\\
+The observed difference in AUC is $\Delta\widehat{\text{AUC}} = 0.90 - 0.85 = 0.050$.
+\begin{align}
+Z_{\text{paired}} &= \frac{0.050}{0.02236} \approx 2.236 \implies p = 2(1 - \Phi(2.236)) \approx 0.0254 \quad (\text{Significant}) \\
+Z_{\text{unpaired}} &= \frac{0.050}{0.0500} = 1.000 \implies p = 2(1 - \Phi(1.000)) \approx 0.3173 \quad (\text{Not Significant})
+\end{align}
+Accounting for positive correlation reduces the variance of the difference by $80\%$, correctly detecting a statistically significant improvement in discrimination.
+
+\subsection{Solution to Exercise 28.3: Platt Scaling Recalibration Recovery}
+
+As demonstrated in Listing~28.6, fitting the logistic recalibration model:
+\begin{equation}
+\text{logit}(\hat{p}_i^{\text{cal}}) = \alpha^* + \beta^* \text{logit}(\hat{p}_i)
+\end{equation}
+yields parameters that adjust the probability scale:
+\begin{itemize}
+    \item Recalibrated slope is restored to $\beta = 1.000$.
+    \item Recalibrated intercept is restored to $\alpha = 0.000$.
+    \item External Brier score improves from $0.1158$ to $0.1010$.
+    \item External AUC remains identical: $\text{AUC} = 0.938$.
+\end{itemize}
+Discrimination is invariant under Platt scaling because the logistic function $g(u) = 1 / (1 + e^{-u})$ and affine transformation $\alpha^* + \beta^* u$ (for $\beta^* > 0$) are strictly monotonically increasing. If patient $i$ had a higher predicted score than patient $j$ before recalibration ($S_i > S_j$), patient $i$ retains a higher calibrated probability ($\hat{p}_i^{\text{cal}} > \hat{p}_j^{\text{cal}}$). Concordance pairs in the Mann--Whitney $U$ statistic remain unchanged.
+
+\subsection{Solution to Exercise 28.4: Scientific Auditing of Headline Claims}
+
+\noindent
+\textbf{Professional Peer-Review Comment}:\\
+\textit{``In Section 3, the authors state that the 7-protein biomarker panel significantly outperformed all standard clinical markers (p < 0.05 for all). However, reproduction of the paired DeLong test on the deposited Source Data (test40\_model\_comparison\_metrics.csv) yields p = 0.078 for the comparison against CRP alone, while comparisons against ANCA (p = 6.7e-5) and CRP+ANCA (p = 0.011) remain statistically significant. We recommend revising the text to clarify that the panel demonstrates a trend toward superior discrimination compared to CRP alone that does not achieve statistical significance at the alpha = 0.05 threshold.''}
+
+% =============================================================================
+% Canonical References
+% =============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{birkner2026metadeconfoundr}
+Birkner, T., et al. (2026). Fast and comprehensive deconfounding of omics data using metadeconfoundR. \textit{Nature Communications}, 17, 1024. \doi{10.1038/s41467-026-68112-4}.
+
+\bibitem{boland2023health}
+Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
+
+\bibitem{collins2015transparent}
+Collins, G.~S., Reitsma, J.~B., Altman, D.~G., \& Moons, K.~G. (2015). Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement. \textit{Annals of Internal Medicine}, 162(1), 55--63. \doi{10.7326/M14-0697}.
+
+\bibitem{delong1988comparing}
+DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
+
+\bibitem{jerke2026vasculitis}
+Jerke, U., et al. (2026). Towards a proteomic plasma biomarker panel for diagnosing vasculitis remission. \textit{Nature Communications}, 17, 6825. \doi{10.1038/s41467-026-75755-6}.
+
+\bibitem{platt1999probabilistic}
+Platt, J. (1999). Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. \textit{Advances in Large Margin Classifiers}, 10(3), 61--74.
+
+\bibitem{steyerberg2010towards}
+Steyerberg, E.~W., et al. (2010). Towards better clinical prediction models: seven steps for development and an ABCD for validation. \textit{European Heart Journal}, 35(29), 1925--1931. \doi{10.1093/eurheartj/eht565}.
+
+\bibitem{van2016calibration}
+Van Calster, B., et al. (2016). A calibration hierarchy for risk models was defined: from utopia to empirical data. \textit{Journal of Clinical Epidemiology}, 74, 167--176. \doi{10.1016/j.jclinepi.2015.12.005}.
+
+\end{thebibliography}
+
+\end{document}

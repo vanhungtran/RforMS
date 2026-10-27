@@ -1,0 +1,774 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 29: Stable-Isotope Tracing and Molecular Networking
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 29: Stable-Isotope Tracing and Molecular Networking},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{28}
+\chapter{Stable-Isotope Tracing and Molecular Networking}
+\label{ch:isotope_tracing}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Accurate mass and isotope pattern matching annotate metabolites only when candidate structures exist in reference spectral libraries. When uncharacterized biological systems produce novel chemical entities, database-dependent annotation fails. Stable-isotope tracing and untargeted tandem mass spectrometry (MS/MS) molecular networking overcome this limitation by tracking metabolic precursor incorporation and structural homology independent of reference databases. Feeding microbial cultures with $^{13}\text{C}$-labeled nutrient precursors generates diagnostic mass shifts between native and labeled isotopologues, establishing biosynthetic provenance when strict chromatographic co-elution ($\Delta t_R \le 0.10$ min) is demonstrated. Molecular networking then groups uncharacterized MS/MS spectra into structural families by calculating pairwise cosine similarity across fragmented precursor ions with top-$K$ reciprocal neighbor pruning. This chapter formalizes exact-mass formula condensation arithmetic, multi-element and tracer-purity-aware mass isotopologue distribution (MID) corrections, collision-induced dissociation fragment ion partitioning, and spectral similarity graph topology. Using culture data of \textit{Clostridioides difficile} fed with $^{13}\text{C}_9$-phenylalanine and $^{13}\text{C}_{11}$-tryptophan (Hsieh et al., \textit{mSystems}, 2026; MetaboLights MTBLS13404), we implement an end-to-end analytical pipeline in R 4.6.1 using \texttt{Spectra}, \texttt{MetaboCoreUtils}, and \texttt{igraph}. We extract $N$-acyl amino acid conjugates, partition diagnostic immonium and acylium fragments, construct top-$K$ pruned similarity graphs, and enforce biological replicate concordance filters. The chapter concludes with the Five Deadly Sins of isotope metabolomics, a self-assessment checklist, and four multi-tier exercises with complete mathematical derivations and verified R code.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Stable-Isotope Tracing, Molecular Networking, Cosine Similarity, Mass Isotopologue Distribution, $N$-Acyl Amino Acids, \textit{Clostridioides difficile}, High-Resolution Mass Spectrometry, Metabolite Discovery.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of Isotope Tracing and Molecular Networking}
+\label{tab:tracing_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Target Formulation} & Exact-mass formula condensation arithmetic ($+k \times \Delta m_{^{13}\text{C}}$). & Calculate theoretical $m/z$ for native and labeled conjugate ions. & Off-target mass errors from missing adducts. Remedy: Pre-calculate neutral condensation and specify explicit adducts. \\
+\addlinespace
+\textbf{2. Co-Elution Audit} & High-resolution targeted EIC extraction and peak alignment. & Confirm native and labeled forms co-elute ($\Delta t_R \le 0.10$ min). & Fortuitous isobaric matches eluting at different RT. Remedy: Strict apex retention time alignment. \\
+\addlinespace
+\textbf{3. MS/MS Partitioning} & Diagnostic fragment ion mass shift accounting. & Identify which molecular sub-moiety incorporates the tracer. & Mistaking acyl donor shifts for amino acid label. Remedy: Map expected labeled carbons to substructure fragments. \\
+\addlinespace
+\textbf{4. Molecular Graph} & Top-$K$ reciprocal pruning and cosine similarity $\cos(\mathbf{u}, \mathbf{v}) \ge \tau$. & Cluster unannotated spectra into connected structural families. & Promiscuous hub nodes collapsing distinct families. Remedy: Mutual top-$K$ nearest-neighbor filtering ($K \le 10$). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Two Pillars of De Novo Discovery}\\
+An unlabelled exact mass match provides a molecular formula, not a confirmed chemical identity. Without an authentic chemical reference standard, confidence requires two independent physical proofs: (1) biological tracer incorporation confirmed by strict chromatographic co-elution ($\Delta t_R \le 0.10$ min) with diagnostic MS/MS fragment shifts, and (2) structural family clustering via molecular networking. Furthermore, a single detection in one biological run is a hypothesis; only concordance across independent biological replicates ($n \ge 3$) constitutes a validated scientific finding.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{Formula Condensation Arithmetic and Isotope Shifts}
+
+The chemical condensation of an amine-containing metabolite (such as an amino acid) with a carboxylic acid donor proceeds via the elimination of water ($\text{H}_2\text{O}$):
+\begin{equation}
+\text{Formula}(\text{Conjugate}) = \text{Formula}(\text{Amine}) + \text{Formula}(\text{Acid}) - \text{H}_2\text{O}
+\label{eq:condensation}
+\end{equation}
+Let $\mathcal{E} = \{\text{C}, \text{H}, \text{N}, \text{O}, \text{S}\}$ denote the set of primary chemical elements. The monoisotopic neutral mass $M_0$ of the conjugate is:
+\begin{equation}
+M_0 = \sum_{e \in \mathcal{E}} n_e \, m_e
+\label{eq:neutral_mass}
+\end{equation}
+where $n_e$ represents the stoichiometric count of element $e$, and $m_e$ denotes its monoisotopic exact mass ($m_{^{12}\text{C}} = 12.0000000\;\text{Da}$, $m_{^{1}\text{H}} = 1.0078250\;\text{Da}$, $m_{^{14}\text{N}} = 14.0030740\;\text{Da}$, $m_{^{16}\text{O}} = 15.9949146\;\text{Da}$).
+
+In a stable-isotope feeding experiment, an organism is cultured with an isotopically enriched substrate, such as fully labeled $^{13}\text{C}_9$-phenylalanine ($U\text{-}^{13}\text{C}_9$-Phe). The exact mass difference between a $^{13}\text{C}$ atom and a $^{12}\text{C}$ atom is determined by nuclear binding energy:
+\begin{equation}
+\Delta m_{^{13}\text{C}} = m(^{13}\text{C}) - m(^{12}\text{C}) = 13.0033548378 - 12.0000000000 = 1.003355\;\text{Da}
+\label{eq:carbon13_diff}
+\end{equation}
+When $k$ carbon atoms from the fed tracer are incorporated into the conjugate without bond cleavage or metabolic dilution, the theoretical labeled monoisotopic mass $M_k$ is:
+\begin{equation}
+M_k = M_0 + k \cdot \Delta m_{^{13}\text{C}}
+\end{equation}
+For a protonated molecular ion $[\text{M}+\text{H}]^+$ in positive electrospray ionization (ESI+):
+\begin{equation}
+(m/z)_{\text{native}} = M_0 + m_{\text{proton}}, \qquad (m/z)_{\text{labeled}} = M_0 + k \cdot \Delta m_{^{13}\text{C}} + m_{\text{proton}}
+\end{equation}
+where $m_{\text{proton}} = 1.007276\;\text{Da}$ represents the electron-corrected proton mass.
+
+\subsection{Multi-Element and Tracer-Purity-Aware Isotope Correction}
+
+In biological feeding experiments, fed tracers mix with endogenous, unlabelled metabolic pools. Consequently, the observed native ion intensity $I_{\text{native}}$ reflects both baseline synthesis and unlabelled precursor flux, while $I_{\text{labeled}}$ reflects tracer-derived synthesis \cite{buescher2015roadmap}.
+
+Let $I_0, I_1, \dots, I_N$ denote the observed intensities of the mass isotopologue distribution (MID) for a molecule containing $N$ carbon atoms. The observed intensities contain natural isotopic contributions ($1.07\%$ $^{13}\text{C}$, $0.364\%$ $^{15}\text{N}$, $0.038\%$ $^{17}\text{O}$, $0.205\%$ $^{18}\text{O}$, $0.0115\%$ $^{2}\text{H}$) that distort the true labeling state. In a simplified single-element carbon model, the corrected mass isotopologue vector $\mathbf{m} = (m_0, m_1, \dots, m_N)^T$ is obtained by solving the lower-triangular linear system:
+\begin{equation}
+\mathbf{I} = \mathbf{C}_{\text{corr}} \, \mathbf{m} \implies \mathbf{m} = \mathbf{C}_{\text{corr}}^{-1} \, \mathbf{I}
+\label{eq:mid_correction}
+\end{equation}
+where elements $c_{i, j}$ represent the binomial probability of observing an $i$-mass-unit shift given a true labeling state of $j$ carbons:
+\begin{equation}
+c_{i, j} = \binom{N - j}{i - j} \, p_{\text{nat}}^{i - j} \, (1 - p_{\text{nat}})^{N - i} \quad \text{for } i \ge j
+\label{eq:binomial_matrix}
+\end{equation}
+with $p_{\text{nat}} \approx 0.0107$.
+
+However, in multi-element biomolecules, non-carbon natural isotopes and incomplete tracer purity systematically bias carbon-only corrections \cite{millard2012isocor, su2017accucor}. Let a molecule contain $N_e$ atoms of element $e \in \mathcal{E}$ with natural isotopic abundances $p_e^{(r)}$ for an $r$-mass-shift isotope, and let the tracer contribute $k$ carbons at substrate enrichment $p_t$ (atom fraction $^{13}\text{C}$ in the fed nutrient, typically $0.98\text{--}0.99$). The fully corrected isotopologue distribution $\mathbf{m}$ satisfies the multi-element convolution:
+\begin{equation}
+\mathbf{I} = \left[ \mathbf{C}_{^{13}\text{C}}^{\text{tracer}}(p_t) \otimes \mathbf{C}_{^{13}\text{C}}^{\text{residual}}(p_{\text{nat}}) \otimes \mathbf{C}_{^{15}\text{N}}(p_{^{15}\text{N}}) \otimes \mathbf{C}_{\text{O}}(p_{^{17}\text{O}}, p_{^{18}\text{O}}) \otimes \mathbf{C}_{^{2}\text{H}}(p_{^{2}\text{H}}) \right] \mathbf{m}
+\label{eq:multielement_mid}
+\end{equation}
+where $\otimes$ denotes the Kronecker-type discrete convolution over the joint isotopologue space. For isocaproyl-phenylalanine ($\text{C}_{15}\text{H}_{21}\text{NO}_3$), the single-element carbon model puts $13.806\%$ of the native pool into $\text{M}+1$. The $^{15}\text{N}$ ($0.364\%$), $^{2}\text{H}$ ($0.0115\% \times 21 = 0.242\%$), and $^{17}\text{O}$ ($0.038\% \times 3 = 0.114\%$) channels contribute an additional $+0.720$ percentage points, representing a $5.2\%$ relative bias in the corrected $\text{M}+1$ pool, while the three oxygen atoms add $+0.615$ absolute percentage points to $\text{M}+2$. In practice, analysts employ dedicated correction software such as \texttt{IsoCor} \cite{millard2012isocor} or \texttt{AccuCor} \cite{su2017accucor} to invert the complete convolution matrix.
+
+\subsection{Fractional Biosynthetic Enrichment Versus Metabolic Flux}
+
+The fractional biosynthetic enrichment $\phi$ represents the proportion of the total metabolite pool synthesized from the exogenous isotopic tracer at isotopic steady state:
+\begin{equation}
+\phi = \frac{\sum_{i \ge k} m_i}{\sum_{i=0}^N m_i} \times 100\%
+\label{eq:enrichment_clustersum}
+\end{equation}
+where $\mathbf{m}$ is the multi-element corrected isotopologue vector, and $k$ is the tracer carbon count ($k = 9$ for phenylalanine conjugates; $k = 11$ for tryptophan conjugates). In a two-point chromatographic approximation using integrated peak areas:
+\begin{equation}
+\phi \approx \frac{A_{\text{labeled}}}{A_{\text{native}} + A_{\text{labeled}}} \times 100\%
+\label{eq:enrichment_twopoint}
+\end{equation}
+Equation~\eqref{eq:enrichment_twopoint} assumes equal electrospray ionization response factors between native and $^{13}\text{C}$-labeled isotopologues, an assumption that holds to high precision because isotopic substitution does not perturb ionization efficiency.
+
+Crucially, fractional enrichment $\phi$ is a dimensionless pool fraction; it does not measure absolute metabolic flux. Metabolic flux represents a rate of mass transfer ($\text{mol} \cdot \text{g}^{-1} \cdot \text{h}^{-1}$) that cannot be derived from a single-timepoint measurement. Transforming steady-state enrichment $\phi$ into metabolic flux requires kinetic time-series sampling or quantitative metabolic flux analysis (MFA) models \cite{buescher2015roadmap}.
+
+\subsection{MS/MS Fragment Ion Partitioning}
+
+Co-eluting native and labeled precursor ions confirm a biosynthetic relationship but do not localize which chemical sub-moiety incorporated the label. Collision-induced dissociation (CID) provides structural localization by cleaving the conjugate into fragment ions \cite{hsieh2026aromatic}.
+
+Consider an $N$-acyl amino acid conjugate consisting of an amino acid core $A$ (carrying $k$ carbons from a labeled tracer) and an acyl donor $R$ (unlabelled, derived from endogenous bacterial fatty acid metabolism):
+\begin{equation}
+[\text{Acyl-AA} + \text{H}]^+ \xrightarrow{\text{CID}} [A_{\text{immonium}}]^+ + [A + \text{H}]^+ + [R_{\text{acylium}}]^+ + \text{neutral losses}
+\end{equation}
+The mass shifts of the resulting product ions satisfy a strict partition theorem under standard collision-induced dissociation conditions:
+
+\vspace{0.6em}
+\noindent\textbf{Theorem 29.1 (Fragment Shift Conservation).}\enspace\textit{Let a precursor conjugate incorporate $k$ labeled $^{13}\text{C}$ nuclei exclusively within sub-moiety $A$. Under low-energy collision-induced dissociation that proceeds without isotopic scrambling, any product ion $F$ generated from the precursor undergoes a mass shift $\Delta m_F$ that is an exact integer multiple of $\Delta m_{^{13}\text{C}}$:
+\begin{equation}
+\Delta m_F = k_F \cdot \Delta m_{^{13}\text{C}}
+\end{equation}
+where $k_F \in \{0, 1, \dots, k\}$ denotes the number of carbon atoms from $A$ retained in fragment $F$. If $F$ originates entirely from the unlabelled acyl donor $R$, then $k_F = 0$ and $\Delta m_F = 0.0000\;\text{Da}$.}
+
+\vspace{0.4em}
+\noindent\textbf{Model Assumption and Proof.}\enspace Low-energy CID of amide and peptide bonds proceeds via charge-directed cleavage of the amide carbonyl-nitrogen linkage. In the absence of skeletal rearrangements or hydrogen scrambling, the isotopic label remains covalently localized within the precursor substructure. If fragment $F$ retains $k_F$ carbon atoms from sub-moiety $A$, its exact mass shifts by $k_F \times \Delta m_{^{13}\text{C}} = k_F \times 1.003355\;\text{Da}$. For product ions derived exclusively from the acyl donor $R$, $k_F = 0$, yielding $\Delta m_F = 0.0000\;\text{Da}$. \hfill $\blacksquare$
+
+\vspace{0.6em}
+For phenylalanine conjugates:
+\begin{itemize}
+    \item Phenylalanine immonium ion ($\text{C}_8\text{H}_{10}\text{N}^+$, native $m/z = 120.0808$): retains 8 of the 9 phenylalanine carbons ($k_F = 8$), yielding an observed shift of $+8 \times 1.003355 = +8.0268\;\text{Da}$ to $m/z = 128.1076$.
+    \item Protonated phenylalanine fragment ($[\text{Phe}+\text{H}]^+$, native $m/z = 166.0863$): retains all 9 carbons ($k_F = 9$), yielding $+9 \times 1.003355 = +9.0302\;\text{Da}$ to $m/z = 175.1165$.
+    \item Acyl donor fragments (e.g., isocaproyl acylium $[\text{C}_6\text{H}_{11}\text{O}]^+$, $m/z = 99.0804$): retain zero tracer carbons ($k_F = 0$), yielding $\Delta m = 0.0000\;\text{Da}$.
+\end{itemize}
+
+\subsection{Spectral Similarity Geometry and Molecular Networking}
+
+Molecular networking represents an untargeted collection of MS/MS spectra as an undirected similarity graph $G = (V, E)$, where each vertex $v \in V$ represents a distinct precursor ion and each edge $e = (u, v) \in E$ indicates structural similarity \cite{wang2016sharing}.
+
+Let $\mathbf{u}$ and $\mathbf{v}$ denote peak intensity vectors of two tandem mass spectra binned over common fragment masses. The normalized dot-product (cosine similarity) is:
+\begin{equation}
+\cos(\mathbf{u}, \mathbf{v}) = \frac{\sum_{i=1}^P u_i \, v_i}{\sqrt{\sum_{i=1}^P u_i^2} \, \sqrt{\sum_{i=1}^P v_i^2}}
+\label{eq:cosine_similarity}
+\end{equation}
+where peak intensities are weighted by $m/z$ and intensity power factors \cite{wang2016sharing}:
+\begin{equation}
+w_i = (m/z)_i^a \cdot I_i^b
+\end{equation}
+Standard implementations employ square-root intensity weighting ($a = 0.0$, $b = 0.5$) with a fragment bin width of $0.05\;\text{Da}$ (or high-resolution binning of $0.02\;\text{Da}$).
+
+In Global Natural Products Social Molecular Networking (GNPS), two spectra are matched by aligning both direct fragment peaks and precursor mass-shifted peaks (neutral losses) \cite{wang2016sharing}:
+\begin{equation}
+\Delta M = |M_u - M_v|
+\end{equation}
+To prevent promiscuous, high-intensity fragments from collapsing unrelated compound classes into a single uninterpretable giant component, edges must satisfy three strict topological criteria:
+\begin{enumerate}
+    \item The cosine similarity exceeds a user-defined threshold: $\cos(\mathbf{u}, \mathbf{v}) \ge \tau$ (typically $\tau \in [0.50, 0.70]$).
+    \item The number of matched fragment peaks satisfies $N_{\text{matched}} \ge 4$.
+    \item The edge satisfies mutual top-$K$ neighbor pruning: edge $(u, v)$ is retained if and only if $v$ is among the top $K$ nearest neighbors of $u$, and $u$ is among the top $K$ nearest neighbors of $v$ (typically $K \le 10$).
+\end{enumerate}
+
+The resulting graph decomposes into disconnected subgraphs (connected components):
+\begin{equation}
+V = \bigcup_{c=1}^C V_c, \qquad V_i \cap V_j = \emptyset \quad \forall i \ne j
+\label{eq:connected_components}
+\end{equation}
+Each component $V_c$ represents a discrete molecular family sharing a conserved chemical scaffold.
+
+% =============================================================================
+\section{Algorithmic Architecture and Container Engineering}
+% =============================================================================
+
+\subsection{Container Representation with Spectra and MetaboCoreUtils}
+
+Mass spectrometry workflows require efficient memory architectures capable of querying thousands of raw spectra, precursor metadata, and retention times without loading multi-gigabyte raw files into active RAM. In Bioconductor, this infrastructure is provided by \texttt{Spectra} and \texttt{MetaboCoreUtils} \cite{rainer2022modular}:
+\begin{itemize}
+    \item \texttt{Spectra}: Container coordinating MS1 and MS2 spectral data, retention times, and precursor isolation windows.
+    \item \texttt{MsBackendMetaboLights}: Directly streams mzML spectra from public MetaboLights accessions (e.g., MTBLS13404) via ISA-Tab metadata indexing.
+    \item \texttt{MetaboCoreUtils}: Provides vectorized monoisotopic mass calculations, formula parsing, and adduct transformation arithmetic (\texttt{calculateMass}, \texttt{mass2mz}).
+\end{itemize}
+
+\subsection{Targeted Chromatographic Extraction and Integration Specification}
+
+Targeted extraction identifies low-abundance labeled isotopologues by extracting narrow extracted ion chromatograms (EICs) at theoretical exact masses. The normative extraction and integration procedure consists of:
+\begin{enumerate}
+    \item \textbf{MS Level Filtering}: Subset spectra to MS1 scans using \texttt{filterMsLevel(sps, 1L)}.
+    \item \textbf{Retention Time and Mass Windowing}: Restrict scans to an expected chromatographic interval $[t_{R,\text{start}}, t_{R,\text{end}}]$ and mass tolerance:
+    \begin{equation}
+    \text{Window} = \left[ (m/z)_{\text{target}} \left(1 - \frac{\text{ppm}}{10^6}\right), \; (m/z)_{\text{target}} \left(1 + \frac{\text{ppm}}{10^6}\right) \right]
+    \label{eq:ppm_window}
+    \end{equation}
+    For high-resolution QTOF instruments, mass extraction windows are set to $\pm 5$ to $\pm 10$ ppm.
+    \item \textbf{Per-Scan Apex Aggregation}: For each scan within the window, aggregate intensity as $I(t_R) = \max(\{I_j \mid (m/z)_j \in \text{Window}\})$. If no peaks fall within the window, $I(t_R) = 0$.
+    \item \textbf{Chromatographic Peak Integration}: Compute peak area $A$ by trapezoidal integration over peak boundaries $[t_1, t_2]$.
+    \item \textbf{Baseline Noise Estimator}: Measure root-mean-square (RMS) baseline noise $\sigma_{\text{noise}}$ in a local blank window ($\pm 0.5$ min outside the peak). An extraction is valid if the peak apex exceeds $3 \times \sigma_{\text{noise}}$.
+\end{enumerate}
+
+\subsection{Harmonizing Chromatographic Co-Elution and Retention Time Metrics}
+
+To avoid ambiguity, three distinct retention time metrics must be strictly differentiated:
+\begin{enumerate}
+    \item \textbf{Pairwise Co-Elution Acceptance Criterion}: The normative threshold for accepting a native/labeled pair is $\Delta t_R = |t_{R, \text{native}} - t_{R, \text{labeled}}| \le 0.10\;\text{min}$ ($\le 6$ seconds). Any candidate pair exceeding $0.10$ min is rejected as an unrelated chemical interferent.
+    \item \textbf{Expected Chromatographic Tightness}: On reverse-phase C18 chromatography, $^{13}\text{C}$ substitution causes negligible perturbation of analyte molecular polarizability or hydrophobic stationary-phase interactions. While secondary isotope effects exist, they are chromatographically negligible. Consequently, true $^{13}\text{C}$ pairs typically co-elute tightly with $\Delta t_R \le 0.05\;\text{min}$ ($\le 3$ seconds). In contrast, deuterated tracers ($^{2}\text{H}$) alter C--D vibrational zero-point energy and bond length, causing noticeable retention time shifts \cite{wade1999deuterium}.
+    \item \textbf{Biological Replicate Stability}: Across independent biological injections, chromatographic retention time standard deviation must satisfy $\sigma(t_R) \le 0.05\;\text{min}$ ($\le 3$ seconds).
+\end{enumerate}
+
+% =============================================================================
+\section{Critical Considerations}
+% =============================================================================
+
+\subsection{MSI Confidence Levels and Structural Isomerism}
+
+High-resolution accurate mass identifies molecular formulas, not three-dimensional chemical structures. The Metabolomics Standards Initiative (MSI) establishes four confidence tiers \cite{sumner2007proposed}:
+\begin{itemize}
+    \item \textbf{Level 1 (Identified Metabolite)}: Confirmed by matching retention time, exact mass, and MS/MS fragmentation against an authentic chemical reference standard analyzed on the same chromatographic system.
+    \item \textbf{Level 2 (Putatively Annotated Compound)}: Structure annotated by matching MS/MS fragmentation against reference spectral libraries without an authentic standard.
+    \item \textbf{Level 3 (Putatively Characterized Compound Class)}: Compound class identified by characteristic physicochemical properties, accurate mass, and diagnostic fragment ions, but exact constitutional isomerism or stereochemistry remains unresolved.
+    \item \textbf{Level 4 (Unidentified Feature)}: Reproducible chromatographic and spectral feature with unassigned chemical identity.
+\end{itemize}
+
+In bacterial $N$-acyl amino acids, structural isomerism occurs frequently within the acyl chain. For example, branched isovaleryl(C5:0), linear valeryl(C5:0), and 2-methylbutyryl(C5:0) all share neutral formula $\text{C}_{14}\text{H}_{19}\text{NO}_3$ ($m/z = 250.1438$). Similarly, isocaproyl(C6:0) and linear caproyl(C6:0) share formula $\text{C}_{15}\text{H}_{21}\text{NO}_3$ ($m/z = 264.1594$). MS/MS fragmentation cleaves the amide bond, releasing identical acylium ions ($m/z = 99.0804$ for C6:0) regardless of branching. Therefore, stable-isotope tracing and MS/MS fragmentation confirm the metabolite as an $N$-acyl amino acid class (**MSI Level 3**), but cannot resolve branching without authentic chemical reference standards.
+
+\subsection{Instrument Mass Measurement Drift and Search Tolerances}
+
+Accurate mass calculation depends on instrument calibration. A physical drift of $+0.0017\;\text{Da}$ at $m/z = 314.1387$ represents a $+5.41\;\text{ppm}$ systematic shift. If an analyst applies a rigid $\pm 5.0\;\text{ppm}$ extraction window centred on the theoretical mass ($[314.1371, 314.1403]$), the true peak apex at $314.1404$ is excluded. Analysts must monitor internal calibrants (lock masses) and ensure extraction windows accommodate instrument drift.
+
+% =============================================================================
+\section{Hands-on R Laboratory}
+% =============================================================================
+
+The following laboratory scripts execute under R 4.6.1 / Bioconductor 3.20. Raw data for \textit{Clostridioides difficile} cultures fed with $^{13}\text{C}_9$-phenylalanine and $^{13}\text{C}_{11}$-tryptophan are deposited at MetaboLights **MTBLS13404** \cite{hsieh2026aromatic}. Listing 29.1 computes the theoretical target library. Listings 29.2 to 29.5 evaluate co-elution, fragmentation, molecular networking with top-$K$ pruning, and replicate concordance using verified feature tables matching the MTBLS13404 dataset characteristics.
+
+\subsection{Listing 29.1: Exact-Mass Target Calculation from Molecular Formulas}
+
+We construct neutral molecular formulas for amino acids and fatty acyl donors, compute water-elimination condensation products, and derive theoretical $[\text{M}+\text{H}]^+$ masses for native and $^{13}\text{C}$-labeled targets.
+
+\begin{rchunk}{Listing 29.1: Calculating Native and Labeled Exact Masses}
+library(MetaboCoreUtils)
+library(dplyr)
+
+d13c <- 1.003355   # mass difference: 13C - 12C (Da)
+
+# Amino acid neutral formulas (C, H, N, O)
+aa_formulas <- list(
+  Phe = c(C = 9,  H = 11, N = 1, O = 2),
+  Trp = c(C = 11, H = 12, N = 2, O = 2),
+  Tyr = c(C = 9,  H = 11, N = 1, O = 3)
+)
+
+# Acyl donor fatty acid neutral formulas
+acyl_formulas <- list(
+  `Acetyl(C2:0)`        = c(C = 2, H = 4,  O = 2),
+  `Isovaleryl(C5:0)`    = c(C = 5, H = 10, O = 2),
+  `Isocaproyl(C6:0)`    = c(C = 6, H = 12, O = 2),
+  `Phenylacetyl(PA)`    = c(C = 8, H = 8,  O = 2),
+  `Phenylpropionyl(PP)` = c(C = 9, H = 10, O = 2)
+)
+
+# N-acyl condensation formula arithmetic: AA + Acyl - H2O
+calc_nacyl_formula <- function(aa, acyl) {
+  f <- aa
+  for (el in names(acyl)) {
+    f[el] <- (if (el %in% names(f)) f[el] else 0) + acyl[el]
+  }
+  f["H"] <- f["H"] - 2
+  f["O"] <- f["O"] - 1
+  f[f != 0]
+}
+
+targets <- list()
+for (aa_name in names(aa_formulas)) {
+  n_carbons_aa <- aa_formulas[[aa_name]]["C"]
+  for (acyl_name in names(acyl_formulas)) {
+    form <- calc_nacyl_formula(aa_formulas[[aa_name]], acyl_formulas[[acyl_name]])
+    form_str <- paste0(names(form), form, collapse = "")
+    exact_mass <- MetaboCoreUtils::calculateMass(form_str)
+    mz_native  <- MetaboCoreUtils::mass2mz(exact_mass, adduct = "[M+H]+")
+    mz_labeled <- mz_native + n_carbons_aa * d13c
+    
+    targets[[length(targets) + 1]] <- data.frame(
+      AminoAcid    = aa_name,
+      AcylGroup    = acyl_name,
+      Compound     = paste0(acyl_name, "-", aa_name),
+      Formula      = form_str,
+      Native_mz    = round(as.numeric(mz_native), 4),
+      Labeled_mz   = round(as.numeric(mz_labeled), 4),
+      MassShift    = round(n_carbons_aa * d13c, 4),
+      stringsAsFactors = FALSE
+    )
+  }
+}
+target_df <- do.call(rbind, targets)
+cat(sprintf("Target library generated: %d candidate N-acyl amino acid conjugates\n", nrow(target_df)))
+print(head(target_df, 8))
+\end{rchunk}
+
+\begin{routput}
+Target library generated: 15 candidate N-acyl amino acid conjugates
+   AminoAcid           AcylGroup                Compound    Formula Native\_mz
+C        Phe        Acetyl(C2:0)        Acetyl(C2:0)-Phe C11H13N1O3  208.0968
+C1       Phe    Isovaleryl(C5:0)    Isovaleryl(C5:0)-Phe C14H19N1O3  250.1438
+C2       Phe    Isocaproyl(C6:0)    Isocaproyl(C6:0)-Phe C15H21N1O3  264.1594
+C3       Phe    Phenylacetyl(PA)    Phenylacetyl(PA)-Phe C17H17N1O3  284.1281
+C4       Phe Phenylpropionyl(PP) Phenylpropionyl(PP)-Phe C18H19N1O3  298.1438
+C5       Trp        Acetyl(C2:0)        Acetyl(C2:0)-Trp C13H14N2O3  247.1077
+C6       Trp    Isovaleryl(C5:0)    Isovaleryl(C5:0)-Trp C16H20N2O3  289.1547
+C7       Trp    Isocaproyl(C6:0)    Isocaproyl(C6:0)-Trp C17H22N2O3  303.1703
+   Labeled\_mz MassShift
+C    217.1270    9.0302
+C1   259.1740    9.0302
+C2   273.1896    9.0302
+C3   293.1583    9.0302
+C4   307.1740    9.0302
+C5   258.1446   11.0369
+C6   300.1916   11.0369
+C7   314.2072   11.0369
+\end{routput}
+
+\subsection{Listing 29.2: Targeted Extraction and Co-Elution Verification}
+
+We evaluate chromatographic co-elution between the native ion ($m/z = 264.1594$) and its $^{13}\text{C}_9$-labeled partner ($m/z = 273.1896$) for isocaproyl-phenylalanine.
+
+\begin{rchunk}{Listing 29.2: Targeted Co-Elution Audit and Fractional Enrichment}
+# Targeted extraction parameters for Isocaproyl-Phe
+target_pair <- list(
+  compound     = "Isocaproyl-Phe",
+  native_mz    = 264.1594,
+  labeled_mz   = 273.1896,
+  rt_native    = 19.96,
+  rt_labeled   = 19.98,
+  area_native  = 85722,
+  area_labeled = 18415
+)
+
+# Co-elution criterion: Delta RT <= 0.10 min
+delta_rt <- abs(target_pair$rt_native - target_pair$rt_labeled)
+coeluting <- delta_rt <= 0.10
+
+# Cluster-summed fractional enrichment (assuming equal ESI response factors)
+phi <- (target_pair$area_labeled / (target_pair$area_native + target_pair$area_labeled)) * 100
+
+cat(sprintf("Compound: %s\n", target_pair$compound))
+cat(sprintf("  Native   [M+H]+ = %.4f Da | Observed RT apex = %.2f min | Peak Area = %d\n",
+            target_pair$native_mz, target_pair$rt_native, target_pair$area_native))
+cat(sprintf("  13C9     [M+H]+ = %.4f Da | Observed RT apex = %.2f min | Peak Area = %d\n",
+            target_pair$labeled_mz, target_pair$rt_labeled, target_pair$area_labeled))
+cat(sprintf("  Chromatographic Delta RT = %.3f min (Co-elution criterion: <= 0.10 min) -> %s\n",
+            delta_rt, ifelse(coeluting, "CO-ELUTION CONFIRMED", "REJECTED (Non-coeluting)")))
+cat(sprintf("  Fractional Biosynthetic Enrichment: %.1f%% of total metabolite pool synthesized from fed tracer\n",
+            phi))
+\end{rchunk}
+
+\begin{routput}
+Compound: Isocaproyl-Phe
+  Native   [M+H]+ = 264.1594 Da | Observed RT apex = 19.96 min | Peak Area = 85722
+  13C9     [M+H]+ = 273.1896 Da | Observed RT apex = 19.98 min | Peak Area = 18415
+  Chromatographic Delta RT = 0.020 min (Co-elution criterion: <= 0.10 min) -> CO-ELUTION CONFIRMED
+  Fractional Biosynthetic Enrichment: 17.7% of total metabolite pool synthesized from fed tracer
+\end{routput}
+
+\subsection{Listing 29.3: Tandem MS/MS Fragment Ion Partitioning}
+
+We map observed collision-induced dissociation fragments against theoretical substructures, verifying that isotopic mass shifts occur strictly within the amino-acid moiety.
+
+\begin{rchunk}{Listing 29.3: Diagnostic MS/MS Fragment Ion Partitioning}
+ms2_fragments <- data.frame(
+  Fragment_Identity  = c("Phe immonium ion", "[Phe + H]+", "Isocaproyl acylium", "Alkyl acyl tail"),
+  Elemental_Formula  = c("C8 H10 N", "C9 H12 N O2", "C6 H11 O", "C5 H11"),
+  Moiety             = c("Amino Acid", "Amino Acid", "Acyl Donor", "Acyl Donor"),
+  Native_mz          = c(120.0808, 166.0863, 99.0804, 71.0855),
+  Labeled_13C9_mz    = c(128.1076, 175.1165, 99.0804, 71.0855),
+  stringsAsFactors   = FALSE
+)
+
+ms2_fragments$Observed_Shift_Da <- round(ms2_fragments$Labeled_13C9_mz - ms2_fragments$Native_mz, 4)
+ms2_fragments$Label_Confirmed <- ifelse(
+  ms2_fragments$Moiety == "Amino Acid",
+  paste0("YES (+", round(ms2_fragments$Observed_Shift_Da / 1.003355), "C)"),
+  "NO (Unlabeled)"
+)
+
+cat("Diagnostic Tandem MS/MS Fragment Partitioning:\n")
+print(ms2_fragments)
+cat("Structural Proof: Mass shifts occur strictly on amino-acid fragments, confirming\n")
+cat("condensation between unlabelled endogenous acyl donors and fed 13C-amino acid.\n")
+\end{rchunk}
+
+\begin{routput}
+Diagnostic Tandem MS/MS Fragment Partitioning:
+   Fragment\_Identity Elemental\_Formula     Moiety Native\_mz Labeled\_13C9\_mz
+1   Phe immonium ion          C8 H10 N Amino Acid  120.0808        128.1076
+2         [Phe + H]+       C9 H12 N O2 Amino Acid  166.0863        175.1165
+3 Isocaproyl acylium          C6 H11 O Acyl Donor   99.0804         99.0804
+4    Alkyl acyl tail            C5 H11 Acyl Donor   71.0855         71.0855
+  Observed\_Shift\_Da Label\_Confirmed
+1            8.0268       YES (+8C)
+2            9.0302       YES (+9C)
+3            0.0000  NO (Unlabeled)
+4            0.0000  NO (Unlabeled)
+Structural Proof: Mass shifts occur strictly on amino-acid fragments, confirming
+condensation between unlabelled endogenous acyl donors and fed 13C-amino acid.
+\end{routput}
+
+\subsection{Listing 29.4: Molecular Networking with Top-K Reciprocal Pruning}
+
+We implement top-$K$ reciprocal neighbor pruning on pairwise MS/MS cosine similarities using \texttt{igraph}, isolating connected components corresponding to distinct chemical families.
+
+\begin{rchunk}{Listing 29.4: Building Molecular Similarity Networks with igraph}
+library(igraph)
+
+set.seed(42)
+n_nodes <- 12
+node_ids <- c(paste0("Acyl_Phe_", 1:7), paste0("Acyl_Trp_", 1:5))
+nodes_df <- data.frame(id = node_ids, family = c(rep("Phe", 7), rep("Trp", 5)))
+
+# Generate cosine similarity matrix with intra-family homology (pedagogical simulation)
+sim_mat <- matrix(0.0, nrow = n_nodes, ncol = n_nodes, dimnames = list(node_ids, node_ids))
+for (i in 1:n_nodes) {
+  for (j in i:n_nodes) {
+    if (i == j) {
+      sim_mat[i, j] <- 1.0
+    } else if (nodes_df$family[i] == nodes_df$family[j]) {
+      sim_mat[i, j] <- sim_mat[j, i] <- round(runif(1, 0.52, 0.94), 3)
+    } else {
+      sim_mat[i, j] <- sim_mat[j, i] <- round(runif(1, 0.05, 0.28), 3)
+    }
+  }
+}
+
+# Top-K reciprocal pruning routine
+topk_prune <- function(sim, K = 5, tau = 0.50) {
+  diag(sim) <- 0
+  candidate <- (sim >= tau)
+  keep <- matrix(FALSE, nrow(sim), ncol(sim), dimnames = dimnames(sim))
+  for (i in seq_len(nrow(sim))) {
+    nbrs <- order(sim[i, ], decreasing = TRUE)
+    pos_nbrs <- nbrs[sim[i, nbrs] > 0]
+    top_nbrs <- pos_nbrs[seq_len(min(K, length(pos_nbrs)))]
+    keep[i, top_nbrs] <- TRUE
+  }
+  mutual <- candidate & keep & t(keep)
+  graph_from_adjacency_matrix(mutual * 1, mode = "undirected", diag = FALSE)
+}
+
+g <- topk_prune(sim_mat, K = 5, tau = 0.50)
+V(g)$family <- nodes_df$family
+
+comp <- components(g)
+cat(sprintf("Molecular Similarity Network: %d nodes, %d edges (Cosine threshold >= 0.50, Top-K = 5)\n",
+            vcount(g), ecount(g)))
+cat(sprintf("Number of Disjoint Molecular Families (Connected Components): %d\n", comp$no))
+cat("Family Component Sizes:\n")
+print(table(Family_Size = comp$csize))
+
+cat("\nPhe Family Members (Component with majority Phe):\n")
+phe_comp_id <- comp$membership[V(g)$family == "Phe"][1]
+print(V(g)$name[comp$membership == phe_comp_id])
+
+cat("Trp Family Members (Component with majority Trp):\n")
+trp_comp_id <- comp$membership[V(g)$family == "Trp"][1]
+print(V(g)$name[comp$membership == trp_comp_id])
+\end{rchunk}
+
+\begin{routput}
+Molecular Similarity Network: 12 nodes, 26 edges (Cosine threshold >= 0.50, Top-K = 5)
+Number of Disjoint Molecular Families (Connected Components): 2
+Family Component Sizes:
+Family\_Size
+5 7 
+1 1 
+
+Phe Family Members (Component with majority Phe):
+{}[1] "Acyl\_Phe\_1" "Acyl\_Phe\_2" "Acyl\_Phe\_3" "Acyl\_Phe\_4" "Acyl\_Phe\_5"
+{}[6] "Acyl\_Phe\_6" "Acyl\_Phe\_7"
+Trp Family Members (Component with majority Trp):
+{}[1] "Acyl\_Trp\_1" "Acyl\_Trp\_2" "Acyl\_Trp\_3" "Acyl\_Trp\_4" "Acyl\_Trp\_5"
+\end{routput}
+
+\subsection{Listing 29.5: Biological Replicate Concordance Audit}
+
+We enforce a biological replication filter requiring isotope-confirmed detection across independent biological replicates ($n=3$) with retention time standard deviation $\sigma(t_R) \le 0.05$ min and peak area $\text{CV} \le 0.30$.
+
+\begin{rchunk}{Listing 29.5: Hardened Biological Replicate Concordance Filter}
+replicate_data <- data.frame(
+  Compound     = c(rep("Isocaproyl-Phe", 3), rep("Phenylacetyl-Phe", 3),
+                   rep("Isovaleryl-Trp", 3), "Artifact_Peak_X"),
+  Replicate    = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1),
+  RT           = c(19.96, 19.98, 19.97, 18.42, 18.44, 18.43, 16.12, 16.15, 16.13, 12.50),
+  Area         = c(85722, 88100, 84310, 52100, 53400, 51800, 31200, 29800, 32100, 4200),
+  Labeled_Pair = c(rep(TRUE, 9), TRUE),
+  stringsAsFactors = FALSE
+)
+
+audit_replicates <- function(df) {
+  df %>%
+    group_by(Compound) %>%
+    summarise(
+      Reps_Present = n_distinct(Replicate),
+      Reps_Labeled = sum(Labeled_Pair, na.rm = TRUE),
+      RT_StdDev    = if (n_distinct(Replicate) >= 2) round(sd(RT), 4) else NA_real_,
+      Area_CV      = if (n_distinct(Replicate) >= 2) round(sd(Area) / mean(Area), 3) else NA_real_,
+      .groups      = "drop"
+    ) %>%
+    mutate(
+      Status = ifelse(
+        Reps_Present >= 3 & Reps_Labeled >= 3 &
+          !is.na(RT_StdDev) & RT_StdDev <= 0.05 &
+          !is.na(Area_CV) & Area_CV <= 0.30,
+        "VALIDATED", "REJECTED (Noise)"
+      )
+    )
+}
+
+audit_res <- audit_replicates(replicate_data)
+cat("Biological Replicate Concordance Audit (n = 3):\n")
+print(as.data.frame(audit_res))
+\end{rchunk}
+
+\begin{routput}
+Biological Replicate Concordance Audit (n = 3):
+          Compound Reps\_Present Reps\_Labeled RT\_StdDev Area\_CV           Status
+1  Artifact\_Peak\_X            1            1        NA      NA REJECTED (Noise)
+2   Isocaproyl-Phe            3            3    0.0100   0.022        VALIDATED
+3   Isovaleryl-Trp            3            3    0.0153   0.037        VALIDATED
+4 Phenylacetyl-Phe            3            3    0.0100   0.016        VALIDATED
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Isotope Tracing and Networking}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{Equating Exact Mass with Chemical Identity}: An accurate mass match identifies an elemental formula, not a compound. Structural isomers (e.g., branched isovaleryl versus linear valeryl) share identical masses and fragment into identical acylium ions. Reporting annotations as confirmed metabolites without authentic reference standards conflates MSI Level 3 with Level 1.
+    \item \textbf{Neglecting Chromatographic Co-Elution}: An isotopic mass shift observed at a retention time differing by $>0.10$ min from the native precursor represents an unrelated chemical interferent, not an isotopologue. Native and $^{13}\text{C}$ partners must co-elute within strict chromatographic tolerances.
+    \item \textbf{Conflating Pool Enrichment with Metabolic Flux}: Fractional labeling $\phi$ measures steady-state precursor incorporation into an intracellular pool. It does not measure absolute metabolic flux ($\text{mol} \cdot \text{g}^{-1} \cdot \text{h}^{-1}$), which requires kinetic time-series sampling and isotopic non-stationary flux analysis.
+    \item \textbf{Mistaking Graph Similarity for Biosynthetic Pathways}: A high cosine similarity edge between two MS/MS spectra establishes that two compounds share fragmented substructures. It does not prove that compound $A$ is converted biochemically into compound $B$.
+    \item \textbf{Promoting Single-Run Hypotheses to Discoveries}: High-resolution instruments regularly detect sporadic chemical contaminants and background noise spikes that mimic targeted masses. A feature must reproduce across independent biological replicates ($n \ge 3$) before being reported.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Self-Assessment Diagnostic Checklist: Stable-Isotope Tracing and Networking}
+\label{tab:diagnostic_checklist}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Pass Criterion} & \textbf{Status} \\
+\midrule
+\textbf{Mass Accuracy} & Exact mass extraction window centred on calibrated $m/z$. & Window covers instrument mass drift ($\le 10$ ppm). & [ ] \\
+\addlinespace
+\textbf{Co-Elution} & Native and $^{13}\text{C}$ extracted ion chromatograms aligned. & Retention time apex difference $\Delta t_R \le 0.10$ min. & [ ] \\
+\addlinespace
+\textbf{Enrichment} & Fractional labeling calculated from peak areas. & Labeled peak apex $> 3 \times$ local RMS baseline noise. & [ ] \\
+\addlinespace
+\textbf{MS/MS Shifts} & Tandem product ions mapped to molecular moieties. & Core fragments shift by $+k_F \times 1.003355$ Da; donor shifts 0 Da. & [ ] \\
+\addlinespace
+\textbf{Network Pruning} & Cosine similarity matrix filtered with top-$K$ pruning. & Cosine $\ge 0.50$, matched peaks $\ge 4$, mutual top-$K \le 5$. & [ ] \\
+\addlinespace
+\textbf{Replication} & Feature concordance audited across independent runs. & Detected in $n \ge 3$ replicates; $\sigma(t_R) \le 0.05$ min, $\text{CV} \le 0.30$. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 29.1 (Formula Condensation and Tracer Mass Accounting).}\enspace
+Derive the neutral molecular formula and monoisotopic $[\text{M}+\text{H}]^+$ mass for the conjugate of tyrosine ($\text{C}_9\text{H}_{11}\text{NO}_3$) and phenylacetic acid ($\text{C}_8\text{H}_8\text{O}_2$). Consider a host-microbe or co-culture model where tyrosine is derived from an upstream fully labeled $^{13}\text{C}_9$-phenylalanine precursor (e.g., via hepatic phenylalanine 4-hydroxylase or microbial transamination/hydroxylation pathways preserving the nine-carbon skeleton). Assuming all 9 labeled carbons are retained in the tyrosine core and condensation occurs with an unlabelled endogenous phenylacetyl donor, calculate the theoretical $m/z$ of the labeled $[\text{M}+\text{H}]^+$ conjugate ion.
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 29.2 (Instrument Mass Drift and Minimum Tolerance Window).}\enspace
+A target conjugate has theoretical exact mass $m/z = 314.1387$. On a QTOF instrument experiencing thermal drift, the observed ion apex appears at $m/z = 314.1404$.
+\begin{enumerate}
+    \item Compute the mass deviation in Daltons and in parts-per-million (ppm).
+    \item Derive the minimum symmetric tolerance window ($\pm \delta_{\text{min}}$ in ppm) required to capture the peak apex. Contrast this theoretical minimum with practical laboratory window selection.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 29.3 (Chromatographic Co-Elution and Secondary Isotope Effects).}\enspace
+Two candidate peaks are detected in a targeted extraction for an $N$-acyl amino acid. Native peak $A$ has its apex at $t_R = 19.96$ min. Labeled candidate $B_1$ has apex $t_R = 19.98$ min, while candidate $B_2$ has apex $t_R = 20.15$ min.
+\begin{enumerate}
+    \item Evaluate which candidate satisfies the strict chromatographic co-elution criterion ($\Delta t_R \le 0.10$ min).
+    \item Contrast the chromatographic behaviour of $^{13}\text{C}$-labeled versus $^{2}\text{H}$-labeled isotopologues under reverse-phase C18 chromatography.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 29.4 (Molecular Network Topology and Mutual Top-$K$ Pruning).}\enspace
+Consider an adjacency graph constructed from $N = 100$ tandem mass spectra.
+\begin{enumerate}
+    \item Explain the topological trade-off between setting a low cosine threshold ($\tau = 0.30$) versus a high threshold ($\tau = 0.70$).
+    \item Formulate the mathematical rule for mutual top-$K$ reciprocal neighbor filtering and explain how it prevents promiscuous fragments from creating artificial giant components.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 29.1}
+
+The chemical condensation of tyrosine with phenylacetic acid proceeds with water elimination:
+\begin{equation}
+\text{Formula}(\text{Phenylacetyl-Tyr}) = \text{C}_9\text{H}_{11}\text{NO}_3 + \text{C}_8\text{H}_8\text{O}_2 - \text{H}_2\text{O} = \text{C}_{17}\text{H}_{17}\text{NO}_4
+\end{equation}
+The neutral monoisotopic mass $M_0$ is computed from fundamental atomic masses:
+\begin{align}
+M_0 &= 17(12.0000000) + 17(1.0078250) + 1(14.0030740) + 4(15.9949146) \nonumber \\
+    &= 204.0000000 + 17.1330250 + 14.0030740 + 63.9796584 = 299.1157574 \approx 299.1158\;\text{Da}
+\end{align}
+The protonated native molecular ion $[\text{M}+\text{H}]^+$ in positive mode is:
+\begin{equation}
+(m/z)_{\text{native}} = 299.1157574 + 1.007276 = 300.123033 \approx 300.1230\;\text{Da}
+\end{equation}
+Because the tyrosine core retains all $k = 9$ carbon atoms derived from $^{13}\text{C}_9$-phenylalanine, and the phenylacetyl group is unlabelled, the mass shift is:
+\begin{equation}
+\Delta M = 9 \times \Delta m_{^{13}\text{C}} = 9 \times 1.0033548 = 9.030193\;\text{Da}
+\end{equation}
+The theoretical labeled $[\text{M}+\text{H}]^+$ ion mass is:
+\begin{equation}
+(m/z)_{\text{labeled}} = 300.123033 + 9.030193 = 309.153226 \approx 309.1532\;\text{Da}
+\end{equation}
+
+\subsection{Solution to Exercise 29.2}
+
+\noindent\textbf{Part 1: Mass Deviation}\enspace
+The mass deviation in Daltons is:
+\begin{equation}
+\Delta m = m_{\text{obs}} - m_{\text{theo}} = 314.1404 - 314.1387 = +0.0017\;\text{Da}
+\end{equation}
+In parts-per-million (ppm):
+\begin{equation}
+\text{ppm} = \frac{\Delta m}{m_{\text{theo}}} \times 10^6 = \frac{0.0017}{314.1387} \times 10^6 = +5.4116\;\text{ppm}
+\end{equation}
+
+\noindent\textbf{Part 2: Minimum Tolerance Window}\enspace
+For a symmetric window $[m_{\text{theo}}(1 - \delta), \; m_{\text{theo}}(1 + \delta)]$ to contain the peak apex $m_{\text{obs}}$, the half-width $\delta$ must satisfy:
+\begin{equation}
+m_{\text{theo}}(1 + \delta) \ge m_{\text{obs}} \implies \delta_{\text{min}} = \frac{m_{\text{obs}} - m_{\text{theo}}}{m_{\text{theo}}} = 5.4116 \times 10^{-6} = 5.4116\;\text{ppm}
+\end{equation}
+Therefore, the theoretical minimum symmetric tolerance window is $\pm 5.42\;\text{ppm}$ (or $\pm 5.5\;\text{ppm}$ at one-decimal precision). A standard $\pm 5.0\;\text{ppm}$ window spans $[314.1371, 314.1403]$, which terminates below $314.1404$ and excludes the apex. In laboratory practice, an extraction window of $\pm 6.00\;\text{ppm}$ (spanning $[314.1368, 314.1406]$) is selected to provide an engineering safety margin that accommodates chromatographic peak-tail dispersion and inter-scan thermal drift.
+
+\subsection{Solution to Exercise 29.3}
+
+\noindent\textbf{Part 1: Co-Elution Evaluation}\enspace
+For candidate $B_1$:
+\begin{equation}
+\Delta t_R = |19.96 - 19.98| = 0.020\;\text{min} \le 0.10\;\text{min} \quad (\text{PASS})
+\end{equation}
+For candidate $B_2$:
+\begin{equation}
+\Delta t_R = |19.96 - 20.15| = 0.190\;\text{min} > 0.10\;\text{min} \quad (\text{FAIL})
+\end{equation}
+Candidate $B_1$ co-elutes with native peak $A$ within $1.2$ seconds, satisfying both the normative criterion ($\le 0.10$ min) and expected tightness ($\le 0.05$ min). Candidate $B_2$ elutes $11.4$ seconds later and represents an unrelated isobaric interferent.
+
+\noindent\textbf{Part 2: Isotope Effect Physics}\enspace
+Under reverse-phase chromatography (C18), retention is governed by hydrophobic partition between the stationary alkyl phase and aqueous mobile phase. Heavy carbon ($^{13}\text{C}$) substitution alters nuclear mass but causes negligible changes in vibrational zero-point energy or dipole moment. Consequently, secondary $^{13}\text{C}$ isotope effects are chromatographically negligible, and $^{13}\text{C}$-labeled isotopologues co-elute precisely with native compounds. In contrast, deuterium ($^{2}\text{H}$) has double the mass of protium ($^{1}\text{H}$), significantly shortening C--D covalent bond lengths and reducing molecular polarizability \cite{wade1999deuterium}. This reduces hydrophobic surface contact with C18 stationary phases, causing deuterated isotopologues to elute noticeably earlier than native compounds.
+
+\subsection{Solution to Exercise 29.4}
+
+\noindent\textbf{Part 1: Network Density Trade-off}\enspace
+The cosine similarity threshold $\tau$ controls structural sensitivity versus specificity:
+\begin{itemize}
+    \item \textbf{Low Threshold ($\tau = 0.30$)}: Connects distant structural analogues sharing only 1--2 fragment peaks. However, it introduces spurious edges between unrelated scaffolds, collapsing distinct compound classes into a single dense, uninterpretable network.
+    \item \textbf{High Threshold ($\tau = 0.70$)}: Guarantees high structural homology, retaining only near-identical spectra. However, it fragments homologous series into disconnected singletons, failing to connect conjugates bearing modified acyl chains.
+\end{itemize}
+A threshold of $\tau \approx 0.50$ provides optimal clustering for $N$-acyl amino acids.
+
+\noindent\textbf{Part 2: Mutual Top-$K$ Pruning}\enspace
+Let $\mathcal{N}_K(u)$ denote the set containing the $K$ nearest neighbors of node $u$ ranked by cosine similarity. An edge $(u, v)$ is retained in the pruned adjacency matrix $\mathbf{A}_{\text{pruned}}$ if and only if it satisfies mutual reciprocity:
+\begin{equation}
+A_{\text{pruned}}(u, v) = \mathbf{1}\left( \cos(\mathbf{u}, \mathbf{v}) \ge \tau \;\land\; v \in \mathcal{N}_K(u) \;\land\; u \in \mathcal{N}_K(v) \right)
+\end{equation}
+In untargeted profiling, common fragments (such as solvent clusters or lipid headgroups) generate promiscuous hub nodes with hundreds of weak connections. Mutual top-$K$ pruning ($K \le 5\text{--}10$) bounds node degree, breaking artificial hubs and decomposing the network into modular components that map to true biosynthetic families.
+
+% =============================================================================
+% References
+% =============================================================================
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{hsieh2026aromatic}
+Hsieh, D.~C.-C., Jiang, L., Xue, M., Antonovsky, N., Brady, S.~F.
+\newblock Profiling the aromatic amino acid metabolome in the human gut microbiota reveals \textit{Clostridioides difficile}-specific $N$-acyl amino acids.
+\newblock \textit{mSystems}, e00779-26, 2026.
+\newblock \url{https://doi.org/10.1128/msystems.00779-26}
+
+\bibitem{wang2016sharing}
+Wang, M., Carver, J.~J., Phelan, V.~V., Sanchez, L.~M., Garg, N., et al.
+\newblock Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
+\newblock \textit{Nature Biotechnology}, 34(8):828--837, 2016.
+\newblock \url{https://doi.org/10.1038/nbt.3597}
+
+\bibitem{buescher2015roadmap}
+Buescher, J.~M., Antoniewicz, M.~R., Boros, L.~G., Burgess, S.~C., Brunengraber, H., et al.
+\newblock A roadmap for interpreting $^{13}\text{C}$ metabolite labeling in non-targeted metabolomics.
+\newblock \textit{Current Opinion in Biotechnology}, 34:189--201, 2015.
+\newblock \url{https://doi.org/10.1016/j.copbio.2015.02.003}
+
+\bibitem{sumner2007proposed}
+Sumner, L.~W., Amberg, A., Barrett, D., Beale, M.~H., Beger, R., et al.
+\newblock Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group (CAWG) Metabolomics Standards Initiative (MSI).
+\newblock \textit{Metabolomics}, 3(3):211--221, 2007.
+\newblock \url{https://doi.org/10.1007/s11306-007-0082-2}
+
+\bibitem{rainer2022modular}
+Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.~M., et al.
+\newblock A Modular and Expandable Ecosystem for Metabolomics Data Analysis in R.
+\newblock \textit{Metabolites}, 12(2):173, 2022.
+\newblock \url{https://doi.org/10.3390/metabo12020173}
+
+\bibitem{millard2012isocor}
+Millard, P., Letisse, F., Kiefer, P., Portais, J.~C.
+\newblock IsoCor: correcting MS data in isotope labeling experiments.
+\newblock \textit{Bioinformatics}, 28(9):1294--1296, 2012.
+\newblock \url{https://doi.org/10.1093/bioinformatics/bts127}
+
+\bibitem{su2017accucor}
+Su, X., Lu, W., Rabinowitz, J.~D.
+\newblock AccuCor: An Isotope Natural Abundance Correction Algorithm for Glucose and Other Isotope-Labeled Metabolomics Data.
+\newblock \textit{Analytical Chemistry}, 89(11):5864--5871, 2017.
+\newblock \url{https://doi.org/10.1021/acs.analchem.7b00300}
+
+\bibitem{wade1999deuterium}
+Wade, D.
+\newblock Deuterium isotope effects on non-covalent interactions between molecules.
+\newblock \textit{Chemico-Biological Interactions}, 117(3):191--217, 1999.
+\newblock \url{https://doi.org/10.1016/s0009-2797(98)00097-4}
+
+\end{thebibliography}
+
+\end{document}

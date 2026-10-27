@@ -1,0 +1,570 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 12: Protein Inference and Parsimony Grouping
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 12: Protein Inference and Parsimony Grouping},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{11}
+\chapter{Protein Inference and Parsimony Grouping}
+\label{ch:protein_inference}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Bottom-up proteomics digests intact proteins into peptide fragments prior to liquid chromatography and tandem mass spectrometry. This proteolytic cleavage severs the physical connectivity between peptide sequences and their parent proteins. Search engines assign MS/MS spectra to peptide sequences, but reconstructing the original proteome requires resolving the protein inference problem. Many peptides map to multiple homologous proteins, splice isoforms, or redundant database entries. Allocating shared peptides to every candidate protein artificially inflates protein counts and distorts quantitative ratios. This chapter formulates the mathematical foundations, network topology, and Bioconductor implementations for protein inference and quantitative aggregation. We define the taxonomy of unique, shared, and razor peptides, model peptide-protein associations as bipartite graphs, and formulate Occam's razor parsimony grouping as a minimum set cover problem. Using the Bioconductor \texttt{QFeatures} container and \texttt{igraph} in R 4.6.1, we partition bipartite graphs into isolated connected components, eliminate degenerate shared peptides, and aggregate peptide intensities into protein abundances using Tukey's median polish. We audit evidence depth using the Two-Peptide Rule to eliminate spurious single-hit identifications. The chapter details the Five Deadly Sins of protein inference, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Protein Inference, Parsimony Principle, Bipartite Graph, Razor Peptides, \texttt{QFeatures}, Median Polish, Connected Components.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of Protein Inference}
+\label{tab:inference_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Mapping} & Primary sequence lookup against reference FASTA database. & Classify peptides as unique ($|\text{prot}| = 1$) or shared ($|\text{prot}| \ge 2$). & Conflating shared peptides with unique evidence. Remedy: Compute uniqueness flag per sequence. \\
+\addlinespace
+\textbf{2. Parsimony} & Bipartite graph connected component analysis and set cover. & Collapse indistinguishable proteins into parsimonious groups. & Over-assembly of subsumed proteins. Remedy: Enforce Occam's razor minimum set cover. \\
+\addlinespace
+\textbf{3. Filtering} & Shared peptide exclusion or razor peptide allocation. & Prevent quantitative signal bleeding across homologous proteins. & Double-counting shared peptide intensity. Remedy: Restrict aggregation to unique peptides. \\
+\addlinespace
+\textbf{4. Aggregation} & Tukey median polish on \texttt{QFeatures} hierarchical assays. & Compute protein abundances resistant to ionization outliers. & Distortion from simple summation. Remedy: Apply linear additive median polish. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Shared-Peptide Double-Counting Pitfall}\\
+Counting a shared peptide toward every candidate protein creates false biological discoveries. If Protein A and Protein B share a dominant peptide, summing that peptide's intensity into both protein records artificially correlates their abundance profiles. For rigorous differential expression, quantify proteins exclusively from unique peptides, or report explicitly defined razor protein groups where shared peptides are assigned to the group with the highest unique evidence count.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{The Proteolytic Loss of Physical Connectivity}
+In bottom-up mass spectrometry, proteome extracts undergo denaturation, reduction, alkylation, and enzymatic digestion (typically with trypsin). Trypsin cleaves polypeptide chains specifically at the carboxyl side of lysine ($\text{K}$) and arginine ($\text{R}$), generating peptides of 7 to 35 amino acids. While short peptides exhibit favorable liquid chromatography retention and electrospray ionization efficiency, digestion destroys the physical bond between peptides originating from the same protein molecule.
+
+When an MS/MS spectrum matches a peptide sequence $p$, establishing which protein generated $p$ is non-trivial. Gene duplication, alternative mRNA splicing, and sequence homology produce identical amino acid stretches across multiple proteins. Reconstructing the protein composition from peptide identifications is the protein inference problem (Nesvizhskii and Aebersold, 2005).
+
+\subsection{Peptide Taxonomy and Bipartite Graph Architecture}
+Let $\mathcal{P} = \{p_1, p_2, \dots, p_n\}$ represent the set of identified peptides, and let $\mathcal{K} = \{P_1, P_2, \dots, P_m\}$ represent the set of candidate proteins in the reference database. The mapping between peptides and proteins forms a bipartite graph $G = (V_{\mathcal{P}}, V_{\mathcal{K}}, E)$, where undirected edge $e_{ij} \in E$ exists if and only if peptide $p_i$ is contained within protein $P_j$.
+
+We partition peptides into three distinct classes:
+\begin{enumerate}
+    \item \textbf{Unique Peptides ($\mathcal{U}$):} A peptide that maps to exactly one protein:
+    \begin{equation}
+    \mathcal{U} = \{p_i \in \mathcal{P} : \deg(p_i) = 1\}
+    \label{eq:unique_peptides}
+    \end{equation}
+    Unique peptides provide definitive, unambiguous evidence for the presence of protein $P_j$.
+    
+    \item \textbf{Shared Peptides ($\mathcal{S}$):} A degenerate peptide that maps to two or more distinct proteins:
+    \begin{equation}
+    \mathcal{S} = \{p_i \in \mathcal{P} : \deg(p_i) \ge 2\}
+    \label{eq:shared_peptides}
+    \end{equation}
+    Shared peptides cannot be attributed to a single protein without additional assumptions.
+    
+    \item \textbf{Razor Peptides ($\mathcal{R}$):} A heuristic assignment rule popularized by MaxQuant (Cox and Mann, 2008). A shared peptide $p_i \in \mathcal{S}$ is assigned exclusively to the protein group that possesses the largest number of unique peptide identifications:
+    \begin{equation}
+    P^*(p_i) = \arg\max_{P_j \in \text{adj}(p_i)} |\mathcal{U}_{P_j}|
+    \label{eq:razor_rule}
+    \end{equation}
+    Ties are broken by total peptide count or sequence coverage.
+\end{enumerate}
+
+\subsection{Occam's Razor and the Minimum Set Cover Formulation}
+The Principle of Parsimony states that the observed data should be explained by the simplest feasible model. In protein inference, this translates to finding the minimum set of proteins $\mathcal{K}^* \subseteq \mathcal{K}$ that accounts for all observed peptides $\mathcal{P}$.
+
+Mathematically, Occam's razor is an instance of the classical Minimum Set Cover problem. Let binary decision variable $x_j \in \{0, 1\}$ indicate whether protein $P_j$ is included in the reported proteome. The optimization problem is:
+\begin{align}
+\min_{\mathbf{x}} \quad & \sum_{j=1}^m x_j \label{eq:set_cover_objective} \\
+\text{subject to} \quad & \sum_{j : P_j \in \text{adj}(p_i)} x_j \ge 1, \quad \forall p_i \in \mathcal{P} \label{eq:set_cover_constraint} \\
+& x_j \in \{0, 1\}, \quad \forall j \in \{1, \dots, m\} \nonumber
+\end{align}
+Because the Minimum Set Cover problem is NP-hard, greedy approximation algorithms (such as IDPicker; Zhang et al., 2007) iteratively select the protein that explains the maximum number of currently unexplained peptides until all peptides are covered.
+
+Proteins that share the exact same set of identified peptides are indistinguishable. Formally, proteins $P_a$ and $P_b$ are indistinguishable if:
+\begin{equation}
+\text{adj}(P_a) = \text{adj}(P_b)
+\label{eq:indistinguishable}
+\end{equation}
+Indistinguishable proteins cannot be separated by mass spectrometry data alone. They are collapsed into an indistinguishable protein group and reported as a single grouped identifier (e.g., \texttt{P00403;P12345}).
+
+\subsection{Quantitative Aggregation via Robust Median Polish}
+Once the qualitative protein groups are established, peptide intensities must be aggregated into protein-level abundance values. Peptides vary by orders of magnitude in electrospray ionization efficiency and mass spectrometer response factors.
+
+Simple summation of peptide intensities across samples is vulnerable to missing values and single-peptide outliers. If a highly ionizing peptide is missing in sample 1 due to stochastic sampling, summing intensities produces a massive artificial fold-change.
+
+Tukey's Median Polish (Tukey, 1977), implemented via \texttt{MsCoreUtils::robustSummary}, fits a two-way additive linear model on $\log_2$-transformed peptide intensities:
+\begin{equation}
+y_{ijk} = \mu + \alpha_i + \beta_j + \epsilon_{ijk}
+\label{eq:median_polish}
+\end{equation}
+where $\mu$ is the grand median, $\alpha_i$ is the peptide-specific ionization effect, $\beta_j$ is the sample abundance effect, and $\epsilon_{ijk}$ represents measurement residual. By iteratively sweeping medians along rows (peptides) and columns (samples), the algorithm decouples peptide ionization efficiency from biological abundance changes, yielding outlier-resistant protein estimates.
+
+\subsection{The Two-Peptide Rule and Evidence Depth}
+Proteins identified by only a single peptide match (termed "One-Hit Wonders") exhibit high false positive rates. A single incorrect PSM mapping to an unexpressed protein creates a spurious protein identification.
+
+The Two-Peptide Rule mandates that a protein group is accepted for quantification only if it is supported by at least two independent peptide sequences ($|\text{adj}(P_j)| \ge 2$). In \texttt{QFeatures}, the metadata column \texttt{.n} tracks the number of contributing peptides per feature, enabling automated thresholding.
+
+% =============================================================================
+\section{Algorithmic Architecture: The QFeatures and igraph Stack}
+% =============================================================================
+
+Modern proteomics analysis in R utilizes \texttt{igraph} for network topology and \texttt{QFeatures} for data management.
+
+\subsection{Bipartite Network Partitioning with igraph}
+The \texttt{igraph} package converts peptide-protein edge lists into bipartite graph structures. Computing connected components via \texttt{igraph::components} decomposes large proteomes into disjoint subgraphs.
+
+Components fall into four structural classes:
+\begin{itemize}
+    \item \textbf{$1 \times 1$ (Unique Trivial):} One unique peptide mapping to one protein.
+    \item \textbf{$n \times 1$ (Multi-Peptide Unique):} $n$ peptides mapping exclusively to a single protein.
+    \item \textbf{$1 \times n$ (Single Shared):} A single peptide sequence shared across $n$ homologous accessions.
+    \item \textbf{$n \times n$ (Complex Assembly):} Multiple peptides and proteins interconnected through overlapping sequence sharing.
+\end{itemize}
+
+\subsection{The QFeatures Hierarchical Assay Tree}
+The \texttt{QFeatures} package (Gatto et al., 2023) manages multi-level mass spectrometry assays within an integrated container. A \texttt{QFeatures} object holds multiple \texttt{SummarizedExperiment} objects, recording the exact mathematical link between peptide rows and protein rows.
+
+Executing \texttt{aggregateFeatures} creates a new assay in the container, linked via an \texttt{AssayLink} S4 slot. The transformation records:
+\begin{itemize}
+    \item Parent assay name (e.g., \texttt{"peptides"}).
+    \item Child assay name (e.g., \texttt{"proteins"}).
+    \item Grouping variable (\texttt{fcol = "Protein\_Group"}).
+    \item Aggregation function (\texttt{fun = MsCoreUtils::robustSummary}).
+    \item Contributing feature counts (\texttt{.n} column in \texttt{rowData}).
+\end{itemize}
+
+% =============================================================================
+\section{Hands-on R Laboratory: Protein Inference and Quantification}
+% =============================================================================
+
+We execute a complete protein inference and aggregation pipeline using a verified R 4.6.1 laboratory workflow. We construct a benchmark PSM table with 8 peptides across 5 proteins, categorize uniqueness, partition the bipartite graph, aggregate abundances using Tukey's median polish in \texttt{QFeatures}, and enforce the Two-Peptide Rule.
+
+\subsection{Listing 12.1: Constructing PSM Dataset and Mapping Peptide Uniqueness}
+
+\begin{rchunk}{Listing 12.1: PSM Dataset and Uniqueness Mapping}
+library(QFeatures)
+library(MsCoreUtils)
+library(igraph)
+library(dplyr)
+library(tibble)
+
+set.seed(42)
+
+# Benchmark PSM table with 8 peptide-spectrum matches across 5 proteins
+psm_data <- tribble(
+  ~peptide_sequence, ~protein_accession, ~intensity_s1, ~intensity_s2,
+  "SYGFNAAR",        "P00403",           1500,          1600,
+  "ELGNDAYK",        "P00403",           3000,          3100,
+  "ELGNDAYK",        "P12345",           3000,          3100,  # Shared between P00403 and P12345
+  "IAEESNFPFIK",     "P98765",           800,           850,
+  "LLQTAEGAE",       "P98765",           1200,          1100,
+  "LLQTAEGAE",       "P88888",           1200,          1100,  # Shared between P98765 and P88888
+  "VLDALDSIK",       "P55555",           2200,          2100,
+  "GVLDTLQFLR",      "P55555",           1900,          2000
+)
+
+# Categorize peptides into unique and shared
+peptide_mapping <- psm_data %>%
+  group_by(peptide_sequence) %>%
+  mutate(
+    n_proteins = n_distinct(protein_accession),
+    peptide_type = if_else(n_proteins == 1, "unique", "shared")
+  ) %>%
+  ungroup()
+
+cat("Peptide Uniqueness Mapping Summary:\n")
+print(as.data.frame(peptide_mapping[, c("peptide_sequence", "protein_accession", "n_proteins", "peptide_type")]))
+\end{rchunk}
+
+\begin{routput}
+Peptide Uniqueness Mapping Summary:
+  peptide\_sequence protein\_accession n\_proteins peptide\_type
+1         SYGFNAAR            P00403          1       unique
+2         ELGNDAYK            P00403          2       shared
+3         ELGNDAYK            P12345          2       shared
+4      IAEESNFPFIK            P98765          1       unique
+5        LLQTAEGAE            P98765          2       shared
+6        LLQTAEGAE            P88888          2       shared
+7        VLDALDSIK            P55555          1       unique
+8       GVLDTLQFLR            P55555          1       unique
+\end{routput}
+
+\subsection{Listing 12.2: Bipartite Graph Analysis and Connected Components}
+
+\begin{rchunk}{Listing 12.2: Bipartite Graph Partitioning via igraph}
+# Construct edge list for all peptide-protein associations
+edge_list <- peptide_mapping %>%
+  select(from = peptide_sequence, to = protein_accession)
+
+bg <- graph_from_data_frame(edge_list, directed = FALSE)
+
+# Extract connected components using igraph
+net_comp <- igraph::components(bg)
+
+cat(sprintf("Bipartite Network Summary:\n"))
+cat(sprintf("  Total Graph Nodes:     %d (%d peptides, %d proteins)\n",
+            vcount(bg), n_distinct(psm_data$peptide_sequence), n_distinct(psm_data$protein_accession)))
+cat(sprintf("  Connected Components:  %d isolated subgraphs\n", net_comp$no))
+cat("\nComponent Membership per Node:\n")
+print(net_comp$membership)
+\end{rchunk}
+
+\begin{routput}
+Bipartite Network Summary:
+  Total Graph Nodes:     11 (6 peptides, 5 proteins)
+  Connected Components:  3 isolated subgraphs
+
+Component Membership per Node:
+   SYGFNAAR    ELGNDAYK IAEESNFPFIK   LLQTAEGAE   VLDALDSIK  GVLDTLQFLR 
+          1           1           2           2           3           3 
+     P00403      P12345      P98765      P88888      P55555 
+          1           1           2           2           3 
+\end{routput}
+
+\subsection{Listing 12.3: Building the QFeatures Container}
+
+\begin{rchunk}{Listing 12.3: Initializing QFeatures with Unique Peptides}
+# Filter to retain strictly unique peptides for unambiguous quantification
+unique_peptides <- peptide_mapping %>%
+  filter(peptide_type == "unique")
+
+# Extract numeric intensity matrix
+quant_matrix <- unique_peptides %>%
+  select(intensity_s1, intensity_s2) %>%
+  as.matrix()
+rownames(quant_matrix) <- unique_peptides$peptide_sequence
+
+# Metadata describing peptide-to-protein parentage
+row_meta <- DataFrame(
+  Protein_Group = unique_peptides$protein_accession,
+  Sequence = unique_peptides$peptide_sequence,
+  row.names = unique_peptides$peptide_sequence
+)
+
+# Wrap into SummarizedExperiment and QFeatures
+peptide_se <- SummarizedExperiment(
+  assays = list(intensities = quant_matrix),
+  rowData = row_meta
+)
+qf <- QFeatures(list(peptides = peptide_se))
+
+cat(sprintf("Constructed QFeatures container with 1 assay ('peptides'):\n"))
+cat(sprintf("  Peptides retained: %d rows x %d samples\n", nrow(quant_matrix), ncol(quant_matrix)))
+\end{rchunk}
+
+\begin{routput}
+Constructed QFeatures container with 1 assay ('peptides'):
+  Peptides retained: 4 rows x 2 samples
+An instance of class QFeatures (type: bulk) with 1 set:
+ [1] peptides: SummarizedExperiment with 4 rows and 2 columns
+\end{routput}
+
+\subsection{Listing 12.4: Robust Quantification Aggregation via Median Polish}
+
+\begin{rchunk}{Listing 12.4: Executing Tukey Median Polish Aggregation}
+# Aggregate peptides to protein groups using robust Tukey median polish
+qf <- aggregateFeatures(
+  object = qf,
+  i = "peptides",
+  fcol = "Protein_Group",
+  name = "proteins",
+  fun = MsCoreUtils::robustSummary,
+  na.rm = TRUE
+)
+
+protein_matrix <- assay(qf[["proteins"]])
+cat("Protein-Level Quantitative Abundance Matrix (Robust Median Polish):\n")
+print(round(protein_matrix, 2))
+\end{rchunk}
+
+\begin{routput}
+Protein-Level Quantitative Abundance Matrix (Robust Median Polish):
+       intensity\_s1 intensity\_s2
+P00403         1500         1600
+P55555         2050         2050
+P98765          800          850
+\end{routput}
+
+\subsection{Listing 12.5: Evidence Depth Auditing and Two-Peptide Filtering}
+
+\begin{rchunk}{Listing 12.5: Enforcing the Two-Peptide Rule}
+# Inspect evidence depth (.n: number of contributing peptides per protein)
+prot_meta <- rowData(qf[["proteins"]])
+cat("Protein Evidence Depth (.n peptides per protein):\n")
+print(as.data.frame(prot_meta[, c("Protein_Group", ".n")]))
+
+# Filter to retain only proteins supported by >= 2 independent peptides
+qf_filtered <- filterFeatures(qf, ~ .n >= 2)
+passing_proteins <- assay(qf_filtered[["proteins"]])
+
+cat(sprintf("\nProteins passing the Two-Peptide Rule (.n >= 2): %d of %d proteins\n",
+            nrow(passing_proteins), nrow(protein_matrix)))
+print(round(passing_proteins, 2))
+\end{rchunk}
+
+\begin{routput}
+Protein Evidence Depth (.n peptides per protein):
+       Protein\_Group .n
+P00403        P00403  1
+P55555        P55555  2
+P98765        P98765  1
+
+Proteins passing the Two-Peptide Rule (.n >= 2): 1 of 3 proteins
+       intensity\_s1 intensity\_s2
+P55555         2050         2050
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Protein Inference}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{The Double-Counting Delusion:}\\
+    \textit{Sin:} Allocating the quantitative abundance of a shared peptide to every protein it maps to.\\
+    \textit{Remedy:} Filter out shared peptides prior to quantification or allocate them strictly under a formal razor heuristic. Double-counting inflates total sample abundance and distorts differential fold-changes.
+
+    \item \textbf{The One-Hit Wonder Vulnerability:}\\
+    \textit{Sin:} Reporting proteins identified and quantified by only a single peptide spectrum match without independent validation.\\
+    \textit{Remedy:} Enforce the Two-Peptide Rule ($\ge 2$ unique peptides) for high-confidence quantitative profiling. Single-hit proteins exhibit high false discovery rates originating from mis-assigned spectra.
+
+    \item \textbf{The Summation Distortion Trap:}\\
+    \textit{Sin:} Summing raw peptide intensities to calculate protein abundance in the presence of missing values.\\
+    \textit{Remedy:} Apply Tukey's median polish (\texttt{MsCoreUtils::robustSummary}). Median polish estimates protein abundance relative to peptide ionization coefficients, preventing missing peptide rows from creating artificial fold-changes.
+
+    \item \textbf{The Disaggregated Homolog Illusion:}\\
+    \textit{Sin:} Reporting individual protein accessions for an indistinguishable set of proteins supported by identical peptide evidence.\\
+    \textit{Remedy:} Collapse indistinguishable proteins into protein groups (e.g., \texttt{P00403;P12345}). Reporting multiple distinct proteins from identical peptide evidence inflates discovery claims.
+
+    \item \textbf{The Non-Parsimonious Over-Assembly:}\\
+    \textit{Sin:} Adding redundant proteins to explain shared peptides that are already accounted for by proteins with unique evidence.\\
+    \textit{Remedy:} Enforce Occam's razor minimum set cover. Drop subsumed proteins that contribute zero unique peptide evidence to the final identification table.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Diagnostic Checklist: Auditing Protein Inference and Quantification}
+\label{tab:inference_checklist}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Classification} & Peptides classified into unique and shared sets. & Uniqueness flag computed against the complete reference database. & [ ] \\
+\addlinespace
+\textbf{Parsimony} & Occam's razor applied to eliminate subsumed proteins. & Minimum protein set cover identified; subsumed proteins dropped. & [ ] \\
+\addlinespace
+\textbf{Grouping} & Indistinguishable proteins collapsed into groups. & Accessions with identical peptide evidence merged with semicolons. & [ ] \\
+\addlinespace
+\textbf{Isolation} & Shared peptide intensity excluded from quantitative assays. & Aggregation performed on unique peptides or documented razor set. & [ ] \\
+\addlinespace
+\textbf{Aggregation} & Outlier-resistant algorithm used for peptide summarization. & Tukey median polish applied to $\log_2$-transformed intensities. & [ ] \\
+\addlinespace
+\textbf{Depth} & Evidence depth verified against One-Hit Wonder pitfall. & Proteins filtered to $\ge 2$ independent peptides (\texttt{.n >= 2}). & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 12.1 (Intensity Filtering and Peptide Uniqueness Dynamics).}\enspace
+\label{ex:intensity_uniqueness}
+A laboratory applies an analytical cut-off, discarding any PSM with intensity below 1000 in sample 1 ($I_{s1} < 1000$).
+\begin{enumerate}
+    \item Evaluate the effect of this intensity filter on the benchmark dataset from Listing 12.1.
+    \item Does removing low-abundance PSMs alter the uniqueness classification of remaining peptides?
+    \item Explain why filtering by intensity can create false unique peptides.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 12.2 (Mathematical Comparison of Aggregation Algorithms).}\enspace
+\label{ex:aggregation_algorithms}
+Protein \texttt{P55555} is quantified across two samples using two unique peptides:
+\begin{itemize}
+    \item Peptide 1 (\texttt{VLDALDSIK}): $I_{s1} = 2200, I_{s2} = 2100$
+    \item Peptide 2 (\texttt{GVLDTLQFLR}): $I_{s1} = 1900, I_{s2} = 2000$
+\end{itemize}
+\begin{enumerate}
+    \item Calculate the protein-level abundance using simple column summation ($\sum$).
+    \item Calculate the protein-level abundance using column medians.
+    \item Compute the Tukey median polish estimate (\texttt{robustSummary}) and compare the results.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 12.3 (Occam's Razor Set Cover Derivation).}\enspace
+\label{ex:occam_set_cover}
+Consider the 8-peptide, 5-protein benchmark system:
+\begin{align*}
+\mathcal{P} = \{&\text{SYGFNAAR}, \text{ELGNDAYK}, \text{IAEESNFPFIK}, \text{LLQTAEGAE}, \text{VLDALDSIK}, \text{GVLDTLQFLR}\}
+\end{align*}
+\begin{enumerate}
+    \item Formulate the minimum set cover problem for this system.
+    \item Identify the minimal set of proteins that completely accounts for all 8 observed peptide entries.
+    \item Identify which proteins are eliminated by Occam's razor as subsumed redundant explanations.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 12.4 (Razor Peptide Signal Recovery).}\enspace
+\label{ex:razor_signal_recovery}
+MaxQuant's razor heuristic assigns shared peptides to the protein group with the largest number of unique peptides.
+\begin{enumerate}
+    \item Apply the razor heuristic to allocate shared peptides \texttt{ELGNDAYK} and \texttt{LLQTAEGAE}.
+    \item Calculate the sample 1 abundance for proteins \texttt{P00403} and \texttt{P98765} under the razor rule versus the unique-only rule.
+    \item Quantify the quantitative signal recovery gain achieved by razor allocation.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 12.1}
+
+\noindent\textbf{Part 1: Filtering Evaluation}\enspace
+Filtering the benchmark dataset for $I_{s1} \ge 1000$ eliminates peptide \texttt{IAEESNFPFIK} ($I_{s1} = 800$), reducing the dataset from 8 to 7 PSMs.
+
+\noindent\textbf{Part 2: Uniqueness Dynamics}\enspace
+The remaining peptides retain their original database mappings. However, protein \texttt{P98765} now possesses zero unique peptides in the filtered dataset, relying exclusively on shared peptide \texttt{LLQTAEGAE}.
+
+\noindent\textbf{Part 3: Methodological Risk}\enspace
+If a shared peptide has a low-intensity match to Protein B and a high-intensity match to Protein A, filtering by intensity removes the match to Protein B. The peptide then appears unique to Protein A, masking the sequence degeneracy and creating a false unique peptide.
+
+\subsection{Solution to Exercise 12.2}
+
+\noindent\textbf{Part 1: Column Summation}\enspace
+\begin{align*}
+I_{\text{sum}, s1} &= 2200 + 1900 = 4100 \\
+I_{\text{sum}, s2} &= 2100 + 2000 = 4100
+\end{align*}
+
+\noindent\textbf{Part 2: Column Medians}\enspace
+For two peptides, the median is the arithmetic mean:
+\begin{align*}
+I_{\text{med}, s1} &= \frac{2200 + 1900}{2} = 2050.0 \\
+I_{\text{med}, s2} &= \frac{2100 + 2000}{2} = 2050.0
+\end{align*}
+
+\noindent\textbf{Part 3: Tukey Median Polish}\enspace
+Fitting the additive model $y_{ij} = \mu + \alpha_i + \beta_j$:
+Because the two peptides change symmetrically across the two samples, the median polish converges to $2050.0$ in sample 1 and $2050.0$ in sample 2. When no missing values are present, median polish aligns with the column median, while scaling at half the magnitude of the column sum.
+
+\subsection{Solution to Exercise 12.3}
+
+\noindent\textbf{Part 1: Set Cover Formulation}\enspace
+The constraints require covering each peptide:
+\begin{align*}
+\text{SYGFNAAR:} & \quad x_{\text{P00403}} \ge 1 \\
+\text{ELGNDAYK:} & \quad x_{\text{P00403}} + x_{\text{P12345}} \ge 1 \\
+\text{IAEESNFPFIK:} & \quad x_{\text{P98765}} \ge 1 \\
+\text{LLQTAEGAE:} & \quad x_{\text{P98765}} + x_{\text{P88888}} \ge 1 \\
+\text{VLDALDSIK:} & \quad x_{\text{P55555}} \ge 1 \\
+\text{GVLDTLQFLR:} & \quad x_{\text{P55555}} \ge 1
+\end{align*}
+
+\noindent\textbf{Part 2: Minimal Covering Set}\enspace
+Proteins \texttt{P00403}, \texttt{P98765}, and \texttt{P55555} are essential because each contains at least one unique peptide.
+Setting $x_{\text{P00403}} = 1, x_{\text{P98765}} = 1, x_{\text{P55555}} = 1$ satisfies all six constraints.
+The minimal set is $\mathcal{K}^* = \{\text{P00403}, \text{P98765}, \text{P55555}\}$, with $|\mathcal{K}^*| = 3$.
+
+\noindent\textbf{Part 3: Subsumed Proteins}\enspace
+Proteins \texttt{P12345} and \texttt{P88888} have zero unique peptides and are subsumed by \texttt{P00403} and \texttt{P98765}. Occam's razor drops them from the final reported proteome.
+
+\subsection{Solution to Exercise 12.4}
+
+\noindent\textbf{Part 1: Razor Allocation}\enspace
+\begin{itemize}
+    \item \texttt{ELGNDAYK} maps to \texttt{P00403} (1 unique peptide) and \texttt{P12345} (0 unique peptides). It is allocated to \texttt{P00403}.
+    \item \texttt{LLQTAEGAE} maps to \texttt{P98765} (1 unique peptide) and \texttt{P88888} (0 unique peptides). It is allocated to \texttt{P98765}.
+\end{itemize}
+
+\noindent\textbf{Part 2: Quantitative Comparison}\enspace
+For sample 1:
+\begin{itemize}
+    \item \texttt{P00403}: Unique-only $= 1500$. Razor-sum $= 1500 + 3000 = 4500$.
+    \item \texttt{P98765}: Unique-only $= 800$. Razor-sum $= 800 + 1200 = 2000$.
+\end{itemize}
+
+\noindent\textbf{Part 3: Signal Recovery Gain}\enspace
+Razor allocation increases quantitative signal for \texttt{P00403} by $4500 / 1500 = 3.0\times$ ($+200\%$) and for \texttt{P98765} by $2000 / 800 = 2.5\times$ ($+150\%$), recovering substantial analytical dynamic range.
+
+% =============================================================================
+% References
+% =============================================================================
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{nesvizhskii2005interpretation}
+Nesvizhskii, A.I., Aebersold, R.: Interpretation of shotgun proteomic data: the protein inference problem.
+\textit{Molecular \& Cellular Proteomics} \textbf{4}(10), 1419--1440 (2005).
+\doi{10.1074/mcp.R500012-MCP200}
+
+\bibitem{cox2008maxquant}
+Cox, J., Mann, M.: MaxQuant enables high peptide identification efficiencies, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification.
+\textit{Nature Biotechnology} \textbf{26}(12), 1367--1372 (2008).
+\doi{10.1038/nbt.1511}
+
+\bibitem{zhang2007idpicker}
+Zhang, B., Chambers, M.C., Tabb, D.L.: Proteomic parsimony through bipartite graph analysis improves accuracy and reproducibility of protein identification.
+\textit{Journal of Proteome Research} \textbf{6}(9), 3549--3557 (2007).
+\doi{10.1021/pr070230a}
+
+\bibitem{tukey1977exploratory}
+Tukey, J.W.: Exploratory Data Analysis.
+Addison-Wesley, Reading (1977).
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C.: QFeatures: Quantitative features for mass spectrometry data.
+\textit{Bioconductor Package} (2023).
+\doi{10.18129/B9.bioc.QFeatures}
+
+\bibitem{chvatal1979greedy}
+Chv\'atal, V.: A greedy heuristic for the set-covering problem.
+\textit{Mathematics of Operations Research} \textbf{4}(3), 233--235 (1979).
+\doi{10.1287/moor.4.3.233}
+
+\end{thebibliography}
+
+\end{document}

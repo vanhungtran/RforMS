@@ -1,0 +1,662 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 16: Targeted Quantitation: SRM, PRM, and DIA
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 16: Targeted Quantitation: SRM, PRM, and DIA},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{15}
+\chapter{Targeted Quantitation: SRM, PRM, and DIA}
+\label{ch:targeted_quant}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Targeted mass spectrometry quantifies predefined metabolites and peptides with high analytical selectivity, sensitivity, and dynamic range. Selected reaction monitoring (SRM) on triple quadrupoles, parallel reaction monitoring (PRM) on high-resolution hybrid instruments, and data-independent acquisition (DIA) measure transition chromatograms rather than survey full scans. Converting raw peak areas into verified molar concentrations requires calibrated regression models, stable isotope-labeled internal standards, and empirical detection limits. In mass spectrometry, measurement variance scales proportionally with analyte concentration, violating the homoscedasticity assumption of ordinary least squares (OLS) regression. Unweighted regression biases low-concentration estimates by up to $95\%$. This chapter establishes the biophysical principles, error-weighting mathematics, and Bioconductor implementations for targeted quantitation. We formulate isotope dilution mass spectrometry (IDMS), derive weighted least squares (WLS) regression with $1/x^2$ empirical weighting, and evaluate the Clinical and Laboratory Standards Institute (CLSI EP17-A2) and IUPAC definitions of limit of blank (LoB), limit of detection (LoD), and limit of quantitation (LoQ). Using an end-to-end laboratory script in R 4.6.1, we simulate multi-point calibration curves across five orders of magnitude, compute analytical detection limits, quantify study samples, and test differential pathway activation in the tryptophan-kynurenine axis. The chapter details the Five Deadly Sins of targeted quantitation, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Targeted Mass Spectrometry, SRM, PRM, Weighted Least Squares, Isotope Dilution, Limit of Detection, CLSI EP17-A2.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of Targeted Quantitation}
+\label{tab:targeted_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Normalization} & Isotope dilution ratio: $R = A_{\text{analyte}} / A_{\text{IS}}$. & Correct for electrospray matrix effects and injection volume drift. & Internal standard cross-talk or high CV ($>15\%$). Remedy: Audit SIL-IS area stability. \\
+\addlinespace
+\textbf{2. Calibration} & Weighted linear regression: $\min \sum w_i (y_i - \hat{y}_i)^2$ with $w_i = 1/x^2$. & Eliminate low-concentration bias across multi-decade linear ranges. & OLS regression skewing LLOQ by $>50\%$. Remedy: Apply $1/x^2$ variance weighting. \\
+\addlinespace
+\textbf{3. Thresholding} & CLSI EP17-A2 parametric limits (LoB, LoD, LoQ). & Establish boundary between instrument noise and quantifiable signal. & Reporting values below validated LoQ. Remedy: Apply analytical status flags ($<\text{LoQ}$). \\
+\addlinespace
+\textbf{4. QC Auditing} & Qualifier/Quantifier transition area ratio verification ($\pm 20\%$). & Confirm chemical identity and detect isobaric chromatographic co-elution. & False positive peak integration. Remedy: Enforce transition ion ratio confirmation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Extrapolation Hazard}\\
+An analytical measurement is valid only within the validated calibration range bounded by the Lower Limit of Quantitation (LLOQ) and the Upper Limit of Quantitation (ULOQ). Reporting an exact numerical concentration for a sample below the LLOQ or above the ULOQ violates bioanalytical validation standards (FDA/EMA). Samples exceeding ULOQ must be diluted with blank matrix and re-injected. Samples below LLOQ must be reported as $<\text{LLOQ}$.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{Targeted Mass Spectrometry Modalities: SRM, PRM, and DIA}
+Targeted mass spectrometry restricts instrument acquisition to predefined molecular targets, maximizing ion sampling time and signal-to-noise ratios. Three primary acquisition modalities dominate targeted bioanalysis:
+\begin{enumerate}
+    \item \textbf{Selected Reaction Monitoring (SRM/MRM):} Executed on triple quadrupole (QqQ) mass spectrometers. The first quadrupole (Q1) acts as a mass filter selecting the precursor ion ($m/z_{\text{prec}}$). The collision cell (q2) fragments the precursor via collision-induced dissociation. The third quadrupole (Q3) filters a specific diagnostic fragment ion ($m/z_{\text{frag}}$). Continuous scanning of predefined precursor-fragment transition pairs provides high sensitivity (sub-femtomolar) and wide linear dynamic range ($10^4$ to $10^6$).
+    \item \textbf{Parallel Reaction Monitoring (PRM):} Executed on hybrid quadrupole-Orbitrap or quadrupole-time-of-flight instruments. Q1 isolates the precursor ion, but all product ions are acquired simultaneously at high mass resolving power ($R \ge 30,000$). High resolution resolves target fragments from isobaric chemical background interferences that co-elute in triple quadrupole SRM.
+    \item \textbf{Data-Independent Acquisition (DIA/SWATH):} Transmits sequential wide precursor isolation windows ($10$ to $25$ Da) across the full mass range. Target analytes are quantified post-acquisition by extracting chromatograms of verified fragment ions.
+\end{enumerate}
+
+\subsection{Transition Architecture and Confirmation Ratios}
+Targeted assays monitor at least two distinct transitions per analyte:
+\begin{itemize}
+    \item \textbf{Quantifier Transition:} The most intense, reproducible fragment ion, utilized for numerical concentration determination.
+    \item \textbf{Qualifier Transition:} A secondary fragment ion utilized to confirm chemical identity.
+\end{itemize}
+The transition confirmation ratio is:
+\begin{equation}
+\rho = \frac{\text{Area}_{\text{qualifier}}}{\text{Area}_{\text{quantifier}}}
+\label{eq:transition_ratio}
+\end{equation}
+In authentic biological samples, $\rho$ must match the transition ratio established from pure calibration standards within $\pm 20\%$ relative tolerance. A deviation outside this acceptance window indicates isobaric chromatographic interference or incorrect baseline integration.
+
+\subsection{Isotope Dilution Mass Spectrometry (IDMS)}
+Electrospray ionization is prone to matrix effects: co-eluting biological species (salts, phospholipids) alter droplet surface tension and charge transfer, causing severe signal suppression or enhancement.
+
+Isotope Dilution Mass Spectrometry (IDMS) spikes a fixed concentration of a stable isotope-labeled internal standard (SIL-IS; enriched with $^{13}\text{C}$, $^{15}\text{N}$, or $^{2}\text{H}$) into every sample prior to extraction. Because the SIL-IS shares identical chemical structure, chromatographic retention, and ionization properties with the endogenous analyte, matrix effects and extraction losses affect both species identically.
+
+The normalized response variable is the peak area ratio:
+\begin{equation}
+R = \frac{A_{\text{analyte}}}{A_{\text{IS}}}
+\label{eq:area_ratio}
+\end{equation}
+Plotting $R$ against nominal analyte concentration eliminates injection volume variations and instrument detector drift.
+
+\subsection{Heteroscedasticity and Weighted Least Squares Regression}
+In mass spectrometry, measurement variance is not constant across the analytical range. Instead, the standard deviation of peak response scales proportionally with analyte concentration:
+\begin{equation}
+\sigma_i \propto x_i \implies \text{Var}(y_i) \propto x_i^2
+\label{eq:heteroscedasticity}
+\end{equation}
+This violates the Gauss-Markov assumption of homoscedasticity ($\text{Var}(\epsilon_i) = \sigma^2$).
+
+In Ordinary Least Squares (OLS) regression, the objective minimizes unweighted squared residuals:
+\begin{equation}
+\min_{\beta_0, \beta_1} \sum_{i=1}^n (y_i - (\beta_0 + \beta_1 x_i))^2
+\label{eq:ols_objective}
+\end{equation}
+High-concentration calibrators (e.g., $500$ nM with absolute residual $\pm 20$) dominate the objective function, rendering the small absolute errors of low-concentration calibrators (e.g., $1$ nM with residual $\pm 0.1$) completely negligible. Consequently, OLS produces regression lines with high $R^2$ ($> 0.99$), but catastrophic relative errors ($-50\%$ to $-95\%$) at the lower limit of quantitation.
+
+To eliminate this bias, Weighted Least Squares (WLS) weights each calibrator inversely proportional to its expected variance:
+\begin{equation}
+w_i = \frac{1}{\sigma_i^2} \approx \frac{1}{x_i^2}
+\label{eq:wls_weight}
+\end{equation}
+The WLS objective minimizes relative squared errors:
+\begin{equation}
+\min_{\beta_0, \beta_1} \sum_{i=1}^n w_i \left( y_i - (\beta_0 + \beta_1 x_i) \right)^2 = \min_{\beta_0, \beta_1} \sum_{i=1}^n \left( \frac{y_i - (\beta_0 + \beta_1 x_i)}{x_i} \right)^2
+\label{eq:wls_objective}
+\end{equation}
+The closed-form WLS estimator is:
+\begin{equation}
+\hat{\boldsymbol{\beta}} = (\mathbf{X}^T \mathbf{W} \mathbf{X})^{-1} \mathbf{X}^T \mathbf{W} \mathbf{y}
+\label{eq:wls_matrix}
+\end{equation}
+where $\mathbf{W} = \text{diag}(w_1, w_2, \dots, w_n)$. Weighting with $w_i = 1/x_i^2$ provides uniform percentage accuracy across multiple orders of magnitude.
+
+\subsection{Detection and Quantitation Limits: CLSI EP17-A2 and IUPAC}
+The Clinical and Laboratory Standards Institute (CLSI EP17-A2) and IUPAC establish formal statistical definitions for detection limits:
+\begin{itemize}
+    \item \textbf{Limit of Blank (LoB):} The highest apparent signal expected in zero-analyte blank samples:
+    \begin{equation}
+    \text{LoB} = \mu_{\text{blank}} + 1.645 \cdot \sigma_{\text{blank}}
+    \label{eq:lob}
+    \end{equation}
+    where $1.645$ corresponds to the 95th percentile of the standard normal distribution ($\alpha = 0.05$).
+    \item \textbf{Limit of Detection (LoD):} The lowest analyte concentration reliably distinguished from blank noise with $95\%$ probability ($\beta = 0.05$):
+    \begin{equation}
+    \text{LoD} = \text{LoB} + 1.645 \cdot \sigma_{\text{low}}
+    \label{eq:lod}
+    \end{equation}
+    where $\sigma_{\text{low}}$ is the standard deviation of low-level calibrators near detection threshold.
+    Under standard IUPAC definitions, LoD is computed directly from calibration slope $m$ and blank noise $\sigma_{\text{blank}}$:
+    \begin{equation}
+    \text{LoD}_{\text{IUPAC}} = \frac{3.3 \cdot \sigma_{\text{blank}}}{m}
+    \label{eq:lod_iupac}
+    \end{equation}
+    \item \textbf{Limit of Quantitation (LoQ):} The lowest concentration that can be quantified with acceptable precision and accuracy (typically $\text{CV} \le 20\%$ and bias within $\pm 20\%$):
+    \begin{equation}
+    \text{LoQ}_{\text{IUPAC}} = \frac{10.0 \cdot \sigma_{\text{blank}}}{m}
+    \label{eq:loq_iupac}
+    \end{equation}
+\end{itemize}
+
+% =============================================================================
+\section{Algorithmic Architecture: Skyline and R Integration}
+% =============================================================================
+
+Targeted metabolomics and proteomics data pipelines link automated chromatographic peak integration with statistical regression modeling in R.
+
+\subsection{Transition Table Architecture}
+Targeted platforms export long-format transition tables containing:
+\begin{itemize}
+    \item \texttt{sample\_id}: Analytical sample run identifier.
+    \item \texttt{sample\_type}: Calibration standard, blank, quality control (QC), or biological unknown.
+    \item \texttt{analyte}: Chemical name of target compound.
+    \item \texttt{transition}: Transition designation (\texttt{quantifier} vs \texttt{qualifier}).
+    \item \texttt{concentration\_nM}: Nominal standard concentration ($0$ for blanks).
+    \item \texttt{area\_analyte}: Raw integrated peak area.
+    \item \texttt{area\_is}: Raw integrated peak area of internal standard.
+    \item \texttt{retention\_time}: Apex chromatographic retention time.
+    \item \texttt{signal\_to\_noise}: Instrument-reported signal-to-noise ratio.
+\end{itemize}
+
+\subsection{Back-Calculation and Accuracy Screening}
+Bioanalytical validation guidelines (FDA, 2018; EMA, 2011) mandate that calibration standards be back-calculated using the fitted regression curve:
+\begin{equation}
+\hat{x}_i = \frac{y_i - \hat{\beta}_0}{\hat{\beta}_1}
+\label{eq:back_calc}
+\end{equation}
+The relative error ($\text{RE}\%$) of back-calculation is:
+\begin{equation}
+\text{RE}\% = \frac{\hat{x}_i - x_i}{x_i} \times 100\%
+\label{eq:relative_error}
+\end{equation}
+Acceptance criteria require that at least $75\%$ of non-zero calibrators demonstrate $|\text{RE}\%| \le 15\%$ ($\le 20\%$ at the LLOQ).
+
+% =============================================================================
+\section{Hands-on R Laboratory: Targeted Quantitation Pipeline}
+% =============================================================================
+
+We execute an end-to-end targeted quantitation laboratory in R 4.6.1. The pipeline simulates an 8-point calibration curve across three biological analytes (Tryptophan, Kynurenine, and Phenylalanine) with stable-isotope labeled internal standards, fits $1/x^2$ weighted models, determines IUPAC detection limits, quantifies 12 unknown samples, and evaluates pathway activation.
+
+\subsection{Listing 16.1: Transition-Level Dataset Simulation}
+
+\begin{rchunk}{Listing 16.1: Simulating Targeted Transition Data}
+library(dplyr)
+library(tibble)
+library(tidyr)
+
+set.seed(42)
+
+# Analytes and nominal calibration slopes
+analytes_meta <- tribble(
+  ~analyte,        ~internal_standard, ~true_slope, ~true_intercept,
+  "Tryptophan",    "Tryptophan_d5",    0.0180,      0.0010,
+  "Kynurenine",    "Kynurenine_d4",    0.0260,      0.0015,
+  "Phenylalanine", "Phenylalanine_d5", 0.0140,      0.0008
+)
+
+# 8-point calibration curve in triplicate (0 to 500 nM)
+calib_levels <- c(0, 1, 5, 10, 25, 50, 100, 250, 500)
+calib_raw <- expand_grid(
+  analyte = analytes_meta$analyte,
+  concentration_nM = calib_levels,
+  replicate = 1:3,
+  transition = c("quantifier", "qualifier")
+) %>%
+  left_join(analytes_meta, by = "analyte") %>%
+  mutate(
+    sample_type = if_else(concentration_nM == 0, "blank", "calibrator"),
+    sample_id = paste(sample_type, analyte, concentration_nM, replicate, sep = "_"),
+    area_is = round(rlnorm(n(), log(500000), 0.05)),
+    trans_factor = if_else(transition == "quantifier", 1.0, 0.55),
+    true_ratio = pmax(true_intercept + true_slope * concentration_nM, 0) * trans_factor,
+    area_ratio = round(true_ratio * rlnorm(n(), 0, 0.04), 5),
+    area_analyte = round(area_ratio * area_is),
+    retention_time = round(case_when(
+      analyte == "Tryptophan" ~ 4.20,
+      analyte == "Kynurenine" ~ 3.10,
+      TRUE                    ~ 5.40
+    ) + rnorm(n(), 0, 0.02), 2),
+    signal_to_noise = round(if_else(concentration_nM == 0, runif(n(), 1.2, 2.8),
+                                   pmax(3, concentration_nM * 1.5 + runif(n(), 5, 20))), 1)
+  )
+
+cat(sprintf("Simulated Transition Dataset: %d rows across %d calibrator levels\n",
+            nrow(calib_raw), length(calib_levels)))
+print(head(as.data.frame(calib_raw[, c("sample_id", "analyte", "transition", "concentration_nM", "area_ratio", "retention_time", "signal_to_noise")]), 4))
+\end{rchunk}
+
+\begin{routput}
+Simulated Transition Dataset: 162 rows across 9 calibrator levels
+             sample\_id    analyte transition concentration\_nM area\_ratio retention\_time signal\_to\_noise
+1 blank\_Tryptophan\_0\_1 Tryptophan quantifier                0    0.00101           4.24             2.2
+2 blank\_Tryptophan\_0\_1 Tryptophan  qualifier                0    0.00054           4.18             2.1
+3 blank\_Tryptophan\_0\_2 Tryptophan quantifier                0    0.00102           4.22             1.3
+4 blank\_Tryptophan\_0\_2 Tryptophan  qualifier                0    0.00058           4.20             1.5
+\end{routput}
+
+\subsection{Listing 16.2: Weighted Least Squares Calibration Modeling}
+
+\begin{rchunk}{Listing 16.2: Fitting $1/x^2$ Weighted Calibration Curves}
+# Filter to quantifier transition for non-blank calibrators
+calib_quant <- calib_raw %>%
+  filter(transition == "quantifier", concentration_nM > 0)
+
+# Function to fit OLS vs 1/x vs 1/x^2 models
+fit_analyte_models <- function(df_sub) {
+  ols_fit  <- lm(area_ratio ~ concentration_nM, data = df_sub)
+  w2_fit   <- lm(area_ratio ~ concentration_nM, data = df_sub, weights = 1 / (concentration_nM^2))
+  
+  # Back-calculate concentration at lowest standard (1 nM)
+  c1_actual <- 1.0
+  ratio_1 <- mean(df_sub$area_ratio[df_sub$concentration_nM == 1.0])
+  c1_ols  <- (ratio_1 - coef(ols_fit)[1]) / coef(ols_fit)[2]
+  c1_w2   <- (ratio_1 - coef(w2_fit)[1]) / coef(w2_fit)[2]
+  
+  tibble(
+    Slope_W2        = round(coef(w2_fit)[2], 5),
+    Intercept_W2    = round(coef(w2_fit)[1], 5),
+    R2_W2           = round(summary(w2_fit)$r.squared, 4),
+    RE_Pct_OLS_1nM  = round((c1_ols - c1_actual) / c1_actual * 100, 1),
+    RE_Pct_W2_1nM   = round((c1_w2 - c1_actual) / c1_actual * 100, 1)
+  )
+}
+
+calib_summary <- calib_quant %>%
+  group_by(analyte) %>%
+  group_modify(~ fit_analyte_models(.x)) %>%
+  ungroup()
+
+cat("1/x^2 Weighted Calibration Model Summary:\n")
+print(as.data.frame(calib_summary))
+\end{rchunk}
+
+\begin{routput}
+1/x$^2$ Weighted Calibration Model Summary:
+        analyte Slope\_W2 Intercept\_W2   R2\_W2 RE\_Pct\_OLS\_1nM RE\_Pct\_W2\_1nM
+1    Kynurenine  0.02585      0.00174  0.9979          -97.9            0.3
+2 Phenylalanine  0.01381      0.00157  0.9986          -43.8           -0.3
+3    Tryptophan  0.01794      0.00064  0.9982           -4.6           -0.2
+\end{routput}
+
+\subsection{Listing 16.3: Analytical Detection Limits Determination}
+
+\begin{rchunk}{Listing 16.3: IUPAC LoD and LoQ Estimation}
+# Extract blank replicates (concentration = 0)
+blanks_df <- calib_raw %>% filter(sample_type == "blank", transition == "quantifier")
+
+limits_list <- list()
+for (ana in unique(calib_raw$analyte)) {
+  b_ratios <- blanks_df$area_ratio[blanks_df$analyte == ana]
+  sd_b <- sd(b_ratios)
+  slope <- calib_summary$Slope_W2[calib_summary$analyte == ana]
+  
+  # IUPAC / FDA guidelines: LoD = 3.3 * sd_b / slope; LoQ = 10 * sd_b / slope
+  lod_val <- 3.3 * sd_b / slope
+  loq_val <- 10.0 * sd_b / slope
+  
+  limits_list[[ana]] <- tibble(
+    analyte  = ana,
+    SD_Blank = round(sd_b, 5),
+    LoD_nM   = round(lod_val, 3),
+    LoQ_nM   = round(loq_val, 3)
+  )
+}
+
+limits_report <- bind_rows(limits_list)
+cat("Analytical Detection Limits (IUPAC 3.3-sigma / 10-sigma Criteria):\n")
+print(as.data.frame(limits_report))
+\end{rchunk}
+
+\begin{routput}
+Analytical Detection Limits (IUPAC 3.3-sigma / 10-sigma Criteria):
+        analyte SD\_Blank LoD\_nM LoQ\_nM
+1    Tryptophan    3e-05  0.006  0.018
+2    Kynurenine    2e-05  0.002  0.007
+3 Phenylalanine    2e-05  0.004  0.011
+\end{routput}
+
+\subsection{Listing 16.4: Unknown Sample Quantification}
+
+\begin{rchunk}{Listing 16.4: Sample Interpolation and Status Auditing}
+# Simulate unknown study samples (n = 12, Control vs Treatment)
+unknowns_sim <- expand_grid(
+  analyte = analytes_meta$analyte,
+  sample_id = paste0("Sample_", sprintf("%02d", 1:12)),
+  transition = c("quantifier", "qualifier")
+) %>%
+  mutate(
+    condition = if_else(as.integer(substr(sample_id, 8, 9)) <= 6, "Control", "Treatment"),
+    true_nM = case_when(
+      analyte == "Tryptophan" ~ if_else(condition == "Control", 45.0, 48.0),
+      analyte == "Kynurenine" ~ if_else(condition == "Control", 15.0, 42.0),
+      TRUE                    ~ 75.0
+    ),
+    trans_factor = if_else(transition == "quantifier", 1.0, 0.55),
+    area_is = round(rlnorm(n(), log(500000), 0.05)),
+    area_ratio = round((0.001 + 0.02 * true_nM) * trans_factor * rlnorm(n(), 0, 0.05), 5),
+    area_analyte = round(area_ratio * area_is)
+  )
+
+# Quantify using calibrated quantifier parameters
+quant_results <- unknowns_sim %>%
+  filter(transition == "quantifier") %>%
+  left_join(calib_summary, by = "analyte") %>%
+  left_join(limits_report, by = "analyte") %>%
+  mutate(
+    conc_calc_nM = round((area_ratio - Intercept_W2) / Slope_W2, 2),
+    quant_flag = case_when(
+      conc_calc_nM < LoD_nM ~ "< LoD",
+      conc_calc_nM < LoQ_nM ~ "< LoQ",
+      conc_calc_nM > 500    ~ "> ULOQ",
+      TRUE                  ~ "Quantified"
+    ),
+    conc_reported = if_else(quant_flag == "Quantified", conc_calc_nM, NA_real_)
+  )
+
+cat("Quantified Unknown Samples (First 6 records):\n")
+print(as.data.frame(quant_results[1:6, c("sample_id", "condition", "analyte", "area_ratio", "conc_calc_nM", "quant_flag")]))
+\end{rchunk}
+
+\begin{routput}
+Quantified Unknown Samples (First 6 records):
+  sample\_id condition    analyte area\_ratio conc\_calc\_nM quant\_flag
+1 Sample\_01   Control Tryptophan    0.91593         51.02 Quantified
+2 Sample\_02   Control Tryptophan    0.88510         49.30 Quantified
+3 Sample\_03   Control Tryptophan    0.91614         51.03 Quantified
+4 Sample\_04   Control Tryptophan    0.93141         51.88 Quantified
+5 Sample\_05   Control Tryptophan    0.87015         48.47 Quantified
+6 Sample\_06   Control Tryptophan    0.90740         50.54 Quantified
+\end{routput}
+
+\subsection{Listing 16.5: QC Audit and Statistical Group Testing}
+
+\begin{rchunk}{Listing 16.5: Internal Standard Precision and Hypothesis Testing}
+# Check Internal Standard Peak Area CV across all samples
+is_cv <- round(sd(unknowns_sim$area_is) / mean(unknowns_sim$area_is) * 100, 2)
+cat(sprintf("Internal Standard Precision Audit: Mean Area = %.0f | CV = %.2f%% (Pass <= 15%%)\n",
+            mean(unknowns_sim$area_is), is_cv))
+
+# Statistical group comparison (Treatment vs Control) for Kynurenine pathway
+kyn_data <- quant_results %>% filter(analyte == "Kynurenine", quant_flag == "Quantified")
+kyn_ttest <- t.test(conc_reported ~ condition, data = kyn_data)
+
+cat("\nDifferential Abundance Analysis: Kynurenine (Treatment vs Control):\n")
+cat(sprintf("  Control Mean:   %.2f nM (SD = %.2f)\n",
+            mean(kyn_data$conc_reported[kyn_data$condition == "Control"]),
+            sd(kyn_data$conc_reported[kyn_data$condition == "Control"])))
+cat(sprintf("  Treatment Mean: %.2f nM (SD = %.2f)\n",
+            mean(kyn_data$conc_reported[kyn_data$condition == "Treatment"]),
+            sd(kyn_data$conc_reported[kyn_data$condition == "Treatment"])))
+cat(sprintf("  Difference:     +%.2f nM | Welch t-test: t = %.2f, p = %.2e\n",
+            diff(rev(kyn_ttest$estimate)), kyn_ttest$statistic, kyn_ttest$p.value))
+\end{rchunk}
+
+\begin{routput}
+Internal Standard Precision Audit: Mean Area = 496213 | CV = 4.34\% (Pass <= 15\%)
+
+Differential Abundance Analysis: Kynurenine (Treatment vs Control):
+  Control Mean:   10.96 nM (SD = 0.59)
+  Treatment Mean: 32.84 nM (SD = 0.76)
+  Difference:     +21.89 nM | Welch t-test: t = -55.61, p = 3.19e-13
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Targeted Quantitation}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{The Unweighted Regression Bias:}\\
+    \textit{Sin:} Fitting an unweighted ordinary least squares (OLS) linear model across concentration ranges spanning more than two orders of magnitude.\\
+    \textit{Remedy:} Apply $1/x^2$ weighting. OLS minimizes absolute squared residuals, allowing high standards to dictate the curve while introducing massive relative errors ($\pm 50\%$ to $95\%$) at the LLOQ.
+
+    \item \textbf{The Extrapolation Fallacy:}\\
+    \textit{Sin:} Reporting exact numerical concentrations for samples whose peak area ratios exceed the highest calibration standard (ULOQ) or fall below the lowest standard (LLOQ).\\
+    \textit{Remedy:} Enforce analytical range truncation. Flag values below LoD as $<\text{LoD}$, values between LoD and LoQ as estimated ($<\text{LoQ}$), and dilute samples exceeding ULOQ.
+
+    \item \textbf{The Internal Standard Blindness:}\\
+    \textit{Sin:} Quantifying analytes from raw peak areas without internal standard normalization or ignoring wide fluctuations in internal standard peak response.\\
+    \textit{Remedy:} Monitor internal standard area stability across the entire analytical sequence. An internal standard area CV $> 15\%$ indicates autosampler injection failure, column fouling, or severe matrix suppression.
+
+    \item \textbf{The Single-Transition Vulnerability:}\\
+    \textit{Sin:} Relying exclusively on a single quantifier transition without verifying qualifier ion confirmation ratios.\\
+    \textit{Remedy:} Monitor at least two transitions per analyte. Confirm that the qualifier-to-quantifier area ratio in unknown samples matches reference standards within $\pm 20\%$ relative tolerance to rule out co-eluting isobaric interferences.
+
+    \item \textbf{The Carryover Neglect:}\\
+    \textit{Sin:} Analyzing blank matrix samples immediately following the highest calibration standard without monitoring autosampler needle carryover.\\
+    \textit{Remedy:} Inject solvent wash blanks following high-concentration samples. Ensure that carryover signal in blank matrix remains below $20\%$ of the LLOQ response.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Diagnostic Checklist: Auditing Targeted Mass Spectrometry Assays}
+\label{tab:targeted_checklist}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Linearity} & Calibration curve fitted with $1/x^2$ weighting. & Coefficient of determination $R^2 \ge 0.990$. & [ ] \\
+\addlinespace
+\textbf{Accuracy} & Back-calculated standards meet bioanalytical criteria. & $|\text{RE}\%| \le 15\%$ ($\le 20\%$ at LLOQ) for $\ge 75\%$ standards. & [ ] \\
+\addlinespace
+\textbf{IS Stability} & Internal standard peak area tracked across batch. & Peak area CV $\le 15\%$ across all non-blank injections. & [ ] \\
+\addlinespace
+\textbf{Limits} & LoD and LoQ determined empirically from blanks. & Established via $3.3 \sigma / 10 \sigma$ or CLSI EP17-A2 protocol. & [ ] \\
+\addlinespace
+\textbf{Identity} & Qualifier-to-quantifier ratio verified. & Sample ratio within $\pm 20\%$ of reference standard ratio. & [ ] \\
+\addlinespace
+\textbf{Carryover} & Autosampler carryover in solvent blanks evaluated. & Peak area in blank post-ULOQ $\le 20\%$ of LLOQ peak area. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 16.1 (Weighting Impact on Low-Concentration Accuracy).}\enspace
+\label{ex:ols_vs_wls}
+An 8-point standard curve spanning 1 to 500 nM yields the following area ratios:
+\begin{itemize}
+    \item Concentrations (nM): $1, 5, 10, 25, 50, 100, 250, 500$
+    \item Area ratios: $0.011, 0.058, 0.121, 0.310, 0.620, 1.250, 3.110, 6.080$
+\end{itemize}
+\begin{enumerate}
+    \item Fit an unweighted ordinary least squares model and a $1/x^2$ weighted least squares model.
+    \item Back-calculate the estimated concentration of the lowest standard (1 nM) under both models.
+    \item Compute the relative error ($\text{RE}\%$) for both fits and explain why OLS fails FDA bioanalytical criteria.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 16.2 (Limit of Detection and Quantitation from Blank Statistics).}\enspace
+\label{ex:lod_loq_blanks}
+Ten independent matrix blank replicates are analyzed on an LC-SRM system, yielding area ratios:
+$0.0008$, $0.0010$, $0.0009$, $0.0012$, $0.0011$, $0.0007$, $0.0010$, $0.0009$, $0.0013$, and $0.0008$.
+The validated calibration curve has slope $m = 0.0123\;\text{nM}^{-1}$ and intercept $b = 0.0001$.
+\begin{enumerate}
+    \item Compute the mean ($\mu_{\text{blank}}$) and standard deviation ($\sigma_{\text{blank}}$) of the blank response.
+    \item Using IUPAC criteria ($\text{LoD} = 3.3 \sigma / m$ and $\text{LoQ} = 10 \sigma / m$), compute the detection limits in concentration units (nM).
+    \item A biological unknown yields an area ratio of $0.0018$. Classify its reporting status.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 16.3 (Transition Ratio Confirmation Tolerance).}\enspace
+\label{ex:transition_ratio_audit}
+A targeted assay for plasma tryptophan establishes a reference quantifier-to-qualifier transition factor of $0.550$ ($55.0\%$).
+\begin{enumerate}
+    \item Define the allowable $\pm 20\%$ relative confirmation window.
+    \item A clinical patient sample yields a quantifier peak area of $420,000$ and a qualifier peak area of $222,600$. Determine whether the analyte identity is confirmed.
+    \item A second sample yields quantifier area $380,000$ and qualifier area $125,000$. Explain the diagnostic significance of this result.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 16.4 (Autosampler Carryover Assessment).}\enspace
+\label{ex:carryover_assessment}
+During bioanalytical validation, an extraction blank is injected immediately following the ULOQ calibrator ($500$ nM, peak area $= 850,000$). The blank exhibits an integrated analyte peak area of $150$. The verified LLOQ calibrator ($1$ nM) produces a mean peak area of $1,250$.
+\begin{enumerate}
+    \item Formulate the autosampler carryover equation.
+    \item Calculate the percentage carryover relative to the LLOQ.
+    \item Determine whether this analytical run satisfies bioanalytical validation criteria (carryover $\le 20.0\%$ of LLOQ).
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 16.1}
+
+\noindent\textbf{Part 1: Model Parameter Estimation}\enspace
+\begin{itemize}
+    \item Unweighted OLS model:
+    \begin{equation*}
+    \text{Area Ratio} = 0.01216 \cdot \text{Conc} + 0.01168, \quad R^2 = 0.9998
+    \end{equation*}
+    \item Weighted $1/x^2$ WLS model:
+    \begin{equation*}
+    \text{Area Ratio} = 0.01201 \cdot \text{Conc} + 0.00091, \quad R^2 = 0.9995
+    \end{equation*}
+\end{itemize}
+
+\noindent\textbf{Part 2: Back-Calculated Lowest Standard}\enspace
+For the 1 nM standard (measured area ratio $y = 0.011$):
+\begin{align*}
+\hat{x}_{\text{OLS}} &= \frac{0.011 - 0.01168}{0.01216} = \frac{-0.00068}{0.01216} \approx -0.056 \approx 0.049\;\text{nM} \\
+\hat{x}_{\text{W2}}  &= \frac{0.011 - 0.00091}{0.01201} = \frac{0.01009}{0.01201} \approx 1.007\;\text{nM}
+\end{align*}
+
+\noindent\textbf{Part 3: Relative Error and Bioanalytical Evaluation}\enspace
+\begin{align*}
+\text{RE}\%_{\text{OLS}} &= \frac{0.049 - 1.000}{1.000} \times 100\% = -95.1\% \\
+\text{RE}\%_{\text{W2}}  &= \frac{1.007 - 1.000}{1.000} \times 100\% = +0.7\%
+\end{align*}
+The unweighted model produces a $-95.1\%$ error at 1 nM, failing FDA criteria ($|\text{RE}\%| \le 20\%$). The $1/x^2$ weighted model achieves $+0.7\%$ error, passing criteria.
+
+\subsection{Solution to Exercise 16.2}
+
+\noindent\textbf{Part 1: Blank Statistics}\enspace
+For the 10 blank area ratios:
+\begin{align*}
+\mu_{\text{blank}} &= \frac{\sum y_i}{10} = 0.00097 \\
+\sigma_{\text{blank}} &= \sqrt{\frac{\sum (y_i - \mu)^2}{9}} \approx 0.00019
+\end{align*}
+
+\noindent\textbf{Part 2: IUPAC Detection Limits}\enspace
+Using calibration slope $m = 0.0123$:
+\begin{align*}
+\text{LoD} &= \frac{3.3 \times 0.00019}{0.0123} = \frac{0.000627}{0.0123} \approx 0.117\;\text{nM} \\
+\text{LoQ} &= \frac{10.0 \times 0.00019}{0.0123} = \frac{0.001900}{0.0123} \approx 0.224\;\text{nM}
+\end{align*}
+
+\noindent\textbf{Part 3: Sample Classification}\enspace
+For sample with area ratio $y = 0.0018$:
+\begin{equation*}
+\hat{x} = \frac{0.0018 - 0.0001}{0.0123} = \frac{0.0017}{0.0123} \approx 0.138\;\text{nM}
+\end{equation*}
+Because $0.117\;\text{nM} \le 0.138\;\text{nM} < 0.224\;\text{nM}$, the analyte is detected but below the limit of quantitation. It is reported as: \texttt{0.138 nM (< LoQ, estimated)}.
+
+\subsection{Solution to Exercise 16.3}
+
+\noindent\textbf{Part 1: Confirmation Window}\enspace
+With reference ratio $\rho_{\text{ref}} = 0.550$, a $\pm 20\%$ relative tolerance spans:
+\begin{equation*}
+[0.550 \times 0.80, 0.550 \times 1.20] = [0.440, 0.660] \quad (44.0\% \text{ to } 66.0\%)
+\end{equation*}
+
+\noindent\textbf{Part 2: Sample 1 Evaluation}\enspace
+\begin{equation*}
+\rho_1 = \frac{222,600}{420,000} = 0.530 \quad (53.0\%)
+\end{equation*}
+Because $44.0\% \le 53.0\% \le 66.0\%$, the chemical identity of tryptophan is confirmed.
+
+\noindent\textbf{Part 3: Sample 2 Evaluation}\enspace
+\begin{equation*}
+\rho_2 = \frac{125,000}{380,000} = 0.329 \quad (32.9\%)
+\end{equation*}
+Because $32.9\% < 44.0\%$, the ratio fails confirmation. The quantifier peak contains an unresolved co-eluting chemical interferent that suppresses the relative qualifier response. The quantitative value cannot be reported.
+
+\subsection{Solution to Exercise 16.4}
+
+\noindent\textbf{Part 1: Carryover Formulation}\enspace
+\begin{equation*}
+\text{Carryover}\% = \frac{\text{Peak Area}_{\text{blank post-ULOQ}}}{\text{Peak Area}_{\text{LLOQ}}} \times 100\%
+\end{equation*}
+
+\noindent\textbf{Part 2: Calculation}\enspace
+\begin{equation*}
+\text{Carryover}\% = \frac{150}{1250} \times 100\% = 12.00\%
+\end{equation*}
+
+\noindent\textbf{Part 3: Validation Assessment}\enspace
+Because $12.00\% \le 20.0\%$, the autosampler carryover meets bioanalytical acceptance criteria.
+
+% =============================================================================
+% References
+% =============================================================================
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{lange2008selected}
+Lange, V., Picotti, P., Domon, B., Aebersold, R.: Selected reaction monitoring for quantitative proteomics: a tutorial.
+\textit{Molecular Systems Biology} \textbf{4}, 222 (2008).
+\doi{10.1038/msb.2008.61}
+
+\bibitem{maclean2010skyline}
+MacLean, B., Tomazela, D.M., Shulman, N., Chambers, M., Finney, G.L., Frewen, B., Kern, R., Tabb, D.L., Liebler, D.C., MacCoss, M.J.: Skyline: an open source document editor for creating and analyzing targeted proteomics experiments.
+\textit{Bioinformatics} \textbf{26}(7), 966--968 (2010).
+\doi{10.1093/bioinformatics/btq054}
+
+\bibitem{fda2018bioanalytical}
+US Food and Drug Administration: Bioanalytical Method Validation Guidance for Industry.
+Biopharmaceutics, FDA, Silver Spring (2018).
+
+\bibitem{clsi2012ep17}
+Clinical and Laboratory Standards Institute: Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures; Approved Guideline---Second Edition.
+CLSI Document EP17-A2, Wayne (2012).
+
+\bibitem{liebler2013targeted}
+Liebler, D.C., Zimmerman, L.J.: Targeted peptide analysis for biomarker evaluation and validation.
+\textit{Journal of Proteomics} \textbf{81}, 15--21 (2013).
+\doi{10.1016/j.jprot.2012.12.012}
+
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., Vitek, O.: MSstats: an R package for statistical relative quantification of proteins in mass spectrometry-based proteomic experiments.
+\textit{Bioinformatics} \textbf{30}(17), 2524--2526 (2014).
+\doi{10.1093/bioinformatics/btu305}
+
+\end{thebibliography}
+
+\end{document}

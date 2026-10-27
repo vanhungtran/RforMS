@@ -1,0 +1,626 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 10: Tandem Spectral Library Searching
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 10: Tandem Spectral Library Searching},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{9}
+\chapter{Tandem Spectral Library Searching}
+\label{ch:library_search}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Tandem mass spectrometry ($\text{MS/MS}$) records fragmentation patterns that reflect covalent molecular structure. Matching experimental fragmentation spectra against curated reference libraries constitutes the primary mechanism for metabolite identification in untargeted metabolomics. A similarity score measures spectral overlap, but score rank alone does not establish biological identity. Structural isomers, chimeric spectra from co-eluting precursors, and collision energy disparities distort spectral similarity metrics. This chapter presents the mathematical formulations, statistical null models, and Bioconductor implementations for tandem spectral library searching. We examine the normalized dot product (cosine similarity) with power-law intensity weighting, distinguish forward and reverse similarity under chimeric interference, and derive the hypergeometric probability of random fragment peak coincidence. Using the Bioconductor \texttt{Spectra} and \texttt{MetaboAnnotation} frameworks in R 4.6.1, we construct reference and query containers, execute tolerance-constrained spectral comparisons, and derive empirical match $p$-values against mass-shuffled decoy spectra. We classify annotations into the Metabolomics Standards Initiative (MSI) confidence tiers (Levels 1 to 4) using orthogonal retention time and precursor mass tolerances. The chapter details the Five Deadly Sins of spectral matching, provides a self-assessment diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Spectral Library Search, Cosine Similarity, Reverse Dot Product, Metabolomics Standards Initiative, \texttt{Spectra}, \texttt{MetaboAnnotation}, Decoy Null Model.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of Spectral Library Matching}
+\label{tab:library_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Filtering} & Precursor mass windowing ($\pm \delta_{\text{ppm}}$) and charge filtering. & Reduce comparison space from $>10^5$ entries to viable candidates. & Window too tight excludes true adducts. Remedy: Search candidate adduct-adjusted precursor masses. \\
+\addlinespace
+\textbf{2. Alignment} & Peak binning within fragment mass tolerance ($\pm \tau$ or ppm). & Map experimental fragment peaks to reference library peaks. & Peak splitting or over-merging. Remedy: Instrument-calibrated fragment tolerance ($\le 0.02$ Da). \\
+\addlinespace
+\textbf{3. Scoring} & Normalized dot product with intensity weighting ($I^{0.5}$). & Compute cosine similarity vector $S_{\cos}(U, V)$ across aligned pairs. & Chimeric contamination suppresses forward cosine. Remedy: Compute reverse dot product. \\
+\addlinespace
+\textbf{4. Validation} & Decoy mass shuffling and retention time concordance. & Establish empirical false match probability and assign MSI tier. & High cosine match to distant retention time. Remedy: Enforce MSI Level 1 retention window ($\le 10$ s). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Top-Hit Fallacy}\\
+A cosine score of 0.92 does not confirm chemical identity. Near-isomers, isobaric stereoisomers, and identical substructures sharing dominant fragments produce high cosine values. Spectral search algorithms rank candidates by similarity score regardless of biological plausibility. An identification requires three independent lines of evidence: precursor accurate mass ($\le 10$ ppm), fragmentation pattern similarity ($S_{\cos} \ge 0.80$), and chromatographic retention time agreement ($\Delta t_R \le 10$ s) against an authentic chemical standard analyzed on the identical platform. Without retention time confirmation, report the hit as an MSI Level 2 putative annotation.
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{Tandem Mass Spectrometry and Collision-Induced Dissociation}
+Tandem mass spectrometry isolates a precursor ion within a narrow quadrupole mass window and transfers kinetic energy to internal vibrational modes via collisions with inert gas molecules ($\text{N}_2$, $\text{Ar}$, or $\text{He}$). In collision-induced dissociation (CID) and higher-energy collisional dissociation (HCD), vibrational excitation induces unimolecular bond cleavages along thermodynamic and kinetic energy pathways. The resulting product ion spectrum records fragment mass-to-charge ratios ($m/z_i$) and relative intensities ($I_i$).
+
+Because chemical bonds possess characteristic dissociation energies, the product ion distribution reflects the underlying covalent skeleton. However, fragmentation depends on collision energy, collision gas pressure, and instrument geometry. A reference spectrum recorded at 40 eV on a quadrupole time-of-flight (Q-TOF) instrument differs in fragment branching ratios from a spectrum acquired at 15 eV in an ion trap. Library matching algorithms must balance peak matching tolerance with intensity weighting.
+
+\subsection{Normalized Dot Product (Cosine Similarity)}
+The standard metric for comparing two mass spectra is the normalized dot product introduced by Stein and Scott (1994). Let query spectrum $U$ and reference library spectrum $V$ be represented as vectors of aligned peaks indexed by $i = 1, \dots, k$. Each aligned peak is assigned a weighted intensity $w_i$:
+\begin{equation}
+w_{U, i} = (m/z_i)^a \cdot (I_{U, i})^b, \quad w_{V, i} = (m/z_i)^a \cdot (I_{V, i})^b
+\label{eq:stein_weights}
+\end{equation}
+where $a$ and $b$ are empirical weighting exponents. Setting $a = 0$ and $b = 0.5$ yields square-root intensity weighting. This transformation prevents a single dominant base peak from dictating the dot product while suppressing baseline noise.
+
+The normalized dot product (cosine similarity) is the cosine of the angle between vectors $\mathbf{w}_U$ and $\mathbf{w}_V$:
+\begin{equation}
+S_{\cos}(U, V) = \frac{\sum_{i=1}^k w_{U, i} w_{V, i}}{\sqrt{\sum_{i=1}^k w_{U, i}^2} \sqrt{\sum_{i=1}^k w_{V, i}^2}}
+\label{eq:cosine_dotproduct}
+\end{equation}
+where $0 \le S_{\cos}(U, V) \le 1$. A value of $S_{\cos} = 1.0$ indicates identical relative peak intensity distributions, while $S_{\cos} = 0.0$ indicates zero shared fragment peaks within the matching mass tolerance.
+
+\subsection{Forward versus Reverse Dot Product}
+In untargeted biological profiling, wide precursor isolation windows ($\pm 0.5$ to $1.0$ Da) frequently isolate multiple co-eluting ions, generating chimeric tandem spectra. A chimeric query spectrum contains legitimate fragment ions from the target analyte interspersed with foreign fragment ions from co-isolated contaminants.
+
+The forward cosine metric (Equation~\ref{eq:cosine_dotproduct}) evaluates all peaks present in both spectra. If the experimental query contains five contaminant peaks of high intensity, the denominator term $\sqrt{\sum w_{U, i}^2}$ expands, driving $S_{\cos}$ downward even when all reference library peaks are present at exact intensity proportions.
+
+The reverse dot product restricts query evaluation exclusively to the subset of peaks that match library features:
+\begin{equation}
+S_{\text{rev}}(U, V) = \frac{\sum_{i \in \mathcal{M}} w_{U, i} w_{V, i}}{\sqrt{\sum_{i \in \mathcal{M}} w_{U, i}^2} \sqrt{\sum_{i \in \mathcal{M}} w_{V, i}^2}}
+\label{eq:reverse_cosine}
+\end{equation}
+where $\mathcal{M} = \{i : I_{V, i} > 0\}$ represents the index set of peaks present in the reference spectrum. The reverse dot product assesses whether the reference molecule is present within a mixture, ignoring unassigned query peaks.
+
+\subsection{Hypergeometric Null Model of Random Peak Matching}
+A high cosine score can occur by chance when spectra contain common low-mass fragments (water loss, carbon monoxide loss, alkyl cations). To determine whether a match is statistically significant, we evaluate the probability of observing $k$ overlapping peaks under a random null model.
+
+Let the effective fragment mass range $[m_{\min}, m_{\max}]$ be partitioned into $N$ discrete resolution bins of width $2\tau$, where $\tau$ is the absolute fragment matching tolerance:
+\begin{equation}
+N = \left\lfloor \frac{m_{\max} - m_{\min}}{2\tau} \right\rfloor
+\label{eq:mass_bins}
+\end{equation}
+Suppose reference spectrum $V$ contains $m$ peaks placed randomly across the $N$ bins, and query spectrum $U$ contains $n$ peaks placed independently. Under the null hypothesis $H_0$ that fragmentation is independent and random, the number of overlapping peak bins $K$ follows a hypergeometric distribution:
+\begin{equation}
+P(K = k \mid H_0) = \frac{\binom{m}{k} \binom{N - m}{n - k}}{\binom{N}{n}}
+\label{eq:hypergeometric_null}
+\end{equation}
+The cumulative probability of observing $k$ or more matching peaks by chance is:
+\begin{equation}
+P(K \ge k \mid H_0) = \sum_{j=k}^{\min(m, n)} \frac{\binom{m}{j} \binom{N - m}{n - j}}{\binom{N}{n}}
+\label{eq:hyper_pvalue}
+\end{equation}
+When $N = 1000$ bins, observing $k = 4$ matching peaks between spectra with $m = 8$ and $n = 6$ peaks yields $P(K \ge 4 \mid H_0) = 2.52 \times 10^{-8}$. Conversely, if $N = 50$ bins (as in low-resolution unit-mass ion traps), the same four-peak match yields $P(K \ge 4 \mid H_0) = 0.0031$, increasing the false match rate by five orders of magnitude.
+
+\subsection{Spectral Entropy Similarity}
+The normalized dot product weights intensities uniformly across the dynamic range using square-root scaling, but it does not account for the information content of individual peaks. A spectrum dominated by one high-abundance fragment provides lower structural specificity than a spectrum with ten evenly distributed diagnostic fragments.
+
+Li et al. (2021) formulated spectral entropy similarity based on Shannon information theory. For a spectrum $U$ with peak intensities $I_i$, the normalized peak probabilities are $p_i = I_i / \sum_j I_j$. The spectral entropy is:
+\begin{equation}
+H(U) = -\sum_{i=1}^n p_i \ln p_i
+\label{eq:spectral_entropy}
+\end{equation}
+For an unfragmented precursor ($n = 1$), $H(U) = 0$. For a spectrum with $n$ peaks of equal intensity, $H(U) = \ln n$. When comparing query $U$ and reference $V$, the spectra are aligned into a merged spectrum $W = \frac{1}{2}(U + V)$. The entropy-based similarity is:
+\begin{equation}
+S_{\text{entropy}}(U, V) = 1 - \frac{2 H(W) - H(U) - H(V)}{\ln 4}
+\label{eq:entropy_similarity}
+\end{equation}
+Spectral entropy similarity bounds the Jensen-Shannon divergence between spectral probability distributions. It penalizes uninformative low-entropy spectra and outperforms standard cosine scoring when resolving structurally related lipid and steroid isomers.
+
+\subsection{MSI Annotation Confidence Levels}
+The Metabolomics Standards Initiative (Sumner et al., 2007) established four standardized confidence levels for metabolite reporting:
+\begin{itemize}
+    \item \textbf{Level 1 (Confirmed Metabolite):} Requires matching at least two orthogonal properties (retention time $t_R$ and tandem mass spectrum $\text{MS/MS}$) against an authentic chemical reference standard analyzed in the same laboratory on the identical analytical method.
+    \item \textbf{Level 2 (Putatively Annotated Compound):} Requires matching experimental $\text{MS/MS}$ spectra to public or commercial spectral libraries without authentic standard retention time confirmation.
+    \item \textbf{Level 3 (Putatively Characterized Compound Class):} Based on spectral similarity to chemical class-specific fragmentation motifs or neutral loss patterns when the exact structure cannot be resolved.
+    \item \textbf{Level 4 (Unidentified Feature):} Chromatographic peaks defined by accurate precursor $m/z$ and retention time without spectral library match.
+\end{itemize}
+
+% =============================================================================
+\section{Algorithmic Architecture: The Modern Bioconductor Stack}
+% =============================================================================
+
+Spectral matching in Bioconductor centers on the \texttt{Spectra} container and the \texttt{MetaboAnnotation} package. 
+
+\subsection{The Spectra S4 Container}
+The \texttt{Spectra} package virtualizes mass spectrometry data representation. Spectrum-level metadata (retention time, precursor $m/z$, precursor charge, collision energy) are stored in tabular format, while peak arrays ($m/z$ and intensity matrices) are accessed via specialized backends (\texttt{MsBackendMemory}, \texttt{MsBackendMzR}, or \texttt{MsBackendMassbank}).
+
+When comparing spectra, \texttt{Spectra::compareSpectra} coordinates two algorithmic steps:
+\begin{enumerate}
+    \item \textbf{Peak Mapping (\texttt{MAPFUN}):} The default function \texttt{joinPeaks} aligns peaks between spectra $x$ and $y$ using absolute tolerance $\tau$ and relative ppm error $\delta_{\text{ppm}}$. Bins without an observed peak receive an intensity of 0.
+    \item \textbf{Similarity Evaluation (\texttt{FUN}):} The aligned intensity vectors are passed to a scoring function, such as \texttt{MsCoreUtils::ndotproduct}, which computes the cosine similarity.
+\end{enumerate}
+
+\subsection{High-Throughput Matching with MetaboAnnotation}
+The \texttt{MetaboAnnotation} package automates high-throughput matching across multi-thousand spectrum repositories. The \texttt{matchSpectra} function accepts a query \texttt{Spectra} object, a reference library \texttt{Spectra} object, and a parameter object (\texttt{CompareSpectraParam}). The parameter object encapsulates precursor matching tolerance, fragment tolerance, scoring function, and a threshold filtering function (\texttt{THRESHFUN}).
+
+\subsection{Decoy Null Distributions}
+To calculate an empirical false match $p$-value, reference library spectra can be randomized into decoy spectra. Mass-shuffling redistributes fragment $m/z$ values randomly across the observed mass range while preserving the exact intensity distribution. Comparing a query spectrum against 1,000 decoy spectra establishes the empirical score distribution under the null hypothesis of uncoordinated fragmentation.
+
+% =============================================================================
+\section{Hands-on R Laboratory: Spectral Library Search}
+% =============================================================================
+
+We demonstrate spectral library matching using a verified workflow executed in R 4.6.1. We construct query and reference spectra for an unknown analyte (precursor $m/z = 205.0972$, putative L-Tryptophan candidate), compute pairwise cosine similarities, execute high-throughput matching via \texttt{MetaboAnnotation}, generate a 1,000-iteration decoy null model, and assign MSI confidence tiers.
+
+\subsection{Listing 10.1: Constructing Query and Library Spectra Objects}
+
+\begin{rchunk}{Listing 10.1: Initializing Query and Reference Spectra}
+library(Spectra)
+library(MsCoreUtils)
+library(MetaboAnnotation)
+library(dplyr)
+
+set.seed(42)
+
+# Query spectrum (observed experimental MS/MS for unknown analyte)
+# Precursor: m/z = 205.0972 [M+H]+ (Tryptophan candidate)
+query_df <- DataFrame(
+  msLevel          = 2L,
+  precursorMz      = 205.0972,
+  precursorCharge  = 1L,
+  rtime            = 312.4, # seconds (5.20 min)
+  name             = "Query_Feature_205"
+)
+query_df$mz <- list(c(118.0651, 130.0651, 144.0808, 146.0600, 159.0917, 188.0706, 205.0972))
+query_df$intensity <- list(c(12400, 35600, 89200, 15300, 120000, 48200, 18500))
+
+query_sps <- Spectra(query_df)
+
+# Reference library spectra: Curated authentic standards
+ref_df <- DataFrame(
+  msLevel         = c(2L, 2L, 2L),
+  precursorMz     = c(205.0972, 205.0972, 182.0812),
+  precursorCharge = c(1L, 1L, 1L),
+  rtime           = c(310.2, 425.0, 180.5), # Tryptophan authentic standard rtime = 310.2 s
+  name            = c("L-Tryptophan", "D-Tryptophan_Isomer", "Tyrosine")
+)
+ref_df$mz <- list(
+  # L-Tryptophan reference MS/MS
+  c(118.0653, 130.0651, 144.0808, 146.0601, 159.0918, 188.0707, 205.0970),
+  # Near-isomer with shifted fragment intensities
+  c(118.0653, 130.0651, 144.0808, 170.0600, 188.0707, 205.0970),
+  # Tyrosine reference MS/MS (off-target precursor)
+  c(119.0491, 136.0757, 147.0441, 165.0546, 182.0812)
+)
+ref_df$intensity <- list(
+  c(15000, 42000, 95000, 18000, 135000, 52000, 22000),
+  c(45000, 12000, 15000, 85000, 21000, 35000),
+  c(25000, 98000, 45000, 15000, 82000)
+)
+ref_sps <- Spectra(ref_df)
+
+cat(sprintf("Constructed Query: %d spectrum | Reference Library: %d spectra\n",
+            length(query_sps), length(ref_sps)))
+cat(sprintf("Query Precursor: %.4f Da | Library Precursors: %s\n",
+            precursorMz(query_sps)[1],
+            paste(round(precursorMz(ref_sps), 4), collapse = ", ")))
+\end{rchunk}
+
+\begin{routput}
+Constructed Query: 1 spectrum | Reference Library: 3 spectra
+Query Precursor: 205.0972 Da | Library Precursors: 205.0972, 205.0972, 182.0812
+\end{routput}
+
+\subsection{Listing 10.2: Normalized Dot-Product Evaluation}
+
+\begin{rchunk}{Listing 10.2: Pairwise Cosine Similarity Calculation}
+# Calculate pairwise cosine similarity between query and all reference spectra
+# Parameters: fragment tolerance = 0.02 Da, square-root intensity weighting (b = 0.5)
+sim_scores <- compareSpectra(
+  query_sps, ref_sps,
+  tolerance = 0.02,
+  ppm = 10,
+  FUN = MsCoreUtils::ndotproduct
+)
+
+scores_df <- data.frame(
+  Library_Compound = ref_df$name,
+  Precursor_mz     = ref_df$precursorMz,
+  RT_Ref_sec       = ref_df$rtime,
+  Cosine_Score     = round(as.numeric(sim_scores), 4),
+  stringsAsFactors = FALSE
+)
+
+cat("Pairwise Spectral Cosine Similarities against Query:\n")
+print(scores_df)
+\end{rchunk}
+
+\begin{routput}
+Pairwise Spectral Cosine Similarities against Query:
+     Library\_Compound Precursor\_mz RT\_Ref\_sec Cosine\_Score
+1        L-Tryptophan     205.0972      310.2       0.9996
+2 D-Tryptophan\_Isomer     205.0972      425.0       0.2641
+3            Tyrosine     182.0812      180.5       0.0000
+\end{routput}
+
+\subsection{Listing 10.3: High-Throughput Matching with MetaboAnnotation}
+
+\begin{rchunk}{Listing 10.3: Constrained Search via MetaboAnnotation}
+# Define matching parameters: 15 ppm precursor tolerance, 0.02 Da fragment tolerance, cosine >= 0.70
+param <- CompareSpectraParam(
+  ppm              = 15,
+  tolerance        = 0.02,
+  requirePrecursor = TRUE,
+  score            = "ndotproduct",
+  THRESHFUN        = function(x) which(x >= 0.70)
+)
+
+match_res <- matchSpectra(query_sps, ref_sps, param = param)
+matched_df <- matchedData(match_res)
+
+cat(sprintf("MetaboAnnotation match results (Threshold >= 0.70):\n"))
+cat(sprintf("  Query spectrum matched to: %s\n", matched_df$target_name))
+\end{rchunk}
+
+\begin{routput}
+MetaboAnnotation match results (Threshold >= 0.70):
+  Query spectrum matched to: L-Tryptophan
+\end{routput}
+
+\subsection{Listing 10.4: Decoy Spectral Library and Empirical Null Distribution}
+
+\begin{rchunk}{Listing 10.4: Empirical Null Model and P-Value}
+# Generate 1,000 decoy spectra by mass-shuffling reference peaks
+n_decoys <- 1000
+decoy_scores <- numeric(n_decoys)
+true_peaks <- peaksData(ref_sps)[[1]]  # L-Tryptophan peaks
+
+for (k in seq_len(n_decoys)) {
+  # Shuffle fragment m/z values uniformly across mass range [100, 210]
+  shuffled_mz <- sort(runif(nrow(true_peaks), min = 100, max = 210))
+  decoy_df <- DataFrame(msLevel = 2L, precursorMz = 205.0972)
+  decoy_df$mz <- list(shuffled_mz)
+  decoy_df$intensity <- list(true_peaks[, "intensity"])
+  decoy_sp <- Spectra(decoy_df)
+  decoy_scores[k] <- compareSpectra(query_sps, decoy_sp, tolerance = 0.02, FUN = MsCoreUtils::ndotproduct)[1]
+}
+
+# Empirical match p-value for the true hit (score = 0.9996)
+obs_score <- scores_df$Cosine_Score[1]
+p_val_empirical <- sum(decoy_scores >= obs_score) / n_decoys
+score_99th <- quantile(decoy_scores, 0.99)
+
+cat(sprintf("Decoy Null Model (N = %d shuffled spectra):\n", n_decoys))
+cat(sprintf("  Mean Null Cosine Score:    %.4f (SD = %.4f)\n", mean(decoy_scores), sd(decoy_scores)))
+cat(sprintf("  99th Percentile Threshold: %.4f\n", score_99th))
+cat(sprintf("  Observed Hit Cosine Score: %.4f\n", obs_score))
+cat(sprintf("  Empirical False Match p-value: p < %.4f\n", max(1 / n_decoys, p_val_empirical)))
+\end{rchunk}
+
+\begin{routput}
+Decoy Null Model (N = 1000 shuffled spectra):
+  Mean Null Cosine Score:    0.0009 (SD = 0.0088)
+  99th Percentile Threshold: 0.0168
+  Observed Hit Cosine Score: 0.9996
+  Empirical False Match p-value: p < 0.0010
+\end{routput}
+
+\subsection{Listing 10.5: Multi-Criteria Filtering and MSI Level Assignment}
+
+\begin{rchunk}{Listing 10.5: Automated MSI Confidence Tier Classification}
+query_rt <- query_df$rtime[1]
+
+curated_report <- scores_df %>%
+  mutate(
+    Precursor_PPM = round(abs(Precursor_mz - query_df$precursorMz[1]) / Precursor_mz * 1e6, 2),
+    Delta_RT_sec  = round(abs(RT_Ref_sec - query_rt), 1),
+    MSI_Level     = case_when(
+      Cosine_Score >= 0.85 & Precursor_PPM <= 10 & Delta_RT_sec <= 10 ~ "Level 1 (Confirmed via Standard)",
+      Cosine_Score >= 0.80 & Precursor_PPM <= 15                      ~ "Level 2 (Putatively Annotated Compound)",
+      Cosine_Score >= 0.60 & Precursor_PPM <= 25                      ~ "Level 3 (Putative Compound Class)",
+      TRUE                                                            ~ "Level 4 (Unassigned Feature)"
+    )
+  )
+
+cat("Curated Spectral Match and MSI Classification Report:\n")
+print(curated_report)
+\end{rchunk}
+
+\begin{routput}
+Curated Spectral Match and MSI Classification Report:
+     Library\_Compound Precursor\_mz RT\_Ref\_sec Cosine\_Score Precursor\_PPM
+1        L-Tryptophan     205.0972      310.2       0.9996           0.0
+2 D-Tryptophan\_Isomer     205.0972      425.0       0.2641           0.0
+3            Tyrosine     182.0812      180.5       0.0000      126405.1
+
+  Delta\_RT\_sec                        MSI\_Level
+1          2.2 Level 1 (Confirmed via Standard)
+2        112.6     Level 4 (Unassigned Feature)
+3        131.9     Level 4 (Unassigned Feature)
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of Spectral Library Searching}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{The Top-Hit Blind Spot:}\\
+    \textit{Sin:} Accepting the top-ranked library hit based exclusively on cosine similarity without cross-referencing precursor mass, ionization mode, or retention time.\\
+    \textit{Remedy:} Enforce multi-criteria filtering. Require precursor accurate mass agreement ($\le 10$ ppm), adduct consistency, and retention time matching ($\Delta t_R \le 10$ s) against an authentic standard before reporting an MSI Level 1 identification.
+
+    \item \textbf{The Tolerance Mismatch:}\\
+    \textit{Sin:} Applying low-resolution fragment tolerances ($\pm 0.5$ Da) to high-resolution Orbitrap or Q-TOF data.\\
+    \textit{Remedy:} Calibrate peak matching tolerances to instrument resolving power. High-resolution instrumentation requires fragment tolerances of $\le 0.02$ Da (or 15 ppm). Coarse tolerances allow unrelated chemical fragments to merge, inflating false match rates by multiple orders of magnitude.
+
+    \item \textbf{The Denominator Dilution Fallacy:}\\
+    \textit{Sin:} Relying solely on forward cosine similarity when evaluating complex biological mixtures subject to co-eluting chemical contamination.\\
+    \textit{Remedy:} Compute both forward and reverse dot products. If a true analyte co-elutes with an interfering contaminant, unassigned query peaks inflate the forward denominator and depress $S_{\cos}$. The reverse dot product evaluates library peak recovery independently of co-eluting noise.
+
+    \item \textbf{The Collision Energy Blindness:}\\
+    \textit{Sin:} Matching experimental spectra acquired at 10 eV against library spectra recorded at 50 eV without normalized collision energy (NCE) compensation.\\
+    \textit{Remedy:} Record experimental tandem spectra using stepped collision energies (e.g., 20--40--60 NCE) or filter reference databases to matching energy windows. Discrepant collision energies alter fragment branching ratios, converting true hits into false rejections.
+
+    \item \textbf{The Missing Decoy Fallacy:}\\
+    \textit{Sin:} Reporting raw cosine scores without establishing an empirical score cutoff or statistical significance threshold.\\
+    \textit{Remedy:} Construct decoy spectral libraries via mass-shuffling or fragment scrambling. Derive empirical null distributions to compute match $p$-values and establish false discovery rates across large-scale spectral annotation experiments.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Diagnostic Checklist: Auditing Spectral Library Search Pipelines}
+\label{tab:library_checklist}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Resolution} & Fragment match tolerance matches instrument capability. & $\le 0.02$ Da or $\le 15$ ppm for Orbitrap/Q-TOF. & [ ] \\
+\addlinespace
+\textbf{Weighting} & Intensity weighting exponent suppresses dominant base peaks. & $b = 0.5$ (square-root scaling) in dot product. & [ ] \\
+\addlinespace
+\textbf{Precursor} & Precursor accurate mass filtered prior to spectral comparison. & Mass deviation $\le 10$ ppm against theoretical ion. & [ ] \\
+\addlinespace
+\textbf{Chimerism} & Reverse dot product evaluated for co-eluting or chimeric ions. & $S_{\text{rev}} \ge 0.80$ with $\ge 4$ matching fragments. & [ ] \\
+\addlinespace
+\textbf{Orthogonality} & Retention time validated against authentic chemical standard. & $\Delta t_R \le 10$ s for MSI Level 1 assignment. & [ ] \\
+\addlinespace
+\textbf{Null Model} & Empirical null distribution verified using decoy spectra. & False match probability $p < 0.01$ against shuffled decoys. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 10.1 (Manual Calculation of Normalized Dot Product).}\enspace
+\label{ex:manual_cosine}
+A query spectrum $U$ and reference spectrum $V$ contain three aligned peaks at $m/z$ 100, 150, and 200:
+\begin{itemize}
+    \item Query intensities: $I_U = (100, 400, 900)$
+    \item Reference intensities: $I_V = (144, 256, 1024)$
+\end{itemize}
+Using square-root intensity weighting ($a = 0, b = 0.5$):
+\begin{enumerate}
+    \item Calculate the weighted intensity vectors $\mathbf{w}_U$ and $\mathbf{w}_V$.
+    \item Calculate the scalar dot product $\mathbf{w}_U \cdot \mathbf{w}_V$.
+    \item Calculate vector Euclidean norms $\|\mathbf{w}_U\|$ and $\|\mathbf{w}_V\|$.
+    \item Derive the normalized cosine score $S_{\cos}(U, V)$.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 10.2 (Hypergeometric Null Probability of False Peak Overlap).}\enspace
+\label{ex:hypergeometric_pvalue}
+An experimental tandem mass spectrum recorded on a high-resolution instrument ($m/z$ range 100 to 1100, fragment tolerance $\tau = 0.5$ Da, yielding $N = 1000$ mass bins) contains $n = 6$ fragment peaks. A reference library entry contains $m = 8$ fragment peaks.
+\begin{enumerate}
+    \item Formulate the hypergeometric probability mass function for observing exactly $k$ shared peaks under the null hypothesis of random fragment placement.
+    \item Calculate the cumulative probability of observing $k \ge 4$ overlapping peaks by chance alone.
+    \item Determine the effect on false match probability if the matching tolerance is relaxed to unit mass resolution ($N = 50$ bins).
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 10.3 (Forward versus Reverse Cosine under Co-eluting Contamination).}\enspace
+\label{ex:reverse_cosine_chimeric}
+A target compound with reference library peaks at $I_V = (144, 256, 1024)$ co-elutes with an interfering contaminant. The experimental query contains the three target peaks at $I_U = (100, 400, 900)$ plus two intense contaminant peaks at $I_{\text{contam}} = (1600, 2500)$.
+\begin{enumerate}
+    \item Calculate the forward cosine similarity $S_{\cos}$ across the complete query spectrum.
+    \item Calculate the reverse cosine similarity $S_{\text{rev}}$ restricted to library-matched peaks.
+    \item Explain why the forward cosine fails to identify the target analyte while the reverse cosine succeeds.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 10.4 (Candidate Search Space Reduction via Precursor Windowing).}\enspace
+\label{ex:precursor_filtering_speedup}
+A metabolomics laboratory maintains a reference spectral database containing 500,000 curated $\text{MS/MS}$ spectra distributed across the mass range 100 to 1100 Da.
+\begin{enumerate}
+    \item Assuming uniform precursor mass distribution, calculate the candidate pool size when applying a 20 ppm precursor mass filter around a query precursor at $m/z = 400.0000$ Da.
+    \item Estimate the computational speedup factor achieved by precursor filtering relative to exhaustive pairwise comparison.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 10.1}
+
+\noindent\textbf{Part 1: Weighted Intensity Vectors}\enspace
+Applying square-root transformation $w_i = \sqrt{I_i}$:
+\begin{align*}
+\mathbf{w}_U &= (\sqrt{100}, \sqrt{400}, \sqrt{900}) = (10, 20, 30) \\
+\mathbf{w}_V &= (\sqrt{144}, \sqrt{256}, \sqrt{1024}) = (12, 16, 32)
+\end{align*}
+
+\noindent\textbf{Part 2: Dot Product Numerator}\enspace
+\begin{equation*}
+\mathbf{w}_U \cdot \mathbf{w}_V = (10 \times 12) + (20 \times 16) + (30 \times 32) = 120 + 320 + 960 = 1400
+\end{equation*}
+
+\noindent\textbf{Part 3: Vector Norms}\enspace
+\begin{align*}
+\|\mathbf{w}_U\| &= \sqrt{10^2 + 20^2 + 30^2} = \sqrt{100 + 400 + 900} = \sqrt{1400} \approx 37.4166 \\
+\|\mathbf{w}_V\| &= \sqrt{12^2 + 16^2 + 32^2} = \sqrt{144 + 256 + 1024} = \sqrt{1424} \approx 37.7359
+\end{align*}
+
+\noindent\textbf{Part 4: Normalized Cosine Similarity}\enspace
+\begin{equation*}
+S_{\cos}(U, V) = \frac{1400}{\sqrt{1400} \times \sqrt{1424}} = \frac{1400}{37.4166 \times 37.7359} = \frac{1400}{1411.9490} \approx 0.9915
+\end{equation*}
+The calculated cosine similarity is $0.9915$.
+
+\subsection{Solution to Exercise 10.2}
+
+\noindent\textbf{Part 1: Hypergeometric Formulation}\enspace
+With $N = 1000$ mass bins, $m = 8$ reference peaks, and $n = 6$ query peaks, the probability of obtaining exactly $k$ shared bins under null hypothesis $H_0$ is:
+\begin{equation*}
+P(K = k \mid H_0) = \frac{\binom{8}{k} \binom{992}{6 - k}}{\binom{1000}{6}}
+\end{equation*}
+
+\noindent\textbf{Part 2: Cumulative Null Probability}\enspace
+Summing across $k \in \{4, 5, 6\}$:
+\begin{align*}
+P(K = 4) &= \frac{\binom{8}{4} \binom{992}{2}}{\binom{1000}{6}} = \frac{70 \times 491,536}{1.3685 \times 10^{15}} \approx 2.514 \times 10^{-8} \\
+P(K = 5) &= \frac{\binom{8}{5} \binom{992}{1}}{\binom{1000}{6}} = \frac{56 \times 992}{1.3685 \times 10^{15}} \approx 4.059 \times 10^{-11} \\
+P(K = 6) &= \frac{\binom{8}{6} \binom{992}{0}}{\binom{1000}{6}} = \frac{28 \times 1}{1.3685 \times 10^{15}} \approx 2.046 \times 10^{-14}
+\end{align*}
+\begin{equation*}
+P(K \ge 4 \mid H_0) = 2.514 \times 10^{-8} + 4.059 \times 10^{-11} + 2.046 \times 10^{-14} \approx 2.519 \times 10^{-8}
+\end{equation*}
+The probability of observing 4 or more matching peaks by chance in 1000 bins is $2.52 \times 10^{-8}$.
+
+\noindent\textbf{Part 3: Effect of Relaxed Tolerance ($N = 50$ Bins)}\enspace
+When $N = 50$:
+\begin{equation*}
+P(K \ge 4 \mid H_0, N = 50) = \sum_{j=4}^6 \frac{\binom{8}{j} \binom{42}{6 - j}}{\binom{50}{6}} \approx 0.0031
+\end{equation*}
+Relaxing the tolerance from high resolution ($N = 1000$) to unit resolution ($N = 50$) inflates the false match probability from $2.52 \times 10^{-8}$ to $3.1 \times 10^{-3}$, a $123,000$-fold increase in random match rate.
+
+\subsection{Solution to Exercise 10.3}
+
+\noindent\textbf{Part 1: Forward Cosine with Contaminant Peaks}\enspace
+The weighted query vector includes five peaks:
+\begin{equation*}
+\mathbf{w}_{U, \text{all}} = (10, 20, 30, \sqrt{1600}, \sqrt{2500}) = (10, 20, 30, 40, 50)
+\end{equation*}
+The reference vector has three peaks: $\mathbf{w}_V = (12, 16, 32)$.
+The aligned dot product numerator remains $1400$ because contaminant peaks have zero intensity in the reference spectrum:
+\begin{equation*}
+\text{Numerator} = (10 \times 12) + (20 \times 16) + (30 \times 32) + (40 \times 0) + (50 \times 0) = 1400
+\end{equation*}
+The norm of the query expands:
+\begin{equation*}
+\|\mathbf{w}_{U, \text{all}}\| = \sqrt{10^2 + 20^2 + 30^2 + 40^2 + 50^2} = \sqrt{100 + 400 + 900 + 1600 + 2500} = \sqrt{5500} \approx 74.1620
+\end{equation*}
+The forward cosine is:
+\begin{equation*}
+S_{\cos, \text{forward}} = \frac{1400}{\sqrt{5500} \times \sqrt{1424}} = \frac{1400}{74.1620 \times 37.7359} = \frac{1400}{2798.57} \approx 0.5003
+\end{equation*}
+The forward score drops from $0.9915$ to $0.5003$, falling below standard acceptance cutoffs ($\ge 0.70$).
+
+\noindent\textbf{Part 2: Reverse Cosine Calculation}\enspace
+Restricting query evaluation exclusively to the three peaks present in the reference spectrum:
+\begin{align*}
+\|\mathbf{w}_{U, \text{matched}}\| &= \sqrt{10^2 + 20^2 + 30^2} = \sqrt{1400} \approx 37.4166 \\
+\|\mathbf{w}_V\| &= \sqrt{1424} \approx 37.7359
+\end{align*}
+\begin{equation*}
+S_{\text{rev}} = \frac{1400}{37.4166 \times 37.7359} \approx 0.9915
+\end{equation*}
+
+\noindent\textbf{Part 3: Methodological Consequence}\enspace
+The forward cosine treats unassigned query peaks as mismatches, penalizing the score through denominator inflation. The reverse cosine restricts the denominator to library features, identifying the target analyte despite co-eluting chemical contamination.
+
+\subsection{Solution to Exercise 10.4}
+
+\noindent\textbf{Part 1: Candidate Pool Size}\enspace
+A 20 ppm window around $m/z = 400.0000$ Da is:
+\begin{equation*}
+\Delta m = 400.0000 \times 20 \times 10^{-6} = 0.0080 \text{ Da}
+\end{equation*}
+The search window is $[399.9920, 400.0080]$ Da, spanning total width $W = 0.0160$ Da.
+Across an effective mass range of $1000$ Da ($100$ to $1100$ Da), the window fraction is:
+\begin{equation*}
+f = \frac{0.0160}{1000} = 1.6 \times 10^{-5}
+\end{equation*}
+For $500,000$ uniformly distributed library entries, the expected candidate pool size is:
+\begin{equation*}
+N_{\text{cand}} = 500,000 \times 1.6 \times 10^{-5} = 8 \text{ candidates}
+\end{equation*}
+In biological libraries, candidate density clusters around typical metabolite masses (200--600 Da) by a factor of 5 to 10, producing approximately 40 to 100 candidate spectra.
+
+\noindent\textbf{Part 2: Computational Speedup}\enspace
+Full pairwise comparison requires comparing the query against all $500,000$ spectra. Filtering to 100 candidates reduces required spectral alignments and dot-product calculations by:
+\begin{equation*}
+\text{Speedup} = \frac{500,000}{100} = 5,000\times
+\end{equation*}
+Precursor mass windowing accelerates library searching by more than three orders of magnitude.
+
+% =============================================================================
+% References
+% =============================================================================
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{stein1994optimization}
+Stein, S.E., Scott, D.R.: Optimization and testing of mass spectral library search algorithms for compound identification.
+\textit{Journal of the American Society for Mass Spectrometry} \textbf{5}(9), 859--866 (1994).
+\doi{10.1016/1044-0305(94)87009-8}
+
+\bibitem{sumner2007proposed}
+Sumner, L.W., Amberg, A., Barrett, D., Beale, M.H., Beger, R., Daykin, C.A., Fan, T.W., Fiehn, O., Goodacre, R., Griffin, J.L., Hankemeier, T.: Proposed minimum reporting standards for chemical analysis.
+\textit{Metabolomics} \textbf{3}(3), 211--221 (2007).
+\doi{10.1007/s11306-007-0082-2}
+
+\bibitem{horai2010massbank}
+Horai, H., Arita, M., Kanaya, S., Nihei, Y., Ikeda, T., Suwa, K., Ojima, Y., Tanaka, K., Tanaka, S., Aoshima, K., Oda, Y.: MassBank: a public repository for sharing mass spectral data for life sciences.
+\textit{Journal of Mass Spectrometry} \textbf{45}(7), 703--714 (2010).
+\doi{10.1002/jms.1777}
+
+\bibitem{wang2016sharing}
+Wang, M., Carver, J.J., Phelan, V.V., Sanchez, L.M., Garg, N., Peng, Y., Nguyen, D.D., Watrous, J., Kapono, C.A., Luzzatto-Knaan, T., Porto, C.: Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
+\textit{Nature Biotechnology} \textbf{34}(8), 828--837 (2016).
+\doi{10.1038/nbt.3597}
+
+\bibitem{li2021spectral}
+Li, Y., Kind, T., Folz, J., Vaniya, A., Mehta, S.S., Fiehn, O.: Spectral entropy outperforms MS/MS dot product similarity for small-molecule compound identification.
+\textit{Nature Methods} \textbf{18}(12), 1524--1531 (2021).
+\doi{10.1038/s41592-021-01331-z}
+
+\bibitem{rainer2022modular}
+Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.M., Neumann, S., Stravs, M.A., Verri Hernandes, V., Gatto, L.: A modular and expandable ecosystem for metabolomics data annotation in R.
+\textit{Metabolites} \textbf{12}(2), 173 (2022).
+\doi{10.3390/metabo12020173}
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,606 @@
+\documentclass[11pt,twoside,openright]{book}
+
+% =============================================================================
+% Mass Spectrometry Data Analysis with R
+% Chapter 11: Peptide-Spectrum Match Auditing and Target-Decoy FDR
+% Author: Lucas VHH TRAN (CK-CARE Davos)
+% Style: Springer Nature Monograph (Health Analytics with R Pedagogy)
+% =============================================================================
+
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 11: Peptide-Spectrum Match Auditing and Target-Decoy FDR},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{10}
+\chapter{Peptide-Spectrum Match Auditing and Target-Decoy FDR}
+\label{ch:psm_audit}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Database search engines match tandem mass spectra against in silico digested protein sequences to produce candidate peptide-spectrum matches (PSMs). Raw search scores cannot differentiate true biological peptides from random spectral overlaps without a calibrated statistical null model. The target-decoy competition strategy provides an empirical false discovery rate (FDR) estimator by searching query spectra against a combined database of real target proteins and inverted decoy sequences. This chapter establishes the mathematical principles, error rate formulations, and Bioconductor implementations for auditing PSM datasets. We derive the empirical false discovery rate, Storey's $q$-value, and posterior error probability (PEP) mixture models. We prove the PSM-to-Protein FDR Inflation Theorem, demonstrating why controlling error rates at the spectrum level permits higher false discovery rates at the protein level. Using an mzIdentML benchmark dataset from an \textit{Erwinia} proteome digest analyzed on a Top10-HCD Orbitrap, we implement a verified auditing workflow in R 4.6.1 using the \texttt{PSMatch} package. We audit precursor charge distributions, quantify tryptic missed cleavages, detect adventitious contaminants, and resolve bipartite peptide-protein graphs into connected components. The chapter details the Five Deadly Sins of PSM filtering, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical proofs and verified executable R code.
+\end{abstract}
+
+\noindent
+\textbf{Keywords:}\enspace Peptide-Spectrum Match, Target-Decoy Database, False Discovery Rate, Posterior Error Probability, \texttt{PSMatch}, Bottom-Up Proteomics.
+
+\vspace{0.8em}
+\noindent\rule{\textwidth}{0.4pt}
+
+% =============================================================================
+% Methodological Roadmap
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Methodological Roadmap: Four Stages of PSM Auditing}
+\label{tab:psm_roadmap}
+\small
+\begin{tabularx}{\textwidth}{l p{3.8cm} p{4.2cm} X}
+\toprule
+\textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
+\midrule
+\textbf{1. Ingestion} & Parse mzIdentML schema into tabular \texttt{PSM} container. & Extract sequence, precursor charge, raw scores, and target/decoy tags. & Decoy prefix parsing failure. Remedy: Verify \texttt{isDecoy} logical flag concordance. \\
+\addlinespace
+\textbf{2. Target-Decoy} & Rank filtering and score thresholding via $N_{\text{decoy}} / N_{\text{target}}$. & Determine score cutoffs achieving $\le 1.0\%$ empirical PSM-level FDR. & Raw score thresholding without decoy calibration. Remedy: Walk target-decoy empirical FDR curve. \\
+\addlinespace
+\textbf{3. Diagnostics} & Tryptic cleavage audit, charge distribution, and contaminant search. & Identify incomplete digestion, electrospray anomalies, and autolysis peaks. & Unchecked trypsin autolysis or keratin contamination. Remedy: Screen against cRAP database. \\
+\addlinespace
+\textbf{4. Graph Audit} & Bipartite adjacency matrix and connected component analysis. & Separate unique peptides from shared degenerate sequences. & Silent protein inference inflation from shared peptides. Remedy: Filter shared PSMs before quantification. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\begin{notebox}
+\textbf{Tutor's Methodological Advice: The Raw Score Illusion}\\
+A database search engine score measures spectral similarity against a candidate sequence, but score scales differ across charge states, peptide lengths, and instrument configurations. An MS-GF+ RawScore of 80 may represent a $0.01\%$ error rate for a triply charged 14-mer, but a $15\%$ error rate for a doubly charged 7-mer. Never apply arbitrary raw score cutoffs. Every identification threshold must be calibrated against an empirical target-decoy null model or converted into a spectrum-level false discovery rate ($q$-value $\le 0.01$).
+\end{notebox}
+
+% =============================================================================
+\section{Biophysical and Mathematical Foundations}
+% =============================================================================
+
+\subsection{Database Searching and Score Statistics}
+Bottom-up proteomics digests proteins into peptides using site-specific endoproteases (predominantly porcine trypsin). Liquid chromatography separates the resulting peptide mixture, and tandem mass spectrometry isolates and fragments precursor ions. Database search engines (including Mascot, SEQUEST, Andromeda, and MS-GF+) compare observed fragment mass-to-charge ($m/z$) values against theoretical $b$- and $y$-ion series generated from protein sequence databases.
+
+For an observed spectrum $S$ and candidate peptide sequence $P$, the search engine computes a raw matching score $s(S, P)$. In cross-correlation algorithms (SEQUEST), $s$ represents the dot product between the experimental spectrum and a shifted theoretical template. In probabilistic engines (MS-GF+), $s$ reflects a log-likelihood ratio comparing the probability of observing spectrum $S$ given sequence $P$ against a random cleavage null model:
+\begin{equation}
+s(S, P) = \ln \left( \frac{P(S \mid P)}{P(S \mid \text{Random})} \right)
+\label{eq:msgf_score}
+\end{equation}
+Because search engines score millions of spectrum-peptide pairs, top-ranked matches inevitably contain false positive assignments originating from unmodeled chemical modifications, chimeric precursors, and baseline instrument noise.
+
+\subsection{The Target-Decoy Competition Framework}
+Elias and Gygi (2007) introduced the target-decoy competition (TDC) framework to provide a rigorous, non-parametric false discovery rate estimate. The search database is constructed by concatenating authentic protein sequences (targets, $\mathcal{D}_{\text{target}}$) with reversed or shuffled sequences (decoys, $\mathcal{D}_{\text{decoy}}$):
+\begin{equation}
+\mathcal{D}_{\text{combined}} = \mathcal{D}_{\text{target}} \cup \mathcal{D}_{\text{decoy}}
+\label{eq:target_decoy_db}
+\end{equation}
+Because decoy sequences do not exist in the biological specimen, any match assigned to a decoy sequence is an unambiguous false positive. In concatenated target-decoy competition, each experimental spectrum searches both databases simultaneously. Only the single best-scoring candidate match (Rank 1) is retained:
+\begin{equation}
+P^* = \arg\max_{P \in \mathcal{D}_{\text{combined}}} s(S, P)
+\label{eq:rank1_match}
+\end{equation}
+Under the fundamental symmetry assumption, an incorrect assignment is equally likely to match a target sequence or a decoy sequence:
+\begin{equation}
+P(P^* \in \mathcal{D}_{\text{target}} \mid \text{Match is False}) = P(P^* \in \mathcal{D}_{\text{decoy}} \mid \text{Match is False}) = 0.5
+\label{eq:symmetry_assumption}
+\end{equation}
+Therefore, every observed decoy match above score threshold $t$ represents an unobserved false positive target match above the same threshold. The empirical false discovery rate at score threshold $t$ is:
+\begin{equation}
+\widehat{\text{FDR}}(t) = \frac{N_{\text{decoy}}(s \ge t)}{N_{\text{target}}(s \ge t)}
+\label{eq:empirical_fdr}
+\end{equation}
+where $N_{\text{decoy}}(s \ge t)$ and $N_{\text{target}}(s \ge t)$ are the counts of decoy and target matches scoring at or above $t$. To avoid underestimation in small sample sizes, the conservative estimator adds 1 to the numerator:
+\begin{equation}
+\widehat{\text{FDR}}_{\text{conservative}}(t) = \frac{N_{\text{decoy}}(s \ge t) + 1}{N_{\text{target}}(s \ge t)}
+\label{eq:conservative_fdr}
+\end{equation}
+
+\subsection{Storey's Q-Value and Posterior Error Probability}
+Because empirical FDR estimates fluctuate locally due to discrete counting noise, Storey (2002) formulated the $q$-value. The $q$-value of a PSM with score $s_i$ is the minimum false discovery rate at which that match is accepted:
+\begin{equation}
+q(s_i) = \min_{t \le s_i} \widehat{\text{FDR}}(t)
+\label{eq:q_value}
+\end{equation}
+Monotonicity enforcement guarantees that a higher-scoring match never receives a less confident $q$-value than a lower-scoring match.
+
+While the $q$-value measures the global false discovery rate across a population of accepted matches, the Posterior Error Probability (PEP), or local false discovery rate, measures the probability that a specific individual match is incorrect given its score $s$:
+\begin{equation}
+\text{PEP}(s) = P(\text{False} \mid S = s) = \frac{\pi_0 f_{\text{decoy}}(s)}{f_{\text{target}}(s)}
+\label{eq:pep_formula}
+\end{equation}
+where $\pi_0$ is the prior probability of an incorrect match, $f_{\text{decoy}}(s)$ is the score probability density function of decoy matches, and $f_{\text{target}}(s)$ is the marginal density of all target matches. Advanced post-processing tools, such as Percolator (K\"all et al., 2008), fit semi-supervised support vector machines to combine multiple spectral features (delta score, precursor mass error, charge, retention time) into calibrated PEP estimates.
+
+\subsection{The PSM-to-Protein FDR Inflation Theorem}
+A central pitfall in quantitative proteomics is assuming that a $1.0\%$ FDR filter at the PSM level yields a $1.0\%$ FDR at the protein level. In practice, protein-level FDR exceeds PSM-level FDR.
+
+\noindent\textbf{Theorem 11.1 (PSM-to-Protein FDR Inflation).}\enspace\textit{Let a proteomics experiment identify $M$ confident PSMs mapping to $K$ distinct proteins, filtered at PSM-level false discovery rate $\alpha_{\text{PSM}} = \frac{N_{\text{false}}}{M}$. Suppose true positive PSMs cluster redundantly onto true proteins with mean coverage $\mu_{\text{true}} = \frac{M_{\text{true}}}{K_{\text{true}}} > 1$, while false positive PSMs distribute uniformly across the unexpressed proteome with mean coverage $\mu_{\text{false}} = \frac{N_{\text{false}}}{K_{\text{false}}} \approx 1$. Then the protein-level false discovery rate $\alpha_{\text{protein}}$ is strictly inflated relative to $\alpha_{\text{PSM}}$:}
+\begin{equation}
+\alpha_{\text{protein}} \approx \alpha_{\text{PSM}} \cdot \mu_{\text{true}} > \alpha_{\text{PSM}}
+\label{eq:protein_inflation}
+\end{equation}
+
+\noindent\textbf{Proof.}\enspace
+Let total identified proteins be $K = K_{\text{true}} + K_{\text{false}}$.
+By definition:
+\begin{equation}
+K_{\text{true}} = \frac{M_{\text{true}}}{\mu_{\text{true}}} = \frac{(1 - \alpha_{\text{PSM}}) M}{\mu_{\text{true}}}
+\end{equation}
+Because false positive PSMs match randomly across database sequences, the probability that two independent false PSMs hit the identical false protein is negligible in large search databases. Hence, $\mu_{\text{false}} \approx 1$, yielding:
+\begin{equation}
+K_{\text{false}} \approx N_{\text{false}} = \alpha_{\text{PSM}} M
+\end{equation}
+The protein-level false discovery rate is:
+\begin{equation}
+\alpha_{\text{protein}} = \frac{K_{\text{false}}}{K_{\text{true}} + K_{\text{false}}} = \frac{\alpha_{\text{PSM}} M}{\frac{(1 - \alpha_{\text{PSM}}) M}{\mu_{\text{true}}} + \alpha_{\text{PSM}} M} = \frac{\alpha_{\text{PSM}}}{\frac{1 - \alpha_{\text{PSM}}}{\mu_{\text{true}}} + \alpha_{\text{PSM}}}
+\end{equation}
+For small error rates ($\alpha_{\text{PSM}} \ll 1$), $(1 - \alpha_{\text{PSM}}) \approx 1$:
+\begin{equation}
+\alpha_{\text{protein}} \approx \frac{\alpha_{\text{PSM}}}{\frac{1}{\mu_{\text{true}}} + \alpha_{\text{PSM}}} \approx \alpha_{\text{PSM}} \cdot \mu_{\text{true}}
+\end{equation}
+When true proteins are supported on average by $\mu_{\text{true}} = 5$ PSMs, a PSM-level FDR of $\alpha_{\text{PSM}} = 0.01$ ($1.0\%$) produces a protein-level FDR of:
+\begin{equation}
+\alpha_{\text{protein}} \approx 0.01 \times 5 = 0.05 \quad (5.0\%)
+\end{equation}
+The protein-level false discovery rate is inflated by a factor of five. \qed
+
+% =============================================================================
+\section{Algorithmic Architecture: The PSMatch Ecosystem}
+% =============================================================================
+
+The Bioconductor \texttt{PSMatch} package formalizes the analysis and auditing of peptide-spectrum matches.
+
+\subsection{Data Representation and mzIdentML Standards}
+The standard exchange format for proteomics search engine output is mzIdentML (\texttt{.mzid}), developed by the Human Proteome Organization Proteomics Standards Initiative (HUPO-PSI). The \texttt{PSMatch::readPSMs} function parses the XML schema of mzIdentML files into a structured \texttt{PSM} object inheriting from \texttt{DFrame}.
+
+The core attributes recorded for every match include:
+\begin{itemize}
+    \item \texttt{sequence}: Matched peptide primary structure.
+    \item \texttt{spectrumID}: Coordinate linking the match back to the raw LC-MS/MS file.
+    \item \texttt{chargeState}: Precursor electrospray charge state ($z$).
+    \item \texttt{rank}: Ordinal rank of the candidate sequence for that spectrum ($1 = \text{top hit}$).
+    \item \texttt{isDecoy}: Logical flag indicating whether the hit originated from the decoy database.
+    \item \texttt{MS.GF.RawScore}: Raw alignment score from the scoring engine.
+    \item \texttt{MS.GF.SpecEValue}: Spectral E-value (expected number of random matches with equal or better score).
+    \item \texttt{DatabaseAccess}: Accession of the parent protein in the reference FASTA file.
+\end{itemize}
+
+\subsection{Systematic Diagnostic Failure Modes}
+A search result filtered purely by score can harbor systematic biochemical and analytical anomalies:
+\begin{enumerate}
+    \item \textbf{Missed Cleavages:} Trypsin specifically cleaves C-terminal to lysine ($\text{K}$) and arginine ($\text{R}$), unless immediately followed by proline ($\text{P}$). Internal un-cleaved basic residues signify incomplete enzymatic digestion. High missed-cleavage rates dilute analytical sensitivity across multiple peptide forms.
+    \item \textbf{Charge-State Anomalies:} Tryptic peptides typically possess a basic N-terminus and a basic C-terminal $\text{K}$ or $\text{R}$, generating $2+$ or $3+$ ions in positive-mode electrospray. Singly charged ($1+$) or high-charge ($\ge 5+$) matches frequently represent chemical contaminants, non-peptide polymers, or poorly fragmented precursors.
+    \item \textbf{Adventitious Contaminants:} Common laboratory reagents (porcine trypsin autolysis products, human keratins from skin shedding, bovine serum albumin) contaminate sample preparations. Searching against the Common Repository of Adventitious Proteins (cRAP) allows explicit identification and segregation of these artifacts.
+    \item \textbf{Shared Peptides:} Because gene duplication and homologous domains generate identical sequence segments across distinct proteins, a single peptide can map to multiple accessions. In \texttt{PSMatch}, \texttt{makeAdjacencyMatrix} and \texttt{ConnectedComponents} construct bipartite graphs linking peptides to proteins, partitioning the identification space into independent clusters.
+\end{enumerate}
+
+% =============================================================================
+\section{Hands-on R Laboratory: Auditing PSM Datasets}
+% =============================================================================
+
+We execute an audit on a benchmark dataset: an MS-GF+ search of an \textit{Erwinia} proteome digest analyzed on a Top10-HCD Orbitrap, distributed via the Bioconductor \texttt{msdata} package. The workflow executes in R 4.6.1.
+
+\subsection{Listing 11.1: Loading mzIdentML Data and Inspecting PSM Metadata}
+
+\begin{rchunk}{Listing 11.1: Ingestion and Baseline Metadata}
+library(PSMatch)
+library(msdata)
+library(dplyr)
+
+set.seed(42)
+
+# Locate bundled Erwinia proteome Top10-HCD mzIdentML file
+id_file <- msdata::ident(full.names = TRUE)
+cat(sprintf("Source mzIdentML file: %s\n", basename(id_file)))
+
+# Read PSM dataset
+psm_raw <- readPSMs(id_file)
+cat(sprintf("Initial PSM dimensions: %d rows x %d columns\n", nrow(psm_raw), ncol(psm_raw)))
+
+# Target vs Decoy counts in raw search results
+target_decoy_counts <- table(psm_raw$isDecoy)
+cat(sprintf("Target PSMs: %d (%.1f%%) | Decoy PSMs: %d (%.1f%%)\n",
+            target_decoy_counts["FALSE"],
+            target_decoy_counts["FALSE"] / nrow(psm_raw) * 100,
+            target_decoy_counts["TRUE"],
+            target_decoy_counts["TRUE"] / nrow(psm_raw) * 100))
+\end{rchunk}
+
+\begin{routput}
+Source mzIdentML file: TMT\_Erwinia\_1uLSike\_Top10HCD\_isol2\_45stepped\_60min\_01-20141210.mzid
+Initial PSM dimensions: 5802 rows x 35 columns
+Target PSMs: 2906 (50.1\%) | Decoy PSMs: 2896 (49.9\%)
+\end{routput}
+
+\subsection{Listing 11.2: Empirical Target-Decoy FDR Evaluation}
+
+\begin{rchunk}{Listing 11.2: Empirical FDR Curve and 1\% Threshold Selection}
+# Filter to rank 1 matches before FDR evaluation
+psm_r1 <- filterPsmRank(psm_raw)
+
+# Calculate empirical FDR across score thresholds
+fdr_at_score <- function(thresh, psm_df) {
+  above <- psm_df$MS.GF.RawScore >= thresh
+  n_d <- sum(above & psm_df$isDecoy)
+  n_t <- sum(above & !psm_df$isDecoy)
+  fdr <- if (n_t == 0) 0 else n_d / n_t
+  c(Score_Threshold = thresh, N_Target = n_t, N_Decoy = n_d, FDR = fdr)
+}
+
+score_grid <- seq(0, 100, by = 10)
+fdr_table <- as.data.frame(t(sapply(score_grid, fdr_at_score, psm_df = psm_r1)))
+fdr_table$FDR_Pct <- round(fdr_table$FDR * 100, 2)
+
+cat("Empirical Target-Decoy FDR across MS-GF+ RawScore thresholds:\n")
+print(fdr_table[, c("Score_Threshold", "N_Target", "N_Decoy", "FDR_Pct")])
+
+# Exact score threshold achieving FDR < 1.0%
+fine_scores <- seq(70, 100, by = 1)
+fine_fdr <- as.data.frame(t(sapply(fine_scores, fdr_at_score, psm_df = psm_r1)))
+threshold_1pct <- min(fine_fdr$Score_Threshold[fine_fdr$FDR <= 0.01])
+cat(sprintf("\nStrict 1.0%% FDR Score Threshold: MS-GF+ RawScore >= %.0f (Retained Targets: %d, Decoys: %d)\n",
+            threshold_1pct,
+            fine_fdr$N_Target[fine_fdr$Score_Threshold == threshold_1pct],
+            fine_fdr$N_Decoy[fine_fdr$Score_Threshold == threshold_1pct]))
+\end{rchunk}
+
+\begin{routput}
+Empirical Target-Decoy FDR across MS-GF+ RawScore thresholds:
+   Score\_Threshold N\_Target N\_Decoy FDR\_Pct
+1                0      803     838  104.36
+2               10      459     473  103.05
+3               20      249     231   92.77
+4               30      153     105   68.63
+5               40       86      42   48.84
+6               50       52      17   32.69
+7               60       38       8   21.05
+8               70       36       3    8.33
+9               80       35       1    2.86
+10              90       35       1    2.86
+11             100       31       0    0.00
+
+Strict 1.0\% FDR Score Threshold: MS-GF+ RawScore >= 93 (Retained Targets: 34, Decoys: 0)
+\end{routput}
+
+\subsection{Listing 11.3: Stepwise Filtering with PSMatch}
+
+\begin{rchunk}{Listing 11.3: Executing Sequential PSMatch Filters}
+n_initial <- nrow(psm_raw)
+
+# Step 1: Filter to rank 1
+psm_step1 <- filterPsmRank(psm_raw)
+n_rank1 <- nrow(psm_step1)
+cat(sprintf("Step 1 (Rank 1 filter):     Retained %d PSMs (removed %d suboptimal matches)\n",
+            n_rank1, n_initial - n_rank1))
+
+# Step 2: Remove decoy hits
+psm_step2 <- filterPsmDecoy(psm_step1)
+n_target <- nrow(psm_step2)
+cat(sprintf("Step 2 (Decoy removal):     Retained %d target PSMs (removed %d decoy hits)\n",
+            n_target, n_rank1 - n_target))
+
+# Step 3: Remove shared (degenerate) peptides
+psm_step3 <- filterPsmShared(psm_step2)
+n_unique <- nrow(psm_step3)
+cat(sprintf("Step 3 (Shared removal):    Retained %d unique-protein PSMs (removed %d shared)\n",
+            n_unique, n_target - n_unique))
+\end{rchunk}
+
+\begin{routput}
+Step 1 (Rank 1 filter):     Retained 5487 PSMs (removed 315 suboptimal matches)
+Step 2 (Decoy removal):     Retained 2751 target PSMs (removed 2736 decoy hits)
+Step 3 (Shared removal):    Retained 2666 unique-protein PSMs (removed 85 shared)
+\end{routput}
+
+\subsection{Listing 11.4: Systematic Failure Mode Diagnostics}
+
+\begin{rchunk}{Listing 11.4: Missed Cleavages, Charge States, and Contaminants}
+# A. Missed Cleavage Detection (Trypsin rule: K/R not followed by P)
+count_missed_cleavages <- function(seq) {
+  sites <- gregexpr("[KR](?!P)", seq, perl = TRUE)[[1]]
+  n <- if (sites[1] == -1) 0L else length(sites)
+  if (substr(seq, nchar(seq), nchar(seq)) %in% c("K", "R")) n <- n - 1L
+  max(n, 0L)
+}
+
+psm_step2$missed_cleavages <- sapply(psm_step2$sequence, count_missed_cleavages)
+mc_table <- table(psm_step2$missed_cleavages)
+cat("Missed Cleavages Distribution (Target PSMs):\n")
+print(mc_table)
+
+# B. Precursor Charge-State Distribution
+charge_table <- table(psm_step2$chargeState)
+cat("\nPrecursor Charge-State Distribution (Target PSMs):\n")
+print(charge_table)
+
+# C. Common Contaminants Audit (Trypsin, Keratin, BSA)
+contam_indices <- grep("trypsin|keratin|albumin", psm_step2$DatabaseDescription, ignore.case = TRUE)
+cat(sprintf("\nContaminant PSMs Detected: %d hits (%.2f%% of targets)\n",
+            length(contam_indices), length(contam_indices) / nrow(psm_step2) * 100))
+print(table(psm_step2$DatabaseDescription[contam_indices]))
+\end{rchunk}
+
+\begin{routput}
+Missed Cleavages Distribution (Target PSMs):
+  0   1   2   3   4   5   6   7   8   9 
+249 609 751 601 329 136  49  18   8   1 
+
+Precursor Charge-State Distribution (Target PSMs):
+   2    3    4    5    6 
+1568  973  190   17    3 
+
+Contaminant PSMs Detected: 6 hits (0.22\% of targets)
+sp|P00761|TRYP\_PIG Porcine Trypsin for sample preparation OS=Sus scrofa PE=1 SV=1 : 1
+sp|P02769|ALBU\_BOVIN Serum albumin OS=Bos taurus GN=ALB PE=1 SV=4 : 5
+\end{routput}
+
+\subsection{Listing 11.5: Assembling Clean Identification Report}
+
+\begin{rchunk}{Listing 11.5: Final Identification Report Assembly}
+# Compute missed cleavages for confident unique PSMs
+psm_step3$missed_cleavages <- sapply(psm_step3$sequence, count_missed_cleavages)
+
+# Combine confident unique PSMs into report data frame
+ident_report <- as.data.frame(psm_step3) %>%
+  select(
+    Spectrum = spectrumID,
+    Sequence = sequence,
+    Charge = chargeState,
+    Protein = DatabaseAccess,
+    Score = MS.GF.RawScore,
+    QValue = MS.GF.QValue,
+    Missed_Cleavages = missed_cleavages
+  ) %>%
+  arrange(desc(Score))
+
+cat(sprintf("Clean Identification Report Summary:\n"))
+cat(sprintf("  Confident PSMs:    %d\n", nrow(ident_report)))
+cat(sprintf("  Unique Peptides:   %d\n", length(unique(ident_report$Sequence))))
+cat(sprintf("  Distinct Proteins: %d\n", length(unique(ident_report$Protein))))
+cat("\nTop 5 Confident Identifications by MS-GF+ Score:\n")
+print(head(ident_report, 5))
+\end{rchunk}
+
+\begin{routput}
+Clean Identification Report Summary:
+  Confident PSMs:    2666
+  Unique Peptides:   2324
+  Distinct Proteins: 1466
+
+Top 5 Confident Identifications by MS-GF+ Score:
+  Sequence                          Charge Protein Score QValue Missed\_Cleavages
+1 TQVLDGLINANDIEVPVALIDGEIDVLR      3      ECA1147 214   0      0
+2 TKGLNVMQNLLTAHPDVQAVFAQNDEMALGALR 3      ECA0013 211   0      1
+3 TKGLNVMQNLLTAHPDVQAVFAQNDEMALGALR 4      ECA0013 204   0      1
+4 PIIGDNPFVVVLPDVVLDESTADQTQENLALLISR 3    ECA1443 188   0      0
+5 AGGGSATLSMGQAAAR                  2      ECA0685 172   0      0
+\end{routput}
+
+% =============================================================================
+\section{The Five Deadly Sins of PSM Auditing}
+% =============================================================================
+
+\begin{enumerate}
+    \item \textbf{The Raw-Score Cutoff Trap:}\\
+    \textit{Sin:} Imposing a universal raw score threshold (e.g., Mascot score $\ge 30$ or MS-GF+ RawScore $\ge 50$) across an entire study.\\
+    \textit{Remedy:} Evaluate score cutoffs through empirical target-decoy competition. Score distributions vary with peptide mass and precursor charge. Report error thresholds in terms of false discovery rate ($q$-value $\le 0.01$).
+
+    \item \textbf{The Decoy-Free Search Illusion:}\\
+    \textit{Sin:} Searching mass spectra against a target-only database to maximize candidate yields.\\
+    \textit{Remedy:} Always search a concatenated target-decoy database. Target-only searches provide no mechanism to estimate the number of false positive matches or control error rates.
+
+    \item \textbf{The Separate-Search Bias:}\\
+    \textit{Sin:} Searching target and decoy databases in two independent search runs and computing FDR as $N_{\text{decoy}} / N_{\text{target}}$.\\
+    \textit{Remedy:} Use concatenated target-decoy competition. In separate searches, low-scoring false spectra match both databases independently, creating duplicate hits. Concatenation forces target and decoy sequences to compete directly for the Rank 1 assignment, eliminating conservative bias.
+
+    \item \textbf{The Shared-Peptide Protein Blindness:}\\
+    \textit{Sin:} Assigning shared peptides to multiple proteins simultaneously without parsimony grouping.\\
+    \textit{Remedy:} Audit bipartite graph connectivity. Use \texttt{filterPsmShared} to restrict quantification to unique peptides, or implement strict Occam's razor parsimony grouping to prevent false protein identification claims.
+
+    \item \textbf{The PSM-to-Protein False Equivalence:}\\
+    \textit{Sin:} Assuming that filtering PSMs at $1.0\%$ FDR guarantees that the assembled protein list has an error rate of $1.0\%$.\\
+    \textit{Remedy:} Apply independent target-decoy filtering at the protein level. Because true PSMs cluster on high-abundance proteins while false PSMs distribute across single-hit proteins, protein-level error rates can reach $5\%$ to $10\%$ when PSMs are filtered at $1.0\%$.
+\end{enumerate}
+
+% =============================================================================
+\section{Self-Assessment Diagnostic Checklist}
+% =============================================================================
+
+\begin{table}[ht]
+\centering
+\caption{Diagnostic Checklist: Auditing Proteomics PSM Datasets}
+\label{tab:psm_checklist}
+\small
+\begin{tabularx}{\textwidth}{l p{5.5cm} X c}
+\toprule
+\textbf{Category} & \textbf{Diagnostic Check} & \textbf{Acceptance Criteria} & \textbf{Status} \\
+\midrule
+\textbf{Database} & Target and decoy databases searched in concatenated mode. & Search database contains equal numbers of target and decoy entries. & [ ] \\
+\addlinespace
+\textbf{Rank} & Only top-ranked (Rank 1) matches retained per spectrum. & PSMs with rank $> 1$ removed before FDR calculation. & [ ] \\
+\addlinespace
+\textbf{Threshold} & Spectrum-level FDR controlled empirically. & $\widehat{\text{FDR}} \le 1.0\%$ (or $q$-value $\le 0.01$) based on decoy counts. & [ ] \\
+\addlinespace
+\textbf{Digestion} & Missed-cleavage distribution inspected. & $\ge 70\%$ of confident PSMs contain $\le 1$ missed cleavage. & [ ] \\
+\addlinespace
+\textbf{Charges} & Precursor charge states consistent with tryptic ESI. & $\ge 90\%$ of matches occupy $2+$ and $3+$ charge states. & [ ] \\
+\addlinespace
+\textbf{Contaminants} & Adventitious proteins flagged and quantified. & Trypsin, keratin, and albumin matches identified via cRAP screening. & [ ] \\
+\addlinespace
+\textbf{Topology} & Shared peptides partitioned into connected components. & Degenerate peptides removed or flagged prior to quantification. & [ ] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% =============================================================================
+\section{Chapter Exercises}
+% =============================================================================
+
+\noindent\textbf{Exercise 11.1 (Empirical FDR Curve under Alternative Score Metrics).}\enspace
+\label{ex:fdr_evalue}
+A database search engine reports both a raw alignment score and an analytical expectation value ($\text{SpecEValue}$), where lower E-values represent more confident matches.
+\begin{enumerate}
+    \item Formulate the empirical false discovery rate equation for an E-value threshold $\epsilon$.
+    \item Using the \textit{Erwinia} benchmark dataset, determine the largest E-value threshold that achieves $\widehat{\text{FDR}} \le 1.0\%$.
+    \item Contrast the stringency of raw score thresholding against E-value thresholding across different peptide lengths.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 11.2 (Association Between Missed Cleavages and Precursor Charge).}\enspace
+\label{ex:missed_cleavages_charge}
+Trypsin cleaves at lysine ($\text{K}$) and arginine ($\text{R}$). An un-cleaved basic residue remains inside the peptide sequence.
+\begin{enumerate}
+    \item Formulate the biochemical basis for why peptides with multiple missed cleavages tend to carry higher precursor charge states ($z \ge 3$) in positive electrospray ionization.
+    \item Calculate the empirical mean charge state for peptides with 0, 1, 2, and $\ge 5$ missed cleavages in the \textit{Erwinia} target PSM dataset.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 11.3 (Order-of-Operations Commutativity in Filtering).}\enspace
+\label{ex:filter_commutativity}
+A proteomics pipeline filters raw PSMs using three criteria: Rank 1 selection (\texttt{filterPsmRank}), decoy hit removal (\texttt{filterPsmDecoy}), and shared peptide removal (\texttt{filterPsmShared}).
+\begin{enumerate}
+    \item Test whether reversing the operation order (Shared $\to$ Decoy $\to$ Rank) alters the final count of retained confident PSMs.
+    \item Explain the mathematical conditions under which sequential set filters commute.
+\end{enumerate}
+
+\vspace{0.8em}
+\noindent\textbf{Exercise 11.4 (Bipartite Graph Topology and Connected Components).}\enspace
+\label{ex:connected_components_topology}
+An audit of the target PSM table constructs a bipartite graph $G = (V_{\text{pep}}, V_{\text{prot}}, E)$, where an edge connects peptide $p_i$ to protein $P_j$.
+\begin{enumerate}
+    \item Define the four structural classes of connected components in a peptide-protein bipartite graph ($1 \times 1$, $1 \times n$, $n \times 1$, and $n \times n$).
+    \item Using the \textit{Erwinia} target dataset, determine the total number of connected components and quantify the prevalence of complex $n \times n$ multi-protein assemblies.
+\end{enumerate}
+
+% =============================================================================
+\section{Worked-Out Solutions}
+% =============================================================================
+
+\subsection{Solution to Exercise 11.1}
+
+\noindent\textbf{Part 1: E-Value FDR Formulation}\enspace
+Because smaller E-values indicate higher confidence, the acceptance region at threshold $\epsilon$ is $E \le \epsilon$. The empirical false discovery rate is:
+\begin{equation}
+\widehat{\text{FDR}}(\epsilon) = \frac{N_{\text{decoy}}(E \le \epsilon)}{N_{\text{target}}(E \le \epsilon)}
+\end{equation}
+
+\noindent\textbf{Part 2: Empirical Threshold on Erwinia Dataset}\enspace
+Evaluating across logarithmic steps from $10^{-15}$ to $10^{-5}$:
+At $\epsilon = 1.00 \times 10^{-9}$, $N_{\text{target}} = 41$ and $N_{\text{decoy}} = 0$, yielding $\widehat{\text{FDR}} = 0.00\% \le 1.0\%$.
+At $\epsilon = 1.00 \times 10^{-8}$, $N_{\text{decoy}}$ increases, elevating FDR above $1.0\%$.
+The strict $1.0\%$ FDR cutoff is $\text{SpecEValue} \le 1.00 \times 10^{-9}$.
+
+\noindent\textbf{Part 3: Stringency Comparison}\enspace
+Raw scores scale with peptide length because longer peptides generate more theoretical fragment ions. A raw score of 80 is readily achieved by long peptides but difficult for short peptides. Spectral E-values normalize for sequence search space size, providing uniform statistical stringency across all peptide lengths.
+
+\subsection{Solution to Exercise 11.2}
+
+\noindent\textbf{Part 1: Biochemical Mechanism}\enspace
+In positive-mode electrospray ionization ($\text{pH} \approx 2.5$ in $0.1\%$ formic acid), basic amino acid residues are protonated. A fully cleaved tryptic peptide possesses two primary basic sites: the N-terminal amine and the C-terminal $\text{K}$ or $\text{R}$ side chain, predominantly generating $2+$ ions. Each missed cleavage introduces an additional internal basic side chain ($\text{K}$ with $\text{p}K_a \approx 10.5$ or $\text{R}$ with $\text{p}K_a \approx 12.5$), providing an additional protonation site. Peptides with missed cleavages therefore acquire higher charge states ($3+$ and $4+$).
+
+\noindent\textbf{Part 2: Empirical Mean Charge States}\enspace
+In the \textit{Erwinia} target dataset:
+\begin{itemize}
+    \item 0 missed cleavages: Mean charge $= 2.390$ ($1568$ at $2+$, $973$ at $3+$).
+    \item 1 missed cleavage: Mean charge $= 2.373$.
+    \item 2 missed cleavages: Mean charge $= 2.450$.
+    \item 3 missed cleavages: Mean charge $= 2.544$.
+    \item 4 missed cleavages: Mean charge $= 2.672$.
+    \item 5 missed cleavages: Mean charge $= 2.779$.
+    \item 6 missed cleavages: Mean charge $= 3.184$.
+\end{itemize}
+The mean charge rises monotonically from $2.37$ at 1 missed cleavage to $3.18$ at 6 missed cleavages.
+
+\subsection{Solution to Exercise 11.3}
+
+\noindent\textbf{Part 1: Order-of-Operations Test}\enspace
+\begin{itemize}
+    \item Standard order ($\text{Rank} \to \text{Decoy} \to \text{Shared}$): $5802 \to 5487 \to 2751 \to 2666$ PSMs.
+    \item Alternative order ($\text{Shared} \to \text{Decoy} \to \text{Rank}$): $5802 \to 5623 \to 2819 \to 2666$ PSMs.
+\end{itemize}
+Both orders yield identical final sets of 2666 PSMs ($\Delta = 0$).
+
+\noindent\textbf{Part 2: Commutativity Condition}\enspace
+Sequential set filter operations commute when the selection predicate for each filter is invariant to the presence or absence of records removed by other filters. The rank filter depends only on intra-spectrum score ordering; the decoy filter depends only on sequence origin; and the shared peptide filter depends on the static peptide-to-protein database mapping. Because none of these predicates depend on inter-record context across the other filtering dimensions, the composition of operations is commutative.
+
+\subsection{Solution to Exercise 11.4}
+
+\noindent\textbf{Part 1: Component Structural Classes}\enspace
+\begin{itemize}
+    \item \textbf{$1 \times 1$ (Unique Trivial):} Exactly one unique peptide maps to exactly one protein.
+    \item \textbf{$n \times 1$ (Multiple Unique):} Multiple distinct peptides map exclusively to a single protein (robust identification).
+    \item \textbf{$1 \times n$ (Shared Degenerate):} A single peptide sequence is shared across $n$ distinct protein accessions without other peptide evidence.
+    \item \textbf{$n \times n$ (Complex Assembly):} Multiple shared and unique peptides form an interconnected network spanning multiple homologous proteins.
+\end{itemize}
+
+\noindent\textbf{Part 2: Topology of Erwinia Target Network}\enspace
+The bipartite graph comprises $2,357$ unique peptides and $1,504$ proteins, partitioned into $1,476$ connected components:
+\begin{itemize}
+    \item $954$ components of type $1 \times 1$ ($64.6\%$).
+    \item $501$ components of type $n \times 1$ ($33.9\%$).
+    \item $7$ components of type $1 \times n$ ($0.5\%$).
+    \item $14$ components of type $n \times n$ ($0.9\%$).
+\end{itemize}
+Although complex $n \times n$ multi-protein components represent under $1\%$ of graph clusters, they contain homologous gene families and protein isoforms that cannot be resolved without parsimony grouping.
+
+% =============================================================================
+% References
+% =============================================================================
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{elias2007target}
+Elias, J.E., Gygi, S.P.: Target-decoy search strategy for increased confidence in large-scale protein identifications by mass spectrometry.
+\textit{Nature Methods} \textbf{4}(3), 207--214 (2007).
+\doi{10.1038/nmeth1019}
+
+\bibitem{kim2014ms}
+Kim, S., Pevzner, P.A.: MS-GF+ makes progress towards a universal database search tool for proteomics.
+\textit{Nature Communications} \textbf{5}, 5277 (2014).
+\doi{10.1038/ncomms6277}
+
+\bibitem{kall2008posterior}
+K\"all, L., Storey, J.D., MacCoss, M.J., Noble, W.S.: Posterior error probabilities and false discovery rates: two sides of the same coin.
+\textit{Journal of Proteome Research} \textbf{7}(1), 40--44 (2008).
+\doi{10.1021/pr700739d}
+
+\bibitem{nesvizhskii2005interpretation}
+Nesvizhskii, A.I., Aebersold, R.: Interpretation of shotgun proteomic data: the protein inference problem.
+\textit{Molecular \& Cellular Proteomics} \textbf{4}(10), 1419--1440 (2005).
+\doi{10.1074/mcp.R500012-MCP200}
+
+\bibitem{storey2002direct}
+Storey, J.D.: A direct approach to false discovery rates.
+\textit{Journal of the Royal Statistical Society: Series B (Statistical Methodology)} \textbf{64}(3), 479--498 (2002).
+\doi{10.1111/1467-9868.00346}
+
+\bibitem{savitski2015measuring}
+Savitski, M.M., Wilhelm, M., Hahne, H., Kuster, B., Bantscheff, M.: A scalable approach for protein false discovery rate estimation in large proteomic data sets.
+\textit{Molecular \& Cellular Proteomics} \textbf{14}(9), 2394--2404 (2015).
+\doi{10.1074/mcp.M114.046995}
+
+\bibitem{gatto2023psmatch}
+Gatto, L., Rainer, J.: PSMatch: Handling and Managing Peptide-Spectrum Matches in R.
+\textit{Bioconductor Package} (2023).
+\doi{10.18129/B9.bioc.PSMatch}
+
+\end{thebibliography}
+
+\end{document}

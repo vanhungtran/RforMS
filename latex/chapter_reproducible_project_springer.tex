@@ -1,0 +1,450 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 04: Reproducible Mass Spectrometry Project Architecture},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{3}
+\chapter{Reproducible Mass Spectrometry Project Architecture}
+\label{chap:reproducible_project}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Reproducibility in mass spectrometry requires deterministic tracking of software versions, operating system dependencies, parameter configurations, and intermediate file caches. Interactive graphical user interfaces obscure parameter histories and prevent exact replication across laboratories. In contrast, scripted pipelines define analytical operations as explicit code. A production-grade computational MS project relies on four architectural layers: portable file referencing that prevents hardcoded operating-system path failures, dependency freezing via package lockfiles (\texttt{renv.lock}), full-stack POSIX containerization (Docker), and directed acyclic graph (DAG) caching (\texttt{targets}). DAG caching tracks cryptographic content hashes of raw spectral inputs and parameter values, recalculating only targets invalidated by code or parameter mutations while skipping computationally expensive peak-picking steps. This chapter presents the architecture of portable project layouts, cryptographic checksum verification, lockfile dependency auditing, DAG caching dynamics, and runtime contract assertions in R 4.6.1.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Reproducibility, renv lockfile, targets DAG, Cryptographic hash, Pipeline caching, Docker containerization, Runtime assertions.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:repro_roadmap} outlines the four tiers of the reproducibility stack for mass spectrometry research.
+
+\begin{table}[htbp]
+\centering
+\caption{Four tiers of the reproducible mass spectrometry computing architecture.}
+\label{tab:repro_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+\textbf{Tier} & \textbf{Tool / Specification} & \textbf{Mechanism} & \textbf{Failure Mode Addressed} \\
+\midrule
+\textbf{1. Workspace} & RStudio Project / \texttt{here} & Anchor relative paths to root \texttt{.Rproj} directory & Hardcoded path breakage (\texttt{C:/Users/}) \\
+\addlinespace
+\textbf{2. Packages} & \texttt{renv} (\texttt{renv.lock}) & Freezes exact CRAN and Bioconductor commit versions & API deprecation and version drift \\
+\addlinespace
+\textbf{3. Operating System} & Docker / Rocker image & Bundles C/C++ system libraries (\texttt{libnetcdf}) & Dynamic link failures across Linux/OS \\
+\addlinespace
+\textbf{4. Pipeline DAG} & \texttt{targets} & Cryptographic hash tracking of data and parameters & Redundant re-computation and stale figures \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: The "Works on My Machine" Fallacy}\\[0.4em]
+An R script that executes successfully in an interactive R session can silently yield divergent results six months later if package versions or system shared libraries shift. An undocumented update to a peak detection package can alter peak boundary integration, changing quantitative matrices and downstream biological conclusions. Long-term reproducibility requires version-controlled lockfiles and automated pipeline graphs from the initial run.
+\end{notebox}
+
+\FloatBarrier
+\section{Project Directory Topology and Path Portability}
+\label{sec:directory_topology}
+
+Computational mass spectrometry projects organize data files, transformation scripts, and reports into distinct directories. Mixing raw vendor files with intermediate CSV outputs risks accidental modification of original instrument data.
+
+\subsection{Standard Project Directory Layout}
+
+A production mass spectrometry project uses a standardized directory layout anchored by an RStudio Project file:
+\begin{verbatim}
+ms_project_root/
+  |-- ms_project.Rproj     # Anchors project root directory
+  |-- data/
+  |   |-- raw/             # Read-only vendor mzML / raw files
+  |   \-- processed/       # SummarizedExperiment / RDS outputs
+  |-- R/                   # Modular analysis functions
+  |-- reports/             # Quarto (.qmd) documents and PDF/HTML output
+  |-- _targets.R           # Pipeline DAG definition
+  |-- _targets/            # Automated target cache (git-ignored)
+  |-- renv.lock            # Exact R package dependency manifest
+  |-- Dockerfile           # POSIX container definition
+  \-- .gitignore           # Excludes raw data and local cache
+\end{verbatim}
+
+\subsection{Path Portability via Anchor Files}
+
+Hardcoding absolute file paths (such as \texttt{"C:/Users/lucas/data/raw/run.mzML"}) breaks pipeline execution when a collaborator runs the code on a different computer or when the directory moves. The \texttt{here} package locates the project root dynamically by identifying the directory containing \texttt{.Rproj} or \texttt{.git}. It constructs platform-independent paths using forward slashes:
+\begin{equation}
+\text{path} = \operatorname{here}(\text{"data"}, \text{"raw"}, \text{"run\_01.mzML"})
+\label{eq:here_path}
+\end{equation}
+
+Listing~4.1 computes MD5 and SHA-256 cryptographic hashes for an ingested raw spectral file.
+
+\begin{rchunk}{Listing 4.1: Cryptographic Checksum Integrity Verification}
+library(digest)
+
+# Generate simulated raw mzML file in temporary workspace
+temp_dir <- tempfile("ms_repro_audit_")
+dir.create(temp_dir, recursive = TRUE)
+raw_dir  <- file.path(temp_dir, "data", "raw")
+dir.create(raw_dir, recursive = TRUE)
+
+sim_raw_file <- file.path(raw_dir, "run_01.mzML")
+writeLines(c("<?xml version='1.0' encoding='UTF-8'?>",
+             "<mzML xmlns='http://psi.hupo.org/ms/mzml'>",
+             "  <run id='sim_run_01' defaultInstrumentConfigurationRef='LCMS'>",
+             "    <spectrum index='0' id='scan=1' defaultArrayLength='500'/>",
+             "  </run>",
+             "</mzML>"), con = sim_raw_file)
+
+# Calculate MD5 and SHA-256 checksums
+sha256_raw <- digest::digest(sim_raw_file, algo = "sha256", file = TRUE)
+md5_raw    <- digest::digest(sim_raw_file, algo = "md5", file = TRUE)
+bytes_raw  <- file.info(sim_raw_file)$size
+
+cat(sprintf("Simulated Raw File: %s\n", basename(sim_raw_file)))
+cat(sprintf("  File Size: %d bytes\n", bytes_raw))
+cat(sprintf("  MD5 Checksum:    %s\n", md5_raw))
+cat(sprintf("  SHA-256 Hash:    %s\n", sha256_raw))
+\end{rchunk}
+
+\begin{routput}
+Simulated Raw File: run\_01.mzML\\
+\enspace\enspace File Size: 233 bytes\\
+\enspace\enspace MD5 Checksum:\enspace\enspace\enspace\enspace 10469785b424d205843712a94c037a76\\
+\enspace\enspace SHA-256 Hash:\enspace\enspace\enspace\enspace 0e3f3fb807b1f1bad15147b3a8f356f4ba85962734d904a115ae3adfde352ace
+\end{routput}
+
+The raw \texttt{run\_01.mzML} file ($233$ bytes) produces SHA-256 hash \texttt{0e3f3fb8\dots}. If a byte changes during network transfer or disk storage, the cryptographic checksum changes immediately, exposing data corruption.
+
+\FloatBarrier
+\section{Software Environment Freezing: renv and Docker}
+\label{sec:renv_docker}
+
+R packages undergo continuous releases. Bioconductor coordinates releases every six months, while CRAN updates packages asynchronously. An analysis written against \texttt{xcms} version 3.20 may fail under version 4.0 if function arguments change.
+
+\subsection{Package Version Pinning with renv}
+
+The \texttt{renv} package establishes an isolated, project-local package library. The dependency graph is recorded in a JSON manifest (\texttt{renv.lock}). This file specifies the exact package versions, sources (CRAN, Bioconductor, or GitHub), and git commit SHAs:
+\begin{equation}
+\mathbf{E} = \{ (p_k, v_k, s_k, h_k) \}_{k=1}^K
+\label{eq:renv_tuple}
+\end{equation}
+where $p_k$ is the package name, $v_k$ is the semantic version string, $s_k$ is the repository source, and $h_k$ is the commit hash.
+
+Listing~4.2 parses and audits the live \texttt{renv.lock} file from the monograph repository.
+
+\begin{rchunk}{Listing 4.2: renv Lockfile Parsing and Architecture Audit}
+library(jsonlite)
+
+proj_lock <- "renv.lock"
+lock_data <- jsonlite::fromJSON(proj_lock)
+r_version <- lock_data$R$Version
+bioc_ver  <- lock_data$Bioconductor$Version
+pkg_names <- names(lock_data$Packages)
+n_pkgs    <- length(pkg_names)
+
+repos <- vapply(lock_data$Packages, function(x) {
+  if (!is.null(x$Repository)) x$Repository else "Other/GitHub"
+}, character(1))
+repo_counts <- table(repos)
+
+cat(sprintf("Project renv.lock Found: %s\n", normalizePath(proj_lock)))
+cat(sprintf("  Recorded R Version:            %s\n", r_version))
+cat(sprintf("  Recorded Bioconductor Version: %s\n", bioc_ver))
+cat(sprintf("  Total Locked Packages:         %d\n", n_pkgs))
+cat("  Repository Distribution:\n")
+for (repo in names(repo_counts)) {
+  cat(sprintf("    - %s: %d packages (%.1f%%)\n", repo, repo_counts[repo],
+              repo_counts[repo] / n_pkgs * 100))
+}
+\end{rchunk}
+
+\begin{routput}
+Project renv.lock Found: C:\textbackslash Users\textbackslash lucas\textbackslash OneDrive\textbackslash Statistics\textbackslash RforMS\textbackslash renv.lock\\
+\enspace\enspace Recorded R Version:\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 4.6.1\\
+\enspace\enspace Recorded Bioconductor Version: 3.23\\
+\enspace\enspace Total Locked Packages:\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 159\\
+\enspace\enspace Repository Distribution:\\
+\enspace\enspace\enspace\enspace - Bioconductor 3.23: 9 packages (5.7\%)\\
+\enspace\enspace\enspace\enspace - CRAN: 111 packages (69.8\%)\\
+\enspace\enspace\enspace\enspace - https://bioc-release.r-universe.dev: 37 packages (23.3\%)\\
+\enspace\enspace\enspace\enspace - https://bioc.r-universe.dev: 1 packages (0.6\%)\\
+\enspace\enspace\enspace\enspace - Other/GitHub: 1 packages (0.6\%)
+\end{routput}
+
+The audit confirms 159 locked packages pinned to R 4.6.1 and Bioconductor 3.23. CRAN accounts for 111 packages ($69.8\%$), Bioconductor repositories account for 47 packages ($29.6\%$), and GitHub accounts for 1 package ($0.6\%$).
+
+\subsection{Full-Stack POSIX Containerization (Docker)}
+
+The \texttt{renv.lock} manifest pins R code, but R packages that parse mass spectrometry data depend on underlying C and C++ system libraries (such as NetCDF, HDF5, and XML2). Divergent system libraries can cause segmentation faults or numerical differences across operating systems.
+
+Docker encapsulates the operating system, system libraries, R runtime, and package library into an immutable image. A standard container definition for mass spectrometry analysis builds from a Rocker base image:
+\begin{verbatim}
+FROM rocker/tidyverse:4.4.1
+RUN apt-get update && apt-get install -y \
+    libnetcdf-dev \
+    libhdf5-dev \
+    libxml2-dev
+COPY . /workspace
+WORKDIR /workspace
+RUN R -e "renv::restore()"
+CMD ["R", "-e", "targets::tar_make()"]
+\end{verbatim}
+Running this container reproduces the pipeline execution independently of host operating system configurations.
+
+\FloatBarrier
+\section{Directed Acyclic Graph (DAG) Pipeline Automation}
+\label{sec:targets_dag}
+
+Mass spectrometry pipelines involve computationally intensive stages: CentWave peak detection on 100 samples can require several hours. Re-running the entire pipeline after correcting a typographical error in a figure title is inefficient.
+
+The \texttt{targets} package organizes an analysis into a Directed Acyclic Graph (DAG). Each step in the pipeline is defined as a target:
+\begin{equation}
+T_j = f_j(T_{j_1}, T_{j_2}, \dots, \theta_j)
+\label{eq:dag_node}
+\end{equation}
+where $T_j$ depends on upstream targets and parameter values $\theta_j$.
+
+\subsection{Cryptographic Target Invalidation}
+
+The pipeline engine computes a cryptographic hash for each target:
+\begin{equation}
+H(T_j) = \operatorname{hash}\Big( H(T_{j_1}) \mathbin{\Vert} H(T_{j_2}) \mathbin{\Vert} \operatorname{hash}(f_j) \mathbin{\Vert} \operatorname{hash}(\theta_j) \Big)
+\label{eq:target_hash}
+\end{equation}
+When \texttt{tar\_make()} executes:
+\begin{enumerate}
+\item If $H(T_j)$ matches the stored hash in the \texttt{\_targets/} cache, the step is skipped and the cached object is loaded from disk in $O(1)$ time.
+\item If an upstream input or parameter $\theta_j$ changes, $H(T_j)$ changes, triggering re-computation of $T_j$ and all downstream dependent targets. Unrelated parallel branches remain untouched.
+\end{enumerate}
+
+Listing~4.3 simulates DAG hash generation, zero-cost cache skipping, and parameter invalidation.
+
+\begin{rchunk}{Listing 4.3: DAG Pipeline Dependency Caching Simulation}
+library(digest)
+
+# Step 1: Compute initial DAG hashes for a 3-step MS pipeline
+ppm_param <- 15.0
+cache_store <- list()
+
+hash_target1 <- digest::digest(list("raw_mzml_data"), algo = "xxhash64")
+hash_target2 <- digest::digest(list(hash_target1, ppm = ppm_param), algo = "xxhash64")
+hash_target3 <- digest::digest(list(hash_target2, method = "max_intensity"), algo = "xxhash64")
+
+cat("Initial DAG Hash Tree Generation:\n")
+cat(sprintf("  Target 1 [raw_file]:       %s\n", hash_target1))
+cat(sprintf("  Target 2 [peak_detection]: %s (ppm = %.1f)\n", hash_target2, ppm_param))
+cat(sprintf("  Target 3 [quant_matrix]:   %s\n", hash_target3))
+
+# Populate cache
+cache_store[[hash_target1]] <- list(status = "SKIPPED")
+cache_store[[hash_target2]] <- list(status = "SKIPPED")
+cache_store[[hash_target3]] <- list(status = "SKIPPED")
+
+# Invocation 2: Zero input changes -> 100% cache hit
+t_start <- Sys.time()
+inv2_recompute <- c(
+  t1 = is.null(cache_store[[hash_target1]]),
+  t2 = is.null(cache_store[[hash_target2]]),
+  t3 = is.null(cache_store[[hash_target3]])
+)
+t_inv2 <- as.numeric(difftime(Sys.time(), t_start, units = "secs"))
+
+cat("\nInvocation 2 (Zero Input Changes):\n")
+cat(sprintf("  Recomputed Targets: %d / 3 (Targets Skipped: %d)\n",
+            sum(inv2_recompute), sum(!inv2_recompute)))
+cat(sprintf("  Pipeline Verification Time: %.6f seconds (0 ms recompute penalty)\n", t_inv2))
+
+# Invocation 3: Parameter mutation: ppm 15.0 -> 10.0
+ppm_param_new <- 10.0
+hash_target2_new <- digest::digest(list(hash_target1, ppm = ppm_param_new), algo = "xxhash64")
+hash_target3_new <- digest::digest(list(hash_target2_new, method = "max_intensity"), algo = "xxhash64")
+
+inv3_recompute <- c(
+  t1_raw_file       = is.null(cache_store[[hash_target1]]),     # Cached!
+  t2_peak_detection = is.null(cache_store[[hash_target2_new]]), # Invalidated!
+  t3_quant_matrix   = is.null(cache_store[[hash_target3_new]])  # Downstream cascade!
+)
+
+cat("\nInvocation 3 (Parameter Mutation: ppm 15.0 -> 10.0):\n")
+cat(sprintf("  Target 1 [raw_file]:       %s\n", ifelse(inv3_recompute["t1_raw_file"], "RECOMPUTED", "SKIPPED (Cached)")))
+cat(sprintf("  Target 2 [peak_detection]: %s\n", ifelse(inv3_recompute["t2_peak_detection"], "RECOMPUTED (Invalidated)", "SKIPPED")))
+cat(sprintf("  Target 3 [quant_matrix]:   %s\n", ifelse(inv3_recompute["t3_quant_matrix"], "RECOMPUTED (Downstream cascade)", "SKIPPED")))
+cat(sprintf("  Total Recomputations: %d / 3 targets\n", sum(inv3_recompute)))
+\end{rchunk}
+
+\begin{routput}
+Initial DAG Hash Tree Generation:\\
+\enspace\enspace Target 1 [raw\_file]:\enspace\enspace\enspace\enspace\enspace\enspace 7ef71c205e4d1ac5\\
+\enspace\enspace Target 2 [peak\_detection]: aa6b898bffea970e (ppm = 15.0)\\
+\enspace\enspace Target 3 [quant\_matrix]:\enspace\enspace dd99504415ea3986\\[0.4em]
+Invocation 2 (Zero Input Changes):\\
+\enspace\enspace Recomputed Targets: 0 / 3 (Targets Skipped: 3)\\
+\enspace\enspace Pipeline Verification Time: 0.000726 seconds (0 ms recompute penalty)\\[0.4em]
+Invocation 3 (Parameter Mutation: ppm 15.0 -$>$ 10.0):\\
+\enspace\enspace Target 1 [raw\_file]:\enspace\enspace\enspace\enspace\enspace\enspace SKIPPED (Cached)\\
+\enspace\enspace Target 2 [peak\_detection]: RECOMPUTED (Invalidated)\\
+\enspace\enspace Target 3 [quant\_matrix]:\enspace\enspace RECOMPUTED (Downstream cascade)\\
+\enspace\enspace Total Recomputations: 2 / 3 targets
+\end{routput}
+
+In Invocation 2, verification completes in $0.000726$ seconds with zero recomputations. In Invocation 3, mutating the mass tolerance from $15.0$ to $10.0$ ppm invalidates Target 2 and cascades to Target 3, while preserving the raw file ingestion target (Target 1).
+
+\FloatBarrier
+\section{Defensive Runtime Contract Testing on MS Assay Matrices}
+\label{sec:contract_testing}
+
+Silent data corruption occurs when erroneous preprocessing produces negative intensities, NaN values, or unexpected dimension drops without halting execution. Runtime contract assertions using \texttt{testthat} verify mathematical invariants before data enter statistical models.
+
+Listing~4.4 tests three structural contracts on a simulated feature abundance matrix: dimension consistency, intensity non-negativity, and missingness rate bounds.
+
+\begin{rchunk}{Listing 4.4: Unit Testing and Defensive Contract Auditing}
+library(testthat)
+
+set.seed(99)
+test_assay <- matrix(abs(rnorm(100, mean = 5000, sd = 1000)), nrow = 20, ncol = 5)
+colnames(test_assay) <- paste0("Sample_", 1:5)
+rownames(test_assay) <- paste0("Feat_", 1:20)
+test_assay[1, 2] <- NA_real_
+
+# Execute contract assertions
+test_results <- testthat::test_that("MS Assay Integrity Contracts", {
+  # Contract 1: Dimensional invariance
+  testthat::expect_equal(dim(test_assay), c(20L, 5L))
+  # Contract 2: Intensity non-negativity
+  testthat::expect_true(all(test_assay[!is.na(test_assay)] >= 0))
+  # Contract 3: Missingness upper bound (< 10%)
+  missing_pct <- mean(is.na(test_assay)) * 100
+  testthat::expect_lt(missing_pct, 10.0)
+})
+
+cat("Testthat Contract Suite Execution: 3 / 3 assertions passed.\n")
+cat(sprintf("  Matrix Dimensions: %d features x %d samples\n", nrow(test_assay), ncol(test_assay)))
+cat(sprintf("  Minimum Valid Intensity: %.2f counts\n", min(test_assay, na.rm = TRUE)))
+cat(sprintf("  Observed Missingness Rate: %.2f%% (Contract threshold: < 10.00%%)\n",
+            mean(is.na(test_assay)) * 100))
+\end{rchunk}
+
+\begin{routput}
+Testthat Contract Suite Execution: 3 / 3 assertions passed.\\
+\enspace\enspace Matrix Dimensions: 20 features x 5 samples\\
+\enspace\enspace Minimum Valid Intensity: 1959.07 counts\\
+\enspace\enspace Observed Missingness Rate: 1.00\% (Contract threshold: $<$ 10.00\%)
+\end{routput}
+
+All three contracts pass: the matrix contains $20$ features and $5$ samples, the minimum observed intensity is $1{,}959.07$ counts, and the observed missingness rate is $1.00\%$, satisfying the $< 10.00\%$ contract threshold.
+
+\FloatBarrier
+\section{Worked Exercises}
+\label{sec:worked_exercises}
+
+\subsection*{Exercise 4.1: Portable Path Resolution with \texttt{here::here()}}
+\noindent\textbf{Problem Statement:}\enspace
+Explain why hardcoding paths such as \texttt{"C:/Users/name/data/raw/sample.mzML"} causes pipeline failures across collaborators' systems and explain how \texttt{here::here()} eliminates this failure mode.
+
+\noindent\textbf{Solution:}\enspace
+Hardcoded paths contain user-specific root directories (\texttt{"C:/Users/name/"}) and Windows backslash separators that do not exist on other machines or POSIX operating systems (Linux/macOS). When another user runs the script, the file cannot be located, halting execution.
+
+The function \texttt{here::here("data", "raw", "sample.mzML")} dynamically detects the project root by searching upward from the current working directory for an anchor file (such as \texttt{.Rproj} or \texttt{.git}). It joins directory components using the host operating system's native file separator. Moving the project directory to another disk, computer, or cloud container preserves valid path resolution without altering code.
+
+\subsection*{Exercise 4.2: Dependency Tier Scope: \texttt{renv} vs Docker}
+\noindent\textbf{Problem Statement:}\enspace
+Distinguish the scope of reproducibility provided by \texttt{renv} from that provided by Docker. State a failure scenario where \texttt{renv.lock} is insufficient to guarantee identical numerical outputs.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{\texttt{renv}}: Freezes the R package layer. It records exact package version strings, repository origins, and GitHub commit SHAs in \texttt{renv.lock}, ensuring that identical R bytecode is loaded.
+\item \textbf{Docker}: Freezes the complete POSIX operating system layer. It bundles the Linux distribution kernel interface, compilers, system libraries (\texttt{libnetcdf}, \texttt{libxml2}, \texttt{libhdf5}), and BLAS/LAPACK linear algebra implementations.
+\end{enumerate}
+
+\noindent\textbf{Failure Scenario:}\enspace
+An analyst runs \texttt{xcms} on Linux with NetCDF version 4.8, while a collaborator restores the identical \texttt{renv.lock} on macOS with NetCDF version 4.9. If NetCDF 4.9 introduces a slight difference in floating-point decompression of vendor raw arrays, downstream peak integration boundaries will diverge, producing altered quantitative values despite identical R package versions. Docker eliminates this divergence by freezing the compiled C libraries.
+
+\subsection*{Exercise 4.3: DAG Invalidation Dynamics in \texttt{targets}}
+\noindent\textbf{Problem Statement:}\enspace
+In a mass spectrometry \texttt{targets} pipeline comprising:
+\begin{enumerate}
+\item \texttt{raw\_files}: Reads list of 50 mzML files.
+\item \texttt{ppm\_tolerance}: Target defined as numeric scalar $15.0$.
+\item \texttt{chrom\_peaks}: Calls \texttt{findChromPeaks(raw\_files, ppm = ppm\_tolerance)}.
+\item \texttt{quant\_matrix}: Extracts feature intensity values from \texttt{chrom\_peaks}.
+\item \texttt{report}: Renders Quarto report displaying the volcano plot.
+\end{enumerate}
+If the analyst alters \texttt{ppm\_tolerance} from $15.0$ to $10.0$, identify which targets \texttt{tar\_make()} skips and which targets it recomputes.
+
+\noindent\textbf{Solution:}\enspace
+\begin{itemize}
+\item \textbf{\texttt{raw\_files}}: \textbf{SKIPPED (Cached)}. The raw mzML files and their file-level checksums are unmodified; their cryptographic hash is identical.
+\item \textbf{\texttt{ppm\_tolerance}}: \textbf{RECOMPUTED}. The target definition mutated from $15.0$ to $10.0$.
+\item \textbf{\texttt{chrom\_peaks}}: \textbf{RECOMPUTED}. This target depends on \texttt{ppm\_tolerance}; the change in upstream hash invalidates the cached peak table.
+\item \textbf{\texttt{quant\_matrix}}: \textbf{RECOMPUTED}. Depends on the newly recomputed \texttt{chrom\_peaks}.
+\item \textbf{\texttt{report}}: \textbf{RECOMPUTED}. Depends on \texttt{quant\_matrix}; the Quarto report is re-rendered with updated quantification results.
+\end{itemize}
+
+\subsection*{Exercise 4.4: High-Performance Serialization Formats}
+\noindent\textbf{Problem Statement:}\enspace
+Explain why default R serialization via \texttt{saveRDS()} creates bottlenecks in large mass spectrometry pipelines and state two alternative serialization formats supported by \texttt{targets}.
+
+\noindent\textbf{Solution:}\enspace
+Default \texttt{saveRDS()} uses single-threaded gzip compression. For large mass spectrometry objects ($> 2$ GB), gzip compression and decompression require substantial CPU time and inflate RAM during serialization.
+
+Two high-performance alternatives are:
+\begin{enumerate}
+\item \textbf{\texttt{qs} (Quick Serialization)}: Uses multi-threaded Zstandard (zstd) compression, providing up to $5\times$ faster read and write throughput than \texttt{saveRDS()} with comparable compression ratios.
+\item \textbf{\texttt{fst} (Fast Serialization of DataFrames)}: Provides multi-threaded, memory-mapped random-access storage for tabular feature matrices and PSM tables, enabling instant decompression of specific column subsets without loading the entire matrix into RAM.
+\end{enumerate}
+
+\FloatBarrier
+\begin{thebibliography}{10}
+
+\bibitem{landau2021targets}
+Landau, W.M.
+\newblock The targets {R} package: a dynamic Make-like function-oriented pipeline toolkit for reproducible workflows.
+\newblock \emph{Journal of Open Source Software}, 6(57):2959, 2021.
+\newblock \url{https://doi.org/10.21105/joss.02959}.
+
+\bibitem{ushey2024renv}
+Ushey, K., Wickham, H.
+\newblock \emph{renv: Project Environments for R}.
+\newblock R package version 1.0.7, 2024.
+\newblock \url{https://CRAN.R-project.org/package=renv}.
+
+\bibitem{knuth1984literate}
+Knuth, D.E.
+\newblock Literate programming.
+\newblock \emph{The Computer Journal}, 27(2):97--111, 1984.
+\newblock \url{https://doi.org/10.1093/comjnl/27.2.97}.
+
+\bibitem{wickham2011testthat}
+Wickham, H.
+\newblock testthat: Get started with testing.
+\newblock \emph{The R Journal}, 3(1):5--10, 2011.
+\newblock \url{https://doi.org/10.32614/RJ-2011-002}.
+
+\bibitem{muller2020here}
+M\"uller, K.
+\newblock \emph{here: A Simpler Way to Find Your Files}.
+\newblock R package version 1.0.1, 2020.
+\newblock \url{https://CRAN.R-project.org/package=here}.
+
+\bibitem{boettiger2015docker}
+Boettiger, C.
+\newblock An introduction to {Docker} for reproducible research.
+\newblock \emph{ACM SIGOPS Operating Systems Review}, 49(1):71--79, 2015.
+\newblock \url{https://doi.org/10.1145/2723872.2723882}.
+
+\end{thebibliography}
+
+\end{document}

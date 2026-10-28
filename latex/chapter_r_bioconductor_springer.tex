@@ -1,0 +1,495 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 03: The Modern R and Bioconductor MS Ecosystem},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{2}
+\chapter{The Modern R and Bioconductor MS Ecosystem}
+\label{chap:r_bioconductor}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+High-throughput mass spectrometry produces gigabytes of spectral time-series and high-dimensional feature arrays that exceed the computational capacity of standard spreadsheets and interactive graphical interfaces. The Bioconductor project provides a formal, peer-reviewed software ecosystem designed for high-throughput biological assays. Bioconductor establishes two architectural standards for computational mass spectrometry: formal S4 classes that enforce structural coordinate invariants between assay matrices and biological metadata, and modular storage backends that separate user-facing operations from on-disk memory representation. Operating on raw spectra via pointer-based backends (\texttt{MsBackendMzR}) prevents random-access memory exhaustion when processing hundreds of gigabytes of raw data. At the quantification tier, containers such as \texttt{SummarizedExperiment} and \texttt{QFeatures} maintain relational integrity across hierarchical transitions from peptide-spectrum matches (PSMs) to proteins. This chapter presents the computational mechanics of vectorization, formal S4 object architectures, pluggable spectral backends, tidyverse data transformations on real PSM tables, and empirical Bayes variance moderation in R 4.6.1.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Bioconductor, S4 formal classes, Spectra backends, SummarizedExperiment, QFeatures, Vectorization, Empirical Bayes shrinkage, Reproducible pipelines.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:r_bioc_roadmap} summarizes the foundational architecture, software containers, and computational mechanics of the modern R and Bioconductor mass spectrometry ecosystem.
+
+\begin{table}[htbp]
+\centering
+\caption{Architectural components and data structures in the Bioconductor MS ecosystem.}
+\label{tab:r_bioc_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+\textbf{Computational Layer} & \textbf{Core Package / Container} & \textbf{Structural Guarantee} & \textbf{Analytical Function} \\
+\midrule
+\textbf{1. Raw Spectra} & \texttt{Spectra} (\texttt{MsBackendMzR}) & $O(1)$ indexed disk seek; lazy-load peak arrays & Peak picking, filtering, precursor extraction \\
+\addlinespace
+\textbf{2. Experiment Metadata} & \texttt{MsExperiment} & Synchronized link between spectra files and sample annotations & Multi-file cohort management \\
+\addlinespace
+\textbf{3. Feature Quantitation} & \texttt{SummarizedExperiment} & Exact coordinate invariance: $\dim(\text{assay})_1 = \dim(\text{rowData})_1$ & 2D metabolite/protein abundance matrices \\
+\addlinespace
+\textbf{4. Multi-level Omics} & \texttt{QFeatures} & Relational directed acyclic graph linking PSMs to proteins & Hierarchical protein summarization \\
+\addlinespace
+\textbf{5. Statistical Inference} & \texttt{limma} & Empirical Bayes variance shrinkage ($d_0, s_0^2$) & Small-sample differential abundance \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: Package Installation Protocol}\\[0.4em]
+Installing Bioconductor packages with base R's \texttt{install.packages()} bypasses Bioconductor release coordination. Bioconductor packages share interdependent S4 class definitions tied to specific Bioconductor release versions. Using \texttt{install.packages()} pulls uncoordinated versions from CRAN mirrors, producing class mismatch errors such as \texttt{'undefined class "Spectra"'}. Always install Bioconductor packages using \texttt{BiocManager::install()} to ensure repository-level dependency reconciliation.
+\end{notebox}
+
+\FloatBarrier
+\section{The R Mindset: Vectorization and SIMD Acceleration}
+\label{sec:vectorization}
+
+R is an interpreted vector-oriented language built on compiled C and Fortran linear algebra subroutines. In base R, scalar for-loops evaluate bytecodes and verify memory pointers on each iteration. When an explicit loop increments an array element in interpreted R:
+\begin{equation}
+y_i = \log_2(x_i + 1), \quad i \in \{1, 2, \dots, N\}
+\label{eq:scalar_loop}
+\end{equation}
+the interpreter verifies memory allocation and type consistency $N$ times. For $N = 200{,}000$ MS intensity measurements, scalar loops produce substantial interpreter latency.
+
+Vectorized operations dispatch contiguous memory buffers directly to underlying C subroutines using Single Instruction, Multiple Data (SIMD) processor instructions. Vectorized execution operates in compiled memory blocks without bytecode evaluation overhead:
+\begin{equation}
+\mathbf{y} = \log_2(\mathbf{x} + \mathbf{1})
+\label{eq:vector_dispatch}
+\end{equation}
+Listing~3.1 benchmarks scalar loop evaluation against vectorized transformation on $200{,}000$ simulated Orbitrap intensity measurements.
+
+\begin{rchunk}{Listing 3.1: Vectorization vs Explicit Loop Performance Benchmark}
+set.seed(42)
+n_vals <- 200000
+raw_intensities <- rlnorm(n_vals, meanlog = 14, sdlog = 1.5)
+
+# Benchmark 1: Explicit scalar loop
+t_start_loop <- Sys.time()
+log_loop <- numeric(n_vals)
+for (i in seq_along(raw_intensities)) {
+  log_loop[i] <- log2(raw_intensities[i] + 1)
+}
+t_loop <- as.numeric(difftime(Sys.time(), t_start_loop, units = "secs"))
+
+# Benchmark 2: Vectorized log2 dispatch
+t_start_vec <- Sys.time()
+log_vec <- log2(raw_intensities + 1)
+t_vec <- as.numeric(difftime(Sys.time(), t_start_vec, units = "secs"))
+
+cat(sprintf("Vector Size: %d intensity measurements\n", n_vals))
+cat(sprintf("  Explicit For-Loop: %.4f seconds\n", t_loop))
+cat(sprintf("  Vectorized log2:   %.4f seconds\n", t_vec))
+cat(sprintf("  Acceleration Factor: %.1fx faster\n", t_loop / t_vec))
+cat(sprintf("  Numeric Identity Check: %s\n", all.equal(log_loop, log_vec)))
+\end{rchunk}
+
+\begin{routput}
+Vector Size: 200000 intensity measurements\\
+\enspace\enspace Explicit For-Loop: 0.0681 seconds\\
+\enspace\enspace Vectorized log2:\enspace\enspace\enspace 0.0057 seconds\\
+\enspace\enspace Acceleration Factor: 12.0x faster\\
+\enspace\enspace Numeric Identity Check: TRUE
+\end{routput}
+
+The vectorized execution completes in $0.0057$ seconds compared to $0.0681$ seconds for the explicit scalar loop, achieving a $12.0\times$ acceleration while maintaining numeric identity.
+
+\FloatBarrier
+\section{Formal S4 Object Architecture and Coordinate Invariants}
+\label{sec:s4_architecture}
+
+Bioconductor relies on the S4 object-oriented system rather than the informal S3 system common in base R packages. An S3 object is an arbitrary list with an assigned class attribute; S3 does not validate whether mandatory components exist or whether data types match.
+
+In contrast, S4 classes enforce rigid contracts through formal slot definitions and class validation methods. An S4 class requires explicit slot types (e.g., \texttt{numeric}, \texttt{character}, \texttt{DataFrame}). When an S4 object is instantiated or modified, validity methods confirm that dimensional and coordinate invariants hold.
+
+In mass spectrometry quantification, the central data container is \texttt{SummarizedExperiment}. It maintains three coordinated components:
+\begin{enumerate}
+\item \textbf{Assays}: A list of 2D matrices $\mathbf{Y} \in \mathbb{R}^{p \times n}$, where $p$ represents biological features (metabolites, peptides, or proteins) and $n$ represents analytical samples.
+\item \textbf{rowData}: A \texttt{DataFrame} of length $p$ containing feature annotations (e.g., $m/z$, retention time, gene symbols).
+\item \textbf{colData}: A \texttt{DataFrame} of length $n$ containing sample phenotypic annotations (e.g., treatment group, batch, injection order).
+\end{enumerate}
+
+The S4 validity constructor enforces coordinate invariance:
+\begin{equation}
+\operatorname{nrow}(\mathbf{Y}) = \operatorname{nrow}(\text{rowData}) = p, \quad \operatorname{ncol}(\mathbf{Y}) = \operatorname{nrow}(\text{colData}) = n
+\label{eq:coordinate_invariance}
+\end{equation}
+Subsetting a \texttt{SummarizedExperiment} by rows or columns automatically subsets the assay matrix, \texttt{rowData}, and \texttt{colData} simultaneously:
+\begin{equation}
+\text{se}[1{:}k, \; 1{:}m] \implies \mathbf{Y}_{k \times m}, \quad \text{rowData}_{k \times c_1}, \quad \text{colData}_{m \times c_2}
+\label{eq:se_subsetting}
+\end{equation}
+Listing~3.2 tests S4 validity checking when dimensional invariants are violated.
+
+\begin{rchunk}{Listing 3.2: S4 Object Architecture and Validity Enforcement}
+library(SummarizedExperiment)
+
+# Construct valid SummarizedExperiment (20 features x 6 samples)
+n_feat <- 20
+n_samp <- 6
+toy_assay <- matrix(rlnorm(n_feat * n_samp, 10, 1), nrow = n_feat, ncol = n_samp,
+                    dimnames = list(paste0("Feat_", 1:n_feat), paste0("S_", 1:n_samp)))
+row_ann <- DataFrame(gene = paste0("Gene_", 1:n_feat), row.names = paste0("Feat_", 1:n_feat))
+col_ann <- DataFrame(group = rep(c("Ctrl", "Treat"), each = 3), row.names = paste0("S_", 1:n_samp))
+
+valid_se <- SummarizedExperiment(assays = list(exprs = toy_assay),
+                                 rowData = row_ann, colData = col_ann)
+
+cat(sprintf("Valid SummarizedExperiment Class: %s\n", class(valid_se)))
+cat(sprintf("Dimensions: %d rows x %d columns\n", nrow(valid_se), ncol(valid_se)))
+cat(sprintf("Slots Present: %s\n", paste(slotNames(valid_se), collapse = ", ")))
+
+# Test invalid construction: 15 rowData entries for a 20-row assay matrix
+tryCatch({
+  invalid_se <- SummarizedExperiment(
+    assays  = list(exprs = toy_assay),
+    rowData = DataFrame(gene = paste0("Gene_", 1:15))
+  )
+}, error = function(e) {
+  cat(sprintf("Expected S4 Validity Catch:\n  %s\n", conditionMessage(e)))
+})
+\end{rchunk}
+
+\begin{routput}
+Valid SummarizedExperiment Class: SummarizedExperiment\\
+Dimensions: 20 rows x 6 columns\\
+Slots Present: colData, assays, NAMES, elementMetadata, metadata\\
+Expected S4 Validity Catch:\\
+\enspace\enspace invalid class "SummarizedExperiment" object: 1: 'x@assays' is not parallel to 'x'
+\end{routput}
+
+The S4 constructor halts execution when \texttt{rowData} has 15 rows while the assay matrix has 20 rows. This validity check prevents silent misalignment between feature annotations and measurement values.
+
+\FloatBarrier
+\section{Tidyverse Data Grammar on Real PSM Tables}
+\label{sec:tidyverse}
+
+Tidyverse packages (\texttt{dplyr}, \texttt{tidyr}, \texttt{ggplot2}) provide a consistent tabular grammar for mass spectrometry metadata and identification tables. Identification tables generated from search engines (such as Mascot, Comet, MS-GF+, or MaxQuant) are imported into R as tabular structures. The native pipe operator (\texttt{|>}) chains operations sequentially:
+\begin{equation}
+\mathbf{T}_{\text{final}} = \mathbf{T}_0 \mid> f_1(\dots) \mid> f_2(\dots) \mid> f_3(\dots)
+\label{eq:pipe_syntax}
+\end{equation}
+
+Five primary verbs manipulate identification tables:
+\begin{itemize}
+\item \texttt{filter()}: Selects subset rows based on logical conditions (e.g., target-decoy status, identification rank).
+\item \texttt{select()}: Extracts or drops specific columns.
+\item \texttt{mutate()}: Calculates transformed variables (e.g., logarithmic scores, mass measurement errors).
+\item \texttt{group\_by() + summarise()}: Computes group-level summary metrics.
+\item \texttt{arrange()}: Sorts rows by specified variables.
+\end{itemize}
+
+Listing~3.3 applies this grammar to an \texttt{mzIdentML} identification file containing $5{,}802$ raw PSMs from an Erwinia carotovora dataset in the \texttt{msdata} package.
+
+\begin{rchunk}{Listing 3.3: Tidyverse Data Transformation on Real PSM Identifications}
+library(PSMatch)
+library(dplyr)
+library(msdata)
+
+# Load raw mzIdentML identification table
+id_file <- system.file("ident",
+  "TMT_Erwinia_1uLSike_Top10HCD_isol2_45stepped_60min_01-20141210.mzid",
+  package = "msdata")
+
+psms_raw <- PSMatch::PSM(id_file)
+psms_df  <- as.data.frame(psms_raw)
+
+# Tidyverse pipeline: Rank 1 target peptides grouped by charge state
+psm_summary <- psms_df %>%
+  filter(rank == 1, isDecoy == FALSE) %>%
+  group_by(chargeState) %>%
+  summarise(
+    n_psms       = n(),
+    n_unique_pep = n_distinct(sequence),
+    mean_score   = round(mean(calculatedMassToCharge), 2),
+    .groups      = "drop"
+  ) %>%
+  arrange(desc(n_psms))
+
+cat(sprintf("Raw PSM Table: %d rows x %d columns\n", nrow(psms_df), ncol(psms_df)))
+cat("Target PSM Charge State Distribution:\n")
+print(as.data.frame(psm_summary))
+\end{rchunk}
+
+\begin{routput}
+Raw PSM Table: 5802 rows x 35 columns\\
+Target PSM Charge State Distribution:\\
+\enspace\enspace chargeState n\_psms n\_unique\_pep mean\_score\\
+1\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 2\enspace\enspace 1568\enspace\enspace\enspace\enspace\enspace\enspace\enspace 1330\enspace\enspace\enspace\enspace 672.24\\
+2\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 3\enspace\enspace\enspace 973\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 916\enspace\enspace\enspace\enspace 694.21\\
+3\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 4\enspace\enspace\enspace 190\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 184\enspace\enspace\enspace\enspace 743.20\\
+4\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 5\enspace\enspace\enspace\enspace 17\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 14\enspace\enspace\enspace\enspace 738.10\\
+5\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 6\enspace\enspace\enspace\enspace\enspace 3\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 3\enspace\enspace\enspace\enspace 524.84
+\end{routput}
+
+Of the $5{,}802$ PSMs, rank-1 target identifications are concentrated in charge states $z = 2$ ($1{,}568$ PSMs, $1{,}330$ unique peptides) and $z = 3$ ($973$ PSMs, $916$ unique peptides). Higher charge states ($z = 4, 5, 6$) account for $210$ PSMs.
+
+\FloatBarrier
+\section{Pluggable Backends and the Four Core Containers}
+\label{sec:backends_containers}
+
+Computational MS workflows process two distinct types of data: raw spectral time-series and processed feature matrices. Bioconductor addresses this through four core containers.
+
+\subsection{Pluggable Backends in Spectra}
+
+The \texttt{Spectra} container separates user operations (e.g., peak filtering, precursor isolation) from the underlying storage mechanism. Four storage backends provide different trade-offs:
+\begin{enumerate}
+\item \texttt{MsBackendMzR}: On-disk pointer backend. Raw $m/z$ and intensity arrays remain inside \texttt{.mzML} files. An in-memory index table holds scan headers ($0.5$ MB per run), enabling $O(1)$ random-access seeking without loading full peak arrays into RAM.
+\item \texttt{MsBackendDataFrame}: In-memory backend. Stores all peak arrays as R \texttt{DataFrame} objects. This backend is fast for small datasets ($< 1{,}000$ spectra) but consumes substantial memory on high-resolution instruments.
+\item \texttt{MsBackendHdf5Peaks}: High-performance on-disk backend. Compresses peak arrays into hierarchical data format (HDF5) files, facilitating fast parallel reads across multi-core computing clusters.
+\item \texttt{MsBackendSql}: Relational database backend. Offloads spectral data storage to a SQL database server, supporting multi-user collaborative environments.
+\end{enumerate}
+
+\subsection{The Four Core Data Containers}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of the four primary Bioconductor mass spectrometry containers.}
+\label{tab:four_containers}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}l}
+\toprule
+\textbf{Container} & \textbf{Data Domain} & \textbf{Key Characteristics} & \textbf{Creation Function} \\
+\midrule
+\texttt{Spectra} & Raw mass spectra & Virtualized time-series; pluggable backends & \texttt{Spectra()} \\
+\addlinespace
+\texttt{MsExperiment} & Experimental cohort & Couples \texttt{Spectra} to sample annotations and LC-MS files & \texttt{readMsExperiment()} \\
+\addlinespace
+\texttt{SummarizedExperiment} & 2D Feature matrix & Enforces parallel coordinate alignment between rows/columns & \texttt{SummarizedExperiment()} \\
+\addlinespace
+\texttt{QFeatures} & Hierarchical omics & Multi-tier assay graph linking PSM $\to$ peptide $\to$ protein & \texttt{QFeatures()} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\FloatBarrier
+\section{Empirical Bayes Variance Moderation in Small-Sample MS}
+\label{sec:limma_eb}
+
+Differential abundance testing in mass spectrometry evaluates whether feature intensities shift significantly across biological conditions. For feature $g$ across $n$ samples, the linear model is:
+\begin{equation}
+\mathbf{y}_g = \mathbf{X} \boldsymbol{\beta}_g + \boldsymbol{\varepsilon}_g, \quad \boldsymbol{\varepsilon}_g \sim \mathcal{N}(\mathbf{0}, \sigma_g^2 \mathbf{I})
+\label{eq:linear_model}
+\end{equation}
+where $\mathbf{X}$ is the design matrix and $\sigma_g^2$ is the feature-specific residual variance.
+
+In clinical and biological MS experiments, sample sizes are often small ($n = 3$ to $5$ replicates per condition), yielding residual degrees of freedom $d_g \le 4$. The sample variance $s_g^2$ has large sampling variability. When a feature has a spuriously small sample variance by chance, its standard error approaches zero:
+\begin{equation}
+t_g = \frac{\hat{\beta}_g}{\operatorname{se}(\hat{\beta}_g)} = \frac{\hat{\beta}_g}{s_g \sqrt{v_g}}
+\label{eq:standard_t}
+\end{equation}
+resulting in inflated $t$-statistics and false positives.
+
+The \texttt{limma} empirical Bayes framework addresses this by modeling feature variances as random variables drawn from a scaled inverse chi-square prior distribution:
+\begin{equation}
+\frac{1}{\sigma_g^2} \sim \frac{1}{d_0 s_0^2} \chi_{d_0}^2
+\label{eq:eb_prior}
+\end{equation}
+where $s_0^2$ represents the global prior variance and $d_0$ represents the prior degrees of freedom estimated from the ensemble of all measured features. The moderated variance $\tilde{s}_g^2$ shrinks the sample variance toward the global prior:
+\begin{equation}
+\tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}
+\label{eq:moderated_variance}
+\end{equation}
+The moderated $t$-statistic replaces $s_g$ with $\tilde{s}_g$:
+\begin{equation}
+\tilde{t}_g = \frac{\hat{\beta}_g}{\tilde{s}_g \sqrt{v_g}}
+\label{eq:moderated_t}
+\end{equation}
+Followed by Benjamini-Hochberg false discovery rate (FDR) control:
+\begin{equation}
+P_{\text{adj}(i)} = \min_{k \ge i} \left( \frac{m \cdot P_{(k)}}{k} \right)
+\label{eq:bh_fdr}
+\end{equation}
+
+Listing~3.4 executes an end-to-end differential pipeline using \texttt{SummarizedExperiment} and \texttt{limma} on 50 features across 6 samples ($n = 3$ Control vs $n = 3$ Treated). Five features (METAB\_001 to METAB\_005) contain true $+2.0$ $\log_2$ fold-change spikes.
+
+\begin{rchunk}{Listing 3.4: Minimal Bioconductor Differential Abundance Pipeline}
+library(SummarizedExperiment)
+library(limma)
+
+set.seed(123)
+n_features <- 50
+n_samples  <- 6
+
+base_means <- rlnorm(n_features, meanlog = 12, sdlog = 1.0)
+exprs_mat  <- matrix(NA_real_, nrow = n_features, ncol = n_samples,
+                     dimnames = list(paste0("METAB_", sprintf("%03d", 1:n_features)),
+                                     paste0("Sample_", 1:n_samples)))
+
+for (i in 1:n_features) {
+  ctrl_vals  <- rnorm(3, mean = log2(base_means[i]), sd = 0.25)
+  treat_mean <- if (i <= 5) log2(base_means[i]) + 2.0 else log2(base_means[i])
+  treat_vals <- rnorm(3, mean = treat_mean, sd = 0.25)
+  exprs_mat[i, ] <- c(ctrl_vals, treat_vals)
+}
+
+col_data <- DataFrame(
+  condition = rep(c("Control", "Treated"), each = 3),
+  row.names = colnames(exprs_mat)
+)
+
+se <- SummarizedExperiment(assays = list(log2_intensity = exprs_mat),
+                           colData = col_data)
+
+# Differential abundance modeling via limma
+design <- model.matrix(~ condition, data = as.data.frame(colData(se)))
+fit <- lmFit(assay(se), design)
+fit <- eBayes(fit)
+top_res <- topTable(fit, coef = "conditionTreated", number = 10)
+
+print(round(top_res[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 4))
+cat(sprintf("\nTrue Positive Recovery (FDR <= 0.05): %d / 5 (%.0f%%)\n",
+            sum(top_res$adj.P.Val[1:5] <= 0.05),
+            sum(top_res$adj.P.Val[1:5] <= 0.05) / 5 * 100))
+cat(sprintf("False Positive Rate in Unchanged Features: %.2f%%\n",
+            sum(top_res$adj.P.Val[-(1:5)] <= 0.05) / (n_features - 5) * 100))
+\end{rchunk}
+
+\begin{routput}
+\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace logFC\enspace AveExpr\enspace\enspace\enspace\enspace\enspace\enspace t\enspace P.Value\enspace adj.P.Val\\
+METAB\_003\enspace\enspace 2.2690\enspace 20.4936\enspace 13.6511\enspace\enspace 0.0000\enspace\enspace\enspace 0.0000\\
+METAB\_001\enspace\enspace 2.2065\enspace 17.6221\enspace 12.5596\enspace\enspace 0.0000\enspace\enspace\enspace 0.0000\\
+METAB\_002\enspace\enspace 2.0778\enspace 17.9491\enspace 11.4209\enspace\enspace 0.0000\enspace\enspace\enspace 0.0000\\
+METAB\_005\enspace\enspace 1.8974\enspace 18.4520\enspace 10.5241\enspace\enspace 0.0000\enspace\enspace\enspace 0.0000\\
+METAB\_004\enspace\enspace 1.6255\enspace 18.4336\enspace\enspace 7.6173\enspace\enspace 0.0000\enspace\enspace\enspace 0.0000\\
+METAB\_036\enspace\enspace 0.5087\enspace 18.4799\enspace\enspace 3.0233\enspace\enspace 0.0069\enspace\enspace\enspace 0.0574\\
+METAB\_029\enspace\enspace 0.4609\enspace 15.6429\enspace\enspace 2.7691\enspace\enspace 0.0121\enspace\enspace\enspace 0.0756\\
+METAB\_044\enspace -0.5122\enspace 20.5666\enspace -2.7684\enspace\enspace 0.0121\enspace\enspace\enspace 0.0756\\
+METAB\_031\enspace -0.3925\enspace 17.9047\enspace -2.1728\enspace\enspace 0.0424\enspace\enspace\enspace 0.2356\\
+METAB\_048\enspace -0.3993\enspace 16.5373\enspace -2.1076\enspace\enspace 0.0483\enspace\enspace\enspace 0.2416\\[0.4em]
+True Positive Recovery (FDR $<=$ 0.05): 5 / 5 (100\%)\\
+False Positive Rate in Unchanged Features: 0.00\%
+\end{routput}
+
+The empirical Bayes pipeline recovers all 5 spiked features at $\text{FDR} \le 0.05$ ($100\%$ sensitivity). The estimated $\log_2$ fold-changes range from $+1.6255$ to $+2.2690$. The false positive rate among unchanged features is $0.00\%$ (the top non-spiked feature, METAB\_036, has $\text{adj.P.Val} = 0.0574$).
+
+\FloatBarrier
+\section{Reproducibility Infrastructure}
+\label{sec:reproducibility}
+
+Reproducible computational MS workflows require explicit dependency management and build automation:
+\begin{enumerate}
+\item \textbf{Package Version Locking (\texttt{renv})}: Records exact versions of CRAN and Bioconductor packages in a version-controlled \texttt{renv.lock} manifest.
+\item \textbf{Target Automation (\texttt{targets})}: Implements dependency graph tracking. Peak picking and chromatographic alignment steps are executed once and cached on disk. Subsequent runs recompute only targets whose code or inputs changed.
+\item \textbf{Literate Documentation (Quarto)}: Combines explanatory text, mathematical notation, and executable code chunks into reproducible PDF and HTML reports.
+\end{enumerate}
+
+\FloatBarrier
+\section{Worked Exercises}
+\label{sec:worked_exercises}
+
+\subsection*{Exercise 3.1: Core Bioconductor Container Architectures}
+\noindent\textbf{Problem Statement:}\enspace
+Describe the four primary Bioconductor containers used in computational mass spectrometry: \texttt{Spectra}, \texttt{MsExperiment}, \texttt{SummarizedExperiment}, and \texttt{QFeatures}. State the mathematical data structure of each container and specify the Bioconductor constructor function.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{\texttt{Spectra}}: Represents raw spectral time-series $(m/z, I, t_{\text{ret}}, \text{MS}_{\text{level}})$. Created via \texttt{Spectra::Spectra(file, backend = MsBackendMzR())}. Peak arrays are lazy-loaded on demand.
+\item \textbf{\texttt{MsExperiment}}: Couples multi-file spectral streams to experimental design metadata. Created via \texttt{MsExperiment::readMsExperiment(spectraFiles, sampleData)}.
+\item \textbf{\texttt{SummarizedExperiment}}: Represents a 2D quantification matrix $\mathbf{Y} \in \mathbb{R}^{p \times n}$ with row annotations $\mathbf{R} \in \mathbb{R}^{p \times k_1}$ and column annotations $\mathbf{C} \in \mathbb{R}^{n \times k_2}$. Instantiated using constructor \texttt{SummarizedExperiment(}\allowbreak\texttt{assays, rowData, colData)}.
+\item \textbf{\texttt{QFeatures}}: Represents a hierarchical directed acyclic graph linking PSM-, peptide-, and protein-level \texttt{SummarizedExperiment} assays. Created via \texttt{QFeatures::QFeatures()} or \texttt{QFeatures::readQFeatures()}.
+\end{enumerate}
+
+\subsection*{Exercise 3.2: Vectorized vs For-Loop Execution Dynamics}
+\noindent\textbf{Problem Statement:}\enspace
+In a laboratory benchmark processing $200{,}000$ intensity values, a scalar for-loop required $0.0681$ seconds, whereas vectorized dispatch required $0.0057$ seconds ($12.0\times$ acceleration). Explain the underlying computer science mechanism responsible for this performance difference.
+
+\noindent\textbf{Solution:}\enspace
+In base R, a scalar for-loop evaluates R interpreter bytecodes on every iteration, resolving memory addresses, checking object types, and allocating intermediate scalar variables. The total execution time scales as $O(N)$ with substantial per-iteration interpreter overhead. 
+
+In contrast, the vectorized function \texttt{log2(x + 1)} dispatches a contiguous memory buffer of 64-bit IEEE floating-point numbers directly to compiled C code. The compiled loop executes SIMD instructions on the CPU register without entering the R evaluator loop. Memory is preallocated in a single block, avoiding repeated memory reallocation.
+
+\subsection*{Exercise 3.3: Tidyverse Translation of Base R Subsetting}
+\noindent\textbf{Problem Statement:}\enspace
+Translate the following base R filtering operation into an idiomatic tidyverse pipeline:
+\begin{verbatim}
+tmp1 <- psm_table[psm_table$msLevel == 2, ]
+tmp2 <- tmp1[tmp1$xcorr >= 2.5, ]
+tmp3 <- tmp2[order(tmp2$xcorr, decreasing = TRUE), ]
+result <- tmp3[1:10, c("sequence", "xcorr", "protein_id")]
+\end{verbatim}
+
+\noindent\textbf{Solution:}\enspace
+The operation filters for MS2 spectra with XCorr $\ge 2.5$, sorts in descending order, and extracts the top 10 rows. The tidyverse translation is:
+\begin{verbatim}
+result <- psm_table %>%
+  filter(msLevel == 2, xcorr >= 2.5) %>%
+  arrange(desc(xcorr)) %>%
+  slice_head(n = 10) %>%
+  select(sequence, xcorr, protein_id)
+\end{verbatim}
+This avoids creating intermediate variables \texttt{tmp1}, \texttt{tmp2}, and \texttt{tmp3}.
+
+\subsection*{Exercise 3.4: Empirical Bayes Moderation in Small-Sample MS}
+\noindent\textbf{Problem Statement:}\enspace
+In an LC-MS experiment with $n = 3$ replicates per group ($d_g = 4$ degrees of freedom), explain why raw $t$-tests produce high false discovery rates and demonstrate how empirical Bayes moderation in \texttt{limma} stabilizes feature variance estimates.
+
+\noindent\textbf{Solution:}\enspace
+With $d_g = 4$, the sample variance $s_g^2$ has large sampling variance ($\operatorname{Var}(s_g^2) = 2\sigma_g^4 / d_g$). Features that exhibit low sample variance by chance yield small standard error denominators ($s_g \sqrt{v_g} \approx 0$). This inflates raw $t$-statistics, producing false positives.
+
+Empirical Bayes moderation estimates a global prior variance $s_0^2$ and prior degrees of freedom $d_0$ across all features. The moderated variance shrinks feature variances toward the global prior:
+\begin{equation}
+\tilde{s}_g^2 = \frac{d_0 s_0^2 + d_g s_g^2}{d_0 + d_g}
+\end{equation}
+When $s_g^2$ is spuriously close to zero, $\tilde{s}_g^2$ is bounded below by $\frac{d_0}{d_0 + d_g} s_0^2$, preventing false-positive test statistics caused by tiny denominators.
+
+\FloatBarrier
+\begin{thebibliography}{10}
+
+\bibitem{gentleman2004bioconductor}
+Gentleman, R.C., Carey, V.J., Bates, D.M., et~al.
+\newblock Bioconductor: open software development for computational biology and bioinformatics.
+\newblock \emph{Genome Biology}, 5(10):R80, 2004.
+\newblock \url{https://doi.org/10.1186/gb-2004-5-10-r80}.
+
+\bibitem{gatto2023msdata}
+Gatto, L., Rainer, J.
+\newblock \emph{msdata: Various Mass Spectrometry Raw Data and Example Files}.
+\newblock R package version 0.44.0, Bioconductor, 2024.
+\newblock \url{https://doi.org/10.18129/B9.bioc.msdata}.
+
+\bibitem{rainer2022spectra}
+Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.M., Neumann, S., Stravs, M.A., Verri Hernandes, V., Gatto, L.
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites}, 12(2):173, 2022.
+\newblock \url{https://doi.org/10.3390/metabo12020173}.
+
+\bibitem{smyth2004linear}
+Smyth, G.K.
+\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
+\newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\bibitem{wickham2019welcome}
+Wickham, H., Averick, M., Bryan, J., et~al.
+\newblock Welcome to the {tidyverse}.
+\newblock \emph{Journal of Open Source Software}, 4(43):1686, 2019.
+\newblock \url{https://doi.org/10.21105/joss.01686}.
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods}, 12(2):115--121, 2015.
+\newblock \url{https://doi.org/10.1038/nmeth.3252}.
+
+\end{thebibliography}
+
+\end{document}

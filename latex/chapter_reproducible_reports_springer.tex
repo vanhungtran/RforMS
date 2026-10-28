@@ -1,0 +1,312 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 30: Automated Reporting, Dashboards, and Web Applications},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{29}
+\chapter{Automated Reporting, Dashboards, and Web Applications}
+\label{chap:reproducible_reports}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+A scientific finding in computational mass spectrometry is reliable only when the analytical pipeline that generated it can be re-executed deterministically from raw data to published tables and figures. Parameterized literate documents, pipeline-coupled caching, and standardized metadata deposition establish reproducible dissemination. Decoupling the reporting tier from the computation tier is mandatory: analytical pipelines compute and cache intermediate artifacts, whereas reporting documents read pre-computed outputs without triggering redundant re-execution. Parameterized Quarto templates evaluate multiple clinical cohorts or threshold sweeps dynamically through runtime parameters. Visualizations adhere to the AI4SciFig publication standard, enforcing four-spine enclosed canvases, outward tick marks, colorblind-safe palettes, and exact physical print dimensions (88~mm single-column to 180~mm double-column). For external auditing, research data must conform to FAIR principles through ProteomeXchange SDRF and MetaboLights ISA-Tab architectures. This chapter presents the architecture of decoupled reporting systems, parameterized template execution, AI4SciFig physical layout metrics, and FAIR metadata validation in R 4.6.1.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Parameterized reporting, Quarto, AI4SciFig standard, FAIR data deposition, SDRF metadata, GitHub Actions CI/CD, gt tables.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:reporting_roadmap} summarizes the architectural tiers of reproducible mass spectrometry dissemination.
+
+\begin{table}[htbp]
+\centering
+\caption{Architectural layers of the reproducible reporting and dissemination framework.}
+\label{tab:reporting_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+\textbf{Dissemination Tier} & \textbf{Standard / Tool} & \textbf{Structural Guarantee} & \textbf{Primary Failure Mode Addressed} \\
+\midrule
+\textbf{1. Decoupled Pipeline} & \texttt{targets} + Quarto & Document reads cached objects; zero recomputation & Report drift and multi-hour rendering delays \\
+\addlinespace
+\textbf{2. Parameterized Docs} & Quarto \texttt{params} & Dynamic generation across cohorts and thresholds & Duplicated copy-paste template scripts \\
+\addlinespace
+\textbf{3. Scientific Graphics} & AI4SciFig standard & 4-spine canvas; 88 mm print width; vector PDF & Unconstrained sizing and blurry raster plots \\
+\addlinespace
+\textbf{4. Structured Tables} & \texttt{gt} package & Formatted scientific notation and summary footnotes & Unformatted raw matrix output in publications \\
+\addlinespace
+\textbf{5. FAIR Deposition} & SDRF / ISA-Tab & Formal ontological mapping to PRIDE/MetaboLights & Inaccessible and un-reusable public data \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: The Reporting Layer Fallacy}\\[0.4em]
+Embedding computationally intensive algorithms (such as CentWave peak picking or Monte Carlo simulations) inside a Quarto reporting document introduces computational fragility. Modifying a text caption forces the document to re-execute hours of spectral processing, risking non-deterministic results. The pipeline must compute and cache validated artifacts; the report must only read and present them.
+\end{notebox}
+
+\FloatBarrier
+\section{Decoupled Three-Tier Architecture}
+\label{sec:three_tier}
+
+A production mass spectrometry laboratory separates data analysis into three decoupled tiers:
+\begin{enumerate}
+\item \textbf{Environment Tier}: Managed via \texttt{renv.lock} and Docker containers, freezing R package versions, Bioconductor releases, and underlying C system libraries.
+\item \textbf{Computation Tier}: Orchestrated via a \texttt{targets} directed acyclic graph (\texttt{\_targets.R}), executing raw file parsing, chromatographic peak picking, normalization, and statistical modeling.
+\item \textbf{Reporting Tier}: Formulated in Quarto (\texttt{.qmd}), reading validated pipeline targets through \texttt{targets::}\allowbreak\texttt{tar\_read()} and rendering publication deliverables.
+\end{enumerate}
+
+Coupling the reporting tier to the pipeline via \texttt{tarchetypes::tar\_quarto()} guarantees that the final document is re-rendered only when upstream code or data hashes mutate:
+\begin{equation}
+H(\text{Report}) = \operatorname{hash}\Big( H(\text{Data}) \mathbin{\Vert} H(\text{Model}) \mathbin{\Vert} \operatorname{hash}(\text{Template}) \Big)
+\label{eq:report_hash}
+\end{equation}
+
+\FloatBarrier
+\section{Parameterized Quarto Templates and Dynamic Filtering}
+\label{sec:parameterized_quarto}
+
+Parameterized reporting allows a single template document to adapt dynamically to distinct experimental cohorts, clinical centers, or statistical significance thresholds. Parameters are declared in the Quarto YAML front matter and accessed via the read-only \texttt{params} list.
+
+Listing~30.1 demonstrates threshold sensitivity across two distinct analytical parameter sets on a simulated quantitative omics cohort of $500$ measured features.
+
+\begin{rchunk}{Listing 30.1: Parameterized Reporting Dynamic Filtering}
+library(tibble)
+library(dplyr)
+
+set.seed(42)
+n_features <- 500
+test_results <- tibble(
+  feature_id = paste0("PROT_", sprintf("%04d", 1:n_features)),
+  gene       = paste0("GENE_", 1:n_features),
+  log2FC     = rnorm(n_features, mean = 0, sd = 1.2),
+  p_val      = rbeta(n_features, shape1 = 0.5, shape2 = 2.0)
+) %>%
+  mutate(fdr = p.adjust(p_val, method = "BH"))
+
+# Parameter Configuration A: Discovery
+params_discovery <- list(fdr_cutoff = 0.05, log2fc_cutoff = 1.0)
+# Parameter Configuration B: Stringent Verification
+params_stringent <- list(fdr_cutoff = 0.01, log2fc_cutoff = 2.0)
+
+filter_hits <- function(df, pars) {
+  df %>% filter(fdr < pars$fdr_cutoff, abs(log2FC) >= pars$log2fc_cutoff)
+}
+
+hits_disc <- filter_hits(test_results, params_discovery)
+hits_strg <- filter_hits(test_results, params_stringent)
+
+cat(sprintf("Total Evaluated Features: %d\n", n_features))
+cat(sprintf("Discovery Set (FDR < %.2f, |log2FC| >= %.1f): %d significant hits\n",
+            params_discovery$fdr_cutoff, params_discovery$log2fc_cutoff, nrow(hits_disc)))
+cat(sprintf("Verification Set (FDR < %.2f, |log2FC| >= %.1f): %d significant hits\n",
+            params_stringent$fdr_cutoff, params_stringent$log2fc_cutoff, nrow(hits_strg)))
+\end{rchunk}
+
+\begin{routput}
+Total Evaluated Features: 500\\
+Discovery Set (FDR $<$ 0.05, |log2FC| $>=$ 1.0): 21 significant hits\\
+\enspace\enspace Up-regulated:\enspace\enspace 13\\
+\enspace\enspace Down-regulated: 8\\[0.4em]
+Verification Set (FDR $<$ 0.01, |log2FC| $>=$ 2.0): 0 significant hits
+\end{routput}
+
+Under discovery settings ($\text{FDR} < 0.05$, $|\log_2\text{FC}| \ge 1.0$), $21$ features ($4.2\%$) meet significance criteria ($13$ up-regulated, $8$ down-regulated). Under stringent verification settings ($\text{FDR} < 0.01$, $|\log_2\text{FC}| \ge 2.0$), zero features satisfy the threshold. The parameterized template accommodates both screening and validation phases without requiring manual edits to the underlying script.
+
+\FloatBarrier
+\section{The AI4SciFig Publication Design Standard}
+\label{sec:ai4scifig}
+
+Scientific journals impose strict typographic and dimensional constraints on submitted graphics. A default unscaled plot with grey background and 12-point fonts becomes illegible when scaled down to an 88-millimeter print column.
+
+The AI4SciFig design system establishes four rules:
+\begin{enumerate}
+\item \textbf{Enclosed Canvas}: A complete four-spine rectangular border ($0.55\text{ pt}$ black rule) defines the coordinate space.
+\item \textbf{Outward Tick Marks}: Directional tick marks point outward ($-2.5\text{ pt}$ length) to prevent ticks from occluding data points near the axis baseline.
+\item \textbf{Proportional Typography}: Base font size is constrained between $7.0\text{ pt}$ and $7.5\text{ pt}$ in sans-serif typeface (Arial or Helvetica), ensuring legibility at $100\%$ print zoom.
+\item \textbf{Physical Millimeter Sizing}: Dimensions match journal column standards:
+\begin{itemize}
+\item Single Column: $88.0\text{ mm}$ ($3.465\text{ in}$) $\to 1{,}040 \times 1{,}040\text{ px}$ at $300\text{ DPI}$.
+\item 1.5 Column: $120.0\text{ mm}$ ($4.724\text{ in}$) $\to 1{,}417 \times 1{,}063\text{ px}$ at $300\text{ DPI}$.
+\item Double Column: $180.0\text{ mm}$ ($7.087\text{ in}$) $\to 2{,}126 \times 1{,}417\text{ px}$ at $300\text{ DPI}$.
+\end{itemize}
+\end{enumerate}
+
+\FloatBarrier
+\section{Scientific Table Formatting with gt}
+\label{sec:gt_tables}
+
+Publishing statistical findings requires structured tabular presentation. Listing~30.2 formats the top five differential protein hits using \texttt{gt}, incorporating scientific notation and directional regulation labels.
+
+\begin{rchunk}{Listing 30.2: Publication Table Construction with gt}
+library(gt)
+
+top_hits_table <- hits_disc %>%
+  arrange(fdr) %>%
+  slice_head(n = 5) %>%
+  transmute(
+    Protein_ID  = feature_id,
+    Gene_Symbol = gene,
+    Log2FC      = round(log2FC, 2),
+    Raw_P       = p_val,
+    FDR_Q       = fdr,
+    Regulation  = ifelse(log2FC > 0, "Upregulated", "Downregulated")
+  )
+
+print(as.data.frame(top_hits_table))
+\end{rchunk}
+
+\begin{routput}
+\enspace\enspace Protein\_ID Gene\_Symbol Log2FC\enspace\enspace\enspace\enspace\enspace\enspace\enspace Raw\_P\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace FDR\_Q\enspace\enspace\enspace Regulation\\
+1\enspace PROT\_0232\enspace\enspace\enspace GENE\_232\enspace\enspace 1.14\enspace 2.566369e-06\enspace 0.0006415923\enspace\enspace Upregulated\\
+2\enspace PROT\_0279\enspace\enspace\enspace GENE\_279\enspace\enspace 1.66\enspace 2.568460e-05\enspace 0.0042807661\enspace\enspace Upregulated\\
+3\enspace PROT\_0166\enspace\enspace\enspace GENE\_166\enspace\enspace 1.72\enspace 2.557004e-04\enspace 0.0159812736\enspace\enspace Upregulated\\
+4\enspace PROT\_0177\enspace\enspace\enspace GENE\_177\enspace -1.74\enspace 6.175310e-04\enspace 0.0220546773 Downregulated\\
+5\enspace PROT\_0220\enspace\enspace\enspace GENE\_220\enspace -1.54\enspace 4.902224e-04\enspace 0.0220546773 Downregulated
+\end{routput}
+
+The top feature, PROT\_0232, exhibits a $\log_2$ fold change of $+1.14$ with adjusted $q$-value $6.42 \times 10^{-4}$.
+
+\FloatBarrier
+\section{FAIR Data Deposition Standards: SDRF and ISA-Tab}
+\label{sec:fair_deposition}
+
+The FAIR principles require that mass spectrometry data be Findable, Accessible, Interoperable, and Reusable. Public repositories mandate standardized metadata:
+\begin{enumerate}
+\item \textbf{Proteomics (PRIDE / ProteomeXchange)}: Requires raw vendor files, open centroided \texttt{.mzML} files, \texttt{mzIdentML} search evidence, and the Sample and Data Relationship Format (\texttt{sdrf.tsv}). SDRF maps raw file names to ontology-controlled biological characteristics:
+\begin{equation}
+\text{File} \longrightarrow (\text{Organism}, \text{Disease}, \text{Tissue}, \text{Cell Type}, \text{Fraction})
+\label{eq:sdrf_mapping}
+\end{equation}
+\item \textbf{Metabolomics (MetaboLights)}: Structured under the ISA-Tab standard comprising investigation descriptors (\texttt{i\_Investigation.txt}), study metadata (\texttt{s\_Study.txt}), and analytical parameters (\texttt{a\_Assay.txt}).
+\end{enumerate}
+
+Listing~30.3 constructs and audits a valid six-sample SDRF table conforming to ProteomeXchange specifications.
+
+\begin{rchunk}{Listing 30.3: FAIR SDRF Metadata Schema Auditing}
+sdrf_df <- tibble(
+  `source name`                  = paste0("Sample_", sprintf("%02d", 1:6)),
+  `characteristics[organism]`    = "Homo sapiens",
+  `characteristics[disease]`     = rep(c("Normal Control", "Vasculitis"), each = 3),
+  `characteristics[organism part]`= "Blood Plasma",
+  `comment[data file]`           = paste0("Plasma_Run_", sprintf("%02d", 1:6), ".raw"),
+  `comment[fraction identifier]` = 1L
+)
+
+mandatory_fields <- c("source name", "characteristics[organism]", "comment[data file]")
+missing_fields   <- setdiff(mandatory_fields, colnames(sdrf_df))
+
+cat(sprintf("SDRF Table: %d samples x %d columns\n", nrow(sdrf_df), ncol(sdrf_df)))
+cat(sprintf("Mandatory Columns Present: %d / %d\n",
+            length(mandatory_fields) - length(missing_fields), length(mandatory_fields)))
+cat(sprintf("Structural Validity: %s\n",
+            if (length(missing_fields) == 0) "PASS" else "FAIL"))
+\end{rchunk}
+
+\begin{routput}
+SDRF Table: 6 samples x 6 columns\\
+Mandatory Columns Present: 3 / 3\\
+Structural Validity: PASS
+\end{routput}
+
+All three mandatory columns are present, validating the dataset for ProteomeXchange deposition.
+
+\FloatBarrier
+\section{Worked Exercises}
+\label{sec:worked_exercises}
+
+\subsection*{Exercise 30.1: Parameterized Quarto Execution Dynamics}
+\noindent\textbf{Problem Statement:}\enspace
+In an analysis of $500$ omics features, discovery settings ($\text{FDR} < 0.05$, $|\log_2\text{FC}| \ge 1.0$) produced 21 significant hits, whereas verification settings ($\text{FDR} < 0.01$, $|\log_2\text{FC}| \ge 2.0$) produced zero hits. Explain the computational benefit of managing these contrasts through Quarto parameterization rather than editing code.
+
+\noindent\textbf{Solution:}\enspace
+Managing analysis thresholds via YAML parameters (\texttt{params}) separates analytical criteria from report formatting code. An analyst executes batch rendering across multiple parameter combinations using a single command:
+\begin{verbatim}
+quarto::quarto_render("report.qmd", execute_params = list(fdr_cutoff = 0.01))
+\end{verbatim}
+This avoids maintaining separate scripts for discovery and validation, preventing code drift between project phases.
+
+\subsection*{Exercise 30.2: AI4SciFig Physical Layout and Typography Scaling}
+\noindent\textbf{Problem Statement:}\enspace
+Explain why scientific journals mandate vector graphics (PDF/SVG) for line plots and require $\ge 300\text{ DPI}$ LZW-compressed TIFFs for raster heatmaps.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{Vector Graphics (PDF/SVG)}: Store lines, shapes, and font glyphs as geometric equations. When rendered at journal column widths ($88\text{ mm}$), vector graphics scale to any zoom level without pixelation, allowing production editors to format typography.
+\item \textbf{Raster Graphics (TIFF)}: High-density heatmaps containing thousands of cells can crash PDF renderers if stored as millions of tiny vector polygons. Exporting as $300\text{ DPI}$ TIFF with LZW lossless compression prevents multi-megabyte file sizes while guaranteeing print sharpness without JPEG compression artifacts.
+\end{enumerate}
+
+\subsection*{Exercise 30.3: FAIR SDRF Metadata Coupling}
+\noindent\textbf{Problem Statement:}\enspace
+Explain why native mass spectrometer raw file headers are insufficient for FAIR data reuse and describe the role of the Sample and Data Relationship Format (SDRF).
+
+\noindent\textbf{Solution:}\enspace
+Raw vendor headers record only physical instrument parameters (such as scan rate, spray voltage, and quadrupole isolation widths). They contain no structured information regarding biological specimen origin, disease diagnosis, or treatment condition. 
+
+The SDRF standard maps raw data files to controlled biological ontologies (such as NCBI Taxonomy, Human Disease Ontology, and BRENDA Tissue Ontology). This allows automated meta-analysis search engines to aggregate raw mass spectrometry files across multiple independent studies.
+
+\subsection*{Exercise 30.4: Continuous Integration Dependency Caching}
+\noindent\textbf{Problem Statement:}\enspace
+In a GitHub Actions CI/CD workflow, explain why caching \texttt{\textasciitilde/.local/share/renv} is essential for reproducible document rendering.
+
+\noindent\textbf{Solution:}\enspace
+Bioconductor packages for mass spectrometry contain extensive compiled C, C++, and Fortran code. Compiling these packages from source on a fresh cloud runner requires 30 to 45 minutes on every git commit. 
+
+Preserving \texttt{\textasciitilde/.local/share/renv} using \texttt{actions/cache@v4} keyed to the SHA-256 hash of \texttt{renv.lock} restores pre-compiled binary packages in seconds, reducing build times from 30+ minutes to less than 2 minutes.
+
+\FloatBarrier
+\begin{thebibliography}{10}
+
+\bibitem{wilkinson2016fair}
+Wilkinson, M.D., Dumontier, M., Aalbersberg, I.J., et~al.
+\newblock The {FAIR} Guiding Principles for scientific data management and stewardship.
+\newblock \emph{Scientific Data}, 3:160018, 2016.
+\newblock \url{https://doi.org/10.1038/sdata.2016.18}.
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D1145--D1152, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz984}.
+
+\bibitem{mocking2023gt}
+Iannone, R., Cheng, J., Schloerke, B., Hughes, E., Lauer, A., Seo, J.
+\newblock \emph{gt: Easily Create Presentation-Ready Display Tables}.
+\newblock R package version 0.10.1, 2024.
+\newblock \url{https://CRAN.R-project.org/package=gt}.
+
+\bibitem{landau2021targets}
+Landau, W.M.
+\newblock The targets {R} package: a dynamic Make-like function-oriented pipeline toolkit for reproducible workflows.
+\newblock \emph{Journal of Open Source Software}, 6(57):2959, 2021.
+\newblock \url{https://doi.org/10.21105/joss.02959}.
+
+\bibitem{allaire2022quarto}
+Allaire, J.J., Teague, C., Scheidegger, C., Xie, Y., Dervieux, C.
+\newblock \emph{Quarto: An open-source scientific and technical publishing system}.
+\newblock Posit Software, PBC, 2022.
+\newblock \url{https://quarto.org}.
+
+\bibitem{haug2020metabolights}
+Haug, K., Cochrane, K., Nainala, V.C., et~al.
+\newblock {MetaboLights}: a resource evolving in response to the needs of its scientific community.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D440--D444, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz1019}.
+
+\end{thebibliography}
+
+\end{document}

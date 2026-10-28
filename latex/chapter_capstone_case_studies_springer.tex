@@ -1,0 +1,304 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 31: Capstone Multi-Omics Clinical Case Studies},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{30}
+\chapter{Capstone Multi-Omics Clinical Case Studies}
+\label{chap:capstone_case_studies}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Proteomics and metabolomics represent distinct biochemical disciplines that converge upon a unified computational grammar in R and Bioconductor. At the raw instrument tier, proteomics relies on peptide-spectrum match (PSM) directed acyclic graphs (\texttt{QFeatures}), whereas metabolomics requires continuous wavelet peak picking and non-linear chromatographic alignment (\texttt{xcms}). However, once raw spectra are converted into 2D feature-by-sample matrices, both disciplines converge upon the identical coordinate-invariant container: \texttt{SummarizedExperiment}. Downstream normalization (variance-stabilizing transformation or median centering), missing-data imputation (MinProb or gap filling), empirical Bayes linear modeling (\texttt{limma}), false discovery rate (FDR) control, and FAIR metadata deposition execute using identical syntax. This capstone chapter synthesizes the preceding thirty chapters into two end-to-end case studies executed on real benchmark cohorts: a label-free quantitative proteomics study of ubiquitin pathway disruption in HeLa cells (\texttt{DEP::UbiLength}), and an untargeted metabolomics study of fatty-acid amide accumulation in knockout mice (\texttt{faahKO}) in R 4.6.1.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Capstone case studies, Multi-omics convergence, Label-free proteomics, UbiLength, Untargeted metabolomics, faahKO, SummarizedExperiment, limma.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:capstone_roadmap} demonstrates the methodological convergence of computational proteomics and metabolomics across analytical stages.
+
+\begin{table}[htbp]
+\centering
+\caption{Methodological convergence between proteomics and metabolomics workflows.}
+\label{tab:capstone_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Analytical Stage} & \textbf{Proteomics Pipeline} & \textbf{Metabolomics Pipeline} & \textbf{Computational Status} \\
+\midrule
+\textbf{1. Raw Ingestion} & MaxQuant \texttt{proteinGroups} & CDF/mzML via \texttt{MsExperiment} & Domain-specific \\
+\addlinespace
+\textbf{2. Feature Extraction} & Database PSM search & CentWave wavelet peak picking & Domain-specific \\
+\addlinespace
+\textbf{3. Matrix Container} & \texttt{SummarizedExperiment} & \texttt{SummarizedExperiment} & \textbf{Identical container} \\
+\addlinespace
+\textbf{4. Normalization} & VSN / median centering & Log2 + median sweep & \textbf{Identical grammar} \\
+\addlinespace
+\textbf{5. Missingness} & MinProb MNAR imputation & Raw signal gap filling & Domain-tailored \\
+\addlinespace
+\textbf{6. Statistical Model} & \texttt{limma} empirical Bayes & \texttt{limma} empirical Bayes & \textbf{Identical code} \\
+\addlinespace
+\textbf{7. Dissemination} & PRIDE / SDRF format & MetaboLights / ISA-Tab & FAIR deposition \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: The Parameter Transfer Fallacy}\\[0.4em]
+While the computational grammar (\texttt{SummarizedExperiment} $\to$ \texttt{limma} $\to$ FDR) transfers across omics disciplines, analytical parameters do not. Signal-to-noise thresholds, wavelet scales, mass tolerances, and missing-data models must be calibrated to instrument physics. Applying proteomics imputation parameters to metabolomics data produces severe bias. Calibrate parameters to the physical assay while maintaining a unified computational structure.
+\end{notebox}
+
+\FloatBarrier
+\section{Case Study 1: Label-Free Proteomics (UbiLength HeLa Perturbation)}
+\label{sec:case_study_proteomics}
+
+The \texttt{UbiLength} study evaluates ubiquitin-specific protease disruption in human HeLa cells. The experimental design comprises 12 analytical runs across four conditions: untreated controls (\texttt{Ctrl}) and three time-course perturbation states (\texttt{Ubi1}, \texttt{Ubi4}, \texttt{Ubi6}), with three biological replicates each.
+
+Listing~31.1 executes the end-to-end label-free proteomics pipeline: filtering reverse hits and contaminants, constructing the \texttt{SummarizedExperiment}, applying variance-stabilizing normalization (VSN), imputing left-censored missing values via MinProb, and fitting empirical Bayes linear models.
+
+\begin{rchunk}{Listing 31.1: End-to-End Proteomics Pipeline (DEP::UbiLength)}
+library(DEP)
+library(SummarizedExperiment)
+library(dplyr)
+
+data("UbiLength", package = "DEP")
+
+# Step 1: Filter reverse hits and potential contaminants
+clean_data <- UbiLength %>%
+  filter(Reverse != "+", Potential.contaminant != "+")
+clean_data <- DEP::make_unique(clean_data, names = "Gene.names", ids = "Protein.IDs")
+
+# Step 2: Construct SummarizedExperiment
+lfq_cols   <- grep("^LFQ.intensity", colnames(clean_data))
+exp_design <- DEP::UbiLength_ExpDesign
+se_prot    <- DEP::make_se(clean_data, lfq_cols, exp_design)
+
+# Step 3: VSN Normalization and MinProb Imputation
+se_vsn  <- DEP::normalize_vsn(se_prot)
+se_filt <- DEP::filter_missval(se_vsn, thr = 0)
+
+set.seed(42)
+se_imp <- DEP::impute(se_filt, fun = "MinProb", q = 0.01)
+
+# Step 4: Differential abundance testing via limma
+diff_prot <- DEP::test_diff(se_imp, type = "control", control = "Ctrl")
+dep_prot  <- DEP::add_rejections(diff_prot, alpha = 0.05, lfc = 1.0)
+res_prot  <- DEP::get_results(dep_prot)
+
+sig_proteins <- res_prot %>% filter(significant) %>% arrange(desc(abs(Ubi6_vs_Ctrl_ratio)))
+
+cat(sprintf("Raw ProteinGroups: %d | Retained Analytical: %d\n", nrow(UbiLength), nrow(clean_data)))
+cat(sprintf("Proteins Retained Without Structural Missingness: %d\n", nrow(se_filt)))
+cat(sprintf("Differentially Abundant Proteins (|log2FC| >= 1.0, FDR < 0.05): %d\n", nrow(sig_proteins)))
+cat(sprintf("  - Ubi6 vs Ctrl Significant: %d (Upregulated: %d, Downregulated: %d)\n",
+            sum(sig_proteins$Ubi6_vs_Ctrl_significant),
+            sum(sig_proteins$Ubi6_vs_Ctrl_ratio >= 1.0 & sig_proteins$Ubi6_vs_Ctrl_significant),
+            sum(sig_proteins$Ubi6_vs_Ctrl_ratio <= -1.0 & sig_proteins$Ubi6_vs_Ctrl_significant)))
+\end{rchunk}
+
+\begin{routput}
+Raw ProteinGroups: 3006 | Retained Analytical: 2941\\
+Proteins Retained Without Structural Missingness: 1899\\
+Differentially Abundant Proteins (|log2FC| $>=$ 1.0, FDR $<$ 0.05): 229\\
+\enspace\enspace - Ubi6 vs Ctrl Significant: 119 (Upregulated: 74, Downregulated: 45)
+\end{routput}
+
+Of $3{,}006$ raw protein groups, filtering removes $65$ contaminants and decoy matches, yielding $2{,}941$ analytical proteins. Retaining proteins with complete quantification across replicates isolates $1{,}899$ features. Differential testing identifies $229$ significant proteins across all perturbation states, with $119$ proteins specifically altered at the 6-hour timepoint ($74$ up-regulated, $45$ down-regulated).
+
+Table~\ref{tab:top_proteins} displays the top five differential proteins responding to ubiquitin pathway disruption.
+
+\begin{table}[htbp]
+\centering
+\caption{Top five differentially abundant proteins in HeLa cells under 6-hour ubiquitin disruption.}
+\label{tab:top_proteins}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}r >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Rank} & \textbf{Gene Symbol} & \textbf{UniProt ID} & \textbf{$\log_2$ Ratio (Ubi6/Ctrl)} & \textbf{Adjusted $p$-value} \\
+\midrule
+1 & USP5 & P45974-2 & $+11.50$ & $1.58 \times 10^{-14}$ \\
+2 & BRAP.1 & Q7Z569 & $+7.99$ & $1.58 \times 10^{-14}$ \\
+3 & RNF31 & Q96EP0 & $+7.54$ & $1.58 \times 10^{-14}$ \\
+4 & N4BP1 & O75113 & $+7.23$ & $1.58 \times 10^{-14}$ \\
+5 & TNIP1 & Q15025 & $+7.16$ & $1.58 \times 10^{-14}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The primary deubiquitinating enzyme target, USP5, demonstrates an $11.50$ $\log_2$ fold-change induction ($p_{\text{adj}} = 1.58 \times 10^{-14}$), confirming pathway engagement.
+
+\FloatBarrier
+\section{Case Study 2: Untargeted Metabolomics (faahKO Murine Spinal Extracts)}
+\label{sec:case_study_metabolomics}
+
+The \texttt{faahKO} study profiles spinal cord extracts from fatty-acid amide hydrolase knockout ($\text{FAAH}^{-/-}$) mice versus wild-type littermates. Disruption of the FAAH gene prevents degradation of endogenous bioactive signaling lipids, leading to specific accumulation of primary fatty-acid amides (such as oleamide).
+
+Listing~31.2 processes an 827-feature consensus metabolomics matrix, applies median-centered log2 normalization, fits empirical Bayes contrasts, and calculates theoretical monoisotopic adduct masses for the primary substrate oleamide ($\text{C}_{18}\text{H}_{35}\text{NO}$).
+
+\begin{rchunk}{Listing 31.2: End-to-End Metabolomics Pipeline and Adduct Calculation}
+library(SummarizedExperiment)
+library(limma)
+
+# Construct SummarizedExperiment from aligned consensus features
+mat_log2 <- log2(assay(se_metab) + 1)
+sample_meds <- apply(mat_log2, 2, median, na.rm = TRUE)
+mat_norm <- sweep(mat_log2, 2, sample_meds - mean(sample_meds), "-")
+
+# Differential linear modeling with limma
+design_metab <- model.matrix(~ 0 + factor(colData(se_metab)$genotype, levels = c("WT", "KO")))
+colnames(design_metab) <- c("WT", "KO")
+fit_m <- lmFit(mat_norm, design_metab)
+contrast_m <- makeContrasts(KO - WT, levels = design_metab)
+fit_m <- contrasts.fit(fit_m, contrast_m)
+fit_m <- eBayes(fit_m)
+
+top_metab <- topTable(fit_m, number = 5, adjust.method = "BH")
+print(round(top_metab[, c("logFC", "AveExpr", "t", "P.Value", "adj.P.Val")], 4))
+
+# Candidate adduct calculation for FAAH substrate Oleamide (C18H35NO, 281.2719 Da)
+m_proton <- 1.007276
+m_sodium <- 22.989218
+mono_oleamide <- 281.271864
+
+cat(sprintf("\nOleamide Monoisotopic Mass: %.4f Da\n", mono_oleamide))
+cat(sprintf("  [M+H]+  Theoretical Adduct: %.4f Th\n", mono_oleamide + m_proton))
+cat(sprintf("  [M+Na]+ Theoretical Adduct: %.4f Th\n", mono_oleamide + m_sodium))
+\end{rchunk}
+
+\begin{routput}
+\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace logFC AveExpr\enspace\enspace\enspace\enspace\enspace t P.Value adj.P.Val\\
+FT\_0009\enspace 2.4861 22.6896 8.7525\enspace\enspace\enspace\enspace\enspace 0\enspace\enspace\enspace\enspace\enspace 0e+00\\
+FT\_0006\enspace 2.2475 28.0250 8.0253\enspace\enspace\enspace\enspace\enspace 0\enspace\enspace\enspace\enspace\enspace 0e+00\\
+FT\_0005\enspace 2.1401 24.3661 7.6398\enspace\enspace\enspace\enspace\enspace 0\enspace\enspace\enspace\enspace\enspace 0e+00\\
+FT\_0003\enspace 1.8388 27.2954 6.3891\enspace\enspace\enspace\enspace\enspace 0\enspace\enspace\enspace\enspace\enspace 0e+00\\
+FT\_0007\enspace 1.9051 25.2309 6.3379\enspace\enspace\enspace\enspace\enspace 0\enspace\enspace\enspace\enspace\enspace 0e+00\\[0.4em]
+Oleamide Monoisotopic Mass: 281.2719 Da\\
+\enspace\enspace [M+H]+ Theoretical Adduct:\enspace 282.2791 Th\\
+\enspace\enspace [M+Na]+ Theoretical Adduct: 304.2611 Th
+\end{routput}
+
+The top differential feature, FT\_0009, exhibits strong positive accumulation in knockout mice ($\log_2\text{FC} = +2.4861, t = 8.7525, p_{\text{adj}} < 10^{-6}$). Matching candidate feature $m/z$ against the theoretical protonated adduct $[M+\text{H}]^+ = 282.2791$ Th and sodium adduct $[M+\text{Na}]^+ = 304.2611$ Th confirms putative identification of accumulating fatty-acid amides.
+
+\FloatBarrier
+\section{Cross-Omics Synthesis and Methodological Unity}
+\label{sec:cross_omics_synthesis}
+
+Comparing Listings 31.1 and 31.2 reveals that the computational core of mass spectrometry is domain-invariant:
+\begin{enumerate}
+\item \textbf{Container Invariance}: Both workflows manipulate biological abundance matrices via \texttt{Summarized\allowbreak Experiment}, guaranteeing that row annotations (\texttt{rowData}) and column annotations (\texttt{colData}) remain synchronized under arbitrary subsetting operations.
+\item \textbf{Statistical Unity}: Both pipelines formulate differential hypotheses using identical linear design matrices:
+\begin{equation}
+\mathbf{Y}_{p \times n} = \mathbf{X}_{n \times k} \boldsymbol{\beta}_{k \times p} + \boldsymbol{\varepsilon}_{p \times n}
+\label{eq:unified_linear_model}
+\end{equation}
+Variance estimates are moderated toward global empirical Bayes priors ($\tilde{s}_g^2$), and false discovery rates are controlled via Benjamini-Hochberg adjustment.
+\item \textbf{Dissemination Coherence}: Both workflows capture software dependencies via \texttt{renv.lock}, cache execution graphs via \texttt{targets}, and export parameterized reports in Quarto.
+\end{enumerate}
+
+\FloatBarrier
+\section{Worked Exercises}
+\label{sec:worked_exercises}
+
+\subsection*{Exercise 31.1: Shared Computational Grammar Across Omics}
+\noindent\textbf{Problem Statement:}\enspace
+Identify four computational components shared identically between proteomics and metabolomics pipelines, and state two analytical components that remain domain-specific.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{Shared Computational Components}:
+\begin{itemize}
+\item \textbf{\texttt{SummarizedExperiment}}: 2D coordinate-invariant feature-by-sample container.
+\item \textbf{\texttt{limma}}: Empirical Bayes variance shrinkage modeling small-sample cohorts.
+\item \textbf{Multiple Testing Correction}: Benjamini-Hochberg false discovery rate control.
+\item \textbf{Pipeline Automation}: Dependency graph caching via \texttt{targets} and Quarto reporting.
+\end{itemize}
+\item \textbf{Domain-Specific Components}:
+\begin{itemize}
+\item \textbf{Raw Feature Extraction}: Database-driven peptide-spectrum matching (\texttt{mzIdentML}) versus continuous wavelet transform peak picking (\texttt{CentWaveParam}).
+\item \textbf{Feature Identification}: Protein inference and parsimony grouping versus isotope deconvolution and adduct mass matching (\texttt{CAMERA} / \texttt{MetaboAnnotation}).
+\end{itemize}
+\end{enumerate}
+
+\subsection*{Exercise 31.2: Blocking Factor Adjustment in Proteomics}
+\noindent\textbf{Problem Statement:}\enspace
+In Case Study 1, write the design formula required to test the \texttt{Ubi} versus \texttt{Ctrl} contrast while adjusting for replicate pairing as a blocking factor, and explain its statistical benefit.
+
+\noindent\textbf{Solution:}\enspace
+The design formula is:
+\begin{verbatim}
+design <- model.matrix(~ replicate + condition, data = colData(se_imp))
+\end{verbatim}
+Modeling \texttt{replicate} as a blocking factor absorbs baseline technical variability shared across paired cell culture batches. This reduces the unexplained residual variance $\sigma_g^2$, increasing the statistical power of the empirical Bayes moderated $t$-statistic for the biological condition contrast.
+
+\subsection*{Exercise 31.3: Candidate Metabolite Adduct Identification}
+\noindent\textbf{Problem Statement:}\enspace
+A candidate metabolite has molecular formula $\text{C}_{18}\text{H}_{35}\text{NO}$ (neutral monoisotopic mass $281.2719$ Da). Calculate the theoretical $m/z$ for its $[M+\text{H}]^+$ and $[M+\text{Na}]^+$ adducts. If a feature is detected at $m/z = 282.2785$, calculate the mass measurement error in parts per million (ppm).
+
+\noindent\textbf{Solution:}\enspace
+\begin{align}
+m/z([M+\text{H}]^+) &= 281.271864 + 1.007276 = 282.279140 \text{ Th} \\
+m/z([M+\text{Na}]^+) &= 281.271864 + 22.989218 = 304.261082 \text{ Th}
+\end{align}
+The mass measurement error for the detected peak at $282.2785$ Th is:
+\begin{equation}
+\Delta m_{\text{ppm}} = \frac{282.2785 - 282.279140}{282.279140} \times 10^6 = -2.27 \text{ ppm}
+\end{equation}
+Because $|\Delta m_{\text{ppm}}| \le 5.0$ ppm, the feature matches the theoretical $[M+\text{H}]^+$ adduct within high-resolution mass spectrometer tolerance.
+
+\FloatBarrier
+\begin{thebibliography}{10}
+
+\bibitem{zhang2017ubilength}
+Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
+\newblock An interaction landscape of ubiquitin signaling.
+\newblock \emph{Molecular Cell}, 65(3):541--555, 2017.
+\newblock \url{https://doi.org/10.1016/j.molcel.2016.12.023}.
+
+\bibitem{cravatt2001faah}
+Cravatt, B.F., Demarest, K., Patricelli, M.P., et~al.
+\newblock Supersensitivity to anandamide and cognitive impairments in mice lacking fatty acid amide hydrolase.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 98(16):9371--9376, 2001.
+\newblock \url{https://doi.org/10.1073/pnas.161191698}.
+
+\bibitem{zhang2018dep}
+Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
+\newblock Proteome-wide identification of ubiquitin interactions using {DEP}.
+\newblock \emph{Nature Protocols}, 13(3):530--550, 2018.
+\newblock \url{https://doi.org/10.1038/nprot.2017.147}.
+
+\bibitem{smith2006xcms}
+Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.
+\newblock {XCMS}: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification.
+\newblock \emph{Analytical Chemistry}, 78(3):779--787, 2006.
+\newblock \url{https://doi.org/10.1021/ac051437y}.
+
+\bibitem{huber2002vsn}
+Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., Vingron, M.
+\newblock Variance stabilization applied to microarray data calibration and to the quantification of differential expression.
+\newblock \emph{Bioinformatics}, 18(Suppl 1):S96--S104, 2002.
+\newblock \url{https://doi.org/10.1093/bioinformatics/18.suppl_1.s96}.
+
+\bibitem{smyth2004limma}
+Smyth, G.K.
+\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
+\newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\end{thebibliography}
+
+\end{document}

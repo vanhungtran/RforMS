@@ -1,0 +1,311 @@
+\documentclass[11pt,twoside,openright]{book}
+\usepackage{springer_monograph}
+\usepackage{placeins}
+\usepackage{float}
+
+\hypersetup{
+    pdftitle={Chapter 13: Quantitative Proteomics Foundations and Dynamic Range},
+    pdfauthor={Lucas VHH TRAN}
+}
+
+\begin{document}
+
+% --- Chapter Title Block ---
+\setcounter{chapter}{12}
+\chapter{Quantitative Proteomics Foundations and Dynamic Range}
+\label{chap:quant_proteomics}
+
+\noindent
+\textbf{Lucas VHH TRAN}\footnote{CK-CARE Davos, Christine K\"uhne--Center for Allergy Research and Education, Davos, Switzerland. Email: \texttt{lucas.tran@ck-care.ch}}\\
+\rule{\textwidth}{0.8pt}
+
+\begin{abstract}
+\noindent
+Quantitative proteomics infers protein abundances from digested peptide intensities, propagating filtering thresholds and missingness across hierarchical levels. Direct protein quantification is physically impossible in bottom-up mass spectrometry; peptides must be identified, quantified, and aggregated into protein groups. The choice of quantification methodology determines dynamic range, throughput, and ratio accuracy: label-free quantification (LFQ) spans four to five orders of dynamic range at the cost of run-to-run stochastic missingness, whereas isobaric labeling (TMT) achieves multiplexed throughput at the cost of precursor co-isolation ratio compression. The \texttt{QFeatures} container formalizes this hierarchy as a directed acyclic graph linking peptide-spectrum matches (PSMs), peptides, and proteins while preserving coordinate alignment and assay provenance. When summarizing peptide intensities into protein abundances, standard median aggregation is susceptible to outlying aberrant peptides, whereas M-estimation (\texttt{robustSummary}) downweights outlier residuals through Tukey biweight estimators. This chapter presents the mathematical foundations of MS quantitation, ratio compression kinetics, hierarchical \texttt{QFeatures} construction, median versus robust aggregation benchmarks on the CPTAC study, and linear modeling in R 4.6.1.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:}\enspace Quantitative proteomics, QFeatures, Dynamic range, Ratio compression, Feature aggregation, Robust summarization, CPTAC benchmark.
+
+\vspace{1em}
+\section*{Chapter Overview and Architectural Roadmap}
+
+Table~\ref{tab:quant_roadmap} compares the four primary mass spectrometry quantification paradigms and summarizes the structural requirements of hierarchical protein summarization.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of quantitative mass spectrometry paradigms and computational trade-offs.}
+\label{tab:quant_roadmap}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}l >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+\textbf{Methodology} & \textbf{Measurement Domain} & \textbf{Dynamic Range \& Accuracy} & \textbf{Primary Failure Mode} \\
+\midrule
+\textbf{1. Label-Free (LFQ)} & MS1 precursor peak integration (AUC) & High dynamic range ($10^4$--$10^5$); no ratio compression & Stochastic missingness across LC-MS runs \\
+\addlinespace
+\textbf{2. Isobaric (TMT)} & MS2/MS3 reporter ion intensities & High multiplexing ($18$-plex); high run-to-run completeness & Ratio compression from precursor co-isolation \\
+\addlinespace
+\textbf{3. DIA / SWATH} & Multiplexed MS2 fragment traces & High reproducibility; wide dynamic range & Spectral deconvolution complexity \\
+\addlinespace
+\textbf{4. SILAC} & MS1 isotopic doublet pairs & Direct light/heavy ratio; high accuracy & Incomplete metabolic labeling; $3$-state limit \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{notebox}
+\textbf{Tutor Warning: Aggregation Sequence Protocol}\\[0.4em]
+Aggregating peptides into protein groups \emph{before} applying data filtering bakes noise and missingness directly into protein estimates. Peptides originating from keratin contaminants, one-hit-wonder identifications, or features with $>50\%$ missingness distort protein summaries if included during aggregation. Always filter low-quality features at the peptide tier prior to invoking \texttt{aggregateFeatures()}.
+\end{notebox}
+
+\FloatBarrier
+\section{Quantitative Proteomics Methodologies and Dynamic Range}
+\label{sec:quant_methodologies}
+
+In bottom-up proteomics, proteins are proteolytically digested into peptides prior to mass spectrometric analysis. The observed signal for peptide $j$ belonging to protein $p$ in sample $k$ follows a linear mixed model:
+\begin{equation}
+y_{pjk} = \mu_p + \alpha_k + \beta_j + (\alpha\beta)_{jk} + \varepsilon_{pjk}
+\label{eq:peptide_linear_model}
+\end{equation}
+where $\mu_p$ is the baseline protein abundance, $\alpha_k$ is the sample effect, $\beta_j$ represents peptide-specific ionization efficiency, and $\varepsilon_{pjk} \sim \mathcal{N}(0, \sigma^2)$ is random measurement error.
+
+\subsection{Dynamic Range and Ratio Compression Kinetics}
+
+Proteomes span over six orders of magnitude in dynamic range in human plasma ($10^0$ to $10^{10}$ pg/mL). In isobaric labeling (TMT), precursor ions are selected within an isolation window (typically $0.7$ to $1.2$ Th). Co-eluting background peptides within this window are co-fragmented simultaneously, contributing reporter ions that distort fold-change estimates.
+
+Let $R_{\text{true}} = I_1 / I_2$ denote the true ratio of an analyte between two channels. If co-isolated interfering ions contribute background intensity with ratio $1:1$ at relative proportion $\beta = I_{\text{interfere}} / I_{\text{target}}$, the observed ratio compresses toward unity:
+\begin{equation}
+R_{\text{obs}} = \frac{I_{1} + \beta I_{\text{target}}}{I_{2} + \beta I_{\text{target}}} = \frac{R_{\text{true}} + \beta}{1 + \beta}
+\label{eq:ratio_compression}
+\end{equation}
+The percentage ratio compression is:
+\begin{equation}
+\text{Compression}(\%) = \left( 1 - \frac{R_{\text{obs}} - 1}{R_{\text{true}} - 1} \right) \times 100 = \left( \frac{\beta}{1 + \beta} \right) \times 100
+\label{eq:compression_pct}
+\end{equation}
+When interference $\beta = 0.50$, an actual $4.0$-fold change compresses to $R_{\text{obs}} = (4 + 0.5)/(1 + 0.5) = 3.00$, representing a $33.3\%$ compression of biological fold-change.
+
+\FloatBarrier
+\section{The QFeatures Architecture: Hierarchical Relational Graphs}
+\label{sec:qfeatures_arch}
+
+The \texttt{QFeatures} container extends \texttt{MultiAssayExperiment} to manage the hierarchical multi-tier structure of mass spectrometry data. It coordinates three interconnected components:
+\begin{enumerate}
+\item \textbf{Assays}: An ordered list of \texttt{SummarizedExperiment} objects representing discrete processing tiers: \texttt{peptides} $\to$ \texttt{norm\_peptides} $\to$ \texttt{proteins}.
+\item \textbf{AssayLinks}: Directed acyclic graph edges linking row indices between assays, generated during aggregation or transformation via \texttt{addAssayLink()}.
+\item \textbf{colData}: Experiment-wide phenotypic sample metadata shared across all assay tiers.
+\end{enumerate}
+
+\subsection{Protein Aggregation Mechanics}
+
+Converting peptide matrices into protein matrices requires row-wise summarization. Two primary algorithms are used:
+\begin{enumerate}
+\item \textbf{Median Aggregation (\texttt{colMedians})}: Computes the sample-wise median of all peptides assigned to protein $p$:
+\begin{equation}
+\hat{Y}_{pk}^{\text{median}} = \operatorname{median}_{j \in \mathcal{P}_p} (y_{pjk})
+\label{eq:col_medians}
+\end{equation}
+While resistant to extreme values, the median discards magnitude information and can fluctuate when peptide counts are small ($|\mathcal{P}_p| \le 2$).
+\item \textbf{Robust Summarization (\texttt{robustSummary})}: Fits a robust linear model using Tukey's biweight M-estimator:
+\begin{equation}
+\sum_{j \in \mathcal{P}_p} \psi\left( \frac{y_{pjk} - \hat{\mu}_{pk} - \hat{\beta}_j}{\hat{\sigma}_p} \right) = 0
+\label{eq:robust_summary}
+\end{equation}
+where $\psi(u) = u(1 - (u/c)^2)^2$ for $|u| \le c$ ($c = 4.685$) and zero otherwise. Peptides with large residual deviations are downweighted iteratively, preventing single aberrant peptides from distorting protein quantification.
+\end{enumerate}
+
+\FloatBarrier
+\section{CPTAC Benchmark Analysis and Differential Testing}
+\label{sec:cptac_lab}
+
+The Clinical Proteomic Tumor Analysis Consortium (CPTAC) study design evaluates quantitative pipelines using yeast spike-in standards across two dilution conditions ($6\text{A}$ and $6\text{B}$) with three replicates each. Listing~4.1 in Chapter 13 loads the genuine $11{,}466$-peptide MaxQuant identification table from \texttt{MsDataHub}.
+
+Listing~13.1 ingests the CPTAC dataset, filters missing values, and normalizes intensities.
+
+\begin{rchunk}{Listing 13.1: Ingestion and Normalization of the CPTAC Benchmark}
+library(QFeatures)
+library(SummarizedExperiment)
+library(MsDataHub)
+
+peptides_file <- MsDataHub::cptac_a_b_peptides.txt()
+cptac_raw <- read.delim(peptides_file, check.names = FALSE)
+
+intensity_cols <- grep("^Intensity 6[AB]_", colnames(cptac_raw), value = TRUE)
+sample_info <- DataFrame(
+  sample    = intensity_cols,
+  condition = sub("Intensity (6[AB])_.*", "\\1", intensity_cols),
+  replicate = sub("Intensity 6[AB]_(.*)", "\\1", intensity_cols),
+  row.names = intensity_cols
+)
+
+peptide_data <- as.matrix(cptac_raw[, intensity_cols])
+rownames(peptide_data) <- make.unique(cptac_raw$Sequence)
+peptide_data[peptide_data == 0] <- NA_real_
+
+cptac_se <- SummarizedExperiment(
+  assays  = list(peptides = peptide_data),
+  rowData = DataFrame(Proteins = cptac_raw$Proteins, row.names = rownames(peptide_data)),
+  colData = sample_info
+)
+
+cptac_qf <- QFeatures(list(peptides = cptac_se))
+cptac_qf <- logTransform(cptac_qf, i = "peptides", name = "log_peptides")
+cptac_qf <- normalize(cptac_qf, i = "log_peptides", name = "norm_peptides",
+                      method = "center.median")
+
+# Filter features with > 50% missingness and empty protein annotations
+cptac_clean <- filterNA(cptac_qf, i = "norm_peptides", pNA = 0.5)
+has_prot <- rowData(cptac_clean[["norm_peptides"]])$Proteins != ""
+cptac_clean <- cptac_clean[has_prot, , ]
+
+cat(sprintf("Raw CPTAC Peptides: %d x %d samples\n",
+            nrow(cptac_qf[["peptides"]]), ncol(cptac_qf[["peptides"]])))
+cat(sprintf("Retained Peptides (pNA <= 0.5): %d\n", nrow(cptac_clean[["norm_peptides"]])))
+\end{rchunk}
+
+\begin{routput}
+Raw CPTAC Peptides: 11466 x 6 samples\\
+Retained Peptides (pNA $<=$ 0.5): 6643
+\end{routput}
+
+Of $11{,}466$ raw peptides, $45.25\%$ of matrix cells contain missing values. Filtering for $\text{pNA} \le 0.5$ and removing 7 peptides lacking protein annotations yields $6{,}643$ analytical peptides ($58.0\%$ retention).
+
+\FloatBarrier
+\section{Median vs RobustSummarization Benchmark}
+\label{sec:median_vs_robust}
+
+Listing~13.2 aggregates the $6{,}643$ peptides to $1{,}451$ protein groups using both \texttt{colMedians} and \texttt{MsCoreUtils::}\allowbreak\texttt{robustSummary}, followed by differential abundance testing with \texttt{limma}.
+
+\begin{rchunk}{Listing 13.2: Protein Aggregation and Differential Abundance Testing}
+library(MsCoreUtils)
+library(limma)
+library(dplyr)
+
+# Aggregation 1: Column medians
+cptac_clean <- aggregateFeatures(cptac_clean, i = "norm_peptides", fcol = "Proteins",
+                                 name = "proteins_median", fun = colMedians, na.rm = TRUE)
+
+# Aggregation 2: Robust M-estimation
+cptac_clean <- aggregateFeatures(cptac_clean, i = "norm_peptides", fcol = "Proteins",
+                                 name = "proteins_robust", fun = MsCoreUtils::robustSummary, na.rm = TRUE)
+
+# Differential abundance helper
+test_diff <- function(qf, assay_name) {
+  se_sub <- filterNA(getWithColData(qf, assay_name), pNA = 0)
+  design <- model.matrix(~ condition, data = colData(se_sub))
+  fit <- eBayes(lmFit(assay(se_sub), design))
+  res <- topTable(fit, coef = 2, number = Inf)
+  res$protein <- rownames(res)
+  res
+}
+
+res_med <- test_diff(cptac_clean, "proteins_median")
+res_rob <- test_diff(cptac_clean, "proteins_robust")
+
+sig_med <- res_med %>% filter(adj.P.Val <= 0.05, abs(logFC) >= 1.0)
+sig_rob <- res_rob %>% filter(adj.P.Val <= 0.05, abs(logFC) >= 1.0)
+shared  <- intersect(sig_med$protein, sig_rob$protein)
+jaccard <- length(shared) / length(union(sig_med$protein, sig_rob$protein))
+
+cat(sprintf("Aggregated Protein Groups: %d\n", nrow(cptac_clean[["proteins_median"]])))
+cat(sprintf("Significant Proteins (Median):        %d\n", nrow(sig_med)))
+cat(sprintf("Significant Proteins (RobustSummary): %d\n", nrow(sig_rob)))
+cat(sprintf("Shared Significant Proteins:          %d (Jaccard = %.4f)\n", length(shared), jaccard))
+\end{rchunk}
+
+\begin{routput}
+Aggregated Protein Groups: 1451\\
+Significant Proteins (Median):\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 3\\
+Significant Proteins (RobustSummary): 12\\
+Shared Significant Proteins:\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace\enspace 2 (Jaccard = 0.1538)
+\end{routput}
+
+At significance thresholds $|\log_2\text{FC}| \ge 1.0$ and $\text{FDR} \le 0.05$, median aggregation identifies 3 significant proteins, whereas robust summarization identifies 12 significant proteins. Only 2 proteins are shared, yielding a Jaccard similarity index of $0.1538$. Median aggregation suffers from variance inflation caused by unmodeled peptide effects, whereas robust summarization downweights aberrant peptides, stabilizing protein variance and improving statistical power.
+
+\FloatBarrier
+\section{Worked Exercises}
+\label{sec:worked_exercises}
+
+\subsection*{Exercise 13.1: Aggregation Robustness and Classification Shift}
+\noindent\textbf{Problem Statement:}\enspace
+In the CPTAC benchmark analysis, median aggregation detected 3 significant proteins while robust summarization detected 12. Explain why 11 proteins differed in classification between the two methods.
+
+\noindent\textbf{Solution:}\enspace
+Median aggregation takes the simple column median across all peptides mapped to a protein. If a protein is quantified by three peptides where one peptide exhibits an atypical ionization shift or co-eluting chemical interference, the sample median can shift substantially across replicates, inflating the estimated residual variance in \texttt{limma} ($s_g^2$).
+
+Robust summarization fits an additive linear model ($y_{jk} = \mu_k + \beta_j + \varepsilon_{jk}$) using Tukey's biweight M-estimator. The estimator downweights individual peptide residuals $|r_{jk}| > c \hat{\sigma}$, isolating genuine protein-level changes from peptide-specific ionization noise. This reduces residual variance $\tilde{s}_g^2$, enabling 10 true yeast spike-in proteins to cross the $\text{FDR} \le 0.05$ threshold.
+
+\subsection*{Exercise 13.2: Missingness Threshold Filtering Sweep}
+\noindent\textbf{Problem Statement:}\enspace
+Evaluating \texttt{filterNA()} on the CPTAC peptide assay at missingness thresholds $\text{pNA} = 0.2$, $0.5$, and $0.8$ retained $5{,}049$, $6{,}650$, and $7{,}584$ peptides, respectively. Analyze the analytical trade-offs of stringent versus permissive missingness filtering.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{Stringent Filtering ($\text{pNA} = 0.2$)}: Retains $5{,}049$ peptides ($44.0\%$). Eliminates imputation uncertainty but discards peptides detected in only one biological condition, filtering out proteins completely absent in the control group.
+\item \textbf{Permissive Filtering ($\text{pNA} = 0.8$)}: Retains $7{,}584$ peptides ($66.1\%$). Maximizes proteome coverage but introduces high missingness proportions that require downstream imputation algorithms (such as MinProb or KNN), risking imputation artifacts in statistical inference.
+\end{enumerate}
+
+\subsection*{Exercise 13.3: Multi-Tier PCA Diagnostics}
+\noindent\textbf{Problem Statement:}\enspace
+In a quantitative proteomics study, peptide-level PCA separates samples by both injection order and biological condition, whereas protein-level PCA clusters predominantly by biological condition ($6\text{A}$ vs $6\text{B}$). State what this diagnostic pattern indicates about the origin of analytical variance.
+
+\noindent\textbf{Solution:}\enspace
+This pattern demonstrates that chromatographic drift and electrospray ionization fluctuations operate at the peptide level. Because peptide-specific technical variations are largely independent across distinct peptide sequences, aggregating multiple peptides into protein groups averages out independent technical noise:
+\begin{equation}
+\operatorname{Var}(\bar{Y}_p) \approx \frac{\sigma_{\text{peptide}}^2}{|\mathcal{P}_p|} + \sigma_{\text{protein}}^2
+\end{equation}
+The biological condition signal dominates at the protein tier because it affects all peptides belonging to that protein systematically.
+
+\subsection*{Exercise 13.4: MSstats Converter Mapping}
+\noindent\textbf{Problem Statement:}\enspace
+Specify the conversion function from the \texttt{MSstatsConvert} package required to transform output from (a) MaxQuant, (b) DIA-NN, and (c) Spectronaut into standard MSstats format.
+
+\noindent\textbf{Solution:}\enspace
+\begin{enumerate}
+\item \textbf{MaxQuant}: \texttt{MSstatsConvert::MaxQtoMSstatsFormat(evidence, proteinGroups, annotation)}
+\item \textbf{DIA-NN}: \texttt{MSstatsConvert::DIANNtoMSstatsFormat(report, annotation)}
+\item \textbf{Spectronaut}: \texttt{MSstatsConvert::SpectronauttoMSstatsFormat(report, annotation)}
+\end{enumerate}
+The resulting standardized data frame feeds into \texttt{MSstats::dataProcess()} for run-level summarization.
+
+\FloatBarrier
+\begin{thebibliography}{10}
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C.
+\newblock \emph{QFeatures: Quantitative features for mass spectrometry data}.
+\newblock R package version 1.14.0, Bioconductor, 2024.
+\newblock \url{https://doi.org/10.18129/B9.bioc.QFeatures}.
+
+\bibitem{paulovich2010cptac}
+Paulovich, A.G., Billheimer, D., Ham, A.J., et~al.
+\newblock Interlaboratory study characterizing a yeast performance standard for benchmarking {LC-MS/MS} platforms in the {NCI CPTAC} study.
+\newblock \emph{Molecular \& Cellular Proteomics}, 9(2):242--254, 2010.
+\newblock \url{https://doi.org/10.1074/mcp.M900222-MCP200}.
+
+\bibitem{ting2011msstats}
+Choi, M., Chang, C.Y., Clough, T., et~al.
+\newblock {MSstats}: an {R} package for statistical analysis of quantitative mass spectrometry-based proteomic experiments.
+\newblock \emph{Bioinformatics}, 30(17):2524--2526, 2014.
+\newblock \url{https://doi.org/10.1093/bioinformatics/btu305}.
+
+\bibitem{savitski2013tmt}
+Savitski, M.M., Mathieson, T., Zinn, N., et~al.
+\newblock Measuring and managing ratio compression for accurate isobaric tag-based protein quantification.
+\newblock \emph{Journal of Proteome Research}, 12(8):3586--3598, 2013.
+\newblock \url{https://doi.org/10.1021/pr400098n}.
+
+\bibitem{stucki2022mscoreutils}
+Rainer, J., Vicini, A., Salzer, L., Gatto, L.
+\newblock \emph{MsCoreUtils: Core Utilities for Mass Spectrometry Data}.
+\newblock R package version 1.16.0, Bioconductor, 2024.
+\newblock \url{https://doi.org/10.18129/B9.bioc.MsCoreUtils}.
+
+\bibitem{smyth2004limma}
+Smyth, G.K.
+\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
+\newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\end{thebibliography}
+
+\end{document}

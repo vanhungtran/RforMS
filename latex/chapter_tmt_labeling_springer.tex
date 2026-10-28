@@ -231,6 +231,7 @@ for (c_idx in 4:6) {
 psm_df <- as.data.frame(raw_mat)
 psm_df$Protein <- paste0("PROT_", rep(1:200, each = 5))
 psm_df$PSM_ID  <- paste0("PSM_", 1:n_psms)
+rownames(psm_df) <- psm_df$PSM_ID
 
 cat(sprintf("Simulated %d PSMs mapping to 200 proteins across 6 TMT channels.\n", n_psms))
 cat(sprintf("True Fold Change: 4.00 (log2FC = 2.00) with 35%% co-isolation interference.\n"))
@@ -258,10 +259,11 @@ se <- SummarizedExperiment(
 qf <- QFeatures(list(psms = se), colData = coldata)
 
 # Step 1: Sample-Loading Normalization (equalize total channel sums)
-qf <- normalize(qf, i = "psms", name = "psms_sl", method = "div.sum")
+qf <- normalize(qf, i = "psms", name = "psms_sl", method = "sum")
 
 # Step 2: Channel Median Centering on log2 scale
-qf <- normalize(qf, i = "psms_sl", name = "psms_norm", method = "center.median")
+qf <- logTransform(qf, i = "psms_sl", name = "psms_log")
+qf <- normalize(qf, i = "psms_log", name = "psms_norm", method = "center.median")
 
 cat("Completed 2-step sample loading and channel median normalization.\n")
 \end{rchunk}

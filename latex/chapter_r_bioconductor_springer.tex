@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-High-throughput mass spectrometry produces gigabytes of spectral time-series and high-dimensional feature arrays that exceed the computational capacity of standard spreadsheets and interactive graphical interfaces. The Bioconductor project provides a formal, peer-reviewed software ecosystem designed for high-throughput biological assays. Bioconductor establishes two architectural standards for computational mass spectrometry: formal S4 classes that enforce structural coordinate invariants between assay matrices and biological metadata, and modular storage backends that separate user-facing operations from on-disk memory representation. Operating on raw spectra via pointer-based backends (\texttt{MsBackendMzR}) prevents random-access memory exhaustion when processing hundreds of gigabytes of raw data. At the quantification tier, containers such as \texttt{SummarizedExperiment} and \texttt{QFeatures} maintain relational integrity across hierarchical transitions from peptide-spectrum matches (PSMs) to proteins. This chapter presents the computational mechanics of vectorization, formal S4 object architectures, pluggable spectral backends, tidyverse data transformations on real PSM tables, and empirical Bayes variance moderation in R 4.6.1.
+High-throughput mass spectrometry produces gigabytes of spectral time-series and high-dimensional feature arrays that exceed the computational capacity of standard spreadsheets and interactive graphical interfaces. The Bioconductor project provides a formal, peer-reviewed software ecosystem designed for high-throughput biological assays \cite{gentleman2004bioconductor, huber2015orchestrating}. Bioconductor establishes two architectural standards for computational mass spectrometry: formal S4 classes that enforce structural coordinate invariants between assay matrices and biological metadata \cite{chambers2008software}, and modular storage backends that separate user-facing operations from on-disk memory representation \cite{rainer2022spectra}. Operating on raw spectra via pointer-based backends (\texttt{MsBackendMzR}) prevents random-access memory exhaustion when processing hundreds of gigabytes of raw data \cite{gatto2021msnbase}. At the quantification tier, containers such as \texttt{SummarizedExperiment} \cite{huber2015orchestrating} and \texttt{QFeatures} \cite{gatto2023qfeatures} maintain relational integrity across hierarchical transitions from peptide-spectrum matches (PSMs) to proteins. This chapter presents the computational mechanics of vectorization, formal S4 object architectures, pluggable spectral backends, tidyverse data transformations on real PSM tables \cite{wickham2019welcome, wickham2014tidy}, and empirical Bayes variance moderation \cite{smyth2004linear, ritchie2015limma} in R 4.6.1.
 \end{abstract}
 
 \vspace{1em}
@@ -41,15 +41,15 @@ Table~\ref{tab:r_bioc_roadmap} summarizes the foundational architecture, softwar
 \toprule
 \textbf{Computational Layer} & \textbf{Core Package / Container} & \textbf{Structural Guarantee} & \textbf{Analytical Function} \\
 \midrule
-\textbf{1. Raw Spectra} & \texttt{Spectra} (\texttt{MsBackendMzR}) & $O(1)$ indexed disk seek; lazy-load peak arrays & Peak picking, filtering, precursor extraction \\
+\textbf{1. Raw Spectra} & \texttt{Spectra} (\texttt{MsBackendMzR}) \cite{rainer2022spectra, gatto2021msnbase} & $O(1)$ indexed disk seek; lazy-load peak arrays & Peak picking, filtering, precursor extraction \\
 \addlinespace
-\textbf{2. Experiment Metadata} & \texttt{MsExperiment} & Synchronized link between spectra files and sample annotations & Multi-file cohort management \\
+\textbf{2. Experiment Metadata} & \texttt{MsExperiment} \cite{rainer2022spectra} & Synchronized link between spectra files and sample annotations & Multi-file cohort management \\
 \addlinespace
-\textbf{3. Feature Quantitation} & \texttt{SummarizedExperiment} & Exact coordinate invariance: $\dim(\text{assay})_1 = \dim(\text{rowData})_1$ & 2D metabolite/protein abundance matrices \\
+\textbf{3. Feature Quantitation} & \texttt{SummarizedExperiment} \cite{huber2015orchestrating} & Exact coordinate invariance: $\dim(\text{assay})_1 = \dim(\text{rowData})_1$ & 2D metabolite/protein abundance matrices \\
 \addlinespace
-\textbf{4. Multi-level Omics} & \texttt{QFeatures} & Relational directed acyclic graph linking PSMs to proteins & Hierarchical protein summarization \\
+\textbf{4. Multi-level Omics} & \texttt{QFeatures} \cite{gatto2023qfeatures, vanderaa2021scp} & Relational directed acyclic graph linking PSMs to proteins & Hierarchical protein summarization \\
 \addlinespace
-\textbf{5. Statistical Inference} & \texttt{limma} & Empirical Bayes variance shrinkage ($d_0, s_0^2$) & Small-sample differential abundance \\
+\textbf{5. Statistical Inference} & \texttt{limma} \cite{smyth2004linear, ritchie2015limma} & Empirical Bayes variance shrinkage ($d_0, s_0^2$) & Small-sample differential abundance \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -63,7 +63,7 @@ Installing Bioconductor packages with base R's \texttt{install.packages()} bypas
 \section{The R Mindset: Vectorization and SIMD Acceleration}
 \label{sec:vectorization}
 
-R is an interpreted vector-oriented language built on compiled C and Fortran linear algebra subroutines. In base R, scalar for-loops evaluate bytecodes and verify memory pointers on each iteration. When an explicit loop increments an array element in interpreted R:
+R is an interpreted vector-oriented language built on compiled C and Fortran linear algebra subroutines. In base R, scalar for-loops evaluate bytecodes and verify memory pointers on each iteration \cite{chambers2008software, wickham2019welcome}. When an explicit loop increments an array element in interpreted R:
 \begin{equation}
 y_i = \log_2(x_i + 1), \quad i \in \{1, 2, \dots, N\}
 \label{eq:scalar_loop}
@@ -116,11 +116,11 @@ The vectorized execution completes in $0.0057$ seconds compared to $0.0681$ seco
 \section{Formal S4 Object Architecture and Coordinate Invariants}
 \label{sec:s4_architecture}
 
-Bioconductor relies on the S4 object-oriented system rather than the informal S3 system common in base R packages. An S3 object is an arbitrary list with an assigned class attribute; S3 does not validate whether mandatory components exist or whether data types match.
+Bioconductor relies on the S4 object-oriented system rather than the informal S3 system common in base R packages \cite{gentleman2004bioconductor, chambers2008software}. An S3 object is an arbitrary list with an assigned class attribute; S3 does not validate whether mandatory components exist or whether data types match.
 
 In contrast, S4 classes enforce rigid contracts through formal slot definitions and class validation methods. An S4 class requires explicit slot types (e.g., \texttt{numeric}, \texttt{character}, \texttt{DataFrame}). When an S4 object is instantiated or modified, validity methods confirm that dimensional and coordinate invariants hold.
 
-In mass spectrometry quantification, the central data container is \texttt{SummarizedExperiment}. It maintains three coordinated components:
+In mass spectrometry quantification, the central data container is \texttt{SummarizedExperiment} \cite{huber2015orchestrating}. It maintains three coordinated components:
 \begin{enumerate}
 \item \textbf{Assays}: A list of 2D matrices $\mathbf{Y} \in \mathbb{R}^{p \times n}$, where $p$ represents biological features (metabolites, peptides, or proteins) and $n$ represents analytical samples.
 \item \textbf{rowData}: A \texttt{DataFrame} of length $p$ containing feature annotations (e.g., $m/z$, retention time, gene symbols).
@@ -182,7 +182,7 @@ The S4 constructor halts execution when \texttt{rowData} has 15 rows while the a
 \section{Tidyverse Data Grammar on Real PSM Tables}
 \label{sec:tidyverse}
 
-Tidyverse packages (\texttt{dplyr}, \texttt{tidyr}, \texttt{ggplot2}) provide a consistent tabular grammar for mass spectrometry metadata and identification tables. Identification tables generated from search engines (such as Mascot, Comet, MS-GF+, or MaxQuant) are imported into R as tabular structures. The native pipe operator (\texttt{|>}) chains operations sequentially:
+Tidyverse packages (\texttt{dplyr}, \texttt{tidyr}, \texttt{ggplot2}) provide a consistent tabular grammar for mass spectrometry metadata and identification tables \cite{wickham2019welcome, wickham2014tidy}. Identification tables generated from search engines (such as Mascot, Comet, MS-GF+, or MaxQuant) are imported into R as tabular structures. The native pipe operator (\texttt{|>}) chains operations sequentially:
 \begin{equation}
 \mathbf{T}_{\text{final}} = \mathbf{T}_0 \mid> f_1(\dots) \mid> f_2(\dots) \mid> f_3(\dots)
 \label{eq:pipe_syntax}
@@ -197,7 +197,7 @@ Five primary verbs manipulate identification tables:
 \item \texttt{arrange()}: Sorts rows by specified variables.
 \end{itemize}
 
-Listing~3.3 applies this grammar to an \texttt{mzIdentML} identification file containing $5{,}802$ raw PSMs from an Erwinia carotovora dataset in the \texttt{msdata} package.
+Listing~3.3 applies this grammar to an \texttt{mzIdentML} identification file containing $5{,}802$ raw PSMs from an Erwinia carotovora dataset in the \texttt{msdata} package \cite{gatto2023msdata}.
 
 \begin{rchunk}{Listing 3.3: Tidyverse Data Transformation on Real PSM Identifications}
 library(PSMatch)
@@ -250,7 +250,7 @@ Computational MS workflows process two distinct types of data: raw spectral time
 
 \subsection{Pluggable Backends in Spectra}
 
-The \texttt{Spectra} container separates user operations (e.g., peak filtering, precursor isolation) from the underlying storage mechanism. Four storage backends provide different trade-offs:
+The \texttt{Spectra} container separates user operations (e.g., peak filtering, precursor isolation) from the underlying storage mechanism \cite{rainer2022spectra, gatto2021msnbase}. Four storage backends provide different trade-offs:
 \begin{enumerate}
 \item \texttt{MsBackendMzR}: On-disk pointer backend. Raw $m/z$ and intensity arrays remain inside \texttt{.mzML} files. An in-memory index table holds scan headers ($0.5$ MB per run), enabling $O(1)$ random-access seeking without loading full peak arrays into RAM.
 \item \texttt{MsBackendDataFrame}: In-memory backend. Stores all peak arrays as R \texttt{DataFrame} objects. This backend is fast for small datasets ($< 1{,}000$ spectra) but consumes substantial memory on high-resolution instruments.
@@ -298,7 +298,7 @@ t_g = \frac{\hat{\beta}_g}{\operatorname{se}(\hat{\beta}_g)} = \frac{\hat{\beta}
 \end{equation}
 resulting in inflated $t$-statistics and false positives.
 
-The \texttt{limma} empirical Bayes framework addresses this by modeling feature variances as random variables drawn from a scaled inverse chi-square prior distribution:
+The \texttt{limma} empirical Bayes framework addresses this by modeling feature variances as random variables drawn from a scaled inverse chi-square prior distribution \cite{smyth2004linear, ritchie2015limma}:
 \begin{equation}
 \frac{1}{\sigma_g^2} \sim \frac{1}{d_0 s_0^2} \chi_{d_0}^2
 \label{eq:eb_prior}
@@ -387,8 +387,8 @@ The empirical Bayes pipeline recovers all 5 spiked features at $\text{FDR} \le 0
 
 Reproducible computational MS workflows require explicit dependency management and build automation:
 \begin{enumerate}
-\item \textbf{Package Version Locking (\texttt{renv})}: Records exact versions of CRAN and Bioconductor packages in a version-controlled \texttt{renv.lock} manifest.
-\item \textbf{Target Automation (\texttt{targets})}: Implements dependency graph tracking. Peak picking and chromatographic alignment steps are executed once and cached on disk. Subsequent runs recompute only targets whose code or inputs changed.
+\item \textbf{Package Version Locking (\texttt{renv})}: Records exact versions of CRAN and Bioconductor packages in a version-controlled \texttt{renv.lock} manifest \cite{ushey2024renv}.
+\item \textbf{Target Automation (\texttt{targets})}: Implements dependency graph tracking. Peak picking and chromatographic alignment steps are executed once and cached on disk. Subsequent runs recompute only targets whose code or inputs changed \cite{landau2021targets}.
 \item \textbf{Literate Documentation (Quarto)}: Combines explanatory text, mathematical notation, and executable code chunks into reproducible PDF and HTML reports.
 \end{enumerate}
 
@@ -452,7 +452,7 @@ Empirical Bayes moderation estimates a global prior variance $s_0^2$ and prior d
 When $s_g^2$ is spuriously close to zero, $\tilde{s}_g^2$ is bounded below by $\frac{d_0}{d_0 + d_g} s_0^2$, preventing false-positive test statistics caused by tiny denominators.
 
 \FloatBarrier
-\begin{thebibliography}{10}
+\begin{thebibliography}{18}
 
 \bibitem{gentleman2004bioconductor}
 Gentleman, R.C., Carey, V.J., Bates, D.M., et~al.
@@ -460,23 +460,47 @@ Gentleman, R.C., Carey, V.J., Bates, D.M., et~al.
 \newblock \emph{Genome Biology}, 5(10):R80, 2004.
 \newblock \url{https://doi.org/10.1186/gb-2004-5-10-r80}.
 
-\bibitem{gatto2023msdata}
-Gatto, L., Rainer, J.
-\newblock \emph{msdata: Various Mass Spectrometry Raw Data and Example Files}.
-\newblock R package version 0.44.0, Bioconductor, 2024.
-\newblock \url{https://doi.org/10.18129/B9.bioc.msdata}.
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods}, 12(2):115--121, 2015.
+\newblock \url{https://doi.org/10.1038/nmeth.3252}.
 
 \bibitem{rainer2022spectra}
-Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.M., Neumann, S., Stravs, M.A., Verri Hernandes, V., Gatto, L.
+Rainer, J., Vicini, A., Salzer, L., et~al.
 \newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
 \newblock \emph{Metabolites}, 12(2):173, 2022.
 \newblock \url{https://doi.org/10.3390/metabo12020173}.
 
-\bibitem{smyth2004linear}
-Smyth, G.K.
-\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
-\newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
-\newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+\bibitem{gatto2012msnbase}
+Gatto, L., Lilley, K.S.
+\newblock {MSnbase}---an {R/Bioconductor} package for isobaric tagged and label-free mass spectrometry data processing.
+\newblock \emph{Bioinformatics}, 28(2):288--289, 2012.
+\newblock \url{https://doi.org/10.1093/bioinformatics/btr645}.
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Gibb, S., Rainer, J.
+\newblock {MSnbase}, efficient and elegant {R}-based processing and visualization of raw mass spectrometry data.
+\newblock \emph{Journal of Proteome Research}, 20(1):1063--1069, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.0c00313}.
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C.
+\newblock \emph{QFeatures: Quantitative features for mass spectrometry data}.
+\newblock R package version 1.14.0, Bioconductor, 2024.
+\newblock \url{https://doi.org/10.18129/B9.bioc.QFeatures}.
+
+\bibitem{vanderaa2021scp}
+Vanderaa, C., Gatto, L.
+\newblock Replication of single-cell proteomics data analysis with the {scp} package.
+\newblock \emph{Journal of Proteome Research}, 20(9):4263--4271, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.1c00168}.
+
+\bibitem{chambers2008software}
+Chambers, J.M.
+\newblock \emph{Software for Data Analysis: Programming with {R}}.
+\newblock Springer, New York, 2008.
+\newblock \url{https://doi.org/10.1007/978-0-387-75936-4}.
 
 \bibitem{wickham2019welcome}
 Wickham, H., Averick, M., Bryan, J., et~al.
@@ -484,11 +508,59 @@ Wickham, H., Averick, M., Bryan, J., et~al.
 \newblock \emph{Journal of Open Source Software}, 4(43):1686, 2019.
 \newblock \url{https://doi.org/10.21105/joss.01686}.
 
-\bibitem{huber2015orchestrating}
-Huber, W., Carey, V.J., Gentleman, R., et~al.
-\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
-\newblock \emph{Nature Methods}, 12(2):115--121, 2015.
-\newblock \url{https://doi.org/10.1038/nmeth.3252}.
+\bibitem{wickham2014tidy}
+Wickham, H.
+\newblock Tidy data.
+\newblock \emph{Journal of Statistical Software}, 59(10):1--23, 2014.
+\newblock \url{https://doi.org/10.18637/jss.v059.i10}.
+
+\bibitem{smyth2004linear}
+Smyth, G.K.
+\newblock Linear models and empirical {Bayes} methods for assessing differential expression in microarray experiments.
+\newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
+\newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.E., Phipson, B., Wu, D., et~al.
+\newblock {limma} powers differential expression analyses for {RNA}-sequencing and microarray studies.
+\newblock \emph{Nucleic Acids Research}, 43(7):e47, 2015.
+\newblock \url{https://doi.org/10.1093/nar/gkv007}.
+
+\bibitem{ushey2024renv}
+Ushey, K., Wickham, H.
+\newblock \emph{renv: Project Environments for R}.
+\newblock R package version 1.0.7, 2024.
+\newblock \url{https://CRAN.R-project.org/package=renv}.
+
+\bibitem{landau2021targets}
+Landau, W.M.
+\newblock The targets {R} package: a dynamic Make-like function-oriented pipeline toolkit for reproducible workflows.
+\newblock \emph{Journal of Open Source Software}, 6(57):2959, 2021.
+\newblock \url{https://doi.org/10.21105/joss.02959}.
+
+\bibitem{gatto2023msdata}
+Gatto, L., Rainer, J.
+\newblock \emph{msdata: Various Mass Spectrometry Raw Data and Example Files}.
+\newblock R package version 0.44.0, Bioconductor, 2024.
+\newblock \url{https://doi.org/10.18129/B9.bioc.msdata}.
+
+\bibitem{smith2006xcms}
+Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.
+\newblock {XCMS}: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification.
+\newblock \emph{Analytical Chemistry}, 78(3):779--787, 2006.
+\newblock \url{https://doi.org/10.1021/ac051437y}.
+
+\bibitem{cox2008maxquant}
+Cox, J., Mann, M.
+\newblock {MaxQuant} enables high peptide identification rates, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification.
+\newblock \emph{Nature Biotechnology}, 26(12):1367--1372, 2008.
+\newblock \url{https://doi.org/10.1038/nbt.1511}.
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D1145--D1152, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz984}.
 
 \end{thebibliography}
 

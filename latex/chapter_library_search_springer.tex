@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Tandem mass spectrometry ($\text{MS/MS}$) records fragmentation patterns that reflect covalent molecular structure. Matching experimental fragmentation spectra against curated reference libraries constitutes the primary mechanism for metabolite identification in untargeted metabolomics. A similarity score measures spectral overlap, but score rank alone does not establish biological identity. Structural isomers, chimeric spectra from co-eluting precursors, and collision energy disparities distort spectral similarity metrics. This chapter presents the mathematical formulations, statistical null models, and Bioconductor implementations for tandem spectral library searching. We examine the normalized dot product (cosine similarity) with power-law intensity weighting, distinguish forward and reverse similarity under chimeric interference, and derive the hypergeometric probability of random fragment peak coincidence. Using the Bioconductor \texttt{Spectra} and \texttt{MetaboAnnotation} frameworks in R 4.6.1, we construct reference and query containers, execute tolerance-constrained spectral comparisons, and derive empirical match $p$-values against mass-shuffled decoy spectra. We classify annotations into the Metabolomics Standards Initiative (MSI) confidence tiers (Levels 1 to 4) using orthogonal retention time and precursor mass tolerances. The chapter details the Five Deadly Sins of spectral matching, provides a self-assessment diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+Tandem mass spectrometry ($\text{MS/MS}$) records fragmentation patterns that reflect covalent molecular structure. Matching experimental fragmentation spectra against curated reference libraries constitutes the primary mechanism for metabolite identification in untargeted metabolomics \cite{stein1994optimization, horai2010massbank, wang2016sharing}. A similarity score measures spectral overlap, but score rank alone does not establish biological identity. Structural isomers, chimeric spectra from co-eluting precursors, and collision energy disparities distort spectral similarity metrics. This chapter presents the mathematical formulations, statistical null models, and Bioconductor implementations for tandem spectral library searching. We examine the normalized dot product (cosine similarity) with power-law intensity weighting \cite{stein1994optimization}, distinguish forward and reverse similarity under chimeric interference, and derive the hypergeometric probability of random fragment peak coincidence \cite{scheubert2017significance}. Using the Bioconductor \texttt{Spectra} and \texttt{MetaboAnnotation} frameworks in R 4.6.1 \cite{gatto2021spectra, rainer2022modular, huber2015orchestrating}, we construct reference and query containers, execute tolerance-constrained spectral comparisons, and derive empirical match $p$-values against mass-shuffled decoy spectra. We classify annotations into the Metabolomics Standards Initiative (MSI) confidence tiers (Levels 1 to 4) \cite{sumner2007proposed, schymanski2014identifying} using orthogonal retention time and precursor mass tolerances. The chapter details the Five Deadly Sins of spectral matching, provides a self-assessment diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Tandem mass spectrometry ($\text{MS/MS}$) records fragmentation patterns that re
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Filtering} & Precursor mass windowing ($\pm \delta_{\text{ppm}}$) and charge filtering. & Reduce comparison space from $>10^5$ entries to viable candidates. & Window too tight excludes true adducts. Remedy: Search candidate adduct-adjusted precursor masses. \\
+\textbf{1. Filtering} & Precursor mass windowing ($\pm \delta_{\text{ppm}}$) and charge filtering \cite{wishart2022hmdb}. & Reduce comparison space from $>10^5$ entries to viable candidates \cite{guijas2018metlin}. & Window too tight excludes true adducts. Remedy: Search candidate adduct-adjusted precursor masses. \\
 \addlinespace
-\textbf{2. Alignment} & Peak binning within fragment mass tolerance ($\pm \tau$ or ppm). & Map experimental fragment peaks to reference library peaks. & Peak splitting or over-merging. Remedy: Instrument-calibrated fragment tolerance ($\le 0.02$ Da). \\
+\textbf{2. Alignment} & Peak binning within fragment mass tolerance ($\pm \tau$ or ppm) \cite{pluskal2010mzmine}. & Map experimental fragment peaks to reference library peaks \cite{tsugawa2015msdial}. & Peak splitting or over-merging. Remedy: Instrument-calibrated fragment tolerance ($\le 0.02$ Da). \\
 \addlinespace
-\textbf{3. Scoring} & Normalized dot product with intensity weighting ($I^{0.5}$). & Compute cosine similarity vector $S_{\cos}(U, V)$ across aligned pairs. & Chimeric contamination suppresses forward cosine. Remedy: Compute reverse dot product. \\
+\textbf{3. Scoring} & Normalized dot product with intensity weighting ($I^{0.5}$) \cite{stein1994optimization}. & Compute cosine similarity vector $S_{\cos}(U, V)$ across aligned pairs \cite{li2021spectral}. & Chimeric contamination suppresses forward cosine. Remedy: Compute reverse dot product. \\
 \addlinespace
-\textbf{4. Validation} & Decoy mass shuffling and retention time concordance. & Establish empirical false match probability and assign MSI tier. & High cosine match to distant retention time. Remedy: Enforce MSI Level 1 retention window ($\le 10$ s). \\
+\textbf{4. Validation} & Decoy mass shuffling and retention time concordance \cite{scheubert2017significance}. & Establish empirical false match probability and assign MSI tier \cite{sumner2007proposed}. & High cosine match to distant retention time. Remedy: Enforce MSI Level 1 retention window ($\le 10$ s). \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -79,7 +79,7 @@ Tandem mass spectrometry isolates a precursor ion within a narrow quadrupole mas
 Because chemical bonds possess characteristic dissociation energies, the product ion distribution reflects the underlying covalent skeleton. However, fragmentation depends on collision energy, collision gas pressure, and instrument geometry. A reference spectrum recorded at 40 eV on a quadrupole time-of-flight (Q-TOF) instrument differs in fragment branching ratios from a spectrum acquired at 15 eV in an ion trap. Library matching algorithms must balance peak matching tolerance with intensity weighting.
 
 \subsection{Normalized Dot Product (Cosine Similarity)}
-The standard metric for comparing two mass spectra is the normalized dot product introduced by Stein and Scott (1994). Let query spectrum $U$ and reference library spectrum $V$ be represented as vectors of aligned peaks indexed by $i = 1, \dots, k$. Each aligned peak is assigned a weighted intensity $w_i$:
+The standard metric for comparing two mass spectra is the normalized dot product introduced by Stein and Scott (1994) \cite{stein1994optimization}. Let query spectrum $U$ and reference library spectrum $V$ be represented as vectors of aligned peaks indexed by $i = 1, \dots, k$. Each aligned peak is assigned a weighted intensity $w_i$:
 \begin{equation}
 w_{U, i} = (m/z_i)^a \cdot (I_{U, i})^b, \quad w_{V, i} = (m/z_i)^a \cdot (I_{V, i})^b
 \label{eq:stein_weights}
@@ -94,7 +94,7 @@ S_{\cos}(U, V) = \frac{\sum_{i=1}^k w_{U, i} w_{V, i}}{\sqrt{\sum_{i=1}^k w_{U, 
 where $0 \le S_{\cos}(U, V) \le 1$. A value of $S_{\cos} = 1.0$ indicates identical relative peak intensity distributions, while $S_{\cos} = 0.0$ indicates zero shared fragment peaks within the matching mass tolerance.
 
 \subsection{Forward versus Reverse Dot Product}
-In untargeted biological profiling, wide precursor isolation windows ($\pm 0.5$ to $1.0$ Da) frequently isolate multiple co-eluting ions, generating chimeric tandem spectra. A chimeric query spectrum contains legitimate fragment ions from the target analyte interspersed with foreign fragment ions from co-isolated contaminants.
+In untargeted biological profiling, wide precursor isolation windows ($\pm 0.5$ to $1.0$ Da) frequently isolate multiple co-eluting ions, generating chimeric tandem spectra \cite{tsugawa2015msdial}. A chimeric query spectrum contains legitimate fragment ions from the target analyte interspersed with foreign fragment ions from co-isolated contaminants.
 
 The forward cosine metric (Equation~\ref{eq:cosine_dotproduct}) evaluates all peaks present in both spectra. If the experimental query contains five contaminant peaks of high intensity, the denominator term $\sqrt{\sum w_{U, i}^2}$ expands, driving $S_{\cos}$ downward even when all reference library peaks are present at exact intensity proportions.
 
@@ -106,7 +106,7 @@ S_{\text{rev}}(U, V) = \frac{\sum_{i \in \mathcal{M}} w_{U, i} w_{V, i}}{\sqrt{\
 where $\mathcal{M} = \{i : I_{V, i} > 0\}$ represents the index set of peaks present in the reference spectrum. The reverse dot product assesses whether the reference molecule is present within a mixture, ignoring unassigned query peaks.
 
 \subsection{Hypergeometric Null Model of Random Peak Matching}
-A high cosine score can occur by chance when spectra contain common low-mass fragments (water loss, carbon monoxide loss, alkyl cations). To determine whether a match is statistically significant, we evaluate the probability of observing $k$ overlapping peaks under a random null model.
+A high cosine score can occur by chance when spectra contain common low-mass fragments (water loss, carbon monoxide loss, alkyl cations). To determine whether a match is statistically significant, we evaluate the probability of observing $k$ overlapping peaks under a random null model \cite{scheubert2017significance}.
 
 Let the effective fragment mass range $[m_{\min}, m_{\max}]$ be partitioned into $N$ discrete resolution bins of width $2\tau$, where $\tau$ is the absolute fragment matching tolerance:
 \begin{equation}
@@ -128,7 +128,7 @@ When $N = 1000$ bins, observing $k = 4$ matching peaks between spectra with $m =
 \subsection{Spectral Entropy Similarity}
 The normalized dot product weights intensities uniformly across the dynamic range using square-root scaling, but it does not account for the information content of individual peaks. A spectrum dominated by one high-abundance fragment provides lower structural specificity than a spectrum with ten evenly distributed diagnostic fragments.
 
-Li et al. (2021) formulated spectral entropy similarity based on Shannon information theory. For a spectrum $U$ with peak intensities $I_i$, the normalized peak probabilities are $p_i = I_i / \sum_j I_j$. The spectral entropy is:
+Li et al. (2021) \cite{li2021spectral} formulated spectral entropy similarity based on Shannon information theory. For a spectrum $U$ with peak intensities $I_i$, the normalized peak probabilities are $p_i = I_i / \sum_j I_j$. The spectral entropy is:
 \begin{equation}
 H(U) = -\sum_{i=1}^n p_i \ln p_i
 \label{eq:spectral_entropy}
@@ -141,11 +141,11 @@ S_{\text{entropy}}(U, V) = 1 - \frac{2 H(W) - H(U) - H(V)}{\ln 4}
 Spectral entropy similarity bounds the Jensen-Shannon divergence between spectral probability distributions. It penalizes uninformative low-entropy spectra and outperforms standard cosine scoring when resolving structurally related lipid and steroid isomers.
 
 \subsection{MSI Annotation Confidence Levels}
-The Metabolomics Standards Initiative (Sumner et al., 2007) established four standardized confidence levels for metabolite reporting:
+The Metabolomics Standards Initiative (Sumner et al., 2007) \cite{sumner2007proposed}, complemented by metric frameworks from Schymanski et al. (2014) \cite{schymanski2014identifying}, established standardized confidence levels for metabolite reporting:
 \begin{itemize}
     \item \textbf{Level 1 (Confirmed Metabolite):} Requires matching at least two orthogonal properties (retention time $t_R$ and tandem mass spectrum $\text{MS/MS}$) against an authentic chemical reference standard analyzed in the same laboratory on the identical analytical method.
-    \item \textbf{Level 2 (Putatively Annotated Compound):} Requires matching experimental $\text{MS/MS}$ spectra to public or commercial spectral libraries without authentic standard retention time confirmation.
-    \item \textbf{Level 3 (Putatively Characterized Compound Class):} Based on spectral similarity to chemical class-specific fragmentation motifs or neutral loss patterns when the exact structure cannot be resolved.
+    \item \textbf{Level 2 (Putatively Annotated Compound):} Requires matching experimental $\text{MS/MS}$ spectra to public or commercial spectral libraries (e.g., MassBank \cite{horai2010massbank}, GNPS \cite{wang2016sharing}, HMDB \cite{wishart2022hmdb}, METLIN \cite{guijas2018metlin}) without authentic standard retention time confirmation.
+    \item \textbf{Level 3 (Putatively Characterized Compound Class):} Based on spectral similarity to chemical class-specific fragmentation motifs or in silico fragment predictions (e.g., SIRIUS \cite{duhrkop2019sirius}, MetFrag \cite{ruttkies2016metfrag}) when the exact structure cannot be resolved.
     \item \textbf{Level 4 (Unidentified Feature):} Chromatographic peaks defined by accurate precursor $m/z$ and retention time without spectral library match.
 \end{itemize}
 
@@ -153,7 +153,7 @@ The Metabolomics Standards Initiative (Sumner et al., 2007) established four sta
 \section{Algorithmic Architecture: The Modern Bioconductor Stack}
 % =============================================================================
 
-Spectral matching in Bioconductor centers on the \texttt{Spectra} container and the \texttt{MetaboAnnotation} package. 
+Spectral matching in Bioconductor centers on the \texttt{Spectra} container \cite{gatto2021spectra} and the \texttt{MetaboAnnotation} package \cite{rainer2022modular}. 
 
 \subsection{The Spectra S4 Container}
 The \texttt{Spectra} package virtualizes mass spectrometry data representation. Spectrum-level metadata (retention time, precursor $m/z$, precursor charge, collision energy) are stored in tabular format, while peak arrays ($m/z$ and intensity matrices) are accessed via specialized backends (\texttt{MsBackendMemory}, \texttt{MsBackendMzR}, or \texttt{MsBackendMassbank}).
@@ -165,10 +165,10 @@ When comparing spectra, \texttt{Spectra::compareSpectra} coordinates two algorit
 \end{enumerate}
 
 \subsection{High-Throughput Matching with MetaboAnnotation}
-The \texttt{MetaboAnnotation} package automates high-throughput matching across multi-thousand spectrum repositories. The \texttt{matchSpectra} function accepts a query \texttt{Spectra} object, a reference library \texttt{Spectra} object, and a parameter object (\texttt{CompareSpectraParam}). The parameter object encapsulates precursor matching tolerance, fragment tolerance, scoring function, and a threshold filtering function (\texttt{THRESHFUN}).
+The \texttt{MetaboAnnotation} package automates high-throughput matching across multi-thousand spectrum repositories \cite{rainer2022modular}. The \texttt{matchSpectra} function accepts a query \texttt{Spectra} object, a reference library \texttt{Spectra} object, and a parameter object (\texttt{CompareSpectraParam}). The parameter object encapsulates precursor matching tolerance, fragment tolerance, scoring function, and a threshold filtering function (\texttt{THRESHFUN}).
 
 \subsection{Decoy Null Distributions}
-To calculate an empirical false match $p$-value, reference library spectra can be randomized into decoy spectra. Mass-shuffling redistributes fragment $m/z$ values randomly across the observed mass range while preserving the exact intensity distribution. Comparing a query spectrum against 1,000 decoy spectra establishes the empirical score distribution under the null hypothesis of uncoordinated fragmentation.
+To calculate an empirical false match $p$-value, reference library spectra can be randomized into decoy spectra \cite{scheubert2017significance}. Mass-shuffling redistributes fragment $m/z$ values randomly across the observed mass range while preserving the exact intensity distribution. Comparing a query spectrum against 1,000 decoy spectra establishes the empirical score distribution under the null hypothesis of uncoordinated fragmentation.
 
 % =============================================================================
 \section{Hands-on R Laboratory: Spectral Library Search}
@@ -592,34 +592,112 @@ Precursor mass windowing accelerates library searching by more than three orders
 \small
 
 \bibitem{stein1994optimization}
-Stein, S.E., Scott, D.R.: Optimization and testing of mass spectral library search algorithms for compound identification.
-\textit{Journal of the American Society for Mass Spectrometry} \textbf{5}(9), 859--866 (1994).
-\doi{10.1016/1044-0305(94)87009-8}
+Stein, S.E., Scott, D.R.:
+\newblock Optimization and testing of mass spectral library search algorithms for compound identification.
+\newblock \emph{Journal of the American Society for Mass Spectrometry} \textbf{5}(9), 859--866 (1994).
+\newblock \doi{10.1016/1044-0305(94)87009-8}
 
 \bibitem{sumner2007proposed}
-Sumner, L.W., Amberg, A., Barrett, D., Beale, M.H., Beger, R., Daykin, C.A., Fan, T.W., Fiehn, O., Goodacre, R., Griffin, J.L., Hankemeier, T.: Proposed minimum reporting standards for chemical analysis.
-\textit{Metabolomics} \textbf{3}(3), 211--221 (2007).
-\doi{10.1007/s11306-007-0082-2}
+Sumner, L.W., Amberg, A., Barrett, D., et~al.:
+\newblock Proposed minimum reporting standards for chemical analysis.
+\newblock \emph{Metabolomics} \textbf{3}(3), 211--221 (2007).
+\newblock \doi{10.1007/s11306-007-0082-2}
+
+\bibitem{schymanski2014identifying}
+Schymanski, E.L., Jeon, J., Gulde, R., et~al.:
+\newblock Identifying small molecules via high resolution mass spectrometry: communicating confidence.
+\newblock \emph{Environmental Science \& Technology} \textbf{48}(4), 2097--2098 (2014).
+\newblock \doi{10.1021/es5002105}
 
 \bibitem{horai2010massbank}
-Horai, H., Arita, M., Kanaya, S., Nihei, Y., Ikeda, T., Suwa, K., Ojima, Y., Tanaka, K., Tanaka, S., Aoshima, K., Oda, Y.: MassBank: a public repository for sharing mass spectral data for life sciences.
-\textit{Journal of Mass Spectrometry} \textbf{45}(7), 703--714 (2010).
-\doi{10.1002/jms.1777}
+Horai, H., Arita, M., Kanaya, S., et~al.:
+\newblock {MassBank}: a public repository for sharing mass spectral data for life sciences.
+\newblock \emph{Journal of Mass Spectrometry} \textbf{45}(7), 703--714 (2010).
+\newblock \doi{10.1002/jms.1777}
 
 \bibitem{wang2016sharing}
-Wang, M., Carver, J.J., Phelan, V.V., Sanchez, L.M., Garg, N., Peng, Y., Nguyen, D.D., Watrous, J., Kapono, C.A., Luzzatto-Knaan, T., Porto, C.: Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
-\textit{Nature Biotechnology} \textbf{34}(8), 828--837 (2016).
-\doi{10.1038/nbt.3597}
+Wang, M., Carver, J.J., Phelan, V.V., et~al.:
+\newblock Sharing and community curation of mass spectrometry data with {Global Natural Products Social Molecular Networking}.
+\newblock \emph{Nature Biotechnology} \textbf{34}(8), 828--837 (2016).
+\newblock \doi{10.1038/nbt.3597}
 
 \bibitem{li2021spectral}
-Li, Y., Kind, T., Folz, J., Vaniya, A., Mehta, S.S., Fiehn, O.: Spectral entropy outperforms MS/MS dot product similarity for small-molecule compound identification.
-\textit{Nature Methods} \textbf{18}(12), 1524--1531 (2021).
-\doi{10.1038/s41592-021-01331-z}
+Li, Y., Kind, T., Folz, J., et~al.:
+\newblock Spectral entropy outperforms {MS/MS} dot product similarity for small-molecule compound identification.
+\newblock \emph{Nature Methods} \textbf{18}(12), 1524--1531 (2021).
+\newblock \doi{10.1038/s41592-021-01331-z}
 
 \bibitem{rainer2022modular}
-Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.M., Neumann, S., Stravs, M.A., Verri Hernandes, V., Gatto, L.: A modular and expandable ecosystem for metabolomics data annotation in R.
-\textit{Metabolites} \textbf{12}(2), 173 (2022).
-\doi{10.3390/metabo12020173}
+Rainer, J., Vicini, A., Salzer, L., et~al.:
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites} \textbf{12}(2), 173 (2022).
+\newblock \doi{10.3390/metabo12020173}
+
+\bibitem{wishart2022hmdb}
+Wishart, D.S., Guo, A., Oler, E., et~al.:
+\newblock {HMDB 5.0}: the Human Metabolome Database for 2022.
+\newblock \emph{Nucleic Acids Research} \textbf{50}(D1), D622--D631 (2022).
+\newblock \doi{10.1093/nar/gkab1015}
+
+\bibitem{guijas2018metlin}
+Guijas, C., Montenegro-Burke, J.R., Domingo-Almenara, X., et~al.:
+\newblock {METLIN}: a technology platform for identifying knowns and unknowns.
+\newblock \emph{Analytical Chemistry} \textbf{90}(5), 3156--3164 (2018).
+\newblock \doi{10.1021/acs.analchem.7b04424}
+
+\bibitem{duhrkop2019sirius}
+D\"uhrkop, K., Fleischauer, M., Ludwig, M., et~al.:
+\newblock {SIRIUS 4}: a rapid tool for turning tandem mass spectra into metabolite structure information.
+\newblock \emph{Nature Methods} \textbf{16}(4), 299--302 (2019).
+\newblock \doi{10.1038/s41592-019-0344-8}
+
+\bibitem{ruttkies2016metfrag}
+Ruttkies, C., Schymanski, E.L., Wolf, S., Hollender, J., Neumann, S.:
+\newblock {MetFrag} relaunched: incorporating strategies beyond in silico fragmentation.
+\newblock \emph{Journal of Cheminformatics} \textbf{8}, 3 (2016).
+\newblock \doi{10.1186/s13321-016-0115-9}
+
+\bibitem{tsugawa2015msdial}
+Tsugawa, H., Cajka, T., Kind, T., et~al.:
+\newblock {MS-DIAL}: data-independent {MS/MS} deconvolution for comprehensive metabolome analysis.
+\newblock \emph{Nature Methods} \textbf{12}(6), 523--526 (2015).
+\newblock \doi{10.1038/nmeth.3393}
+
+\bibitem{pluskal2010mzmine}
+Pluskal, T., Castillo, S., Villar-Briones, A., Ore\v{s}i\v{c}, M.:
+\newblock {MZmine 2}: modular framework for processing, visualizing, and analyzing mass spectrometry-based molecular profile data.
+\newblock \emph{BMC Bioinformatics} \textbf{11}, 395 (2010).
+\newblock \doi{10.1186/1471-2105-11-395}
+
+\bibitem{scheubert2017significance}
+Scheubert, K., Hufsky, F., Petras, D., et~al.:
+\newblock Significance estimation for large scale metabolomics annotations by spectral matching.
+\newblock \emph{Nature Communications} \textbf{8}, 1494 (2017).
+\newblock \doi{10.1038/s41592-017-01318-5}
+
+\bibitem{gatto2021spectra}
+Gatto, L., Rainer, J., Gibb, S.:
+\newblock {MSnbase}, {Spectra}, and {QFeatures}: Modern mass spectrometry data structures in {Bioconductor}.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00864}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.:
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\newblock \doi{10.1038/nmeth.3252}
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.N., et~al.:
+\newblock Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied to untargeted metabolomics.
+\newblock \emph{Metabolomics} \textbf{14}(6), 72 (2018).
+\newblock \doi{10.1007/s11306-018-1367-3}
+
+\bibitem{bittremieux2020mzqc}
+Bittremieux, N., Walzer, M., Tenzer, S., et~al.:
+\newblock The {mzQC} format for mass spectrometry quality control data.
+\newblock \emph{Journal of Proteome Research} \textbf{19}(10), 4174--4181 (2020).
+\newblock \doi{10.1021/acs.jproteome.0c00379}
 
 \end{thebibliography}
 

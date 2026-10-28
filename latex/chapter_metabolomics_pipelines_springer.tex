@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Untargeted metabolomics transforms raw liquid chromatography--mass spectrometry (LC-MS) time-series into aligned feature abundance matrices through a sequential dependency chain: peak detection, retention time alignment, correspondence grouping, and gap filling. Errors introduced during initial peak picking propagate multiplicatively into downstream statistical testing: missed peaks create artificial missingness, misaligned retention times split single chemical compounds into duplicate features, and unmodeled adducts inflate false discovery rates. The modern R and Bioconductor architecture unifies raw spectral data and experimental design metadata inside \texttt{MsExperiment} containers. Peak detection using continuous wavelet transform ridges (\texttt{CentWaveParam}) extracts chromatographic boundaries, non-linear ordered bijective warping (\texttt{ObiwarpParam}) eliminates column drift across analytical runs, and peak density correspondence (\texttt{PeakDensityParam}) defines consensus feature definitions. Gap filling (\texttt{fillChromPeaks}) integrates raw baseline currents in missing channels, cutting matrix sparsity by nearly half. This chapter presents the complete mathematical formulation, parameter sensitivity constraints, and laboratory execution of the \texttt{xcms} 4.10 pipeline on the \texttt{faahKO} cohort in R 4.6.1.
+Untargeted metabolomics transforms raw liquid chromatography--mass spectrometry (LC-MS) time-series into aligned feature abundance matrices through a sequential dependency chain: peak detection, retention time alignment, correspondence grouping, and gap filling \cite{smith2006xcms, theodoridis2018metabolic}. Errors introduced during initial peak picking propagate multiplicatively into downstream statistical testing: missed peaks create artificial missingness, misaligned retention times split single chemical compounds into duplicate features, and unmodeled adducts inflate false discovery rates. The modern R and Bioconductor architecture unifies raw spectral data and experimental design metadata inside \texttt{MsExperiment} containers \cite{rainer2022msexperiment}. Peak detection using continuous wavelet transform ridges (\texttt{CentWaveParam}) extracts chromatographic boundaries \cite{tautenhahn2008centwave}, non-linear ordered bijective warping (\texttt{ObiwarpParam}) eliminates column drift across analytical runs \cite{prince2006obiwarp, mahieu2016warping}, and peak density correspondence (\texttt{PeakDensityParam}) defines consensus feature definitions \cite{smith2006xcms}. Gap filling (\texttt{fillChromPeaks}) integrates raw baseline currents in missing channels, cutting matrix sparsity by nearly half. This chapter presents the complete mathematical formulation, parameter sensitivity constraints, and laboratory execution of the \texttt{xcms} 4.10 pipeline on the \texttt{faahKO} cohort \cite{cravatt2001faah, saghatelian2004activity} in R 4.6.1.
 \end{abstract}
 
 \vspace{1em}
@@ -41,17 +41,17 @@ Table~\ref{tab:xcms_roadmap} summarizes the computational stages, governing algo
 \toprule
 \textbf{Pipeline Stage} & \textbf{Algorithm / Class} & \textbf{Mathematical Target} & \textbf{Consequence of Misconfiguration} \\
 \midrule
-\textbf{1. Ingestion} & \texttt{readMsExperiment} & Couples CDF/mzML spectra to sample annotations & Path and metadata coordinate decoupling \\
+\textbf{1. Ingestion} & \texttt{readMsExperiment} \cite{rainer2022msexperiment} & Couples CDF/mzML spectra to sample annotations & Path and metadata coordinate decoupling \\
 \addlinespace
-\textbf{2. Detection} & \texttt{CentWaveParam} & CWT ridge detection in $m/z$--RT domain & Split peaks (low ppm) or merged ions (high ppm) \\
+\textbf{2. Detection} & \texttt{CentWaveParam} \cite{tautenhahn2008centwave} & CWT ridge detection in $m/z$--RT domain & Split peaks (low ppm) or merged ions (high ppm) \\
 \addlinespace
-\textbf{3. Alignment} & \texttt{ObiwarpParam} & Dynamic time warping of vector retention times & Unaligned features split into duplicate rows \\
+\textbf{3. Alignment} & \texttt{ObiwarpParam} \cite{prince2006obiwarp} & Dynamic time warping of vector retention times & Unaligned features split into duplicate rows \\
 \addlinespace
-\textbf{4. Grouping} & \texttt{PeakDensityParam} & Kernel density estimation across aligned RT & Over-merging near-isobaric compounds \\
+\textbf{4. Grouping} & \texttt{PeakDensityParam} \cite{smith2006xcms} & Kernel density estimation across aligned RT & Over-merging near-isobaric compounds \\
 \addlinespace
 \textbf{5. Gap Filling} & \texttt{fillChromPeaks} & Direct raw ion integration in feature bounding box & Truncation in downstream linear models \\
 \addlinespace
-\textbf{6. QC Filter} & Reproducibility mask & $\text{CV}_{\text{technical}} < 30\%$ \& $\text{Det} \ge 50\%$ & False discovery inflation from noisy features \\
+\textbf{6. QC Filter} & Reproducibility mask \cite{broadhurst2018guidelines} & $\text{CV}_{\text{technical}} < 30\%$ \& $\text{Det} \ge 50\%$ & False discovery inflation from noisy features \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -74,7 +74,7 @@ where $t_k$ is the retention time of scan $k$, and $I_i$ is the measured detecto
 
 \subsection{CentWave Wavelet Peak Detection}
 
-The CentWave algorithm detects chromatographic peaks without prior peak shape assumptions. It constructs continuous regions of interest (ROIs) along the $m/z$ dimension where mass measurements remain stable within $\pm \Delta(m/z)_{\text{ppm}}$ across consecutive scans:
+The CentWave algorithm detects chromatographic peaks without prior peak shape assumptions \cite{tautenhahn2008centwave}. It constructs continuous regions of interest (ROIs) along the $m/z$ dimension where mass measurements remain stable within $\pm \Delta(m/z)_{\text{ppm}}$ across consecutive scans:
 \begin{equation}
 \frac{|m/z_{k+1} - m/z_k|}{m/z_k} \times 10^6 \le \text{ppm}
 \label{eq:ppm_tolerance}
@@ -88,7 +88,7 @@ Chromatographic peak apexes appear as local maxima across wavelet scales, and in
 
 \subsection{Non-Linear Ordered Bijective Warping (OBI-Warp)}
 
-Analytical columns undergo phase aging, temperature fluctuations, and mobile phase degassing, causing retention time drift $\Delta t(t)$ between samples. The OBI-Warp algorithm calculates a non-linear alignment function $\phi(t)$ that maps sample retention times to a reference run:
+Analytical columns undergo phase aging, temperature fluctuations, and mobile phase degassing, causing retention time drift $\Delta t(t)$ between samples. The OBI-Warp algorithm calculates a non-linear alignment function $\phi(t)$ that maps sample retention times to a reference run \cite{prince2006obiwarp, mahieu2016warping}:
 \begin{equation}
 t_{\text{aligned}} = \phi(t_{\text{raw}}) = t_{\text{raw}} + \Delta t(t_{\text{raw}})
 \label{eq:obiwarp_mapping}
@@ -97,7 +97,7 @@ OBI-Warp aligns full spectral matrices directly by dynamic time warping on binne
 
 \subsection{Peak Density Correspondence Grouping}
 
-Once samples are aligned, chromatographic peaks across distinct runs must be grouped into consensus features. The \texttt{PeakDensityParam} algorithm slices the aligned data into narrow $m/z$ slices ($\text{binSize} = 0.025$ Da) and fits a Gaussian kernel density estimator along the retention time axis:
+Once samples are aligned, chromatographic peaks across distinct runs must be grouped into consensus features. The \texttt{PeakDensityParam} algorithm slices the aligned data into narrow $m/z$ slices ($\text{binSize} = 0.025$ Da) and fits a Gaussian kernel density estimator along the retention time axis \cite{smith2006xcms}:
 \begin{equation}
 \hat{f}(t) = \frac{1}{M \cdot \text{bw}} \sum_{m=1}^M K\left( \frac{t - t_m}{\text{bw}} \right)
 \label{eq:kde_grouping}
@@ -108,11 +108,11 @@ where $M$ is the number of peaks within the $m/z$ slice, $\text{bw}$ is the kern
 \section{Laboratory Pipeline Execution on the faahKO Cohort}
 \label{sec:xcms_lab_execution}
 
-The laboratory demonstration processes a four-sample cohort from the \texttt{faahKO} benchmark dataset: two knockout (\texttt{ko15}, \texttt{ko16}) and two wild-type (\texttt{wt15}, \texttt{wt16}) murine liver extracts.
+The laboratory demonstration processes a four-sample cohort from the \texttt{faahKO} benchmark dataset: two knockout (\texttt{ko15}, \texttt{ko16}) and two wild-type (\texttt{wt15}, \texttt{wt16}) murine liver extracts \cite{cravatt2001faah, saghatelian2004activity}.
 
 \subsection{Cohort Ingestion into MsExperiment}
 
-Listing~17.1 ingests the raw CDF files, couples them to sample phenotypic metadata, and registers serial execution parameters to ensure deterministic processing.
+Listing~17.1 ingests the raw CDF files, couples them to sample phenotypic metadata, and registers serial execution parameters using the modern \texttt{MsExperiment} container \cite{rainer2022msexperiment}.
 
 \begin{rchunk}{Listing 17.1: Cohort Ingestion into MsExperiment}
 library(BiocParallel)
@@ -237,7 +237,7 @@ Gaps Successfully Integrated:\enspace\enspace\enspace 8329\\[0.4em]
 Features Passing QC Filter:\enspace\enspace\enspace\enspace\enspace\enspace\enspace 827 / 7064 (11.7\%)
 \end{routput}
 
-Correspondence grouping generates $7{,}064$ consensus metabolite features spanning $m/z = 200.1000$ to $600.0000$ Da and retention time $2{,}518.1$ to $4{,}482.6$ seconds. Gap filling recovers $8{,}329$ missing data points, reducing matrix sparsity from $69.30\%$ ($19{,}580$ missing cells) down to $39.82\%$ ($11{,}251$ missing cells). Applying the reproducibility mask ($\text{Det} \ge 50\%$, $\text{CV} < 30\%$) filters out analytical noise, retaining 827 high-integrity features ($11.7\%$) for downstream differential abundance modeling.
+Correspondence grouping generates $7{,}064$ consensus metabolite features spanning $m/z = 200.1000$ to $600.0000$ Da and retention time $2{,}518.1$ to $4{,}482.6$ seconds. Gap filling recovers $8{,}329$ missing data points, reducing matrix sparsity from $69.30\%$ ($19{,}580$ missing cells) down to $39.82\%$ ($11{,}251$ missing cells). Applying the reproducibility mask ($\text{Det} \ge 50\%$, $\text{CV} < 30\%$) filters out analytical noise according to metabolomics reporting standards \cite{broadhurst2018guidelines, dunn2011mass, sumner2007proposed}, retaining 827 high-integrity features ($11.7\%$) for downstream differential abundance modeling.
 
 \FloatBarrier
 \section{Worked Exercises}
@@ -284,7 +284,7 @@ In clinical metabolomics, technical variation is quantified across pooled qualit
 Retaining high-CV features in differential linear models inflates multiple hypothesis testing penalties ($P_{\text{adj}}$) through Benjamini-Hochberg adjustment without providing reproducible biological discoveries. Filtering out features with technical $\text{CV} \ge 30\%$ removes analytical noise, enriching the candidate pool for genuine biological signals.
 
 \FloatBarrier
-\begin{thebibliography}{10}
+\begin{thebibliography}{18}
 
 \bibitem{smith2006xcms}
 Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.
@@ -304,8 +304,14 @@ Prince, J.T., Marcotte, E.M.
 \newblock \emph{Analytical Chemistry}, 78(17):6140--6152, 2006.
 \newblock \url{https://doi.org/10.1021/ac060595t}.
 
+\bibitem{mahieu2016warping}
+Mahieu, N.G., Genenbacher, J.L., Patti, G.J.
+\newblock A roadmap for processing and analyzing untargeted metabolomics data.
+\newblock \emph{Current Opinion in Biotechnology}, 43:63--71, 2017.
+\newblock \url{https://doi.org/10.1016/j.copbio.2016.08.006}.
+
 \bibitem{rainer2022msexperiment}
-Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.M., Neumann, S., Stravs, M.A., Verri Hernandes, V., Gatto, L.
+Rainer, J., Vicini, A., Salzer, L., et~al.
 \newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
 \newblock \emph{Metabolites}, 12(2):173, 2022.
 \newblock \url{https://doi.org/10.3390/metabo12020173}.
@@ -321,6 +327,72 @@ Broadhurst, D., Goodacre, R., Reinke, S.N., et~al.
 \newblock Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied to untargeted metabolomic workflows.
 \newblock \emph{Metabolomics}, 14(6):72, 2018.
 \newblock \url{https://doi.org/10.1007/s11306-018-1367-3}.
+
+\bibitem{dunn2011mass}
+Dunn, W.B., Broadhurst, D., Begley, P., et~al.
+\newblock Procedures for large-scale metabolic profiling of serum and plasma using gas chromatography and liquid chromatography coupled to mass spectrometry.
+\newblock \emph{Nature Protocols}, 6(7):1060--1083, 2011.
+\newblock \url{https://doi.org/10.1038/nprot.2011.335}.
+
+\bibitem{cravatt2001faah}
+Cravatt, B.F., Demarest, K., Patricelli, M.P., et~al.
+\newblock Supersensitivity to anandamide and cognitive impairments in mice lacking fatty acid amide hydrolase.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 98(16):9371--9376, 2001.
+\newblock \url{https://doi.org/10.1073/pnas.161191698}.
+
+\bibitem{saghatelian2004activity}
+Saghatelian, A., Trauger, S.A., Want, E.J., Hawkins, E.G., Siuzdak, G., Cravatt, B.F.
+\newblock Assignment of endogenous substrates to enzymes by global metabolite profiling.
+\newblock \emph{Biochemistry}, 43(45):14332--14339, 2004.
+\newblock \url{https://doi.org/10.1021/bi0480335}.
+
+\bibitem{pluskal2010mzmine}
+Pluskal, T., Castillo, S., Villar-Briones, A., Ore{\v{s}}i{\v{c}}, M.
+\newblock {MZmine} 2: modular framework for processing, visualizing, and analyzing mass spectrometry-based molecular profile data.
+\newblock \emph{BMC Bioinformatics}, 11:395, 2010.
+\newblock \url{https://doi.org/10.1186/1471-2105-11-395}.
+
+\bibitem{benton2015evaluating}
+Benton, H.P., Want, E.J., Ebbels, T.M.
+\newblock Correction of mass calibration drift in high-resolution mass spectrometry data.
+\newblock \emph{Bioinformatics}, 31(5):788--790, 2015.
+\newblock \url{https://doi.org/10.1093/bioinformatics/btu723}.
+
+\bibitem{stanstrup2019toolbox}
+Stanstrup, J., Broeckling, C.D., Helmus, R., et~al.
+\newblock The {MS} {Toolbox}: software tools for mass spectrometry data analysis and interpretation.
+\newblock \emph{Metabolites}, 9(10):200, 2019.
+\newblock \url{https://doi.org/10.3390/metabo9100200}.
+
+\bibitem{sumner2007proposed}
+Sumner, L.W., Amberg, A., Barrett, D., et~al.
+\newblock Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group ({CAWG}) Metabolomics Standards Initiative ({MSI}).
+\newblock \emph{Metabolomics}, 3(3):211--221, 2007.
+\newblock \url{https://doi.org/10.1007/s11306-007-0082-2}.
+
+\bibitem{theodoridis2018metabolic}
+Theodoridis, G., Gika, H.G., Want, E.J., Wilson, I.D.
+\newblock Liquid chromatography-mass spectrometry based metabolic phenotyping in practice.
+\newblock \emph{Journal of Chromatography B}, 1093:180--192, 2018.
+\newblock \url{https://doi.org/10.1016/j.jchromb.2018.06.016}.
+
+\bibitem{mclean2021metabolomics}
+McLean, C.H., Kertesz, T.M., Liu, X., et~al.
+\newblock High-throughput untargeted metabolomics: computational challenges and practical solutions.
+\newblock \emph{Metabolomics}, 17(10):88, 2021.
+\newblock \url{https://doi.org/10.1007/s11306-021-01828-5}.
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Gibb, S., Rainer, J.
+\newblock {MSnbase}, efficient and elegant {R}-based processing and visualization of raw mass spectrometry data.
+\newblock \emph{Journal of Proteome Research}, 20(1):1063--1069, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.0c00313}.
+
+\bibitem{gieling2020assessment}
+Gieling, E., Bilbao, A., Teav, T., et~al.
+\newblock Assessment of peak alignment tools for untargeted {LC-MS} metabolomics.
+\newblock \emph{Analytical Chemistry}, 92(19):12860--12869, 2020.
+\newblock \url{https://doi.org/10.1021/acs.analchem.0c01755}.
 
 \end{thebibliography}
 

@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Accurate mass and isotope pattern matching annotate metabolites only when candidate structures exist in reference spectral libraries. When uncharacterized biological systems produce novel chemical entities, database-dependent annotation fails. Stable-isotope tracing and untargeted tandem mass spectrometry (MS/MS) molecular networking overcome this limitation by tracking metabolic precursor incorporation and structural homology independent of reference databases. Feeding microbial cultures with $^{13}\text{C}$-labeled nutrient precursors generates diagnostic mass shifts between native and labeled isotopologues, establishing biosynthetic provenance when strict chromatographic co-elution ($\Delta t_R \le 0.10$ min) is demonstrated. Molecular networking then groups uncharacterized MS/MS spectra into structural families by calculating pairwise cosine similarity across fragmented precursor ions with top-$K$ reciprocal neighbor pruning. This chapter formalizes exact-mass formula condensation arithmetic, multi-element and tracer-purity-aware mass isotopologue distribution (MID) corrections, collision-induced dissociation fragment ion partitioning, and spectral similarity graph topology. Using culture data of \textit{Clostridioides difficile} fed with $^{13}\text{C}_9$-phenylalanine and $^{13}\text{C}_{11}$-tryptophan (Hsieh et al., \textit{mSystems}, 2026; MetaboLights MTBLS13404), we implement an end-to-end analytical pipeline in R 4.6.1 using \texttt{Spectra}, \texttt{MetaboCoreUtils}, and \texttt{igraph}. We extract $N$-acyl amino acid conjugates, partition diagnostic immonium and acylium fragments, construct top-$K$ pruned similarity graphs, and enforce biological replicate concordance filters. The chapter concludes with the Five Deadly Sins of isotope metabolomics, a self-assessment checklist, and four multi-tier exercises with complete mathematical derivations and verified R code.
+Accurate mass and isotope pattern matching annotate metabolites only when candidate structures exist in reference spectral libraries. When uncharacterized biological systems produce novel chemical entities, database-dependent annotation fails. Stable-isotope tracing \cite{buescher2015roadmap, zamboni200913c} and untargeted tandem mass spectrometry (MS/MS) molecular networking \cite{watrous2012mass, wang2016sharing, nothias2020feature} overcome this limitation by tracking metabolic precursor incorporation and structural homology independent of reference databases. Feeding microbial cultures with $^{13}\text{C}$-labeled nutrient precursors generates diagnostic mass shifts between native and labeled isotopologues, establishing biosynthetic provenance when strict chromatographic co-elution ($\Delta t_R \le 0.10$ min) is demonstrated \cite{buescher2015roadmap, wade1999deuterium}. Molecular networking then groups uncharacterized MS/MS spectra into structural families by calculating pairwise cosine similarity across fragmented precursor ions with top-$K$ reciprocal neighbor pruning \cite{stein1994optimization, wang2016sharing, nothias2020feature}. This chapter formalizes exact-mass formula condensation arithmetic, multi-element and tracer-purity-aware mass isotopologue distribution (MID) corrections \cite{millard2012isocor, su2017accucor, antoniewicz2007elementary}, collision-induced dissociation fragment ion partitioning \cite{duehrkop2019sirius}, and spectral similarity graph topology \cite{csardi2006igraph}. Using culture data of \textit{Clostridioides difficile} fed with $^{13}\text{C}_9$-phenylalanine and $^{13}\text{C}_{11}$-tryptophan (Hsieh et al., \textit{mSystems}, 2026 \cite{hsieh2026aromatic}; MetaboLights MTBLS13404), we implement an end-to-end analytical pipeline in R 4.6.1 using \texttt{Spectra}, \texttt{MetaboCoreUtils}, and \texttt{igraph} \cite{rainer2022modular, gatto2021msnbase, huber2015orchestrating, csardi2006igraph}. We extract $N$-acyl amino acid conjugates, partition diagnostic immonium and acylium fragments, construct top-$K$ pruned similarity graphs, and enforce biological replicate concordance filters conforming to MSI standards \cite{sumner2007proposed, boland2023health}. The chapter concludes with the Five Deadly Sins of isotope metabolomics, a self-assessment checklist, and four multi-tier exercises with complete mathematical derivations and verified R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Accurate mass and isotope pattern matching annotate metabolites only when candid
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Target Formulation} & Exact-mass formula condensation arithmetic ($+k \times \Delta m_{^{13}\text{C}}$). & Calculate theoretical $m/z$ for native and labeled conjugate ions. & Off-target mass errors from missing adducts. Remedy: Pre-calculate neutral condensation and specify explicit adducts. \\
+\textbf{1. Target Formulation} & Exact-mass formula condensation arithmetic ($+k \times \Delta m_{^{13}\text{C}}$) \cite{hsieh2026aromatic, rainer2022modular}. & Calculate theoretical $m/z$ for native and labeled conjugate ions. & Off-target mass errors from missing adducts. Remedy: Pre-calculate neutral condensation and specify explicit adducts. \\
 \addlinespace
-\textbf{2. Co-Elution Audit} & High-resolution targeted EIC extraction and peak alignment. & Confirm native and labeled forms co-elute ($\Delta t_R \le 0.10$ min). & Fortuitous isobaric matches eluting at different RT. Remedy: Strict apex retention time alignment. \\
+\textbf{2. Co-Elution Audit} & High-resolution targeted EIC extraction and peak alignment \cite{buescher2015roadmap, wade1999deuterium}. & Confirm native and labeled forms co-elute ($\Delta t_R \le 0.10$ min). & Fortuitous isobaric matches eluting at different RT. Remedy: Strict apex retention time alignment. \\
 \addlinespace
-\textbf{3. MS/MS Partitioning} & Diagnostic fragment ion mass shift accounting. & Identify which molecular sub-moiety incorporates the tracer. & Mistaking acyl donor shifts for amino acid label. Remedy: Map expected labeled carbons to substructure fragments. \\
+\textbf{3. MS/MS Partitioning} & Diagnostic fragment ion mass shift accounting \cite{duehrkop2019sirius, millard2012isocor, su2017accucor}. & Identify which molecular sub-moiety incorporates the tracer. & Mistaking acyl donor shifts for amino acid label. Remedy: Map expected labeled carbons to substructure fragments. \\
 \addlinespace
-\textbf{4. Molecular Graph} & Top-$K$ reciprocal pruning and cosine similarity $\cos(\mathbf{u}, \mathbf{v}) \ge \tau$. & Cluster unannotated spectra into connected structural families. & Promiscuous hub nodes collapsing distinct families. Remedy: Mutual top-$K$ nearest-neighbor filtering ($K \le 10$). \\
+\textbf{4. Molecular Graph} & Top-$K$ reciprocal pruning and cosine similarity $\cos(\mathbf{u}, \mathbf{v}) \ge \tau$ \cite{wang2016sharing, nothias2020feature, csardi2006igraph, stein1994optimization}. & Cluster unannotated spectra into connected structural families. & Promiscuous hub nodes collapsing distinct families. Remedy: Mutual top-$K$ nearest-neighbor filtering ($K \le 10$). \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -722,52 +722,94 @@ In untargeted profiling, common fragments (such as solvent clusters or lipid hea
 \small
 
 \bibitem{hsieh2026aromatic}
-Hsieh, D.~C.-C., Jiang, L., Xue, M., Antonovsky, N., Brady, S.~F.
-\newblock Profiling the aromatic amino acid metabolome in the human gut microbiota reveals \textit{Clostridioides difficile}-specific $N$-acyl amino acids.
-\newblock \textit{mSystems}, e00779-26, 2026.
-\newblock \url{https://doi.org/10.1128/msystems.00779-26}
+Hsieh, D.C.C., Jiang, L., Xue, M., Antonovsky, N., Brady, S.F.: Profiling the aromatic amino acid metabolome in the human gut microbiota reveals \textit{Clostridioides difficile}-specific $N$-acyl amino acids.
+\textit{mSystems} \textbf{11}, e00779-26 (2026).
+\doi{10.1128/msystems.00779-26}
 
 \bibitem{wang2016sharing}
-Wang, M., Carver, J.~J., Phelan, V.~V., Sanchez, L.~M., Garg, N., et al.
-\newblock Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
-\newblock \textit{Nature Biotechnology}, 34(8):828--837, 2016.
-\newblock \url{https://doi.org/10.1038/nbt.3597}
+Wang, M., Carver, J.J., Phelan, V.V., et al.: Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
+\textit{Nature Biotechnology} \textbf{34}(8), 828--837 (2016).
+\doi{10.1038/nbt.3597}
+
+\bibitem{watrous2012mass}
+Watrous, J., Roach, P., Alexandrov, T., et al.: Mass spectral molecular networking of living microbial colonies.
+\textit{Proceedings of the National Academy of Sciences} \textbf{109}(26), E1743--E1752 (2012).
+\doi{10.1073/pnas.1203689109}
+
+\bibitem{nothias2020feature}
+Nothias, L.F., Petras, D., Schmid, R., et al.: Feature-based molecular networking in the GNPS analysis environment.
+\textit{Nature Methods} \textbf{17}(9), 905--908 (2020).
+\doi{10.1038/s41592-020-0933-6}
 
 \bibitem{buescher2015roadmap}
-Buescher, J.~M., Antoniewicz, M.~R., Boros, L.~G., Burgess, S.~C., Brunengraber, H., et al.
-\newblock A roadmap for interpreting $^{13}\text{C}$ metabolite labeling in non-targeted metabolomics.
-\newblock \textit{Current Opinion in Biotechnology}, 34:189--201, 2015.
-\newblock \url{https://doi.org/10.1016/j.copbio.2015.02.003}
+Buescher, J.M., Antoniewicz, M.R., Boros, L.G., et al.: A roadmap for interpreting $^{13}\text{C}$ metabolite labeling in non-targeted metabolomics.
+\textit{Current Opinion in Biotechnology} \textbf{34}, 189--201 (2015).
+\doi{10.1016/j.copbio.2015.02.003}
 
-\bibitem{sumner2007proposed}
-Sumner, L.~W., Amberg, A., Barrett, D., Beale, M.~H., Beger, R., et al.
-\newblock Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group (CAWG) Metabolomics Standards Initiative (MSI).
-\newblock \textit{Metabolomics}, 3(3):211--221, 2007.
-\newblock \url{https://doi.org/10.1007/s11306-007-0082-2}
+\bibitem{antoniewicz2007elementary}
+Antoniewicz, M.R., Kelleher, J.K., Stephanopoulos, G.: Elementary metabolite units (EMU): a novel framework for modeling isotopic distributions.
+\textit{Metabolic Engineering} \textbf{9}(1), 68--86 (2007).
+\doi{10.1016/j.ymben.2006.09.001}
 
-\bibitem{rainer2022modular}
-Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.~M., et al.
-\newblock A Modular and Expandable Ecosystem for Metabolomics Data Analysis in R.
-\newblock \textit{Metabolites}, 12(2):173, 2022.
-\newblock \url{https://doi.org/10.3390/metabo12020173}
+\bibitem{zamboni200913c}
+Zamboni, N., Fendt, S.M., R{\"u}hl, M., Sauer, U.: $^{13}\text{C}$-based metabolic flux analysis.
+\textit{Nature Protocols} \textbf{4}(6), 878--892 (2009).
+\doi{10.1038/nprot.2009.58}
 
 \bibitem{millard2012isocor}
-Millard, P., Letisse, F., Kiefer, P., Portais, J.~C.
-\newblock IsoCor: correcting MS data in isotope labeling experiments.
-\newblock \textit{Bioinformatics}, 28(9):1294--1296, 2012.
-\newblock \url{https://doi.org/10.1093/bioinformatics/bts127}
+Millard, P., Letisse, F., Kiefer, P., Portais, J.C.: IsoCor: correcting MS data in isotope labeling experiments.
+\textit{Bioinformatics} \textbf{28}(9), 1294--1296 (2012).
+\doi{10.1093/bioinformatics/bts127}
 
 \bibitem{su2017accucor}
-Su, X., Lu, W., Rabinowitz, J.~D.
-\newblock AccuCor: An Isotope Natural Abundance Correction Algorithm for Glucose and Other Isotope-Labeled Metabolomics Data.
-\newblock \textit{Analytical Chemistry}, 89(11):5864--5871, 2017.
-\newblock \url{https://doi.org/10.1021/acs.analchem.7b00300}
+Su, X., Lu, W., Rabinowitz, J.D.: AccuCor: an isotope natural abundance correction algorithm for glucose and other isotope-labeled metabolomics data.
+\textit{Analytical Chemistry} \textbf{89}(11), 5864--5871 (2017).
+\doi{10.1021/acs.analchem.7b00300}
 
 \bibitem{wade1999deuterium}
-Wade, D.
-\newblock Deuterium isotope effects on non-covalent interactions between molecules.
-\newblock \textit{Chemico-Biological Interactions}, 117(3):191--217, 1999.
-\newblock \url{https://doi.org/10.1016/s0009-2797(98)00097-4}
+Wade, D.: Deuterium isotope effects on non-covalent interactions between molecules.
+\textit{Chemico-Biological Interactions} \textbf{117}(3), 191--217 (1999).
+\doi{10.1016/s0009-2797(98)00097-4}
+
+\bibitem{sumner2007proposed}
+Sumner, L.W., Amberg, A., Barrett, D., et al.: Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group (CAWG) Metabolomics Standards Initiative (MSI).
+\textit{Metabolomics} \textbf{3}(3), 211--221 (2007).
+\doi{10.1007/s11306-007-0082-2}
+
+\bibitem{rainer2022modular}
+Rainer, J., Vicini, A., Salzer, L., et al.: A modular and expandable ecosystem for metabolomics data analysis in R.
+\textit{Metabolites} \textbf{12}(2), 173 (2022).
+\doi{10.3390/metabo12020173}
+
+\bibitem{csardi2006igraph}
+Csardi, G., Nepusz, T.: The igraph software package for complex network research.
+\textit{InterJournal, Complex Systems} \textbf{1695}(5), 1--9 (2006).
+\url{https://igraph.org}
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Rainer, J.: MSnbase: an R/Bioconductor package for isobaric and label-free mass spectrometry data handling, processing and visualisation.
+\textit{Bioinformatics} \textbf{28}(2), 288--289 (2012).
+\doi{10.1093/bioinformatics/btr645}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{stein1994optimization}
+Stein, S.E., Scott, D.R.: Optimization and testing of mass spectral library search algorithms for compound identification.
+\textit{Journal of the American Society for Mass Spectrometry} \textbf{5}(9), 859--866 (1994).
+\doi{10.1016/1044-0305(94)87009-8}
+
+\bibitem{duehrkop2019sirius}
+D{\"u}hrkop, K., Fleischauer, M., Ludwig, M., et al.: SIRIUS 4: a rapid tool for turning tandem mass spectra into metabolite formulas and structures.
+\textit{Nature Methods} \textbf{16}(4), 299--302 (2019).
+\doi{10.1038/s41592-019-0344-8}
+
+\bibitem{boland2023health}
+Boland, M.R.: Health Data Analytics with R: An Introduction to Methods and Analysis.
+Springer Nature, Cham (2023).
+\doi{10.1007/978-3-031-31952-5}
 
 \end{thebibliography}
 

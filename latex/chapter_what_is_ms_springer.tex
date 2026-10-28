@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Mass spectrometers operate as physical sensors that convert gas-phase ions into digitized mass-to-charge ratios ($m/z$) and ion-current intensities. Neutral molecules cannot be detected directly; they must acquire electric charge through electron ionization (EI), electrospray ionization (ESI), or matrix-assisted laser desorption/ionization (MALDI). Because the instrument measures $m/z$ rather than uncharged mass, molecular identity must be derived by deconvoluting integer charge states ($z$) from isotopic peak spacing. Instrument mass analyzers---quadrupoles, time-of-flight (TOF), and Orbitraps---differ by orders of magnitude in resolving power and mass accuracy, setting physical boundaries on isobaric separation. Furthermore, the choice of acquisition strategy governs data completeness: data-dependent acquisition (DDA) introduces stochastic missingness through top-$N$ precursor selection, whereas data-independent acquisition (DIA) captures multiplexed fragmentation arrays at the expense of computational deconvolution. This chapter presents the physical governing equations, charge deconvolution algorithms, resolving power thresholds, and matrix suppression kinetics that define mass spectrometry data structures in R 4.6.1.
+Mass spectrometers operate as physical sensors that convert gas-phase ions into digitized mass-to-charge ratios ($m/z$) and ion-current intensities. Neutral molecules cannot be detected directly; they must acquire electric charge through electron ionization (EI), electrospray ionization (ESI) \cite{fenn1989electrospray}, or matrix-assisted laser desorption/ionization (MALDI) \cite{karas1988laser}. Because the instrument measures $m/z$ rather than uncharged mass, molecular identity must be derived by deconvoluting integer charge states ($z$) from isotopic peak spacing. Instrument mass analyzers---quadrupoles \cite{paul1990electromagnetic}, time-of-flight (TOF) \cite{guilhaus1995principles}, and Orbitraps \cite{makarov2000orbitrap, marshall1998fourier}---differ by orders of magnitude in resolving power and mass accuracy \cite{zubarev2007persistent, gross2017mass}, setting physical boundaries on isobaric separation. Furthermore, the choice of acquisition strategy governs data completeness: data-dependent acquisition (DDA) introduces stochastic missingness through top-$N$ precursor selection \cite{domon2010options, michalski2011more}, whereas data-independent acquisition (DIA) captures multiplexed fragmentation arrays at the expense of computational deconvolution \cite{gillet2012targeted, venable2004automated, demichev2020dia}. This chapter presents the physical governing equations, charge deconvolution algorithms, resolving power thresholds, and matrix suppression kinetics that define mass spectrometry data structures in R 4.6.1 \cite{domon2006ms, gross2017mass}.
 \end{abstract}
 
 \vspace{1em}
@@ -41,15 +41,15 @@ Table~\ref{tab:ms_physics_roadmap} outlines the physical principles and analytic
 \toprule
 \textbf{Physical Domain} & \textbf{Instrument Mechanism} & \textbf{Mathematical Formulation} & \textbf{Data Structure Impact} \\
 \midrule
-\textbf{1. Ionization} & Gas-phase charging (ESI/MALDI) & $m/z = (M + z \cdot m_{\text{proton}})/z$ & Multi-charge envelopes \\
+\textbf{1. Ionization} & Gas-phase charging (ESI/MALDI) \cite{fenn1989electrospray, karas1988laser} & $m/z = (M + z \cdot m_{\text{proton}})/z$ & Multi-charge envelopes \\
 \addlinespace
-\textbf{2. Analyzer} & Trajectory dispersion in fields & $R = m / \Delta m_{\text{FWHM}}$ & Peak width and ppm error \\
+\textbf{2. Analyzer} & Trajectory dispersion in fields \cite{makarov2000orbitrap, guilhaus1995principles} & $R = m / \Delta m_{\text{FWHM}}$ \cite{zubarev2007persistent} & Peak width and ppm error \\
 \addlinespace
-\textbf{3. Acquisition} & DDA stochastic precursor selection & Top-$N$ instantaneous intensity rank & Stochastic missingness \\
+\textbf{3. Acquisition} & DDA stochastic precursor selection \cite{michalski2011more} & Top-$N$ instantaneous intensity rank \cite{domon2010options} & Stochastic missingness \\
 \addlinespace
-\textbf{4. Multiplexing} & DIA windowed fragmentation & Swath stepping $\Delta m = 20$--$25$ Da & Chimeric fragment arrays \\
+\textbf{4. Multiplexing} & DIA windowed fragmentation \cite{gillet2012targeted} & Swath stepping $\Delta m = 20$--$25$ Da & Chimeric fragment arrays \cite{demichev2020dia} \\
 \addlinespace
-\textbf{5. Matrix Effect} & Droplet evaporation competition & $I_{\text{obs}} = S(t) \cdot k \cdot C_{\text{analyte}}$ & Ion suppression loss \\
+\textbf{5. Matrix Effect} & Droplet evaporation competition \cite{king2000mechanisms} & $I_{\text{obs}} = S(t) \cdot k \cdot C_{\text{analyte}}$ & Ion suppression loss \cite{annesley2003ion} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -64,15 +64,15 @@ A mass spectrometer measures the dimensionless ratio $m/z$, not molecular mass. 
 \label{sec:mz_measurement}
 % =============================================================================
 
-Electric and magnetic fields manipulate charged particles according to the Lorentz force:
+Electric and magnetic fields manipulate charged particles according to the Lorentz force \cite{gross2017mass, paul1990electromagnetic}:
 \begin{equation}
 \mathbf{F} = q(\mathbf{E} + \mathbf{v} \times \mathbf{B})
 \end{equation}
-Because acceleration $\mathbf{a} = \mathbf{F}/m$ depends directly on the ratio of charge to inertial mass ($q/m$), mass spectrometers separate ions by their mass-to-charge ratio ($m/z$).
+Because acceleration $\mathbf{a} = \mathbf{F}/m$ depends directly on the ratio of charge to inertial mass ($q/m$), mass spectrometers separate ions by their mass-to-charge ratio ($m/z$) \cite{domon2006ms}.
 
 \subsection{Charge State Determination from Carbon-13 Isotope Spacing}
 
-In organic molecules, naturally occurring carbon contains approximately $98.93\%$ $^{12}\text{C}$ and $1.07\%$ $^{13}\text{C}$. The mass difference between a $^{13}\text{C}$ atom and a $^{12}\text{C}$ atom is:
+In organic molecules, naturally occurring carbon contains approximately $98.93\%$ $^{12}\text{C}$ and $1.07\%$ $^{13}\text{C}$ \cite{gross2017mass}. The mass difference between a $^{13}\text{C}$ atom and a $^{12}\text{C}$ atom is:
 \begin{equation}
 \Delta m_{^{13}\text{C} - ^{12}\text{C}} = 1.003355\;\text{Da}
 \end{equation}
@@ -90,11 +90,11 @@ M_{\text{neutral}} = z \cdot (m/z)_{\text{obs}} - z \cdot m_{\text{proton}}
 \label{sec:resolving_power}
 % =============================================================================
 
-Two orthogonal metrics define mass analyzer performance: resolving power ($R$) and mass measurement accuracy ($\delta_{\text{ppm}}$).
+Two orthogonal metrics define mass analyzer performance: resolving power ($R$) and mass measurement accuracy ($\delta_{\text{ppm}}$) \cite{zubarev2007persistent, makarov2000orbitrap, marshall1998fourier}.
 
 \subsection{Resolving Power Definition}
 
-The mass resolving power $R$ describes the ability of an analyzer to separate adjacent spectral peaks of equal intensity. Under the Full Width at Half Maximum (FWHM) convention:
+The mass resolving power $R$ describes the ability of an analyzer to separate adjacent spectral peaks of equal intensity. Under the Full Width at Half Maximum (FWHM) convention \cite{zubarev2007persistent}:
 \begin{equation}
 R = \frac{m}{\Delta m_{\text{FWHM}}} \implies \Delta m_{\text{FWHM}} = \frac{m}{R}
 \end{equation}
@@ -116,35 +116,35 @@ High-resolution analyzers operate at tolerances $|\delta_{\text{ppm}}| \le 5.0$ 
 \label{sec:dda_vs_dia}
 % =============================================================================
 
-Untargeted mass spectrometry operates under two distinct tandem acquisition regimes:
+Untargeted mass spectrometry operates under two distinct tandem acquisition regimes \cite{domon2010options}:
 
 \subsection{Data-Dependent Acquisition (DDA)}
 
-In DDA, each duty cycle begins with an MS1 survey scan. The instrument firmware identifies the $N$ most abundant precursor peaks (Top-$N$ protocol), isolates each ion sequentially using a narrow quadrupole transmission window ($\approx 1.0$--$1.5$ Da), fragments it via collision-induced dissociation (CID) or higher-energy collisional dissociation (HCD), and records clean, single-precursor fragment spectra.
+In DDA, each duty cycle begins with an MS1 survey scan \cite{michalski2011more}. The instrument firmware identifies the $N$ most abundant precursor peaks (Top-$N$ protocol), isolates each ion sequentially using a narrow quadrupole transmission window ($\approx 1.0$--$1.5$ Da), fragments it via collision-induced dissociation (CID) or higher-energy collisional dissociation (HCD), and records clean, single-precursor fragment spectra.
 
 \noindent\textbf{Analytical Implication:}\enspace Because complex proteomes contain hundreds of co-eluting peptides per second, Top-$N$ selection is stochastic. Lower-abundance precursors hover near the detection threshold; Poisson ion-arrival statistics determine whether a peptide is fragmented in a given run, creating stochastic missingness across cohort runs.
 
 \subsection{Data-Independent Acquisition (DIA)}
 
-In DIA, the instrument disregards instantaneous precursor intensities. Instead, it systematically steps through a series of wide precursor isolation windows ($\Delta m = 20$--$25$ Da) spanning the entire mass range. All ions within each window are fragmented simultaneously.
+In DIA, the instrument disregards instantaneous precursor intensities \cite{gillet2012targeted, venable2004automated}. Instead, it systematically steps through a series of wide precursor isolation windows ($\Delta m = 20$--$25$ Da) spanning the entire mass range. All ions within each window are fragmented simultaneously.
 
-\noindent\textbf{Analytical Implication:}\enspace DIA provides $100\%$ acquisition completeness across all runs. However, the resulting MS2 spectra are multiplexed mixtures of fragments from dozens of co-isolated precursors. Identification requires matched spectral libraries and algorithmic deconvolution (e.g., DIA-NN, Spectronaut).
+\noindent\textbf{Analytical Implication:}\enspace DIA provides $100\%$ acquisition completeness across all runs. However, the resulting MS2 spectra are multiplexed mixtures of fragments from dozens of co-isolated precursors. Identification requires matched spectral libraries and algorithmic deconvolution (e.g., DIA-NN \cite{demichev2020dia}, Spectronaut).
 
 % =============================================================================
 \section{Matrix Effects and Ion Suppression}
 \label{sec:ion_suppression}
 % =============================================================================
 
-In electrospray ionization (ESI), charged droplets formed at atmospheric pressure undergo solvent evaporation and Coulomb fission. Co-eluting non-volatile salts, phospholipids, or polymer contaminants compete with target analytes for droplet surface access and available charge.
+In electrospray ionization (ESI), charged droplets formed at atmospheric pressure undergo solvent evaporation and Coulomb fission \cite{fenn1989electrospray, king2000mechanisms}. Co-eluting non-volatile salts, phospholipids, or polymer contaminants compete with target analytes for droplet surface access and available charge.
 
-This competition attenuates analyte ionization by an empirical suppression factor $S(t) \in [0, 1]$:
+This competition attenuates analyte ionization by an empirical suppression factor $S(t) \in [0, 1]$ \cite{matuszewski2003strategies, annesley2003ion}:
 \begin{equation}
 I_{\text{obs}}(t) = S(t) \cdot k \cdot C_{\text{analyte}}
 \end{equation}
 Severe suppression causes signals to drop below the limit of detection, generating Missing Not At Random (MNAR) patterns.
 
 \noindent\textbf{Correction via Stable Isotope Standards:}\enspace
-Spiking a stable isotope-labeled (SIL) internal standard corrects this distortion. Because the SIL analog co-elutes with the native analyte, both experience the identical suppression factor $S(t)$:
+Spiking a stable isotope-labeled (SIL) internal standard corrects this distortion \cite{ong2002stable}. Because the SIL analog co-elutes with the native analyte, both experience the identical suppression factor $S(t)$:
 \begin{equation}
 \frac{I_{\text{analyte}}}{I_{\text{SIL}}} = \frac{S(t) \cdot k \cdot C_{\text{analyte}}}{S(t) \cdot k \cdot C_{\text{SIL}}} = \frac{C_{\text{analyte}}}{C_{\text{SIL}}}
 \end{equation}
@@ -413,8 +413,19 @@ Computing the signal ratio:
 The suppression coefficient $0.40$ and instrument factor $k$ cancel algebraically, preserving linear calibration accuracy.
 
 % =============================================================================
-\begin{thebibliography}{10}
-% =============================================================================
+\begin{thebibliography}{99}
+
+\bibitem{fenn1989electrospray}
+Fenn, J.B., Mann, M., Meng, C.K., Wong, S.F., Whitehouse, C.M.:
+\newblock Electrospray ionization for mass spectrometry of large biomolecules.
+\newblock \emph{Science} \textbf{246}(4926), 64--71 (1989).
+\newblock \doi{10.1126/science.246.4926.64}
+
+\bibitem{karas1988laser}
+Karas, M., Hillenkamp, F.:
+\newblock Laser desorption ionization of proteins with molecular masses exceeding 10,000 daltons.
+\newblock \emph{Analytical Chemistry} \textbf{60}(20), 2299--2301 (1988).
+\newblock \doi{10.1021/ac00171a028}
 
 \bibitem{gross2017mass}
 Gross, J.H.:
@@ -428,11 +439,11 @@ Domon, B., Aebersold, R.:
 \newblock \emph{Science} \textbf{312}(5771), 212--217 (2006).
 \newblock \doi{10.1126/science.1124619}
 
-\bibitem{domon2010options}
-Domon, B., Aebersold, R.:
-\newblock Options and considerations when selecting a quantitative proteomics strategy.
-\newblock \emph{Nature Biotechnology} \textbf{28}(7), 710--721 (2010).
-\newblock \doi{10.1038/nbt.1661}
+\bibitem{makarov2000orbitrap}
+Makarov, A.:
+\newblock Electrostatic axially harmonic orbital trapping: a high-performance technique of mass analysis.
+\newblock \emph{Analytical Chemistry} \textbf{72}(6), 1156--1162 (2000).
+\newblock \doi{10.1021/ac991131p}
 
 \bibitem{marshall1998fourier}
 Marshall, A.G., Hendrickson, C.L., Jackson, G.S.:
@@ -440,11 +451,77 @@ Marshall, A.G., Hendrickson, C.L., Jackson, G.S.:
 \newblock \emph{Mass Spectrometry Reviews} \textbf{17}(1), 1--35 (1998).
 \newblock \doi{10.1002/(SICI)1098-2787(1998)17:1<1::AID-MAS1>3.0.CO;2-K}
 
-\bibitem{makarov2000orbitrap}
-Makarov, A.:
-\newblock Electrostatic axially harmonic orbital trapping: a high-performance technique of mass analysis.
-\newblock \emph{Analytical Chemistry} \textbf{72}(6), 1156--1162 (2000).
-\newblock \doi{10.1021/ac991131p}
+\bibitem{paul1990electromagnetic}
+Paul, W.:
+\newblock Electromagnetic traps for charged particles.
+\newblock \emph{Reviews of Modern Physics} \textbf{62}(3), 531--540 (1990).
+\newblock \doi{10.1103/RevModPhys.62.531}
+
+\bibitem{guilhaus1995principles}
+Guilhaus, M.:
+\newblock Principles and instrumentation in time-of-flight mass spectrometry. Special feature: tutorial.
+\newblock \emph{Journal of Mass Spectrometry} \textbf{30}(11), 1519--1532 (1995).
+\newblock \doi{10.1002/jms.1190301102}
+
+\bibitem{zubarev2007persistent}
+Zubarev, R., Mann, M.:
+\newblock On the proper use of the terms mass resolution and mass resolving power.
+\newblock \emph{Analytical Chemistry} \textbf{79}(20), 7937--7937 (2007).
+\newblock \doi{10.1021/ac072023d}
+
+\bibitem{domon2010options}
+Domon, B., Aebersold, R.:
+\newblock Options and considerations when selecting a quantitative proteomics strategy.
+\newblock \emph{Nature Biotechnology} \textbf{28}(7), 710--721 (2010).
+\newblock \doi{10.1038/nbt.1661}
+
+\bibitem{michalski2011more}
+Michalski, A., Cox, J., Mann, M.:
+\newblock More than 100,000 detectable peptide features and more than 10,000 identified proteins in a single analysis of the human proteome.
+\newblock \emph{Journal of Proteome Research} \textbf{10}(4), 1785--1793 (2011).
+\newblock \doi{10.1021/pr101065u}
+
+\bibitem{gillet2012targeted}
+Gillet, L.C., Navarro, P., Tate, S., et~al.:
+\newblock Targeted data extraction of the {MS/MS} spectra generated by data-independent acquisition: a new concept for consistent and accurate proteome analysis.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{11}(6), O111.016717 (2012).
+\newblock \doi{10.1074/mcp.O111.016717}
+
+\bibitem{venable2004automated}
+Venable, J.D., Dong, M.Q., Wohlschlegel, J., Dillin, A., Yates, J.R.:
+\newblock Automated approach for quantitative analysis of complex peptide mixtures from tandem mass spectra.
+\newblock \emph{Nature Methods} \textbf{1}(1), 39--45 (2004).
+\newblock \doi{10.1038/nmeth705}
+
+\bibitem{demichev2020dia}
+Demichev, V., Messner, C.B., Vernardis, S.I., Lilley, K.S., Ralser, M.:
+\newblock {DIA-NN}: neural networks and interference correction enable deep proteome coverage in high throughput.
+\newblock \emph{Nature Methods} \textbf{17}(1), 41--44 (2020).
+\newblock \doi{10.1038/s41592-019-0638-x}
+
+\bibitem{king2000mechanisms}
+King, R., Bonfiglio, R., Fernandez-Metzler, C., Miller-Stein, C., Olah, T.:
+\newblock Mechanisms of matrix effects in electrospray ionization {LC-MS}.
+\newblock \emph{Journal of the American Society for Mass Spectrometry} \textbf{11}(11), 942--950 (2000).
+\newblock \doi{10.1016/S1044-0305(00)00163-X}
+
+\bibitem{matuszewski2003strategies}
+Matuszewski, B.K., Constanzer, M.L., Chavez-Eng, C.M.:
+\newblock Strategies for the assessment of matrix effect in quantitative bioanalytical methods based on {HPLC-MS/MS}.
+\newblock \emph{Analytical Chemistry} \textbf{75}(13), 3019--3030 (2003).
+\newblock \doi{10.1021/ac020361s}
+
+\bibitem{annesley2003ion}
+Annesley, T.M.:
+\newblock Ion suppression in mass spectrometry.
+\newblock \emph{Clinical Chemistry} \textbf{49}(7), 1041--1044 (2003).
+\newblock \doi{10.1373/49.7.1041}
+
+\bibitem{ong2002stable}
+Ong, S.E., Blagoev, B., Kratchmarova, I., et~al.:
+\newblock Stable isotope labeling by amino acids in cell culture, {SILAC}, as a simple and accurate approach to expression proteomics.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{1}(5), 376--386 (2002).
+\newblock \doi{10.1074/mcp.M200025-MCP200}
 
 \end{thebibliography}
 

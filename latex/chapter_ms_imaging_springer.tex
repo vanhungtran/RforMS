@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Mass spectrometry imaging (MSI) incorporates spatial coordinates into mass spectrometry, recording full mass spectra across two-dimensional tissue sections or three-dimensional organ volumes. Unlike liquid chromatography--mass spectrometry (LC-MS), which averages cellular heterogeneity across bulk homogenates, MSI preserves the anatomical localization of metabolites, lipids, and peptides. However, the resulting three-dimensional data cube $(x, y, m/z)$ introduces severe computational and statistical challenges. Neighboring pixels exhibit strong positive spatial autocorrelation, directly violating the independence assumptions of classical statistical tests. Furthermore, raw data formats split metadata and binary arrays across linked \texttt{.imzML} and \texttt{.ibd} file pairs, requiring memory-efficient streaming architectures. This chapter establishes the biophysical foundations, data models, and computational workflows for mass spectrometry imaging using Bioconductor's \texttt{Cardinal} ecosystem. We formalize the spatial data cube, derive Moran's $I$ index of spatial autocorrelation, and calculate the effective biological sample size under spatial dependence. We dissect the preprocessing pipeline---total ion current (TIC) normalization, local minimum baseline reduction, and mass binning---and examine spatially regularized unsupervised learning via Spatial Principal Component Analysis and spatial shrunken centroids segmentation. Following the hands-on data analytics pedagogy \cite{boland2023health}, the chapter concludes with an executable R laboratory based on DESI-MS imaging, the Five Deadly Sins of spatial mass spectrometry, a self-assessment checklist, and multi-tier exercises with worked solutions.
+Mass spectrometry imaging (MSI) incorporates spatial coordinates into mass spectrometry, recording full mass spectra across two-dimensional tissue sections or three-dimensional organ volumes \cite{caprioli1997molecular, norris2013mass, mcdonnell2014mass}. Unlike liquid chromatography--mass spectrometry (LC-MS), which averages cellular heterogeneity across bulk homogenates, MSI preserves the anatomical localization of metabolites, lipids, and peptides \cite{alexandrov2012spatial, veselkov2014chemo}. However, the resulting three-dimensional data cube $(x, y, m/z)$ introduces severe computational and statistical challenges. Neighboring pixels exhibit strong positive spatial autocorrelation \cite{tobler1970computer, moran1950notes}, directly violating the independence assumptions of classical statistical tests. Furthermore, raw data formats split metadata and binary arrays across linked \texttt{.imzML} and \texttt{.ibd} file pairs \cite{schramm2012imputing}, requiring memory-efficient streaming architectures. This chapter establishes the biophysical foundations, data models, and computational workflows for mass spectrometry imaging using Bioconductor's \texttt{Cardinal} ecosystem \cite{bemis2015cardinal, bemis2023cardinal, huber2015orchestrating}. We formalize the spatial data cube, derive Moran's $I$ index of spatial autocorrelation \cite{moran1950notes}, and calculate the effective biological sample size under spatial dependence \cite{cressie1993statistics}. We dissect the preprocessing pipeline---total ion current (TIC) normalization, local minimum baseline reduction, and mass binning \cite{deininger2011matrix, palmer2017fdr}---and examine spatially regularized unsupervised learning via Spatial Principal Component Analysis and spatial shrunken centroids segmentation \cite{tibshirani2002diagnosis, bemis2015cardinal}. Following the hands-on data analytics pedagogy \cite{boland2023health}, the chapter concludes with an executable R laboratory based on DESI-MS imaging \cite{takats2004mass}, the Five Deadly Sins of spatial mass spectrometry, a self-assessment checklist, and multi-tier exercises with worked solutions.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Mass spectrometry imaging (MSI) incorporates spatial coordinates into mass spect
 \toprule
 \textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Container I/O} & Coordinate-indexed binary arrays; linked \texttt{.imzML} (XML) and \texttt{.ibd} (binary) pair. & Stream spectral arrays into memory-efficient \texttt{MSImagingExperiment} objects. & Breaking file links by renaming \texttt{.imzML} without \texttt{.ibd}. Remedy: Retain paired files in identical directories. \\
+\textbf{1. Container I/O} & Coordinate-indexed binary arrays; linked \texttt{.imzML} (XML) and \texttt{.ibd} (binary) pair \cite{schramm2012imputing, bemis2015cardinal, huber2015orchestrating}. & Stream spectral arrays into memory-efficient \texttt{MSImagingExperiment} objects. & Breaking file links by renaming \texttt{.imzML} without \texttt{.ibd}. Remedy: Retain paired files in identical directories. \\
 \addlinespace
-\textbf{2. Spatial Preprocessing} & Heterogeneous section thickness, matrix crystallization, and baseline drift. & Apply Total Ion Current (TIC) normalization and local-minimum baseline correction. & Unnormalized pixel intensities confounding tissue histology. Remedy: Pixel-wise TIC normalization before peak extraction. \\
+\textbf{2. Spatial Preprocessing} & Heterogeneous section thickness, matrix crystallization, and baseline drift \cite{deininger2011matrix, palmer2017fdr}. & Apply Total Ion Current (TIC) normalization and local-minimum baseline correction. & Unnormalized pixel intensities confounding tissue histology. Remedy: Pixel-wise TIC normalization before peak extraction. \\
 \addlinespace
-\textbf{3. Spatial Autocorrelation} & Diffusion and tissue continuity; Tobler's first law of geography. & Audit spatial dependence via Moran's $I$ and Cressie's effective sample size $N_{\text{eff}}$. & Pixel pseudoreplication: running independent $t$-tests across pixels. Remedy: Region-of-Interest (ROI) summarization at subject level. \\
+\textbf{3. Spatial Autocorrelation} & Diffusion and tissue continuity; Tobler's first law of geography \cite{tobler1970computer, moran1950notes}. & Audit spatial dependence via Moran's $I$ and Cressie's effective sample size $N_{\text{eff}}$ \cite{cressie1993statistics}. & Pixel pseudoreplication: running independent $t$-tests across pixels. Remedy: Region-of-Interest (ROI) summarization at subject level. \\
 \addlinespace
-\textbf{4. Molecular Segmentation} & Anatomical tissue compartmentalization and co-localized molecular pathways. & Segment distinct anatomical regions using spatial shrunken centroids ($r, k$). & Over-smoothing fine boundaries ($r$ too large). Remedy: Cross-validation selection of regularization radius $r$. \\
+\textbf{4. Molecular Segmentation} & Anatomical tissue compartmentalization and co-localized molecular pathways \cite{tibshirani2002diagnosis, bemis2015cardinal}. & Segment distinct anatomical regions using spatial shrunken centroids ($r, k$) \cite{bemis2023cardinal}. & Over-smoothing fine boundaries ($r$ too large). Remedy: Cross-validation selection of regularization radius $r$. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -596,33 +596,96 @@ As demonstrated in Listing~27.6:
 % =============================================================================
 
 \begin{thebibliography}{99}
+\small
 
-\bibitem{bemis2015cardinal}
-Bemis, K.~D., et al. (2015). Cardinal: an R package for statistical analysis of mass spectrometry-based imaging experiments. \textit{Bioinformatics}, 31(14), 2418--2420. \doi{10.1093/bioinformatics/btv146}.
-
-\bibitem{bemis2023cardinal}
-Bemis, K.~D., \& Vitek, O. (2023). Mass spectrometry imaging data analysis with Cardinal 3. \textit{Bioconductor Documentation}, \url{https://bioconductor.org/packages/Cardinal/}.
-
-\bibitem{boland2023health}
-Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
-
-\bibitem{cressie1993statistics}
-Cressie, N.~A. (1993). \textit{Statistics for Spatial Data}. Revised Edition. John Wiley \& Sons.
-
-\bibitem{moran1950notes}
-Moran, P.~A. (1950). Notes on continuous stochastic phenomena. \textit{Biometrika}, 37(1/2), 17--23. \doi{10.2307/2332142}.
+\bibitem{caprioli1997molecular}
+Caprioli, R.M., Farmer, T.B., Gile, J.: Molecular imaging of biological samples on surfaces using mass spectrometry.
+\textit{Analytical Chemistry} \textbf{69}(23), 4751--4760 (1997).
+\doi{10.1021/ac970888i}
 
 \bibitem{norris2013mass}
-Norris, J.~L., \& Caprioli, R.~M. (2013). Analysis of tissue by matrix-assisted laser desorption/ionization imaging mass spectrometry: a review. \textit{Chemical Reviews}, 113(4), 2309--2342. \doi{10.1021/cr3004295}.
+Norris, J.L., Caprioli, R.M.: Analysis of tissue by matrix-assisted laser desorption/ionization imaging mass spectrometry: a review.
+\textit{Chemical Reviews} \textbf{113}(4), 2309--2342 (2013).
+\doi{10.1021/cr3004295}
 
-\bibitem{schramm2012imputing}
-Schramm, T., et al. (2012). imzML---a common data format for the flexible exchange and processing of mass spectrometry imaging data. \textit{Journal of Proteomics}, 75(16), 5106--5110. \doi{10.1016/j.jprot.2012.07.026}.
+\bibitem{mcdonnell2014mass}
+McDonnell, L.A., Heeren, R.M.: Imaging mass spectrometry.
+\textit{Mass Spectrometry Reviews} \textbf{26}(4), 606--643 (2007).
+\doi{10.1002/mas.20124}
 
 \bibitem{takats2004mass}
-Tak{\'a}ts, Z., Wiseman, J.~M., Gologan, B., \& Cooks, R.~G. (2004). Mass spectrometry sampling under ambient conditions with desorption electrospray ionization. \textit{Science}, 306(5695), 471--473. \doi{10.1126/science.1104404}.
+Tak{\'a}ts, Z., Wiseman, J.M., Gologan, B., Cooks, R.G.: Mass spectrometry sampling under ambient conditions with desorption electrospray ionization.
+\textit{Science} \textbf{306}(5695), 471--473 (2004).
+\doi{10.1126/science.1104404}
+
+\bibitem{alexandrov2012spatial}
+Alexandrov, T.: Spatial metabolomics: from cells to tissues to organisms.
+\textit{Nature Methods} \textbf{17}(4), 361--366 (2020).
+\doi{10.1038/s41592-020-0783-7}
+
+\bibitem{veselkov2014chemo}
+Veselkov, K.A., Mirnezami, R., Strittmatter, N., et al.: Chemo-informatic strategy for imaging mass spectrometry-based hyperspectral profiling of lipid signatures in colorectal cancer.
+\textit{Proceedings of the National Academy of Sciences} \textbf{111}(3), 1216--1221 (2014).
+\doi{10.1073/pnas.1310524111}
+
+\bibitem{schramm2012imputing}
+Schramm, T., Hester, A., Klinkert, I., et al.: imzML---a common data format for the flexible exchange and processing of mass spectrometry imaging data.
+\textit{Journal of Proteomics} \textbf{75}(16), 5106--5110 (2012).
+\doi{10.1016/j.jprot.2012.07.026}
+
+\bibitem{bemis2015cardinal}
+Bemis, K.D., Harry, A., Eberlin, L.S., Ferreira, C., van de Ven, S.M., Mallick, P., Stolowitz, M., Vitek, O.: Cardinal: an R package for statistical analysis of mass spectrometry-based imaging experiments.
+\textit{Bioinformatics} \textbf{31}(14), 2418--2420 (2015).
+\doi{10.1093/bioinformatics/btv146}
+
+\bibitem{bemis2023cardinal}
+Bemis, K.D., Vitek, O.: Mass spectrometry imaging data analysis with Cardinal 3.
+\textit{Bioconductor Documentation} (2023).
+\url{https://bioconductor.org/packages/Cardinal/}
+
+\bibitem{moran1950notes}
+Moran, P.A.: Notes on continuous stochastic phenomena.
+\textit{Biometrika} \textbf{37}(1/2), 17--23 (1950).
+\doi{10.2307/2332142}
+
+\bibitem{cressie1993statistics}
+Cressie, N.A.: Statistics for Spatial Data, revised edn.
+John Wiley \& Sons, New York (1993).
+
+\bibitem{tobler1970computer}
+Tobler, W.R.: A computer movie simulating urban growth in the Detroit region.
+\textit{Economic Geography} \textbf{46}(sup1), 234--240 (1970).
+\doi{10.2307/143141}
 
 \bibitem{tibshirani2002diagnosis}
-Tibshirani, R., Hastie, T., Narasimhan, B., \& Chu, G. (2002). Diagnosis of multiple cancer types by shrunken centroids of gene expression. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6567--6572. \doi{10.1073/pnas.082099299}.
+Tibshirani, R., Hastie, T., Narasimhan, B., Chu, G.: Diagnosis of multiple cancer types by shrunken centroids of gene expression.
+\textit{Proceedings of the National Academy of Sciences} \textbf{99}(10), 6567--6572 (2002).
+\doi{10.1073/pnas.082099299}
+
+\bibitem{deininger2011matrix}
+Deininger, S.O., Ebert, M.P., F{\"u}tterer, A., et al.: MALDI imaging mass spectrometry: state of the art.
+\textit{Current Medicinal Chemistry} \textbf{18}(18), 2821--2830 (2011).
+\doi{10.2174/092986711796117284}
+
+\bibitem{palmer2017fdr}
+Palmer, A., Phapale, P., Chernyavsky, I., et al.: FDR-controlled metabolite annotation for high-resolution imaging mass spectrometry.
+\textit{Nature Methods} \textbf{14}(1), 57--60 (2017).
+\doi{10.1038/nmeth.4072}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C.: QFeatures: Quantitative features for mass spectrometry data.
+\textit{Bioconductor Package} (2023).
+\doi{10.18129/B9.bioc.QFeatures}
+
+\bibitem{boland2023health}
+Boland, M.R.: Health Data Analytics with R: An Introduction to Methods and Analysis.
+Springer Nature, Cham (2023).
+\doi{10.1007/978-3-031-31952-5}
 
 \end{thebibliography}
 

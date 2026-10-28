@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Reproducibility in mass spectrometry requires deterministic tracking of software versions, operating system dependencies, parameter configurations, and intermediate file caches. Interactive graphical user interfaces obscure parameter histories and prevent exact replication across laboratories. In contrast, scripted pipelines define analytical operations as explicit code. A production-grade computational MS project relies on four architectural layers: portable file referencing that prevents hardcoded operating-system path failures, dependency freezing via package lockfiles (\texttt{renv.lock}), full-stack POSIX containerization (Docker), and directed acyclic graph (DAG) caching (\texttt{targets}). DAG caching tracks cryptographic content hashes of raw spectral inputs and parameter values, recalculating only targets invalidated by code or parameter mutations while skipping computationally expensive peak-picking steps. This chapter presents the architecture of portable project layouts, cryptographic checksum verification, lockfile dependency auditing, DAG caching dynamics, and runtime contract assertions in R 4.6.1.
+Reproducibility in mass spectrometry requires deterministic tracking of software versions, operating system dependencies, parameter configurations, and intermediate file caches \cite{peng2011reproducible, baker2016reproducibility, sandve2013ten}. Interactive graphical user interfaces obscure parameter histories and prevent exact replication across laboratories. In contrast, scripted pipelines define analytical operations as explicit code. A production-grade computational MS project relies on four architectural layers: portable file referencing that prevents hardcoded operating-system path failures \cite{muller2020here, marwick2018packaging}, dependency freezing via package lockfiles (\texttt{renv.lock}) \cite{ushey2024renv}, full-stack POSIX containerization (Docker) \cite{boettiger2015docker, nust2020ten}, and directed acyclic graph (DAG) caching (\texttt{targets}) \cite{landau2021targets}. DAG caching tracks cryptographic content hashes of raw spectral inputs and parameter values, recalculating only targets invalidated by code or parameter mutations while skipping computationally expensive peak-picking steps. This chapter presents the architecture of portable project layouts, cryptographic checksum verification, lockfile dependency auditing, DAG caching dynamics, and runtime contract assertions \cite{wickham2011testthat} in R 4.6.1.
 \end{abstract}
 
 \vspace{1em}
@@ -41,13 +41,13 @@ Table~\ref{tab:repro_roadmap} outlines the four tiers of the reproducibility sta
 \toprule
 \textbf{Tier} & \textbf{Tool / Specification} & \textbf{Mechanism} & \textbf{Failure Mode Addressed} \\
 \midrule
-\textbf{1. Workspace} & RStudio Project / \texttt{here} & Anchor relative paths to root \texttt{.Rproj} directory & Hardcoded path breakage (\texttt{C:/Users/}) \\
+\textbf{1. Workspace} & RStudio Project / \texttt{here} \cite{muller2020here} & Anchor relative paths to root \texttt{.Rproj} directory & Hardcoded path breakage (\texttt{C:/Users/}) \\
 \addlinespace
-\textbf{2. Packages} & \texttt{renv} (\texttt{renv.lock}) & Freezes exact CRAN and Bioconductor commit versions & API deprecation and version drift \\
+\textbf{2. Packages} & \texttt{renv} (\texttt{renv.lock}) \cite{ushey2024renv} & Freezes exact CRAN and Bioconductor commit versions & API deprecation and version drift \\
 \addlinespace
-\textbf{3. Operating System} & Docker / Rocker image & Bundles C/C++ system libraries (\texttt{libnetcdf}) & Dynamic link failures across Linux/OS \\
+\textbf{3. Operating System} & Docker / Rocker image \cite{boettiger2015docker, nust2020ten} & Bundles C/C++ system libraries (\texttt{libnetcdf}) & Dynamic link failures across Linux/OS \\
 \addlinespace
-\textbf{4. Pipeline DAG} & \texttt{targets} & Cryptographic hash tracking of data and parameters & Redundant re-computation and stale figures \\
+\textbf{4. Pipeline DAG} & \texttt{targets} \cite{landau2021targets} & Cryptographic hash tracking of data and parameters & Redundant re-computation and stale figures \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -61,7 +61,7 @@ An R script that executes successfully in an interactive R session can silently 
 \section{Project Directory Topology and Path Portability}
 \label{sec:directory_topology}
 
-Computational mass spectrometry projects organize data files, transformation scripts, and reports into distinct directories. Mixing raw vendor files with intermediate CSV outputs risks accidental modification of original instrument data.
+Computational mass spectrometry projects organize data files, transformation scripts, and reports into distinct directories \cite{marwick2018packaging, sandve2013ten}. Mixing raw vendor files with intermediate CSV outputs risks accidental modification of original instrument data.
 
 \subsection{Standard Project Directory Layout}
 
@@ -83,7 +83,7 @@ ms_project_root/
 
 \subsection{Path Portability via Anchor Files}
 
-Hardcoding absolute file paths (such as \texttt{"C:/Users/lucas/data/raw/run.mzML"}) breaks pipeline execution when a collaborator runs the code on a different computer or when the directory moves. The \texttt{here} package locates the project root dynamically by identifying the directory containing \texttt{.Rproj} or \texttt{.git}. It constructs platform-independent paths using forward slashes:
+Hardcoding absolute file paths (such as \texttt{"C:/Users/lucas/data/raw/run.mzML"}) breaks pipeline execution when a collaborator runs the code on a different computer or when the directory moves. The \texttt{here} package locates the project root dynamically by identifying the directory containing \texttt{.Rproj} or \texttt{.git} \cite{muller2020here}. It constructs platform-independent paths using forward slashes:
 \begin{equation}
 \text{path} = \operatorname{here}(\text{"data"}, \text{"raw"}, \text{"run\_01.mzML"})
 \label{eq:here_path}
@@ -132,11 +132,11 @@ The raw \texttt{run\_01.mzML} file ($233$ bytes) produces SHA-256 hash \texttt{0
 \section{Software Environment Freezing: renv and Docker}
 \label{sec:renv_docker}
 
-R packages undergo continuous releases. Bioconductor coordinates releases every six months, while CRAN updates packages asynchronously. An analysis written against \texttt{xcms} version 3.20 may fail under version 4.0 if function arguments change.
+R packages undergo continuous releases. Bioconductor coordinates releases every six months, while CRAN updates packages asynchronously. An analysis written against \texttt{xcms} version 3.20 may fail under version 4.0 if function arguments change \cite{beaulieujones2017reproducibility}.
 
 \subsection{Package Version Pinning with renv}
 
-The \texttt{renv} package establishes an isolated, project-local package library. The dependency graph is recorded in a JSON manifest (\texttt{renv.lock}). This file specifies the exact package versions, sources (CRAN, Bioconductor, or GitHub), and git commit SHAs:
+The \texttt{renv} package establishes an isolated, project-local package library \cite{ushey2024renv}. The dependency graph is recorded in a JSON manifest (\texttt{renv.lock}). This file specifies the exact package versions, sources (CRAN, Bioconductor, or GitHub), and git commit SHAs:
 \begin{equation}
 \mathbf{E} = \{ (p_k, v_k, s_k, h_k) \}_{k=1}^K
 \label{eq:renv_tuple}
@@ -190,7 +190,7 @@ The audit confirms 159 locked packages pinned to R 4.6.1 and Bioconductor 3.23. 
 
 The \texttt{renv.lock} manifest pins R code, but R packages that parse mass spectrometry data depend on underlying C and C++ system libraries (such as NetCDF, HDF5, and XML2). Divergent system libraries can cause segmentation faults or numerical differences across operating systems.
 
-Docker encapsulates the operating system, system libraries, R runtime, and package library into an immutable image. A standard container definition for mass spectrometry analysis builds from a Rocker base image:
+Docker encapsulates the operating system, system libraries, R runtime, and package library into an immutable image \cite{boettiger2015docker, nust2020ten}. A standard container definition for mass spectrometry analysis builds from a Rocker base image:
 \begin{verbatim}
 FROM rocker/tidyverse:4.4.1
 RUN apt-get update && apt-get install -y \
@@ -210,7 +210,7 @@ Running this container reproduces the pipeline execution independently of host o
 
 Mass spectrometry pipelines involve computationally intensive stages: CentWave peak detection on 100 samples can require several hours. Re-running the entire pipeline after correcting a typographical error in a figure title is inefficient.
 
-The \texttt{targets} package organizes an analysis into a Directed Acyclic Graph (DAG). Each step in the pipeline is defined as a target:
+The \texttt{targets} package organizes an analysis into a Directed Acyclic Graph (DAG) \cite{landau2021targets}. Each step in the pipeline is defined as a target:
 \begin{equation}
 T_j = f_j(T_{j_1}, T_{j_2}, \dots, \theta_j)
 \label{eq:dag_node}
@@ -306,7 +306,7 @@ In Invocation 2, verification completes in $0.000726$ seconds with zero recomput
 \section{Defensive Runtime Contract Testing on MS Assay Matrices}
 \label{sec:contract_testing}
 
-Silent data corruption occurs when erroneous preprocessing produces negative intensities, NaN values, or unexpected dimension drops without halting execution. Runtime contract assertions using \texttt{testthat} verify mathematical invariants before data enter statistical models.
+Silent data corruption occurs when erroneous preprocessing produces negative intensities, NaN values, or unexpected dimension drops without halting execution. Runtime contract assertions using \texttt{testthat} \cite{wickham2011testthat} verify mathematical invariants before data enter statistical models.
 
 Listing~4.4 tests three structural contracts on a simulated feature abundance matrix: dimension consistency, intensity non-negativity, and missingness rate bounds.
 
@@ -407,7 +407,7 @@ Two high-performance alternatives are:
 \end{enumerate}
 
 \FloatBarrier
-\begin{thebibliography}{10}
+\begin{thebibliography}{18}
 
 \bibitem{landau2021targets}
 Landau, W.M.
@@ -421,17 +421,29 @@ Ushey, K., Wickham, H.
 \newblock R package version 1.0.7, 2024.
 \newblock \url{https://CRAN.R-project.org/package=renv}.
 
-\bibitem{knuth1984literate}
-Knuth, D.E.
-\newblock Literate programming.
-\newblock \emph{The Computer Journal}, 27(2):97--111, 1984.
-\newblock \url{https://doi.org/10.1093/comjnl/27.2.97}.
+\bibitem{peng2011reproducible}
+Peng, R.D.
+\newblock Reproducible research in computational science.
+\newblock \emph{Science}, 334(6060):1226--1227, 2011.
+\newblock \url{https://doi.org/10.1126/science.1213847}.
 
-\bibitem{wickham2011testthat}
-Wickham, H.
-\newblock testthat: Get started with testing.
-\newblock \emph{The R Journal}, 3(1):5--10, 2011.
-\newblock \url{https://doi.org/10.32614/RJ-2011-002}.
+\bibitem{baker2016reproducibility}
+Baker, M.
+\newblock 1,500 scientists lift the lid on reproducibility.
+\newblock \emph{Nature}, 533(7604):452--454, 2016.
+\newblock \url{https://doi.org/10.1038/533452a}.
+
+\bibitem{sandve2013ten}
+Sandve, G.K., Nekrutenko, A., Taylor, J., Hovig, E.
+\newblock Ten simple rules for reproducible computational research.
+\newblock \emph{PLoS Computational Biology}, 9(10):e1003285, 2013.
+\newblock \url{https://doi.org/10.1371/journal.pcbi.1003285}.
+
+\bibitem{marwick2018packaging}
+Marwick, B., Boettiger, C., Mullen, L.
+\newblock Packaging data analytical work reproducibly using {R} packages, renv, and {Docker}.
+\newblock \emph{The American Statistician}, 72(1):80--88, 2018.
+\newblock \url{https://doi.org/10.1080/00031305.2017.1375986}.
 
 \bibitem{muller2020here}
 M\"uller, K.
@@ -444,6 +456,66 @@ Boettiger, C.
 \newblock An introduction to {Docker} for reproducible research.
 \newblock \emph{ACM SIGOPS Operating Systems Review}, 49(1):71--79, 2015.
 \newblock \url{https://doi.org/10.1145/2723872.2723882}.
+
+\bibitem{nust2020ten}
+N\"ust, D., Sochat, V., Marwick, B., Eglen, S.J., Head, T., Hirst, T., Evans, B.D.
+\newblock Ten simple rules for writing {Dockerfiles} for reproducible data science.
+\newblock \emph{PLoS Computational Biology}, 16(11):e1008316, 2020.
+\newblock \url{https://doi.org/10.1371/journal.pcbi.1008316}.
+
+\bibitem{beaulieujones2017reproducibility}
+Beaulieu-Jones, B.K., Greene, C.S.
+\newblock Reproducibility of computational workflows is automated using continuous analysis.
+\newblock \emph{Nature Biotechnology}, 35(4):342--346, 2017.
+\newblock \url{https://doi.org/10.1038/nbt.3780}.
+
+\bibitem{knuth1984literate}
+Knuth, D.E.
+\newblock Literate programming.
+\newblock \emph{The Computer Journal}, 27(2):97--111, 1984.
+\newblock \url{https://doi.org/10.1093/comjnl/27.2.97}.
+
+\bibitem{wickham2011testthat}
+Wickham, H.
+\newblock testthat: Get started with testing.
+\newblock \emph{The R Journal}, 3(1):5--10, 2011.
+\newblock \url{https://doi.org/10.32614/RJ-2011-002}.
+
+\bibitem{wilkinson2016fair}
+Wilkinson, M.D., Dumontier, M., Aalbersberg, I.J., et~al.
+\newblock The {FAIR} Guiding Principles for scientific data management and stewardship.
+\newblock \emph{Scientific Data}, 3:160018, 2016.
+\newblock \url{https://doi.org/10.1038/sdata.2016.18}.
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D1145--D1152, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz984}.
+
+\bibitem{perezriverol2022pride}
+Perez-Riverol, Y., Bai, J., Bandla, C., et~al.
+\newblock The {PRIDE} database resources in 2022: a hub for mass spectrometry-based proteomics evidences.
+\newblock \emph{Nucleic Acids Research}, 50(D1):D543--D552, 2022.
+\newblock \url{https://doi.org/10.1093/nar/gkab1038}.
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Gibb, S., Rainer, J.
+\newblock {MSnbase}, efficient and elegant {R}-based processing and visualization of raw mass spectrometry data.
+\newblock \emph{Journal of Proteome Research}, 20(1):1063--1069, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.0c00313}.
+
+\bibitem{rainer2022spectra}
+Rainer, J., Vicini, A., Salzer, L., et~al.
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites}, 12(2):173, 2022.
+\newblock \url{https://doi.org/10.3390/metabo12020173}.
+
+\bibitem{blankenberg2010galaxy}
+Blankenberg, D., Kuster, G.V., Coraor, N., et~al.
+\newblock Galaxy: a web-based genome analysis tool for experimentalists.
+\newblock \emph{Current Protocols in Molecular Biology}, 89(1):19--10, 2010.
+\newblock \url{https://doi.org/10.1002/0471142727.mb1910s89}.
 
 \end{thebibliography}
 

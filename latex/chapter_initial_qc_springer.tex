@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Technical artifacts and experimental confounding in mass spectrometry invalidate downstream statistical modeling if left unaddressed. Samples exhibiting spray collapse, progressive retention time shifts, mass calibration drift, or carryover from high-concentration standards must be flagged during acquisition. Experimental designs where biological cohorts are collinear with acquisition batches collapse model degrees of freedom, rendering treatment effects inseparable from technical variance. In R 4.6.1 and Bioconductor 3.20, quality control auditing operates at two distinct levels: low-level spectral trace extraction using \texttt{Spectra} and standardized metric calculation via the \texttt{MsQuality} framework conforming to HUPO-PSI \texttt{mzQC} controlled vocabularies. This chapter details the physical failure modes of liquid chromatography--mass spectrometry (LC-MS) instruments, mathematical formulations for mass accuracy drift and autosampler carryover ratios, degrees-of-freedom auditing in design matrices, and empirical coefficient of variation (CV) distributions in pooled quality control samples that set the lower bound for biological effect detection.
+Technical artifacts and experimental confounding in mass spectrometry invalidate downstream statistical modeling if left unaddressed \cite{leek2010tackling, goh2017why}. Samples exhibiting spray collapse, progressive retention time shifts, mass calibration drift, or carryover from high-concentration standards must be flagged during acquisition \cite{broadhurst2018guidelines, fda2018bioanalytical}. Experimental designs where biological cohorts are collinear with acquisition batches collapse model degrees of freedom, rendering treatment effects inseparable from technical variance \cite{nygaard2016methods}. In R 4.6.1 and Bioconductor 3.20, quality control auditing operates at two distinct levels: low-level spectral trace extraction using \texttt{Spectra} \cite{gatto2021spectra, gatto2012msnbase} and standardized metric calculation via the \texttt{MsQuality} framework \cite{naake2023msquality} conforming to HUPO-PSI \texttt{mzQC} controlled vocabularies \cite{bittremieux2020mzqc, walzer2014qc}. This chapter details the physical failure modes of liquid chromatography--mass spectrometry (LC-MS) instruments, mathematical formulations for mass accuracy drift and autosampler carryover ratios \cite{booth2011workshop, ema2011bioanalytical}, degrees-of-freedom auditing in design matrices, and empirical coefficient of variation (CV) distributions in pooled quality control samples that set the lower bound for biological effect detection \cite{dunn2011procedures, gika2007quality}.
 \end{abstract}
 
 \vspace{1em}
@@ -41,15 +41,15 @@ Table~\ref{tab:qc_roadmap} outlines the diagnostic checks required to audit mass
 \toprule
 \textbf{Diagnostic Tier} & \textbf{Physical Target} & \textbf{Analytical Metric} & \textbf{Rejection Threshold} \\
 \midrule
-\textbf{1. Design Matrix} & Batch-group confounding & Cross-tabulation rank, Pearson $r$ & $\text{rank}(X) < p$, $r = 1.0$ \\
+\textbf{1. Design Matrix} & Batch-group confounding \cite{leek2010tackling} & Cross-tabulation rank, Pearson $r$ & $\text{rank}(X) < p$, $r = 1.0$ \\
 \addlinespace
-\textbf{2. Chromatography} & Column stability and gradient & TIC/BPC overlay, apex RT drift & $\Delta t_R > 30$ seconds \\
+\textbf{2. Chromatography} & Column stability and gradient & TIC/BPC overlay, apex RT drift \cite{broadhurst2018guidelines} & $\Delta t_R > 30$ seconds \\
 \addlinespace
-\textbf{3. Mass Accuracy} & Analyzer calibration drift & Parts-per-million error vs lock mass & $|\text{ppm}| > 5.0$ ppm \\
+\textbf{3. Mass Accuracy} & Analyzer calibration drift \cite{gross2017mass} & Parts-per-million error vs lock mass & $|\text{ppm}| > 5.0$ ppm \cite{zubarev2007persistent} \\
 \addlinespace
-\textbf{4. Carryover} & Autosampler wash efficiency & Solvent blank area post-ULOQ & $> 20\%$ of LLOQ area \\
+\textbf{4. Carryover} & Autosampler wash efficiency \cite{fda2018bioanalytical} & Solvent blank area post-ULOQ & $> 20\%$ of LLOQ area \cite{booth2011workshop} \\
 \addlinespace
-\textbf{5. Technical Noise} & Pooled QC repeatability & Feature intensity CV across batch & Feature $\text{CV} > 30\%$ \\
+\textbf{5. Technical Noise} & Pooled QC repeatability \cite{dunn2011procedures} & Feature intensity CV across batch & Feature $\text{CV} > 30\%$ \cite{sangster2006investigation} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -64,7 +64,7 @@ Quality control is an irreversible analytical gate, not an exploratory afterthou
 \label{sec:design_auditing}
 % =============================================================================
 
-The most severe quality failure in mass spectrometry is experimental confounding. Confounding occurs when a biological condition is completely collinear with a technical batch factor.
+The most severe quality failure in mass spectrometry is experimental confounding \cite{leek2010tackling, goh2017why}. Confounding occurs when a biological condition is completely collinear with a technical batch factor \cite{nygaard2016methods}.
 
 \subsection{Mathematical Formulation of Design Rank Deficiency}
 
@@ -90,7 +90,7 @@ The ordinary least squares normal equations $(\mathbf{X}^T \mathbf{X}) \hat{\bol
 \label{sec:chromatographic_stability}
 % =============================================================================
 
-The total ion current (TIC) represents the summed intensity across all measured $m/z$ channels at retention time $t_i$:
+The total ion current (TIC) represents the summed intensity across all measured $m/z$ channels at retention time $t_i$ \cite{broadhurst2018guidelines, want2010global}:
 \begin{equation}
 \text{TIC}(t_i) = \sum_{j=1}^{P_i} I_{ij}
 \end{equation}
@@ -112,7 +112,7 @@ where $P_i$ is the number of peaks detected in scan $i$. The base peak chromatog
 \label{sec:mass_accuracy_drift}
 % =============================================================================
 
-High-resolution mass analyzers (Orbitrap, Time-of-Flight) maintain mass accuracies within narrow tolerances. Mass measurement error is expressed in parts per million (ppm):
+High-resolution mass analyzers (Orbitrap, Time-of-Flight) maintain mass accuracies within narrow tolerances \cite{gross2017mass, zubarev2007persistent}. Mass measurement error is expressed in parts per million (ppm):
 \begin{equation}
 \delta_{\text{ppm}} = \frac{m_{\text{obs}} - m_{\text{theor}}}{m_{\text{theor}}} \times 10^6
 \end{equation}
@@ -132,7 +132,7 @@ The carryover percentage is defined relative to the preceding calibrator:
 \begin{equation}
 \text{Carryover}_{\text{ULOQ}}\% = \frac{\text{Area}_{\text{blank, post}}}{\text{Area}_{\text{ULOQ}}} \times 100\%
 \end{equation}
-Regulatory bioanalytical guidelines (FDA, EMA) enforce a strict criterion evaluated against the Lower Limit of Quantitation (LLOQ):
+Regulatory bioanalytical guidelines (FDA, EMA) enforce a strict criterion evaluated against the Lower Limit of Quantitation (LLOQ) \cite{fda2018bioanalytical, ema2011bioanalytical, booth2011workshop}:
 \begin{equation}
 \text{Carryover}_{\text{LLOQ}}\% = \frac{\text{Area}_{\text{blank, post}}}{\text{Area}_{\text{LLOQ}}} \times 100\% \le 20.0\%
 \end{equation}
@@ -143,7 +143,7 @@ If carryover in the solvent blank exceeds $20\%$ of the LLOQ peak area, subseque
 \label{sec:pooled_qc_precision}
 % =============================================================================
 
-A pooled quality control (QC) sample combines equal aliquots of every biological sample in the cohort. Injected periodically throughout the analytical sequence (typically every 5--10 injections), pooled QCs provide an empirical measure of technical variation across the entire pipeline.
+A pooled quality control (QC) sample combines equal aliquots of every biological sample in the cohort \cite{dunn2011procedures, gika2007quality}. Injected periodically throughout the analytical sequence (typically every 5--10 injections), pooled QCs provide an empirical measure of technical variation across the entire pipeline \cite{broadhurst2018guidelines, sangster2006investigation}.
 
 For each feature $j$, its technical coefficient of variation ($\text{CV}_j$) across $K$ pooled QC injections is:
 \begin{equation}
@@ -432,20 +432,25 @@ Using the $2\sigma$ technical error limit:
 An apparent fold-change of $1.25\times$ ($+25\%$) falls inside the technical noise interval $[0.69\times, 1.44\times]$. The observed difference cannot be reliably attributed to biology and represents technical measurement variance.
 
 % =============================================================================
-\begin{thebibliography}{10}
-% =============================================================================
+\begin{thebibliography}{99}
 
 \bibitem{naake2023msquality}
 Naake, T., Rainer, J., Gatto, L., et~al.:
-\newblock MsQuality: an interoperable R package for calculation of standardized quality metrics of mass spectrometry data.
+\newblock {MsQuality}: an interoperable {R} package for calculation of standardized quality metrics of mass spectrometry data.
 \newblock \emph{Bioinformatics} \textbf{39}(10), btad610 (2023).
 \newblock \doi{10.1093/bioinformatics/btad610}
 
 \bibitem{bittremieux2020mzqc}
 Bittremieux, N., Walzer, M., Tenzer, S., et~al.:
-\newblock The mzQC format for mass spectrometry quality control data.
+\newblock The {mzQC} format for mass spectrometry quality control data.
 \newblock \emph{Journal of Proteome Research} \textbf{19}(10), 4174--4181 (2020).
 \newblock \doi{10.1021/acs.jproteome.0c00379}
+
+\bibitem{walzer2014qc}
+Walzer, M., Pernas, L.E., Nasso, S., et~al.:
+\newblock {qcML}: An exchange format for quality control metrics from mass spectrometry experiments.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{13}(8), 1905--1913 (2014).
+\newblock \doi{10.1074/mcp.M113.035907}
 
 \bibitem{broadhurst2018guidelines}
 Broadhurst, D., Goodacre, R., Reinke, S.N., et~al.:
@@ -459,10 +464,82 @@ Dunn, W.B., Broadhurst, D., Begley, P., et~al.:
 \newblock \emph{Nature Protocols} \textbf{6}(7), 1060--1083 (2011).
 \newblock \doi{10.1038/nprot.2011.335}
 
+\bibitem{gika2007quality}
+Gika, H.G., Theodoridis, G.A., Wingate, J.E., Wilson, I.D.:
+\newblock Within-day and between-day reproducibility of biomarker candidates in metabonomic profiling of human urine using {LC-MS}.
+\newblock \emph{Journal of Proteome Research} \textbf{6}(8), 3291--3303 (2007).
+\newblock \doi{10.1021/pr070212k}
+
+\bibitem{want2010global}
+Want, E.J., Wilson, I.D., Gika, H., et~al.:
+\newblock Global metabolic profiling procedures for urine using {UPLC-MS}.
+\newblock \emph{Nature Protocols} \textbf{5}(6), 1005--1018 (2010).
+\newblock \doi{10.1038/nprot.2010.50}
+
+\bibitem{sangster2006investigation}
+Sangster, T., Major, H., Plumb, R., Wilson, A.J., Wilson, I.D.:
+\newblock A pragmatic and readily implemented approach to ratio-based conditioning and quality control for {HPLC-MS} metabonomics.
+\newblock \emph{Analyst} \textbf{131}(10), 1075--1078 (2006).
+\newblock \doi{10.1039/B604498K}
+
 \bibitem{fda2018bioanalytical}
 US Food and Drug Administration:
 \newblock Bioanalytical Method Validation Guidance for Industry.
-\newblock \emph{FDA Guidance Document} (2018).
+\newblock \emph{FDA Guidance Document}, Silver Spring, MD (2018).
+\newblock \url{https://www.fda.gov/regulatory-information/search-fda-guidance-documents/bioanalytical-method-validation-guidance-industry}
+
+\bibitem{ema2011bioanalytical}
+European Medicines Agency:
+\newblock Guideline on bioanalytical method validation.
+\newblock \emph{EMEA/CHMP/EWP/192292/2010 Rev. 1}, London, UK (2011).
+
+\bibitem{booth2011workshop}
+Booth, B.P., Arnold, M.E., DeSilva, B., et~al.:
+\newblock Workshop report: {Crystal City V}---quantitative bioanalytical method validation and implementation.
+\newblock \emph{The AAPS Journal} \textbf{17}(2), 277--288 (2015).
+\newblock \doi{10.1208/s12248-014-9710-1}
+
+\bibitem{leek2010tackling}
+Leek, J.T., Scharpf, R.B., Bravo, H.C., et~al.:
+\newblock Tackling the widespread and critical impact of batch effects in high-throughput data.
+\newblock \emph{Nature Reviews Genetics} \textbf{11}(10), 733--739 (2010).
+\newblock \doi{10.1038/nrg2825}
+
+\bibitem{goh2017why}
+Goh, W.W., Wang, W., Wong, L.:
+\newblock Why batch effects matter in omics data, and how to address them.
+\newblock \emph{Trends in Biotechnology} \textbf{35}(6), 498--507 (2017).
+\newblock \doi{10.1016/j.tibtech.2017.02.012}
+
+\bibitem{nygaard2016methods}
+Nygaard, V., R{\o}dland, E.A., Hovig, E.:
+\newblock Methods that remove batch effects while retaining group differences may also mediate spurious biological conclusions.
+\newblock \emph{Nucleic Acids Research} \textbf{44}(7), e45 (2016).
+\newblock \doi{10.1093/nar/gkv1366}
+
+\bibitem{gatto2021spectra}
+Gatto, L., Rainer, J., Gibb, S.:
+\newblock {MSnbase}, {Spectra}, and {QFeatures}: Modern mass spectrometry data structures in {Bioconductor}.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00864}
+
+\bibitem{gatto2012msnbase}
+Gatto, L., Lilley, K.S.:
+\newblock {MSnbase}---an {R/Bioconductor} package for isobaric tagged and label-free mass spectrometry data processing.
+\newblock \emph{Bioinformatics} \textbf{28}(2), 288--289 (2012).
+\newblock \doi{10.1093/bioinformatics/btr645}
+
+\bibitem{zubarev2007persistent}
+Zubarev, R., Mann, M.:
+\newblock On the proper use of the terms mass resolution and mass resolving power.
+\newblock \emph{Analytical Chemistry} \textbf{79}(20), 7937--7937 (2007).
+\newblock \doi{10.1021/ac072023d}
+
+\bibitem{gross2017mass}
+Gross, J.H.:
+\newblock \emph{Mass Spectrometry: A Textbook}, 3rd edn.
+\newblock Springer, Cham (2017).
+\newblock \doi{10.1007/978-3-319-54398-7}
 
 \end{thebibliography}
 

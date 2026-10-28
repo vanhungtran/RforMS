@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Mass spectrometry data structures must coordinate high-volume spectral time-series, multi-sample experimental designs, and multi-tier molecular parsimony hierarchies without desynchronization. Flattening spectral measurements into unstructured tables drops parent-child linkages, creating silent indexing errors during filtering and statistical modeling. In R 4.6.1 and Bioconductor 3.20, four interoperable S4 classes manage the computational lifecycle of mass spectrometry data. The \texttt{Spectra} container stores raw scans using lazy on-disk evaluation. The \texttt{MsExperiment} class couples raw spectral streams to experimental design factors and sample injection sequences. The \texttt{SummarizedExperiment} container structures feature-by-sample quantitative matrices, enforcing coordinate invariance across row-level annotations (\texttt{rowData}) and column-level phenotypes (\texttt{colData}). For bottom-up proteomics, the \texttt{QFeatures} container organizes peptide-spectrum matches, unique peptides, and protein groups into an auditable relational graph via \texttt{AssayLinks}. This chapter establishes the mathematical definitions, coordinate invariants, and executable implementations of these modern data containers, demonstrating multi-tier aggregation and seamless transfer into downstream statistical modeling.
+Mass spectrometry data structures must coordinate high-volume spectral time-series, multi-sample experimental designs, and multi-tier molecular parsimony hierarchies without desynchronization. Flattening spectral measurements into unstructured tables drops parent-child linkages, creating silent indexing errors during filtering and statistical modeling. In R 4.6.1 and Bioconductor 3.20 \cite{gentleman2004bioconductor, huber2015orchestrating}, four interoperable S4 classes \cite{chambers2008software} manage the computational lifecycle of mass spectrometry data. The \texttt{Spectra} container stores raw scans using lazy on-disk evaluation \cite{gatto2021spectra}. The \texttt{MsExperiment} class couples raw spectral streams to experimental design factors and sample injection sequences \cite{rainer2022msexperiment}. The \texttt{SummarizedExperiment} container structures feature-by-sample quantitative matrices, enforcing coordinate invariance across row-level annotations (\texttt{rowData}) and column-level phenotypes (\texttt{colData}) \cite{huber2015orchestrating}. For bottom-up proteomics, the \texttt{QFeatures} container organizes peptide-spectrum matches, unique peptides, and protein groups into an auditable relational graph via \texttt{AssayLinks} \cite{gatto2023qfeatures, vanderaa2021reproducible}. This chapter establishes the mathematical definitions, coordinate invariants, and executable implementations of these modern data containers, demonstrating multi-tier aggregation \cite{cox2014maxquant, goeminne2016msqrob} and seamless transfer into downstream statistical modeling \cite{smyth2004limma, zhu2020deqms}.
 \end{abstract}
 
 \vspace{1em}
@@ -41,13 +41,13 @@ Table~\ref{tab:containers_roadmap} outlines the four core Bioconductor data stru
 \toprule
 \textbf{Container} & \textbf{Data Modality} & \textbf{Structural Invariant} & \textbf{Primary Downstream Tool} \\
 \midrule
-\textbf{1. Spectra} & Raw scan time-series & Lazy processing queue, zero RAM arrays & \texttt{filterIntensity}, \texttt{xcms} \\
+\textbf{1. Spectra} & Raw scan time-series \cite{gatto2021spectra} & Lazy processing queue, zero RAM arrays & \texttt{filterIntensity}, \texttt{xcms} \\
 \addlinespace
-\textbf{2. MsExperiment} & Multi-run raw data & Bijective link between spectra and metadata & \texttt{readMsExperiment} \\
+\textbf{2. MsExperiment} & Multi-run raw data \cite{rainer2022msexperiment} & Bijective link between spectra and metadata & \texttt{readMsExperiment} \\
 \addlinespace
-\textbf{3. SummarizedExperiment} & 2D abundance matrix & Dimension lock: $\text{nrow}(A) = \text{nrow}(R)$, $\text{ncol}(A) = \text{nrow}(C)$ & \texttt{limma}, \texttt{proDA}, \texttt{DEqMS} \\
+\textbf{3. SummarizedExperiment} & 2D abundance matrix \cite{huber2015orchestrating} & Dimension lock: $\text{nrow}(A) = \text{nrow}(R)$, $\text{ncol}(A) = \text{nrow}(C)$ & \texttt{limma} \cite{smyth2004limma}, \texttt{DEqMS} \cite{zhu2020deqms} \\
 \addlinespace
-\textbf{4. QFeatures} & Multi-level hierarchy & Bipartite directed graph of parent-child assays & \texttt{aggregateFeatures} \\
+\textbf{4. QFeatures} & Multi-level hierarchy \cite{gatto2023qfeatures} & Bipartite directed graph of parent-child assays & \texttt{aggregateFeatures} \cite{vanderaa2021reproducible} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -62,7 +62,7 @@ Flattening hierarchical quantitative data into a flat CSV or unlinked numeric ma
 \label{sec:summarized_experiment_invariance}
 % =============================================================================
 
-The \texttt{SummarizedExperiment} container represents a rectangular quantitative assay matrix $\mathbf{Y} \in \mathbb{R}^{G \times N}$, where $G$ denotes the number of biological features (metabolites, peptides, or proteins) and $N$ denotes the number of experimental samples.
+The \texttt{SummarizedExperiment} container represents a rectangular quantitative assay matrix $\mathbf{Y} \in \mathbb{R}^{G \times N}$, where $G$ denotes the number of biological features (metabolites, peptides, or proteins) and $N$ denotes the number of experimental samples \cite{huber2015orchestrating}.
 
 \subsection{Mathematical Formulation}
 
@@ -81,7 +81,7 @@ preserving coordinate alignment across all dimensions:
 \begin{equation}
 \text{rownames}(\mathbf{Y}_{[\mathcal{I}, \mathcal{J}]}) \equiv \text{rownames}(\mathbf{R}_{[\mathcal{I}, *]}), \quad \text{colnames}(\mathbf{Y}_{[\mathcal{I}, \mathcal{J}]}) \equiv \text{rownames}(\mathbf{C}_{[\mathcal{J}, *]})
 \end{equation}
-Proof.}\enspace The S4 extraction operator \texttt{[} intercepts row and column index vectors simultaneously. Subsetting operations on the assay matrix trigger identical coordinate slicing on row and column metadata tables, preventing mismatched assignments. \qed
+Proof.}\enspace The S4 extraction operator \texttt{[} intercepts row and column index vectors simultaneously \cite{chambers2008software}. Subsetting operations on the assay matrix trigger identical coordinate slicing on row and column metadata tables, preventing mismatched assignments. \qed
 
 % =============================================================================
 \section{The QFeatures Relational Hierarchy}
@@ -90,7 +90,7 @@ Proof.}\enspace The S4 extraction operator \texttt{[} intercepts row and column 
 
 Bottom-up proteomics and untargeted metabolomics measure low-level physical signals (peptide-spectrum matches or chromatographic ion features) rather than intact biological macromolecules. A single protein is quantified through multiple distinct peptide sequences, each observed across multiple charge states and retention times.
 
-The \texttt{QFeatures} container structures this biology as an ordered collection of \texttt{SummarizedExperiment} assays connected by directed bipartite graphs called \texttt{AssayLinks}:
+The \texttt{QFeatures} container structures this biology as an ordered collection of \texttt{SummarizedExperiment} assays connected by directed bipartite graphs called \texttt{AssayLinks} \cite{gatto2023qfeatures, vanderaa2021reproducible}, advancing the single-tier models historically provided by \texttt{MSnbase} \cite{gatto2012msnbase}:
 \begin{equation}
 \mathcal{Q} = \left( \{ \mathcal{A}_1, \mathcal{A}_2, \dots, \mathcal{A}_K \}, \, \mathcal{E} \right)
 \end{equation}
@@ -106,23 +106,23 @@ The directed edge $\mathcal{E}_{k, k+1}$ stores an S4 \texttt{Hits} object mappi
 \text{Parents}(i) = \{ j \in \text{rownames}(\mathcal{A}_k) \mid (j, i) \in \text{Hits}(\mathcal{E}_{k, k+1}) \}
 \end{equation}
 
-This bipartite tracking guarantees full traceability: any anomalous protein ratio can be audited directly back to its underlying peptide chromatograms and raw fragmentation scans.
+This bipartite tracking guarantees full traceability: any anomalous protein ratio can be audited directly back to its underlying peptide chromatograms and raw fragmentation scans \cite{martens2011mzml, wilkinson2016fair}.
 
 % =============================================================================
 \section{Feature Aggregation Mechanics}
 \label{sec:aggregation_mechanics}
 % =============================================================================
 
-Transforming low-level features into high-level biological entities is executed via \texttt{aggregateFeatures()}:
+Transforming low-level features into high-level biological entities is executed via \texttt{aggregateFeatures()} \cite{gatto2023qfeatures}:
 \begin{equation}
 \hat{y}_{ik} = \Phi\left( \{ y_{jk} \mid j \in \text{Parents}(i) \} \right)
 \end{equation}
 where $\Phi(\cdot)$ denotes an aggregation summary estimator. Common estimators include:
 \begin{enumerate}
-    \item \textbf{Sum Aggregation ($\Phi_{\text{sum}}$):} Sums peptide abundances ($\sum_j y_{jk}$). This estimator is sensitive to missing values and assumes constant peptide ionization efficiency.
+    \item \textbf{Sum Aggregation ($\Phi_{\text{sum}}$):} Sums peptide abundances ($\sum_j y_{jk}$). This estimator is sensitive to missing values and assumes constant peptide ionization efficiency \cite{cox2014maxquant}.
     \item \textbf{Mean Aggregation ($\Phi_{\text{mean}}$):} Averages peptide abundances ($\frac{1}{m} \sum_j y_{jk}$). Highly sensitive to miscleaved or contaminated outlier peptides.
     \item \textbf{Median Aggregation ($\Phi_{\text{median}}$):} Computes the sample median. Breakpoint of 50\%, resistant to extreme outlier peaks.
-    \item \textbf{Robust Summary ($\Phi_{\text{robust}}$):} Uses Tukey's biweight M-estimator via median polish implemented in \texttt{robustSummary}. It downweights outlier peptides iteratively, providing stable estimates across variable ionization efficiencies.
+    \item \textbf{Robust Summary ($\Phi_{\text{robust}}$):} Uses Tukey's biweight M-estimator \cite{tukey1977exploratory} via median polish implemented in \texttt{robustSummary} \cite{goeminne2016msqrob}. It downweights outlier peptides iteratively, providing stable estimates across variable ionization efficiencies.
 \end{enumerate}
 
 % =============================================================================
@@ -434,38 +434,114 @@ extracts a native \texttt{SummarizedExperiment} containing $2$ protein rows acro
 Calling \texttt{assay(prot\_se)} yields a pure numeric matrix where \texttt{is.matrix()} evaluates to \texttt{TRUE}. The column annotations in \texttt{colData(prot\_se)} carry the experimental factors directly. Downstream functions in \texttt{limma} (such as \texttt{lmFit}) or \texttt{DEqMS} operate directly on this object without intermediate CSV formatting.
 
 % =============================================================================
-\begin{thebibliography}{10}
-% =============================================================================
+\begin{thebibliography}{99}
 
-\bibitem{gatto2021qfeatures}
-Gatto, L., Rainer, J., Gibb, S.:
-\newblock MSnbase, Spectra, and QFeatures: Modern mass spectrometry data structures in Bioconductor.
-\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
-\newblock \doi{10.1021/acs.jproteome.0c00864}
-
-\bibitem{huber2015bioconductor}
+\bibitem{huber2015orchestrating}
 Huber, W., Carey, V.J., Gentleman, R., et~al.:
-\newblock Orchestrating high-throughput genomic analysis with Bioconductor.
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
 \newblock \emph{Nature Methods} \textbf{12}(2), 115--121 (2015).
 \newblock \doi{10.1038/nmeth.3252}
 
+\bibitem{gentleman2004bioconductor}
+Gentleman, R.C., Carey, V.J., Bates, D.M., et~al.:
+\newblock Bioconductor: open software development for computational biology and bioinformatics.
+\newblock \emph{Genome Biology} \textbf{5}(10), R80 (2004).
+\newblock \doi{10.1186/gb-2004-5-10-r80}
+
+\bibitem{chambers2008software}
+Chambers, J.M.:
+\newblock \emph{Software for Data Analysis: Programming with R}.
+\newblock Springer, New York (2008).
+\newblock \doi{10.1007/978-0-387-75936-4}
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., Breckels, L.M.:
+\newblock A foundation for reproducible single-cell and bulk proteomics data analysis in {Bioconductor}.
+\newblock \emph{Nature Communications} \textbf{14}, 5698 (2023).
+\newblock \doi{10.1038/s41467-023-41556-2}
+
+\bibitem{vanderaa2021reproducible}
+Vanderaa, C., Gatto, L.:
+\newblock Replication of single-cell proteomics data analysis using scp.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(9), 4209--4218 (2021).
+\newblock \doi{10.1021/acs.jproteome.1c00168}
+
+\bibitem{gatto2021spectra}
+Gatto, L., Rainer, J., Gibb, S.:
+\newblock {MSnbase}, {Spectra}, and {QFeatures}: Modern mass spectrometry data structures in {Bioconductor}.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00864}
+
+\bibitem{gatto2012msnbase}
+Gatto, L., Lilley, K.S.:
+\newblock {MSnbase}---an {R/Bioconductor} package for isobaric tagged and label-free mass spectrometry data processing.
+\newblock \emph{Bioinformatics} \textbf{28}(2), 288--289 (2012).
+\newblock \doi{10.1093/bioinformatics/btr645}
+
+\bibitem{rainer2022msexperiment}
+Rainer, J., Vicini, A., Salzer, L., et~al.:
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites} \textbf{12}(2), 173 (2022).
+\newblock \doi{10.3390/metabo12020173}
+
 \bibitem{cox2014maxquant}
 Cox, J., Hein, M.Y., Luber, C.A., et~al.:
-\newblock Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ.
+\newblock Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed {MaxLFQ}.
 \newblock \emph{Molecular \& Cellular Proteomics} \textbf{13}(9), 2513--2526 (2014).
 \newblock \doi{10.1074/mcp.M113.031591}
 
+\bibitem{tukey1977exploratory}
+Tukey, J.W.:
+\newblock \emph{Exploratory Data Analysis}.
+\newblock Addison-Wesley, Reading, MA (1977).
+
+\bibitem{goeminne2016msqrob}
+Goeminne, L.J., Gevaert, K., Clement, L.:
+\newblock Experimental design and data-analysis in label-free quantitative {LC/MS} proteomics: A tutorial with {MSqRob}.
+\newblock \emph{Journal of Proteomics} \textbf{171}, 23--36 (2018).
+\newblock \doi{10.1016/j.jprot.2017.04.004}
+
+\bibitem{smyth2004limma}
+Smyth, G.K.:
+\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\newblock \emph{Statistical Applications in Genetics and Molecular Biology} \textbf{3}(1), Article 3 (2004).
+\newblock \doi{10.2202/1544-6115.1027}
+
 \bibitem{ritchie2015limma}
 Ritchie, M.E., Phipson, B., Wu, D., et~al.:
-\newblock limma powers differential expression analyses for RNA-sequencing and microarray studies.
+\newblock limma powers differential expression analyses for {RNA}-sequencing and microarray studies.
 \newblock \emph{Nucleic Acids Research} \textbf{43}(7), e47 (2015).
 \newblock \doi{10.1093/nar/gkv007}
 
 \bibitem{zhu2020deqms}
 Zhu, Y., Orre, L.M., Zhou, T.Y., et~al.:
-\newblock DEqMS: a method for accurate variance estimation in differential protein expression analysis.
+\newblock {DEqMS}: a method for accurate variance estimation in differential protein expression analysis.
 \newblock \emph{Molecular \& Cellular Proteomics} \textbf{19}(6), 1047--1057 (2020).
 \newblock \doi{10.1074/mcp.TIR119.001646}
+
+\bibitem{ahlmann2020proda}
+Ahlmann-Eltze, C., Anders, S.:
+\newblock {proDA}: Probabilistic dropout analysis for peptide and protein quantification with missing values.
+\newblock \emph{Bioinformatics} \textbf{37}(13), 1927--1928 (2021).
+\newblock \doi{10.1093/bioinformatics/btaa961}
+
+\bibitem{martens2011mzml}
+Martens, L., Chambers, M., Hermjakob, H., et~al.:
+\newblock {mzML}---a community standard for mass spectrometry data.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{10}(1), R110.000133 (2011).
+\newblock \doi{10.1074/mcp.R110.000133}
+
+\bibitem{wilkinson2016fair}
+Wilkinson, M.D., Dumontier, M., Aalbersberg, I.J., et~al.:
+\newblock The {FAIR} Guiding Principles for scientific data management and stewardship.
+\newblock \emph{Scientific Data} \textbf{3}, 160018 (2016).
+\newblock \doi{10.1038/sdata.2016.18}
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.:
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research} \textbf{48}(D1), D1145--D1152 (2020).
+\newblock \doi{10.1093/nar/gkz984}
 
 \end{thebibliography}
 

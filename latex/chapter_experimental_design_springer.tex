@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Mass spectrometers suffer from time-dependent signal drift, electrospray source fouling, chromatographic retention time shifts, and batch-to-batch variation. No downstream statistical algorithm or normalization formula can rescue a study when biological conditions are confounded with technical acquisition batches. This chapter establishes the mathematical principles, physical error structures, and computational tools required to design valid mass spectrometry studies. We formulate the Fisherian triad---replication, randomization, and local control (blocking)---within the context of high-dimensional chromatography and mass spectrometry. We decompose experimental variance into biological and technical components, derive the intraclass correlation coefficient, and demonstrate the diminishing returns of repeated technical injections. We provide exact analytical power formulations under multiple testing adjustments (Benjamini--Hochberg false discovery rate control) and left-censored feature dropout. Through an executable R laboratory, we implement randomized complete block designs, pre-acquisition confounding diagnostic audits, empirical Bayes power simulations with \texttt{limma}, and duplicate correlation modeling to prevent pseudoreplication. The chapter concludes with the Five Deadly Sins of mass spectrometry experimental design, a self-assessment checklist, and four multi-tier exercises with complete worked solutions.
+Mass spectrometers suffer from time-dependent signal drift, electrospray source fouling, chromatographic retention time shifts, and batch-to-batch variation. No downstream statistical algorithm or normalization formula can rescue a study when biological conditions are confounded with technical acquisition batches. This chapter establishes the mathematical principles, physical error structures, and computational tools required to design valid mass spectrometry studies. We formulate the Fisherian triad---replication, randomization, and local control (blocking) \cite{fisher1935design, box1978statistics}---within the context of high-dimensional chromatography and mass spectrometry \cite{graw2020statistical, broadhurst2018guidelines}. We decompose experimental variance into biological and technical components, derive the intraclass correlation coefficient \cite{shrout1979intraclass}, and demonstrate the diminishing returns of repeated technical injections \cite{hurlbert1984pseudoreplication}. We provide exact analytical power formulations under multiple testing adjustments (Benjamini--Hochberg false discovery rate control \cite{benjamini1995controlling, cohen1988statistical}) and left-censored feature dropout \cite{karpievitch2012normalization, hoenig2001abuse}. Through an executable R laboratory, we implement randomized complete block designs \cite{fisher1935design, box1978statistics}, pre-acquisition confounding diagnostic audits \cite{leek2010tackling, johnson2007adjusting}, empirical Bayes power simulations with \texttt{limma} \cite{smyth2004linear, ritchie2015limma, choi2014msstats}, and duplicate correlation modeling to prevent pseudoreplication \cite{hurlbert1984pseudoreplication, kammers2015detecting, vanderaa2021scp}. The chapter concludes with the Five Deadly Sins of mass spectrometry experimental design, a self-assessment checklist, and four multi-tier exercises with complete worked solutions.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Mass spectrometers suffer from time-dependent signal drift, electrospray source 
 \toprule
 \textbf{Stage} & \textbf{Physical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Replicate Allocation} & Biological diversity vs instrument measurement error; ICC $= \sigma^2_{\text{bio}} / (\sigma^2_{\text{bio}} + \sigma^2_{\text{tech}})$. & Allocate resources between biological units ($n$) and technical injections ($m$). & Pseudoreplication: treating $m$ injections as independent $N = n \cdot m$. Remedy: Average injections or apply \texttt{duplicateCorrelation()}. \\
+\textbf{1. Replicate Allocation} & Biological diversity vs instrument measurement error; ICC $= \sigma^2_{\text{bio}} / (\sigma^2_{\text{bio}} + \sigma^2_{\text{tech}})$ \cite{shrout1979intraclass, hurlbert1984pseudoreplication}. & Allocate resources between biological units ($n$) and technical injections ($m$). & Pseudoreplication: treating $m$ injections as independent $N = n \cdot m$. Remedy: Average injections or apply \texttt{duplicateCorrelation()} \cite{smyth2004linear}. \\
 \addlinespace
-\textbf{2. Blocking Architecture} & Multi-well plates, digestion batches, TMT plexes, and instrument days. & Balance biological groups evenly across technical blocks (RCBD). & Complete confounding: all cases in Batch 1, all controls in Batch 2. Remedy: Orthogonal randomized complete block design. \\
+\textbf{2. Blocking Architecture} & Multi-well plates, digestion batches, TMT plexes, and instrument days \cite{fisher1935design, box1978statistics}. & Balance biological groups evenly across technical blocks (RCBD). & Complete confounding: all cases in Batch 1, all controls in Batch 2. Remedy: Orthogonal randomized complete block design \cite{leek2010tackling, johnson2007adjusting}. \\
 \addlinespace
-\textbf{3. Sequence Randomization} & Source contamination, column aging, mass calibration drift, and carryover. & Break correlation between injection order and biological condition. & Monotonic drift mistaken for biological induction. Remedy: Constrained run randomization with periodic pooled QCs. \\
+\textbf{3. Sequence Randomization} & Source contamination, column aging, mass calibration drift, and carryover \cite{broadhurst2018guidelines, graw2020statistical}. & Break correlation between injection order and biological condition. & Monotonic drift mistaken for biological induction. Remedy: Constrained run randomization with periodic pooled QCs. \\
 \addlinespace
-\textbf{4. Power Planning} & Multiplicity ($M = 10^3$--$10^4$ tests) and left-censored dropout ($p_{\text{miss}}$). & Calculate required $n$ under target FDR ($q \le 0.05$) and missingness. & Underpowered studies ($n=3$ for human plasma). Remedy: FDR-inflated and missingness-adjusted sample size formulas. \\
+\textbf{4. Power Planning} & Multiplicity ($M = 10^3$--$10^4$ tests) and left-censored dropout ($p_{\text{miss}}$) \cite{karpievitch2012normalization, hoenig2001abuse}. & Calculate required $n$ under target FDR ($q \le 0.05$) and missingness. & Underpowered studies ($n=3$ for human plasma). Remedy: FDR-inflated and missingness-adjusted sample size formulas \cite{benjamini1995controlling, cohen1988statistical}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -771,39 +771,94 @@ Every condition is balanced within every plex (2 replicates per condition per pl
 % =============================================================================
 
 \begin{thebibliography}{99}
+\small
 
 \bibitem{benjamini1995controlling}
-Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \doi{10.1111/j.2517-6161.1995.tb02031.x}.
-
-\bibitem{boland2023health}
-Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
+Benjamini, Y., Hochberg, Y.: Controlling the false discovery rate: a practical and powerful approach to multiple testing.
+\textit{Journal of the Royal Statistical Society: Series B (Methodological)} \textbf{57}(1), 289--300 (1995).
+\doi{10.1111/j.2517-6161.1995.tb02031.x}
 
 \bibitem{box1978statistics}
-Box, G.~E., Hunter, W.~G., \& Hunter, J.~S. (1978). \textit{Statistics for Experimenters: An Introduction to Design, Data Analysis, and Model Building}. John Wiley \& Sons.
-
-\bibitem{broadhurst2018guidelines}
-Broadhurst, D., et al. (2018). Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted clinical metabolomic studies. \textit{Metabolomics}, 14(6), 72. \doi{10.1007/s11306-018-1367-3}.
+Box, G.E., Hunter, W.G., Hunter, J.S.: Statistics for Experimenters: An Introduction to Design, Data Analysis, and Model Building.
+John Wiley \& Sons, New York (1978).
 
 \bibitem{fisher1935design}
-Fisher, R.~A. (1935). \textit{The Design of Experiments}. Oliver and Boyd, Edinburgh.
+Fisher, R.A.: The Design of Experiments.
+Oliver and Boyd, Edinburgh (1935).
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.N., et al.: Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied in untargeted clinical metabolomic studies.
+\textit{Metabolomics} \textbf{14}(6), 72 (2018).
+\doi{10.1007/s11306-018-1367-3}
 
 \bibitem{graw2020statistical}
-Graw, S., et al. (2020). Statistical design of proteomics experiments: from fundamental concepts to practical implementations. \textit{Briefings in Functional Genomics}, 19(5-6), 337--345. \doi{10.1093/bfgp/elaa018}.
+Graw, S., Tang, J., Zafar, M.K., et al.: Statistical design of proteomics experiments: from fundamental concepts to practical implementations.
+\textit{Briefings in Functional Genomics} \textbf{19}(5-6), 337--345 (2020).
+\doi{10.1093/bfgp/elaa018}
+
+\bibitem{hurlbert1984pseudoreplication}
+Hurlbert, S.H.: Pseudoreplication and the design of ecological field experiments.
+\textit{Ecological Monographs} \textbf{54}(2), 187--211 (1984).
+\doi{10.2307/1942661}
+
+\bibitem{shrout1979intraclass}
+Shrout, P.E., Fleiss, J.L.: Intraclass correlations: uses in assessing rater reliability.
+\textit{Psychological Bulletin} \textbf{86}(2), 420--428 (1979).
+\doi{10.1037/0033-2909.86.2.420}
+
+\bibitem{cohen1988statistical}
+Cohen, J.: Statistical Power Analysis for the Behavioral Sciences, 2nd edn.
+Lawrence Erlbaum Associates, Hillsdale (1988).
 
 \bibitem{hoenig2001abuse}
-Hoenig, J.~M., \& Heisey, D.~M. (2001). The abuse of power: the pervasive fallacy of power calculations for data analysis. \textit{The American Statistician}, 55(1), 19--24. \doi{10.1198/000313001300339897}.
-
-\bibitem{kammers2015detecting}
-Kammers, K., Cole, R.~N., Tiambeng, T.~N., \& Ruczinski, I. (2015). Detecting differentially expressed proteins in isobaric mass tagging experiments. \textit{Bioinformatics}, 31(17), 2883--2889. \doi{10.1093/bioinformatics/btv274}.
+Hoenig, J.M., Heisey, D.M.: The abuse of power: the pervasive fallacy of power calculations for data analysis.
+\textit{The American Statistician} \textbf{55}(1), 19--24 (2001).
+\doi{10.1198/000313001300339897}
 
 \bibitem{karpievitch2012normalization}
-Karpievitch, Y.~V., Dabney, A.~R., \& Smith, R.~D. (2012). Normalization and missing value imputation for label-free LC-MS analysis. \textit{Bioinformatics}, 28(10), 1353--1360. \doi{10.1093/bioinformatics/bts150}.
+Karpievitch, Y.V., Dabney, A.R., Smith, R.D.: Normalization and missing value imputation for label-free LC-MS analysis.
+\textit{Bioinformatics} \textbf{28}(10), 1353--1360 (2012).
+\doi{10.1093/bioinformatics/bts150}
 
 \bibitem{smyth2004linear}
-Smyth, G.~K. (2004). Linear models and empirical bayes methods for assessing differential expression in microarray experiments. \textit{Statistical Applications in Genetics and Molecular Biology}, 3(1), Article 3. \doi{10.2202/1544-6115.1027}.
+Smyth, G.K.: Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\textit{Statistical Applications in Genetics and Molecular Biology} \textbf{3}(1), Article 3 (2004).
+\doi{10.2202/1544-6115.1027}
+
+\bibitem{ritchie2015limma}
+Ritchie, M.E., Phipson, B., Wu, D., Hu, Y., Law, C.W., Shi, W., Smyth, G.K.: limma powers differential expression analyses for RNA-sequencing and microarray studies.
+\textit{Nucleic Acids Research} \textbf{43}(7), e47 (2015).
+\doi{10.1093/nar/gkv007}
+
+\bibitem{choi2014msstats}
+Choi, M., Chang, C.Y., Clough, T., et al.: MSstats: an R package for statistical relative quantification of proteins in mass spectrometry-based proteomic experiments.
+\textit{Bioinformatics} \textbf{30}(17), 2524--2526 (2014).
+\doi{10.1093/bioinformatics/btu305}
+
+\bibitem{leek2010tackling}
+Leek, J.T., Scharpf, R.B., Bravo, H.C., et al.: Tackling the widespread and critical impact of batch effects in high-throughput data.
+\textit{Nature Reviews Genetics} \textbf{11}(10), 733--739 (2010).
+\doi{10.1038/nrg2825}
+
+\bibitem{johnson2007adjusting}
+Johnson, W.E., Li, C., Rabinovic, A.: Adjusting batch effects in microarray expression data using empirical Bayes methods.
+\textit{Biostatistics} \textbf{8}(1), 118--127 (2007).
+\doi{10.1093/biostatistics/kxj037}
+
+\bibitem{kammers2015detecting}
+Kammers, K., Cole, R.N., Tiambeng, T.N., Ruczinski, I.: Detecting differentially expressed proteins in isobaric mass tagging experiments.
+\textit{Bioinformatics} \textbf{31}(17), 2883--2889 (2015).
+\doi{10.1093/bioinformatics/btv274}
 
 \bibitem{vanderaa2021scp}
-Vanderaa, C., \& Gatto, L. (2021). Replication of single-cell proteomics data reveals important analytical challenges. \textit{Expert Review of Proteomics}, 18(10), 835--843. \doi{10.1080/14789450.2021.1988871}.
+Vanderaa, C., Gatto, L.: Replication of single-cell proteomics data reveals important analytical challenges.
+\textit{Expert Review of Proteomics} \textbf{18}(10), 835--843 (2021).
+\doi{10.1080/14789450.2021.1988871}
+
+\bibitem{boland2023health}
+Boland, M.R.: Health Data Analytics with R: An Introduction to Methods and Analysis.
+Springer Nature, Cham (2023).
+\doi{10.1007/978-3-031-31952-5}
 
 \end{thebibliography}
 

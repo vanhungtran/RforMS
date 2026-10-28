@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Feature detection extracts thousands of chromatographic peaks defined by mass-to-charge ($m/z$) and retention time ($t_R$), but a coordinate pair does not identify a molecule. In electrospray ionization (ESI), single chemical metabolites partition into multiple spectral features: protonated ions, sodium and potassium adducts, neutral water losses, and isotopic envelopes. Conversely, a single accurate mass matches multiple isomeric structures. Metabolite annotation deconvolutes redundant adduct multiplets into discrete parent molecules and queries reference chemical databases within instrument-calibrated mass tolerances. This chapter establishes the physical chemistry, mathematical formulations, and Bioconductor implementations for metabolite annotation. We derive exact monoisotopic mass arithmetic from atomic mass defects, formulate tolerance-aware search intervals in parts-per-million (ppm), and model natural isotopic fine structure distributions using multinomial expansions. We present the Isotope Envelope Discriminability Theorem, demonstrating the resolving power required to separate sulfur-34 ($^{34}\text{S}$) from double carbon-13 ($^{13}\text{C}_2$) substitutions ($10.91$ mDa). Using open access benchmark data, we execute a modernized Bioconductor workflow in R 4.6.1 combining \texttt{MetaboCoreUtils} and \texttt{SummarizedExperiment}. We demonstrate adduct deconvolution, tolerance-controlled database matching, and structured reporting conforming to the Metabolomics Standards Initiative (MSI) confidence tiers. The chapter concludes with the Five Deadly Sins of metabolite annotation, a diagnostic checklist, and four multi-tier exercises with complete mathematical derivations and verified R code.
+Feature detection extracts thousands of chromatographic peaks defined by mass-to-charge ($m/z$) and retention time ($t_R$), but a coordinate pair does not identify a molecule. In electrospray ionization (ESI), single chemical metabolites partition into multiple spectral features: protonated ions, sodium and potassium adducts, neutral water losses, and isotopic envelopes. Conversely, a single accurate mass matches multiple isomeric structures. Metabolite annotation deconvolutes redundant adduct multiplets into discrete parent molecules \cite{kuhl2012camera, rainer2022modular} and queries reference chemical databases \cite{wishart2022hmdb, guijas2018metlin, horai2010massbank} within instrument-calibrated mass tolerances. This chapter establishes the physical chemistry, mathematical formulations, and Bioconductor implementations for metabolite annotation. We derive exact monoisotopic mass arithmetic from atomic mass defects \cite{gross2017mass}, formulate tolerance-aware search intervals in parts-per-million (ppm) \cite{kind2007seven}, and model natural isotopic fine structure distributions using multinomial expansions \cite{duehrkop2019sirius}. We present the Isotope Envelope Discriminability Theorem, demonstrating the resolving power required to separate sulfur-34 ($^{34}\text{S}$) from double carbon-13 ($^{13}\text{C}_2$) substitutions ($10.91$ mDa). Using open access benchmark data, we execute a modernized Bioconductor workflow in R 4.6.1 combining \texttt{MetaboCoreUtils}, \texttt{MetaboAnnotation}, and \texttt{SummarizedExperiment} \cite{rainer2022modular, huber2015orchestrating, smith2006xcms, tautenhahn2008centwave}. We demonstrate adduct deconvolution, tolerance-controlled database matching, and structured reporting conforming to the Metabolomics Standards Initiative (MSI) confidence tiers \cite{sumner2007proposed, schymanski2014identifying}. The chapter concludes with the Five Deadly Sins of metabolite annotation, a diagnostic checklist, and four multi-tier exercises with complete mathematical derivations and verified R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Feature detection extracts thousands of chromatographic peaks defined by mass-to
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Deconvolution} & Peak shape correlation ($r \ge 0.85$) and chromatographic grouping. & Collapse co-eluting adducts and isotopes into pseudo-spectra. & Treating adducts as distinct biological features. Remedy: Group by retention time and EIC shape correlation. \\
+\textbf{1. Deconvolution} & Peak shape correlation ($r \ge 0.85$) and chromatographic grouping \cite{kuhl2012camera, pluskal2010mzmine}. & Collapse co-eluting adducts and isotopes into pseudo-spectra. & Treating adducts as distinct biological features. Remedy: Group by retention time and EIC shape correlation. \\
 \addlinespace
-\textbf{2. Adduct Inversion} & Algebraic neutral mass calculation from known adducts. & Deduce monoisotopic neutral precursor mass $M_0$. & Inverting with wrong adduct assumption (e.g., Na vs H). Remedy: Multi-adduct consistency verification. \\
+\textbf{2. Adduct Inversion} & Algebraic neutral mass calculation from known adducts \cite{gross2017mass, rainer2022modular}. & Deduce monoisotopic neutral precursor mass $M_0$. & Inverting with wrong adduct assumption (e.g., Na vs H). Remedy: Multi-adduct consistency verification. \\
 \addlinespace
-\textbf{3. Exact Search} & Symmetric parts-per-million windowing ($\pm \delta_{\text{ppm}}$). & Query reference databases for candidate formulas and structures. & Search space explosion from wide tolerance ($> 15$ ppm). Remedy: Instrument lock-mass calibration ($\le 5$ ppm). \\
+\textbf{3. Exact Search} & Symmetric parts-per-million windowing ($\pm \delta_{\text{ppm}}$) \cite{kind2007seven, wishart2022hmdb}. & Query reference databases for candidate formulas and structures. & Search space explosion from wide tolerance ($> 15$ ppm). Remedy: Instrument lock-mass calibration ($\le 5$ ppm). \\
 \addlinespace
-\textbf{4. Fine Structure} & Multinomial isotopic envelope simulation and cosine scoring. & Filter candidate formulas via $M+1$ and $M+2$ abundance matching. & Formula degeneracy above $m/z = 300$. Remedy: Score fine-structure mass shifts ($^{34}\text{S}$ vs $^{13}\text{C}_2$). \\
+\textbf{4. Fine Structure} & Multinomial isotopic envelope simulation and cosine scoring \cite{duehrkop2019sirius, tsugawa2015msdial}. & Filter candidate formulas via $M+1$ and $M+2$ abundance matching. & Formula degeneracy above $m/z = 300$. Remedy: Score fine-structure mass shifts ($^{34}\text{S}$ vs $^{13}\text{C}_2$). \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -178,7 +178,7 @@ The similarity between an experimental isotopic envelope $\mathbf{x} = (x_0, x_1
 S_{\text{iso}} = \frac{\sum_{i=0}^k x_i \, y_i}{\sqrt{\sum_{i=0}^k x_i^2} \, \sqrt{\sum_{i=0}^k y_i^2}}
 \label{eq:iso_score}
 \end{equation}
-Candidates with $S_{\text{iso}} < 0.90$ are rejected as chemically implausible.
+Candidates with $S_{\text{iso}} < 0.90$ are rejected as chemically implausible \cite{duehrkop2019sirius, tsugawa2015msdial}.
 
 % =============================================================================
 \section{Algorithmic Architecture and Container Engineering}
@@ -191,11 +191,11 @@ Deconvolution partitions raw feature tables into pseudo-spectra by exploiting ch
 r_{AB} = \frac{\sum_{s=1}^S (I_{A, s} - \bar{I}_A)(I_{B, s} - \bar{I}_B)}{\sqrt{\sum_{s=1}^S (I_{A, s} - \bar{I}_A)^2} \, \sqrt{\sum_{s=1}^S (I_{B, s} - \bar{I}_B)^2}} \ge 0.85
 \label{eq:eic_cor}
 \end{equation}
-Features satisfying $r_{AB} \ge 0.85$ and apex retention time alignment $\Delta t_R \le 0.02$ min are grouped into a single pseudo-spectrum. Pairwise mass differences within the group are matched against an adduct library (Table~\ref{tab:annotation_roadmap}) to identify the monoisotopic precursor $[M+\text{H}]^+$.
+Features satisfying $r_{AB} \ge 0.85$ and apex retention time alignment $\Delta t_R \le 0.02$ min are grouped into a single pseudo-spectrum. Pairwise mass differences within the group are matched against an adduct library (Table~\ref{tab:annotation_roadmap}) to identify the monoisotopic precursor $[M+\text{H}]^+$ \cite{kuhl2012camera, pluskal2010mzmine}.
 
 \subsection{Bioconductor Modernization: MetaboCoreUtils and MetaboAnnotation}
 
-Legacy metabolomics pipelines relied on \texttt{CAMERA}, which operated on old \texttt{xcmsSet} data structures and required complex S4 conversions. Modern Bioconductor workflows decouple formula arithmetic, adduct transformation, and spectral matching into dedicated modular packages \cite{rainer2022modular}:
+Legacy metabolomics pipelines relied on \texttt{CAMERA}, which operated on old \texttt{xcmsSet} data structures and required complex S4 conversions. Modern Bioconductor workflows decouple formula arithmetic, adduct transformation, and spectral matching into dedicated modular packages \cite{rainer2022modular, huber2015orchestrating, smith2006xcms, tautenhahn2008centwave}:
 \begin{itemize}
     \item \texttt{MetaboCoreUtils}: C-level vectorized formula calculations, atomic mass arithmetic, adduct parsing (\texttt{calculateMass}, \texttt{mass2mz}, \texttt{mz2mass}).
     \item \texttt{MetaboAnnotation}: Query-to-reference matching pipelines supporting multi-dimensional constraints (exact mass, retention time, MS/MS spectra).
@@ -210,7 +210,7 @@ The end-to-end annotation pipeline proceeds in four computational stages:
 \begin{enumerate}
     \item \textbf{Feature Matrix Deconvolution}: Group features by retention time and peak shape correlation ($r \ge 0.85$) to collapse adducts.
     \item \textbf{Neutral Mass Inversion}: Invert observed $[M+\text{Na}]^+$ or $[M+\text{K}]^+$ ions to neutral mass $M_0$ using \texttt{MetaboCoreUtils::mz2mass}.
-    \item \textbf{Tolerance-Controlled Search}: Match neutral masses against reference databases (HMDB, KEGG, ChEBI) within $\pm 5.0\;\text{ppm}$.
+    \item \textbf{Tolerance-Controlled Search}: Match neutral masses against reference databases (HMDB, KEGG, ChEBI \cite{wishart2022hmdb, guijas2018metlin, horai2010massbank}) within $\pm 5.0\;\text{ppm}$.
     \item \textbf{Isotopic Fine Structure Pruning}: Simulate theoretical isotopic envelopes and filter candidate formulas by cosine score $S_{\text{iso}} \ge 0.90$.
     \item \textbf{Rectangular Packaging}: Integrate candidate annotations, matched formulas, and MSI confidence levels into the \texttt{rowData} of a \texttt{SummarizedExperiment}.
 \end{enumerate}
@@ -221,7 +221,7 @@ The end-to-end annotation pipeline proceeds in four computational stages:
 
 \subsection{MSI Confidence Levels Quoting Sumner et al. (2007)}
 
-The Metabolomics Standards Initiative (MSI) defines four unambiguous confidence tiers \cite{sumner2007proposed}:
+The Metabolomics Standards Initiative (MSI) defines four unambiguous confidence tiers \cite{sumner2007proposed, schymanski2014identifying, broadhurst2018guidelines, wang2016sharing}:
 \begin{itemize}
     \item \textbf{Level 1 (Identified Metabolites)}: Confirmed by matching at least two orthogonal properties (retention time, exact mass, and MS/MS fragmentation) against an authentic chemical reference standard analyzed on the identical instrument under identical analytical conditions.
     \item \textbf{Level 2 (Putatively Annotated Compounds)}: Structurally annotated by matching MS/MS fragmentation spectra against public or commercial reference libraries without an authentic standard analyzed locally.
@@ -632,40 +632,94 @@ For features matching formula $\text{C}_6\text{H}_{12}\text{O}_6$ ($m/z = 180.06
 \small
 
 \bibitem{sumner2007proposed}
-Sumner, L.~W., Amberg, A., Barrett, D., Beale, M.~H., Beger, R., et al.
-\newblock Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group (CAWG) Metabolomics Standards Initiative (MSI).
-\newblock \textit{Metabolomics}, 3(3):211--221, 2007.
-\newblock \url{https://doi.org/10.1007/s11306-007-0082-2}
+Sumner, L.W., Amberg, A., Barrett, D., et al.: Proposed minimum reporting standards for chemical analysis Chemical Analysis Working Group (CAWG) Metabolomics Standards Initiative (MSI).
+\textit{Metabolomics} \textbf{3}(3), 211--221 (2007).
+\doi{10.1007/s11306-007-0082-2}
 
 \bibitem{schymanski2014identifying}
-Schymanski, E.~L., Jeon, J., Gulde, R., Fenner, K., Ruff, M., et al.
-\newblock Identifying small molecules via high resolution mass spectrometry: Communicating confidence.
-\newblock \textit{Environmental Science \& Technology}, 48(4):2097--2098, 2014.
-\newblock \url{https://doi.org/10.1021/es5002105}
+Schymanski, E.L., Jeon, J., Gulde, R., et al.: Identifying small molecules via high resolution mass spectrometry: Communicating confidence.
+\textit{Environmental Science \& Technology} \textbf{48}(4), 2097--2098 (2014).
+\doi{10.1021/es5002105}
 
 \bibitem{kuhl2012camera}
-Kuhl, C., Tautenhahn, R., B\"ottcher, C., Larson, T.~R., Neumann, S.
-\newblock CAMERA: An integrated strategy for compound spectra extraction and annotation of liquid chromatography/mass spectrometry data sets.
-\newblock \textit{Analytical Chemistry}, 84(1):283--289, 2012.
-\newblock \url{https://doi.org/10.1021/ac202450g}
+Kuhl, C., Tautenhahn, R., B{\"o}ttcher, C., Larson, T.R., Neumann, S.: CAMERA: An integrated strategy for compound spectra extraction and annotation of liquid chromatography/mass spectrometry data sets.
+\textit{Analytical Chemistry} \textbf{84}(1), 283--289 (2012).
+\doi{10.1021/ac202450g}
 
 \bibitem{kind2007seven}
-Kind, T., Fiehn, O.
-\newblock Seven Golden Rules for heuristic filtering of molecular formulas obtained by accurate mass spectrometry.
-\newblock \textit{BMC Bioinformatics}, 8:105, 2007.
-\newblock \url{https://doi.org/10.1186/1471-2105-8-105}
+Kind, T., Fiehn, O.: Seven Golden Rules for heuristic filtering of molecular formulas obtained by accurate mass spectrometry.
+\textit{BMC Bioinformatics} \textbf{8}, 105 (2007).
+\doi{10.1186/1471-2105-8-105}
 
 \bibitem{rainer2022modular}
-Rainer, J., Vicini, A., Salzer, L., Stanstrup, J., Badia, J.~M., et al.
-\newblock A Modular and Expandable Ecosystem for Metabolomics Data Analysis in R.
-\newblock \textit{Metabolites}, 12(2):173, 2022.
-\newblock \url{https://doi.org/10.3390/metabo12020173}
+Rainer, J., Vicini, A., Salzer, L., et al.: A modular and expandable ecosystem for metabolomics data analysis in R.
+\textit{Metabolites} \textbf{12}(2), 173 (2022).
+\doi{10.3390/metabo12020173}
 
 \bibitem{gross2017mass}
-Gross, J.~H.
-\newblock \textit{Mass Spectrometry: A Textbook}.
-\newblock Springer, 3rd edition, 2017.
-\newblock \url{https://doi.org/10.1007/978-3-319-54398-7}
+Gross, J.H.: Mass Spectrometry: A Textbook, 3rd edn.
+Springer, Cham (2017).
+\doi{10.1007/978-3-319-54398-7}
+
+\bibitem{smith2006xcms}
+Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.: XCMS: processing mass spectrometry data for metabolite profiling using nonlinear peak alignment, matching, and identification.
+\textit{Analytical Chemistry} \textbf{78}(3), 779--787 (2006).
+\doi{10.1021/ac051437y}
+
+\bibitem{tautenhahn2008centwave}
+Tautenhahn, R., B{\"o}ttcher, C., Neumann, S.: Highly sensitive feature detection for high resolution LC/MS.
+\textit{BMC Bioinformatics} \textbf{9}, 504 (2008).
+\doi{10.1186/1471-2105-9-504}
+
+\bibitem{wishart2022hmdb}
+Wishart, D.S., Guo, A., Oler, E., et al.: HMDB 5.0: the Human Metabolome Database for 2022.
+\textit{Nucleic Acids Research} \textbf{50}(D1), D622--D631 (2022).
+\doi{10.1093/nar/gkab1062}
+
+\bibitem{guijas2018metlin}
+Guijas, C., Montenegro-Burke, J.R., Domingo-Almenara, X., et al.: METLIN: a technology platform for identifying knowns and unknowns.
+\textit{Analytical Chemistry} \textbf{90}(5), 3156--3164 (2018).
+\doi{10.1021/acs.analchem.7b04424}
+
+\bibitem{horai2010massbank}
+Horai, H., Arita, M., Kanaya, S., et al.: MassBank: a public repository for sharing mass spectral data for life sciences.
+\textit{Journal of Mass Spectrometry} \textbf{45}(7), 703--714 (2010).
+\doi{10.1002/jms.1777}
+
+\bibitem{wang2016sharing}
+Wang, M., Carver, J.J., Phelan, V.V., et al.: Sharing and community curation of mass spectrometry data with Global Natural Products Social Molecular Networking.
+\textit{Nature Biotechnology} \textbf{34}(8), 828--837 (2016).
+\doi{10.1038/nbt.3597}
+
+\bibitem{duehrkop2019sirius}
+D{\"u}hrkop, K., Fleischauer, M., Ludwig, M., et al.: SIRIUS 4: a rapid tool for turning tandem mass spectra into metabolite formulas and structures.
+\textit{Nature Methods} \textbf{16}(4), 299--302 (2019).
+\doi{10.1038/s41592-019-0344-8}
+
+\bibitem{tsugawa2015msdial}
+Tsugawa, H., Cajka, T., Kind, T., et al.: MS-DIAL: data-independent MS/MS deconvolution for comprehensive metabolome analysis.
+\textit{Nature Methods} \textbf{12}(6), 523--526 (2015).
+\doi{10.1038/nmeth.3393}
+
+\bibitem{pluskal2010mzmine}
+Pluskal, T., Castillo, S., Villar-Briones, A., Ore{\v{s}}i{\v{c}}, M.: MZmine 2: modular framework for processing, visualizing, and analyzing mass spectrometry-based molecular profile data.
+\textit{BMC Bioinformatics} \textbf{11}, 395 (2010).
+\doi{10.1186/1471-2105-11-395}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Rainer, J.: MSnbase: an R/Bioconductor package for isobaric and label-free mass spectrometry data handling, processing and visualisation.
+\textit{Bioinformatics} \textbf{28}(2), 288--289 (2012).
+\doi{10.1093/bioinformatics/btr645}
+
+\bibitem{broadhurst2018guidelines}
+Broadhurst, D., Goodacre, R., Reinke, S.N., et al.: Guidelines and considerations for the use of system suitability and quality control samples in mass spectrometry assays applied to untargeted clinical metabolomic studies.
+\textit{Metabolomics} \textbf{14}(6), 72 (2018).
+\doi{10.1007/s11306-018-1367-3}
 
 \end{thebibliography}
 

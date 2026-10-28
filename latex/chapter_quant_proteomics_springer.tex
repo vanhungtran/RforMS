@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Quantitative proteomics infers protein abundances from digested peptide intensities, propagating filtering thresholds and missingness across hierarchical levels. Direct protein quantification is physically impossible in bottom-up mass spectrometry; peptides must be identified, quantified, and aggregated into protein groups. The choice of quantification methodology determines dynamic range, throughput, and ratio accuracy: label-free quantification (LFQ) spans four to five orders of dynamic range at the cost of run-to-run stochastic missingness, whereas isobaric labeling (TMT) achieves multiplexed throughput at the cost of precursor co-isolation ratio compression. The \texttt{QFeatures} container formalizes this hierarchy as a directed acyclic graph linking peptide-spectrum matches (PSMs), peptides, and proteins while preserving coordinate alignment and assay provenance. When summarizing peptide intensities into protein abundances, standard median aggregation is susceptible to outlying aberrant peptides, whereas M-estimation (\texttt{robustSummary}) downweights outlier residuals through Tukey biweight estimators. This chapter presents the mathematical foundations of MS quantitation, ratio compression kinetics, hierarchical \texttt{QFeatures} construction, median versus robust aggregation benchmarks on the CPTAC study, and linear modeling in R 4.6.1.
+Quantitative proteomics infers protein abundances from digested peptide intensities, propagating filtering thresholds and missingness across hierarchical levels. Direct protein quantification is physically impossible in bottom-up mass spectrometry; peptides must be identified, quantified, and aggregated into protein groups. The choice of quantification methodology determines dynamic range, throughput, and ratio accuracy: label-free quantification (LFQ) spans four to five orders of dynamic range \cite{cox2014maxlfq}, whereas isobaric labeling (TMT) achieves multiplexed throughput at the cost of precursor co-isolation ratio compression \cite{ting2011sps, savitski2013tmt}. The \texttt{QFeatures} container formalizes this hierarchy as a directed acyclic graph linking peptide-spectrum matches (PSMs), peptides, and proteins \cite{gatto2023qfeatures, vanderaa2021scp} while preserving coordinate alignment and assay provenance \cite{huber2015orchestrating}. When summarizing peptide intensities into protein abundances, standard median aggregation is susceptible to outlying aberrant peptides, whereas M-estimation (\texttt{robustSummary}) downweights outlier residuals through Tukey biweight estimators \cite{stucki2022mscoreutils, ting2011msstats}. This chapter presents the mathematical foundations of MS quantitation, ratio compression kinetics, hierarchical \texttt{QFeatures} construction, median versus robust aggregation benchmarks on the CPTAC study \cite{paulovich2010cptac}, and linear modeling \cite{smyth2004limma} in R 4.6.1.
 \end{abstract}
 
 \vspace{1em}
@@ -41,13 +41,13 @@ Table~\ref{tab:quant_roadmap} compares the four primary mass spectrometry quanti
 \toprule
 \textbf{Methodology} & \textbf{Measurement Domain} & \textbf{Dynamic Range \& Accuracy} & \textbf{Primary Failure Mode} \\
 \midrule
-\textbf{1. Label-Free (LFQ)} & MS1 precursor peak integration (AUC) & High dynamic range ($10^4$--$10^5$); no ratio compression & Stochastic missingness across LC-MS runs \\
+\textbf{1. Label-Free (LFQ)} & MS1 precursor peak integration (AUC) \cite{cox2014maxlfq} & High dynamic range ($10^4$--$10^5$); no ratio compression & Stochastic missingness across LC-MS runs \\
 \addlinespace
-\textbf{2. Isobaric (TMT)} & MS2/MS3 reporter ion intensities & High multiplexing ($18$-plex); high run-to-run completeness & Ratio compression from precursor co-isolation \\
+\textbf{2. Isobaric (TMT)} & MS2/MS3 reporter ion intensities \cite{ting2011sps, savitski2013tmt} & High multiplexing ($18$-plex); high run-to-run completeness & Ratio compression from precursor co-isolation \\
 \addlinespace
-\textbf{3. DIA / SWATH} & Multiplexed MS2 fragment traces & High reproducibility; wide dynamic range & Spectral deconvolution complexity \\
+\textbf{3. DIA / SWATH} & Multiplexed MS2 fragment traces \cite{gillet2012targeted, bruderer2015extending} & High reproducibility; wide dynamic range & Spectral deconvolution complexity \\
 \addlinespace
-\textbf{4. SILAC} & MS1 isotopic doublet pairs & Direct light/heavy ratio; high accuracy & Incomplete metabolic labeling; $3$-state limit \\
+\textbf{4. SILAC} & MS1 isotopic doublet pairs \cite{ong2002stable} & Direct light/heavy ratio; high accuracy & Incomplete metabolic labeling; $3$-state limit \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -70,7 +70,7 @@ where $\mu_p$ is the baseline protein abundance, $\alpha_k$ is the sample effect
 
 \subsection{Dynamic Range and Ratio Compression Kinetics}
 
-Proteomes span over six orders of magnitude in dynamic range in human plasma ($10^0$ to $10^{10}$ pg/mL). In isobaric labeling (TMT), precursor ions are selected within an isolation window (typically $0.7$ to $1.2$ Th). Co-eluting background peptides within this window are co-fragmented simultaneously, contributing reporter ions that distort fold-change estimates.
+Proteomes span over six orders of magnitude in dynamic range in human plasma ($10^0$ to $10^{10}$ pg/mL). In isobaric labeling (TMT), precursor ions are selected within an isolation window (typically $0.7$ to $1.2$ Th). Co-eluting background peptides within this window are co-fragmented simultaneously, contributing reporter ions that distort fold-change estimates \cite{ting2011sps, savitski2013tmt}.
 
 Let $R_{\text{true}} = I_1 / I_2$ denote the true ratio of an analyte between two channels. If co-isolated interfering ions contribute background intensity with ratio $1:1$ at relative proportion $\beta = I_{\text{interfere}} / I_{\text{target}}$, the observed ratio compresses toward unity:
 \begin{equation}
@@ -88,7 +88,7 @@ When interference $\beta = 0.50$, an actual $4.0$-fold change compresses to $R_{
 \section{The QFeatures Architecture: Hierarchical Relational Graphs}
 \label{sec:qfeatures_arch}
 
-The \texttt{QFeatures} container extends \texttt{MultiAssayExperiment} to manage the hierarchical multi-tier structure of mass spectrometry data. It coordinates three interconnected components:
+The \texttt{QFeatures} container extends \texttt{MultiAssayExperiment} to manage the hierarchical multi-tier structure of mass spectrometry data \cite{gatto2023qfeatures, vanderaa2021scp, huber2015orchestrating}. It coordinates three interconnected components:
 \begin{enumerate}
 \item \textbf{Assays}: An ordered list of \texttt{SummarizedExperiment} objects representing discrete processing tiers: \texttt{peptides} $\to$ \texttt{norm\_peptides} $\to$ \texttt{proteins}.
 \item \textbf{AssayLinks}: Directed acyclic graph edges linking row indices between assays, generated during aggregation or transformation via \texttt{addAssayLink()}.
@@ -105,7 +105,7 @@ Converting peptide matrices into protein matrices requires row-wise summarizatio
 \label{eq:col_medians}
 \end{equation}
 While resistant to extreme values, the median discards magnitude information and can fluctuate when peptide counts are small ($|\mathcal{P}_p| \le 2$).
-\item \textbf{Robust Summarization (\texttt{robustSummary})}: Fits a robust linear model using Tukey's biweight M-estimator:
+\item \textbf{Robust Summarization (\texttt{robustSummary})}: Fits a robust linear model using Tukey's biweight M-estimator \cite{stucki2022mscoreutils, ting2011msstats}:
 \begin{equation}
 \sum_{j \in \mathcal{P}_p} \psi\left( \frac{y_{pjk} - \hat{\mu}_{pk} - \hat{\beta}_j}{\hat{\sigma}_p} \right) = 0
 \label{eq:robust_summary}
@@ -117,7 +117,7 @@ where $\psi(u) = u(1 - (u/c)^2)^2$ for $|u| \le c$ ($c = 4.685$) and zero otherw
 \section{CPTAC Benchmark Analysis and Differential Testing}
 \label{sec:cptac_lab}
 
-The Clinical Proteomic Tumor Analysis Consortium (CPTAC) study design evaluates quantitative pipelines using yeast spike-in standards across two dilution conditions ($6\text{A}$ and $6\text{B}$) with three replicates each. Listing~4.1 in Chapter 13 loads the genuine $11{,}466$-peptide MaxQuant identification table from \texttt{MsDataHub}.
+The Clinical Proteomic Tumor Analysis Consortium (CPTAC) study design evaluates quantitative pipelines using yeast spike-in standards across two dilution conditions ($6\text{A}$ and $6\text{B}$) with three replicates each \cite{paulovich2010cptac, tabb2010repeatability}. Listing~4.1 in Chapter 13 loads the genuine $11{,}466$-peptide MaxQuant identification table from \texttt{MsDataHub}.
 
 Listing~13.1 ingests the CPTAC dataset, filters missing values, and normalizes intensities.
 
@@ -173,7 +173,7 @@ Of $11{,}466$ raw peptides, $45.25\%$ of matrix cells contain missing values. Fi
 \section{Median vs RobustSummarization Benchmark}
 \label{sec:median_vs_robust}
 
-Listing~13.2 aggregates the $6{,}643$ peptides to $1{,}451$ protein groups using both \texttt{colMedians} and \texttt{MsCoreUtils::}\allowbreak\texttt{robustSummary}, followed by differential abundance testing with \texttt{limma}.
+Listing~13.2 aggregates the $6{,}643$ peptides to $1{,}451$ protein groups using both \texttt{colMedians} and \texttt{MsCoreUtils::}\allowbreak\texttt{robustSummary} \cite{stucki2022mscoreutils}, followed by differential abundance testing with \texttt{limma} \cite{smyth2004limma, ritchie2015limma}.
 
 \begin{rchunk}{Listing 13.2: Protein Aggregation and Differential Abundance Testing}
 library(MsCoreUtils)
@@ -268,7 +268,7 @@ Specify the conversion function from the \texttt{MSstatsConvert} package require
 The resulting standardized data frame feeds into \texttt{MSstats::dataProcess()} for run-level summarization.
 
 \FloatBarrier
-\begin{thebibliography}{10}
+\begin{thebibliography}{18}
 
 \bibitem{gatto2023qfeatures}
 Gatto, L., Vanderaa, C.
@@ -276,11 +276,29 @@ Gatto, L., Vanderaa, C.
 \newblock R package version 1.14.0, Bioconductor, 2024.
 \newblock \url{https://doi.org/10.18129/B9.bioc.QFeatures}.
 
+\bibitem{vanderaa2021scp}
+Vanderaa, C., Gatto, L.
+\newblock Replication of single-cell proteomics data analysis with the {scp} package.
+\newblock \emph{Journal of Proteome Research}, 20(9):4263--4271, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.1c00168}.
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods}, 12(2):115--121, 2015.
+\newblock \url{https://doi.org/10.1038/nmeth.3252}.
+
 \bibitem{paulovich2010cptac}
 Paulovich, A.G., Billheimer, D., Ham, A.J., et~al.
 \newblock Interlaboratory study characterizing a yeast performance standard for benchmarking {LC-MS/MS} platforms in the {NCI CPTAC} study.
 \newblock \emph{Molecular \& Cellular Proteomics}, 9(2):242--254, 2010.
 \newblock \url{https://doi.org/10.1074/mcp.M900222-MCP200}.
+
+\bibitem{tabb2010repeatability}
+Tabb, D.L., Vega-Montoto, L., Rudnick, P.A., et~al.
+\newblock Repeatability and reproducibility in proteomic identifications by liquid chromatography-tandem mass spectrometry.
+\newblock \emph{Journal of Proteome Research}, 9(2):761--776, 2010.
+\newblock \url{https://doi.org/10.1021/pr9006365}.
 
 \bibitem{ting2011msstats}
 Choi, M., Chang, C.Y., Clough, T., et~al.
@@ -294,6 +312,42 @@ Savitski, M.M., Mathieson, T., Zinn, N., et~al.
 \newblock \emph{Journal of Proteome Research}, 12(8):3586--3598, 2013.
 \newblock \url{https://doi.org/10.1021/pr400098n}.
 
+\bibitem{ting2011sps}
+Ting, L., Rad, R., Gygi, S.P., Haas, W.
+\newblock {MS3} spectrum resolution enables accurate quantification of low-abundance proteins in isobaric tagging.
+\newblock \emph{Nature Methods}, 8(11):937--940, 2011.
+\newblock \url{https://doi.org/10.1038/nmeth.1714}.
+
+\bibitem{cox2014maxlfq}
+Cox, J., Hein, M.Y., Luber, C.A., Parida, I., Cox, J., Mann, M.
+\newblock Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed {MaxLFQ}.
+\newblock \emph{Molecular \& Cellular Proteomics}, 13(9):2513--2526, 2014.
+\newblock \url{https://doi.org/10.1074/mcp.M113.031591}.
+
+\bibitem{ong2002stable}
+Ong, S.E., Blagoev, B., Kratchmarova, I., et~al.
+\newblock Stable isotope labeling by amino acids in cell culture, {SILAC}, as a simple and accurate approach to expression proteomics.
+\newblock \emph{Molecular \& Cellular Proteomics}, 1(5):376--386, 2002.
+\newblock \url{https://doi.org/10.1074/mcp.M200025-MCP200}.
+
+\bibitem{gillet2012targeted}
+Gillet, L.C., Navarro, P., Tate, S., et~al.
+\newblock Targeted data extraction of the {MS/MS} spectra generated by data-independent acquisition: a new concept for consistent and reproducible proteome analysis.
+\newblock \emph{Molecular \& Cellular Proteomics}, 11(6):O111.016717, 2012.
+\newblock \url{https://doi.org/10.1074/mcp.O111.016717}.
+
+\bibitem{bruderer2015extending}
+Bruderer, R., Bernhardt, O.M., Gandhi, T., et~al.
+\newblock Extending the limits of quantitative proteome profiling with data-independent acquisition and {Spectronaut}.
+\newblock \emph{Molecular \& Cellular Proteomics}, 14(5):1400--1410, 2015.
+\newblock \url{https://doi.org/10.1074/mcp.M114.044305}.
+
+\bibitem{goeminne2016msqrob2}
+Goeminne, L.J., Gevaert, K., Clement, L.
+\newblock Experimental design and data-analysis in label-free quantitative {LC/MS} proteomics: a tutorial with {MSqRob}.
+\newblock \emph{Journal of Proteomics}, 171:23--36, 2018.
+\newblock \url{https://doi.org/10.1016/j.jprot.2017.04.004}.
+
 \bibitem{stucki2022mscoreutils}
 Rainer, J., Vicini, A., Salzer, L., Gatto, L.
 \newblock \emph{MsCoreUtils: Core Utilities for Mass Spectrometry Data}.
@@ -302,9 +356,27 @@ Rainer, J., Vicini, A., Salzer, L., Gatto, L.
 
 \bibitem{smyth2004limma}
 Smyth, G.K.
-\newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
+\newblock Linear models and empirical {Bayes} methods for assessing differential expression in microarray experiments.
 \newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
 \newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.E., Phipson, B., Wu, D., et~al.
+\newblock {limma} powers differential expression analyses for {RNA}-sequencing and microarray studies.
+\newblock \emph{Nucleic Acids Research}, 43(7):e47, 2015.
+\newblock \url{https://doi.org/10.1093/nar/gkv007}.
+
+\bibitem{gatto2021msnbase}
+Gatto, L., Gibb, S., Rainer, J.
+\newblock {MSnbase}, efficient and elegant {R}-based processing and visualization of raw mass spectrometry data.
+\newblock \emph{Journal of Proteome Research}, 20(1):1063--1069, 2021.
+\newblock \url{https://doi.org/10.1021/acs.jproteome.0c00313}.
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D1145--D1152, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz984}.
 
 \end{thebibliography}
 

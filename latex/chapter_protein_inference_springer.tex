@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Bottom-up proteomics digests intact proteins into peptide fragments prior to liquid chromatography and tandem mass spectrometry. This proteolytic cleavage severs the physical connectivity between peptide sequences and their parent proteins. Search engines assign MS/MS spectra to peptide sequences, but reconstructing the original proteome requires resolving the protein inference problem. Many peptides map to multiple homologous proteins, splice isoforms, or redundant database entries. Allocating shared peptides to every candidate protein artificially inflates protein counts and distorts quantitative ratios. This chapter formulates the mathematical foundations, network topology, and Bioconductor implementations for protein inference and quantitative aggregation. We define the taxonomy of unique, shared, and razor peptides, model peptide-protein associations as bipartite graphs, and formulate Occam's razor parsimony grouping as a minimum set cover problem. Using the Bioconductor \texttt{QFeatures} container and \texttt{igraph} in R 4.6.1, we partition bipartite graphs into isolated connected components, eliminate degenerate shared peptides, and aggregate peptide intensities into protein abundances using Tukey's median polish. We audit evidence depth using the Two-Peptide Rule to eliminate spurious single-hit identifications. The chapter details the Five Deadly Sins of protein inference, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+Bottom-up proteomics digests intact proteins into peptide fragments prior to liquid chromatography and tandem mass spectrometry. This proteolytic cleavage severs the physical connectivity between peptide sequences and their parent proteins. Search engines assign MS/MS spectra to peptide sequences, but reconstructing the original proteome requires resolving the protein inference problem \cite{nesvizhskii2005interpretation, nesvizhskii2003statistical}. Many peptides map to multiple homologous proteins, splice isoforms, or redundant database entries. Allocating shared peptides to every candidate protein artificially inflates protein counts and distorts quantitative ratios. This chapter formulates the mathematical foundations, network topology, and Bioconductor implementations for protein inference and quantitative aggregation. We define the taxonomy of unique, shared, and razor peptides \cite{cox2008maxquant}, model peptide-protein associations as bipartite graphs \cite{zhang2007idpicker}, and formulate Occam's razor parsimony grouping as a minimum set cover problem \cite{chvatal1979greedy, serang2012efficient}. Using the Bioconductor \texttt{QFeatures} container \cite{gatto2023qfeatures, vanderaa2021reproducible, huber2015orchestrating} and \texttt{igraph} \cite{csardi2006igraph} in R 4.6.1, we partition bipartite graphs into isolated connected components, eliminate degenerate shared peptides, and aggregate peptide intensities into protein abundances using Tukey's median polish \cite{tukey1977exploratory, goeminne2016msqrob}. We audit evidence depth using the Two-Peptide Rule \cite{gupta2009false, savitski2015measuring} to eliminate spurious single-hit identifications. The chapter details the Five Deadly Sins of protein inference, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Bottom-up proteomics digests intact proteins into peptide fragments prior to liq
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Mapping} & Primary sequence lookup against reference FASTA database. & Classify peptides as unique ($|\text{prot}| = 1$) or shared ($|\text{prot}| \ge 2$). & Conflating shared peptides with unique evidence. Remedy: Compute uniqueness flag per sequence. \\
+\textbf{1. Mapping} & Primary sequence lookup against reference FASTA database \cite{nesvizhskii2005interpretation, gatto2023psmatch}. & Classify peptides as unique ($|\text{prot}| = 1$) or shared ($|\text{prot}| \ge 2$). & Conflating shared peptides with unique evidence. Remedy: Compute uniqueness flag per sequence. \\
 \addlinespace
-\textbf{2. Parsimony} & Bipartite graph connected component analysis and set cover. & Collapse indistinguishable proteins into parsimonious groups. & Over-assembly of subsumed proteins. Remedy: Enforce Occam's razor minimum set cover. \\
+\textbf{2. Parsimony} & Bipartite graph connected component analysis and set cover \cite{zhang2007idpicker, chvatal1979greedy, csardi2006igraph}. & Collapse indistinguishable proteins into parsimonious groups. & Over-assembly of subsumed proteins. Remedy: Enforce Occam's razor minimum set cover. \\
 \addlinespace
-\textbf{3. Filtering} & Shared peptide exclusion or razor peptide allocation. & Prevent quantitative signal bleeding across homologous proteins. & Double-counting shared peptide intensity. Remedy: Restrict aggregation to unique peptides. \\
+\textbf{3. Filtering} & Shared peptide exclusion or razor peptide allocation \cite{cox2008maxquant, cox2014maxquant, savitski2015measuring}. & Prevent quantitative signal bleeding across homologous proteins. & Double-counting shared peptide intensity. Remedy: Restrict aggregation to unique peptides. \\
 \addlinespace
-\textbf{4. Aggregation} & Tukey median polish on \texttt{QFeatures} hierarchical assays. & Compute protein abundances resistant to ionization outliers. & Distortion from simple summation. Remedy: Apply linear additive median polish. \\
+\textbf{4. Aggregation} & Tukey median polish on \texttt{QFeatures} hierarchical assays \cite{tukey1977exploratory, gatto2023qfeatures, vanderaa2021reproducible, goeminne2016msqrob}. & Compute protein abundances resistant to ionization outliers. & Distortion from simple summation. Remedy: Apply linear additive median polish. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -76,7 +76,7 @@ Counting a shared peptide toward every candidate protein creates false biologica
 \subsection{The Proteolytic Loss of Physical Connectivity}
 In bottom-up mass spectrometry, proteome extracts undergo denaturation, reduction, alkylation, and enzymatic digestion (typically with trypsin). Trypsin cleaves polypeptide chains specifically at the carboxyl side of lysine ($\text{K}$) and arginine ($\text{R}$), generating peptides of 7 to 35 amino acids. While short peptides exhibit favorable liquid chromatography retention and electrospray ionization efficiency, digestion destroys the physical bond between peptides originating from the same protein molecule.
 
-When an MS/MS spectrum matches a peptide sequence $p$, establishing which protein generated $p$ is non-trivial. Gene duplication, alternative mRNA splicing, and sequence homology produce identical amino acid stretches across multiple proteins. Reconstructing the protein composition from peptide identifications is the protein inference problem (Nesvizhskii and Aebersold, 2005).
+When an MS/MS spectrum matches a peptide sequence $p$, establishing which protein generated $p$ is non-trivial. Gene duplication, alternative mRNA splicing, and sequence homology produce identical amino acid stretches across multiple proteins. Reconstructing the protein composition from peptide identifications is the protein inference problem \cite{nesvizhskii2005interpretation, nesvizhskii2003statistical, serang2012efficient}.
 
 \subsection{Peptide Taxonomy and Bipartite Graph Architecture}
 Let $\mathcal{P} = \{p_1, p_2, \dots, p_n\}$ represent the set of identified peptides, and let $\mathcal{K} = \{P_1, P_2, \dots, P_m\}$ represent the set of candidate proteins in the reference database. The mapping between peptides and proteins forms a bipartite graph $G = (V_{\mathcal{P}}, V_{\mathcal{K}}, E)$, where undirected edge $e_{ij} \in E$ exists if and only if peptide $p_i$ is contained within protein $P_j$.
@@ -97,7 +97,7 @@ We partition peptides into three distinct classes:
     \end{equation}
     Shared peptides cannot be attributed to a single protein without additional assumptions.
     
-    \item \textbf{Razor Peptides ($\mathcal{R}$):} A heuristic assignment rule popularized by MaxQuant (Cox and Mann, 2008). A shared peptide $p_i \in \mathcal{S}$ is assigned exclusively to the protein group that possesses the largest number of unique peptide identifications:
+    \item \textbf{Razor Peptides ($\mathcal{R}$):} A heuristic assignment rule popularized by MaxQuant \cite{cox2008maxquant, cox2014maxquant, savitski2015measuring}. A shared peptide $p_i \in \mathcal{S}$ is assigned exclusively to the protein group that possesses the largest number of unique peptide identifications:
     \begin{equation}
     P^*(p_i) = \arg\max_{P_j \in \text{adj}(p_i)} |\mathcal{U}_{P_j}|
     \label{eq:razor_rule}
@@ -114,7 +114,7 @@ Mathematically, Occam's razor is an instance of the classical Minimum Set Cover 
 \text{subject to} \quad & \sum_{j : P_j \in \text{adj}(p_i)} x_j \ge 1, \quad \forall p_i \in \mathcal{P} \label{eq:set_cover_constraint} \\
 & x_j \in \{0, 1\}, \quad \forall j \in \{1, \dots, m\} \nonumber
 \end{align}
-Because the Minimum Set Cover problem is NP-hard, greedy approximation algorithms (such as IDPicker; Zhang et al., 2007) iteratively select the protein that explains the maximum number of currently unexplained peptides until all peptides are covered.
+Because the Minimum Set Cover problem is NP-hard, greedy approximation algorithms (such as IDPicker \cite{zhang2007idpicker, chvatal1979greedy}) iteratively select the protein that explains the maximum number of currently unexplained peptides until all peptides are covered.
 
 Proteins that share the exact same set of identified peptides are indistinguishable. Formally, proteins $P_a$ and $P_b$ are indistinguishable if:
 \begin{equation}
@@ -128,7 +128,7 @@ Once the qualitative protein groups are established, peptide intensities must be
 
 Simple summation of peptide intensities across samples is vulnerable to missing values and single-peptide outliers. If a highly ionizing peptide is missing in sample 1 due to stochastic sampling, summing intensities produces a massive artificial fold-change.
 
-Tukey's Median Polish (Tukey, 1977), implemented via \texttt{MsCoreUtils::robustSummary}, fits a two-way additive linear model on $\log_2$-transformed peptide intensities:
+Tukey's Median Polish \cite{tukey1977exploratory, goeminne2016msqrob, zhu2020deqms}, implemented via \texttt{MsCoreUtils::robustSummary}, fits a two-way additive linear model on $\log_2$-transformed peptide intensities:
 \begin{equation}
 y_{ijk} = \mu + \alpha_i + \beta_j + \epsilon_{ijk}
 \label{eq:median_polish}
@@ -136,7 +136,7 @@ y_{ijk} = \mu + \alpha_i + \beta_j + \epsilon_{ijk}
 where $\mu$ is the grand median, $\alpha_i$ is the peptide-specific ionization effect, $\beta_j$ is the sample abundance effect, and $\epsilon_{ijk}$ represents measurement residual. By iteratively sweeping medians along rows (peptides) and columns (samples), the algorithm decouples peptide ionization efficiency from biological abundance changes, yielding outlier-resistant protein estimates.
 
 \subsection{The Two-Peptide Rule and Evidence Depth}
-Proteins identified by only a single peptide match (termed "One-Hit Wonders") exhibit high false positive rates. A single incorrect PSM mapping to an unexpressed protein creates a spurious protein identification.
+Proteins identified by only a single peptide match (termed "One-Hit Wonders") exhibit high false positive rates \cite{gupta2009false, elias2007target, savitski2015measuring}. A single incorrect PSM mapping to an unexpressed protein creates a spurious protein identification.
 
 The Two-Peptide Rule mandates that a protein group is accepted for quantification only if it is supported by at least two independent peptide sequences ($|\text{adj}(P_j)| \ge 2$). In \texttt{QFeatures}, the metadata column \texttt{.n} tracks the number of contributing peptides per feature, enabling automated thresholding.
 
@@ -144,10 +144,10 @@ The Two-Peptide Rule mandates that a protein group is accepted for quantificatio
 \section{Algorithmic Architecture: The QFeatures and igraph Stack}
 % =============================================================================
 
-Modern proteomics analysis in R utilizes \texttt{igraph} for network topology and \texttt{QFeatures} for data management.
+Modern proteomics analysis in R utilizes \texttt{igraph} for network topology and \texttt{QFeatures} for data management \cite{csardi2006igraph, gatto2023qfeatures, vanderaa2021reproducible, huber2015orchestrating}.
 
 \subsection{Bipartite Network Partitioning with igraph}
-The \texttt{igraph} package converts peptide-protein edge lists into bipartite graph structures. Computing connected components via \texttt{igraph::components} decomposes large proteomes into disjoint subgraphs.
+The \texttt{igraph} package \cite{csardi2006igraph} converts peptide-protein edge lists into bipartite graph structures. Computing connected components via \texttt{igraph::components} decomposes large proteomes into disjoint subgraphs.
 
 Components fall into four structural classes:
 \begin{itemize}
@@ -158,7 +158,7 @@ Components fall into four structural classes:
 \end{itemize}
 
 \subsection{The QFeatures Hierarchical Assay Tree}
-The \texttt{QFeatures} package (Gatto et al., 2023) manages multi-level mass spectrometry assays within an integrated container. A \texttt{QFeatures} object holds multiple \texttt{SummarizedExperiment} objects, recording the exact mathematical link between peptide rows and protein rows.
+The \texttt{QFeatures} package \cite{gatto2023qfeatures, vanderaa2021reproducible, gatto2023psmatch} manages multi-level mass spectrometry assays within an integrated container. A \texttt{QFeatures} object holds multiple \texttt{SummarizedExperiment} objects, recording the exact mathematical link between peptide rows and protein rows.
 
 Executing \texttt{aggregateFeatures} creates a new assay in the container, linked via an \texttt{AssayLink} S4 slot. The transformation records:
 \begin{itemize}
@@ -541,29 +541,89 @@ Nesvizhskii, A.I., Aebersold, R.: Interpretation of shotgun proteomic data: the 
 \textit{Molecular \& Cellular Proteomics} \textbf{4}(10), 1419--1440 (2005).
 \doi{10.1074/mcp.R500012-MCP200}
 
-\bibitem{cox2008maxquant}
-Cox, J., Mann, M.: MaxQuant enables high peptide identification efficiencies, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification.
-\textit{Nature Biotechnology} \textbf{26}(12), 1367--1372 (2008).
-\doi{10.1038/nbt.1511}
+\bibitem{nesvizhskii2003statistical}
+Nesvizhskii, A.I., Keller, A., Kolker, E., Aebersold, R.: A statistical model for identifying proteins by tandem mass spectrometry.
+\textit{Analytical Chemistry} \textbf{75}(17), 4646--4658 (2003).
+\doi{10.1021/ac0341261}
+
+\bibitem{serang2012efficient}
+Serang, O., Moruz, L., K{\"a}ll, L.: Efficient marginalization to compute protein posterior probabilities from overlapping peptide identifications.
+\textit{Journal of Proteome Research} \textbf{11}(12), 5586--5591 (2012).
+\doi{10.1021/pr300588j}
 
 \bibitem{zhang2007idpicker}
 Zhang, B., Chambers, M.C., Tabb, D.L.: Proteomic parsimony through bipartite graph analysis improves accuracy and reproducibility of protein identification.
 \textit{Journal of Proteome Research} \textbf{6}(9), 3549--3557 (2007).
 \doi{10.1021/pr070230a}
 
+\bibitem{chvatal1979greedy}
+Chv\'atal, V.: A greedy heuristic for the set-covering problem.
+\textit{Mathematics of Operations Research} \textbf{4}(3), 233--235 (1979).
+\doi{10.1287/moor.4.3.233}
+
+\bibitem{cox2008maxquant}
+Cox, J., Mann, M.: MaxQuant enables high peptide identification efficiencies, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification.
+\textit{Nature Biotechnology} \textbf{26}(12), 1367--1372 (2008).
+\doi{10.1038/nbt.1511}
+
+\bibitem{cox2014maxquant}
+Cox, J., Hein, M.Y., Luber, C.A., Parca, I., Nagaraj, N., Mann, M.: Accurate proteome-wide label-free quantification by delayed normalization and maximal peptide ratio extraction, termed MaxLFQ.
+\textit{Molecular \& Cellular Proteomics} \textbf{13}(9), 2513--2526 (2014).
+\doi{10.1074/mcp.M113.031591}
+
+\bibitem{gupta2009false}
+Gupta, N., Pevzner, P.A.: False discovery rates of protein identifications: a strike against the two-peptide rule.
+\textit{Journal of Proteome Research} \textbf{8}(9), 4173--4181 (2009).
+\doi{10.1021/pr9004794}
+
+\bibitem{savitski2015measuring}
+Savitski, M.M., Wilhelm, M., Hahne, H., Kuster, B., Bantscheff, M.: A scalable approach for protein false discovery rate estimation in large proteomic data sets.
+\textit{Molecular \& Cellular Proteomics} \textbf{14}(9), 2394--2404 (2015).
+\doi{10.1074/mcp.M114.046995}
+
 \bibitem{tukey1977exploratory}
 Tukey, J.W.: Exploratory Data Analysis.
 Addison-Wesley, Reading (1977).
+
+\bibitem{goeminne2016msqrob}
+Goeminne, L.J., Gevaert, K., Clement, L.: Peptide-level robust ridge regression improves estimation, sensitivity, and specificity in data-dependent quantitative label-free shotgun proteomics.
+\textit{Molecular \& Cellular Proteomics} \textbf{15}(2), 657--668 (2016).
+\doi{10.1074/mcp.M115.055897}
 
 \bibitem{gatto2023qfeatures}
 Gatto, L., Vanderaa, C.: QFeatures: Quantitative features for mass spectrometry data.
 \textit{Bioconductor Package} (2023).
 \doi{10.18129/B9.bioc.QFeatures}
 
-\bibitem{chvatal1979greedy}
-Chv\'atal, V.: A greedy heuristic for the set-covering problem.
-\textit{Mathematics of Operations Research} \textbf{4}(3), 233--235 (1979).
-\doi{10.1287/moor.4.3.233}
+\bibitem{vanderaa2021reproducible}
+Vanderaa, C., Gatto, L.: Replication of single-cell proteomics data analysis with the scp package.
+\textit{Journal of Proteome Research} \textbf{20}(8), 4203--4208 (2021).
+\doi{10.1021/acs.jproteome.1c00268}
+
+\bibitem{gatto2023psmatch}
+Gatto, L., Rainer, J.: PSMatch: Handling and processing peptide-spectrum matches.
+\textit{Bioconductor Package} (2023).
+\doi{10.18129/B9.bioc.PSMatch}
+
+\bibitem{csardi2006igraph}
+Csardi, G., Nepusz, T.: The igraph software package for complex network research.
+\textit{InterJournal, Complex Systems} \textbf{1695}(5), 1--9 (2006).
+\url{https://igraph.org}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{elias2007target}
+Elias, J.E., Gygi, S.P.: Target-decoy search strategy for increased confidence in large-scale protein identifications by mass spectrometry.
+\textit{Nature Methods} \textbf{4}(3), 207--214 (2007).
+\doi{10.1038/nmeth1019}
+
+\bibitem{zhu2020deqms}
+Zhu, Y., Orre, L.M., Johansson, H.J., Huss, M., Boekel, J., Vesterlund, M., Fernandez-Woodbridge, A., Branca, R.M., Lehti{\"o}, J.: DEqMS: a method for accurate variance estimation in differential protein expression analysis.
+\textit{Molecular \& Cellular Proteomics} \textbf{19}(6), 1047--1057 (2020).
+\doi{10.1074/mcp.TIR119.001646}
 
 \end{thebibliography}
 

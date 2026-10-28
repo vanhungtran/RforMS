@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Translating mass spectrometry profiles into clinically actionable biomarker signatures requires rigorous statistical modeling that prevents data leakage. In high-dimensional omics where features outnumber samples ($p \gg n$), naive preprocessing, global missing-data imputation, or feature ranking performed prior to data partitioning artificially inflates model performance. Such pipelines produce signatures with apparent near-perfect accuracy that fail completely when deployed in independent patient cohorts. This chapter establishes the mathematical principles, validation architectures, and clinical reporting standards required to develop reproducible mass spectrometry biomarkers. We formalize the taxonomy of data leakage, derive the extreme value distribution of spurious feature selection under the global null hypothesis, and establish nested cross-validation as the non-negotiable benchmark for model selection. We examine receiver operating characteristic (ROC) geometry, DeLong confidence intervals, Brier score probability calibration, and multivariable Cox proportional hazards survival modeling. Through a verified R laboratory, we implement leakage-free preprocessing, benchmark honest nested cross-validation against leaky pipelines on pure noise, evaluate performance on held-out test data, and demonstrate clinical survival risk stratification. The chapter concludes with the Five Deadly Sins of biomarker modeling, a pre-submission diagnostic checklist, and four multi-tier exercises with complete worked solutions.
+Translating mass spectrometry profiles into clinically actionable biomarker signatures requires rigorous statistical modeling that prevents data leakage. In high-dimensional omics where features outnumber samples ($p \gg n$), naive preprocessing, global missing-data imputation, or feature ranking performed prior to data partitioning artificially inflates model performance. Such pipelines produce signatures with apparent near-perfect accuracy that fail completely when deployed in independent patient cohorts. This chapter establishes the mathematical principles, validation architectures, and clinical reporting standards required to develop reproducible mass spectrometry biomarkers. We formalize the taxonomy of data leakage \cite{ambroise2002selection, varma2006bias}, derive the extreme value distribution of spurious feature selection under the global null hypothesis \cite{cover1965geometrical, hastie2009elements}, and establish nested cross-validation as the non-negotiable benchmark for model selection \cite{varma2006bias, kuhn2013applied}. We examine receiver operating characteristic (ROC) geometry \cite{robin2011proc}, DeLong confidence intervals \cite{delong1988comparing}, Brier score probability calibration \cite{brier1950verification, steckelbroeck2019guidelines}, and multivariable Cox proportional hazards survival modeling \cite{cox1972regression, mcshane2005reporting}. Through a verified R laboratory, we implement leakage-free preprocessing \cite{kuhn2013applied, huber2015orchestrating}, benchmark honest nested cross-validation against leaky pipelines on pure noise \cite{ambroise2002selection, varma2006bias}, evaluate performance on held-out test data with random forests and lasso \cite{breiman2001random, tibshirani1996regression, friedman2010regularization}, and demonstrate clinical survival risk stratification conforming to TRIPOD and REMARK standards \cite{collins2015transparent, collins2024tripod, mcshane2005reporting}. The chapter concludes with the Five Deadly Sins of biomarker modeling, a pre-submission diagnostic checklist, and four multi-tier exercises with complete worked solutions.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Translating mass spectrometry profiles into clinically actionable biomarker sign
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Cohort Partitioning} & Complete isolation of training and held-out evaluation sets. & Partition samples into training ($75\%$) and test ($25\%$) before any transformation. & Preprocessing leakage: standardizing or imputing globally. Remedy: Fit scaling and imputation strictly on training data. \\
+\textbf{1. Cohort Partitioning} & Complete isolation of training and held-out evaluation sets \cite{collins2015transparent, kuhn2013applied}. & Partition samples into training ($75\%$) and test ($25\%$) before any transformation. & Preprocessing leakage: standardizing or imputing globally. Remedy: Fit scaling and imputation strictly on training data. \\
 \addlinespace
-\textbf{2. Nested Validation} & Outer fold for generalization error; inner fold for tuning and selection. & Select candidate features and tune hyperparameters inside each CV fold. & Selection leakage: ranking features on all data before CV. Remedy: Execute automated feature selection inside each fold. \\
+\textbf{2. Nested Validation} & Outer fold for generalization error; inner fold for tuning and selection \cite{varma2006bias, ambroise2002selection}. & Select candidate features and tune hyperparameters inside each CV fold. & Selection leakage: ranking features on all data before CV. Remedy: Execute automated feature selection inside each fold. \\
 \addlinespace
-\textbf{3. Model Evaluation} & Classification discrimination vs probability calibration. & Measure AUC with DeLong 95\% CIs and quantify calibration via Brier score. & Over-optimistic resubstitution AUC. Remedy: Single unbiased evaluation on the strictly held-out test partition. \\
+\textbf{3. Model Evaluation} & Classification discrimination vs probability calibration \cite{delong1988comparing, brier1950verification, robin2011proc, steckelbroeck2019guidelines}. & Measure AUC with DeLong 95\% CIs and quantify calibration via Brier score. & Over-optimistic resubstitution AUC. Remedy: Single unbiased evaluation on the strictly held-out test partition. \\
 \addlinespace
-\textbf{4. Clinical Translation} & Survival prognostication and covariate confounding. & Verify prognostic risk stratification in multivariable Cox models adjusting for age and batch. & Biomarker collinearity with clinical covariates. Remedy: Multivariable regression testing independent prognostic value. \\
+\textbf{4. Clinical Translation} & Survival prognostication and covariate confounding \cite{cox1972regression, mcshane2005reporting, collins2024tripod}. & Verify prognostic risk stratification in multivariable Cox models adjusting for age and batch. & Biomarker collinearity with clinical covariates. Remedy: Multivariable regression testing independent prognostic value. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -646,39 +646,97 @@ Protein abundance changes in this panel reflect secondary biological processes a
 % =============================================================================
 
 \begin{thebibliography}{99}
+\small
 
 \bibitem{ambroise2002selection}
-Ambroise, C., \& McLachlan, G.~J. (2002). Selection bias in gene extraction on the basis of microarray gene expression data. \textit{Proceedings of the National Academy of Sciences}, 99(10), 6562--6566. \doi{10.1073/pnas.102102699}.
-
-\bibitem{boland2023health}
-Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
-
-\bibitem{breiman2001random}
-Breiman, L. (2001). Random forests. \textit{Machine Learning}, 45(1), 5--32. \doi{10.1023/A:1010933404324}.
-
-\bibitem{collins2015transparent}
-Collins, G.~S., Reitsma, J.~B., Altman, D.~G., \& Moons, K.~G. (2015). Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement. \textit{Annals of Internal Medicine}, 162(1), 55--63. \doi{10.7326/M14-0697}.
-
-\bibitem{collins2024tripod}
-Collins, G.~S., et al. (2024). Protocol for TRIPOD-AI and PROBAST-AI: developing reporting guidelines and risk of bias tools for artificial intelligence in medicine. \textit{BMJ Open}, 14, e082226. \doi{10.1136/bmjopen-2023-082226}.
-
-\bibitem{cover1965geometrical}
-Cover, T.~M. (1965). Geometrical and statistical properties of systems of linear inequalities with applications in pattern recognition. \textit{IEEE Transactions on Electronic Computers}, EC-14(3), 326--334. \doi{10.1109/PGEC.1965.264137}.
-
-\bibitem{cox1972regression}
-Cox, D.~R. (1972). Regression models and life-tables. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 34(2), 187--202. \doi{10.1111/j.2517-6161.1972.tb00899.x}.
-
-\bibitem{delong1988comparing}
-DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
-
-\bibitem{hastie2009elements}
-Hastie, T., Tibshirani, R., \& Friedman, J. (2009). \textit{The Elements of Statistical Learning: Data Mining, Inference, and Prediction}. 2nd ed. Springer.
-
-\bibitem{mcshane2005reporting}
-McShane, L.~M., et al. (2005). Reporting recommendations for tumor marker prognostic studies (REMARK). \textit{Journal of Clinical Oncology}, 23(36), 9067--9072. \doi{10.1200/JCO.2005.08.545}.
+Ambroise, C., McLachlan, G.J.: Selection bias in gene extraction on the basis of microarray gene expression data.
+\textit{Proceedings of the National Academy of Sciences} \textbf{99}(10), 6562--6566 (2002).
+\doi{10.1073/pnas.102102699}
 
 \bibitem{varma2006bias}
-Varma, S., \& Simon, R. (2006). Bias in error estimation when using cross-validation for model selection. \textit{BMC Bioinformatics}, 7(1), 91. \doi{10.1186/1471-2105-7-91}.
+Varma, S., Simon, R.: Bias in error estimation when using cross-validation for model selection.
+\textit{BMC Bioinformatics} \textbf{7}, 91 (2006).
+\doi{10.1186/1471-2105-7-91}
+
+\bibitem{collins2015transparent}
+Collins, G.S., Reitsma, J.B., Altman, D.G., Moons, K.G.: Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement.
+\textit{Annals of Internal Medicine} \textbf{162}(1), 55--63 (2015).
+\doi{10.7326/M14-0697}
+
+\bibitem{collins2024tripod}
+Collins, G.S., Moons, K.G., Dhiman, P., et al.: Protocol for TRIPOD-AI and PROBAST-AI: developing reporting guidelines and risk of bias tools for artificial intelligence in medicine.
+\textit{BMJ Open} \textbf{14}(4), e082226 (2024).
+\doi{10.1136/bmjopen-2023-082226}
+
+\bibitem{mcshane2005reporting}
+McShane, L.M., Altman, D.G., Sauerbrei, W., et al.: Reporting recommendations for tumor marker prognostic studies (REMARK).
+\textit{Journal of Clinical Oncology} \textbf{23}(36), 9067--9072 (2005).
+\doi{10.1200/JCO.2005.08.545}
+
+\bibitem{delong1988comparing}
+DeLong, E.R., DeLong, D.M., Clarke-Pearson, D.L.: Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach.
+\textit{Biometrics} \textbf{44}(3), 837--845 (1988).
+\doi{10.2307/2531595}
+
+\bibitem{robin2011proc}
+Robin, X., Turck, N., Hainard, A., et al.: pROC: an open-source package for R and S+ to analyze and compare ROC curves.
+\textit{BMC Bioinformatics} \textbf{12}, 77 (2011).
+\doi{10.1186/1471-2105-12-77}
+
+\bibitem{brier1950verification}
+Brier, G.W.: Verification of forecasts expressed in terms of probability.
+\textit{Monthly Weather Review} \textbf{78}(1), 1--3 (1950).
+\doi{10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}
+
+\bibitem{steckelbroeck2019guidelines}
+Steyerberg, E.W., Vickers, A.J., Cook, N.R., et al.: Assessing the performance of prediction models: a framework for traditional and novel measures.
+\textit{Epidemiology} \textbf{21}(1), 128--138 (2010).
+\doi{10.1097/EDE.0b013e3181c30fb2}
+
+\bibitem{cox1972regression}
+Cox, D.R.: Regression models and life-tables.
+\textit{Journal of the Royal Statistical Society: Series B (Methodological)} \textbf{34}(2), 187--202 (1972).
+\doi{10.1111/j.2517-6161.1972.tb00899.x}
+
+\bibitem{breiman2001random}
+Breiman, L.: Random forests.
+\textit{Machine Learning} \textbf{45}(1), 5--32 (2001).
+\doi{10.1023/A:1010933404324}
+
+\bibitem{tibshirani1996regression}
+Tibshirani, R.: Regression shrinkage and selection via the lasso.
+\textit{Journal of the Royal Statistical Society: Series B (Methodological)} \textbf{58}(1), 267--288 (1996).
+\doi{10.1111/j.2517-6161.1996.tb02080.x}
+
+\bibitem{friedman2010regularization}
+Friedman, J., Hastie, T., Tibshirani, R.: Regularization paths for generalized linear models via coordinate descent.
+\textit{Journal of Statistical Software} \textbf{33}(1), 1--22 (2010).
+\doi{10.18637/jss.v033.i01}
+
+\bibitem{hastie2009elements}
+Hastie, T., Tibshirani, R., Friedman, J.: The Elements of Statistical Learning: Data Mining, Inference, and Prediction, 2nd edn.
+Springer, New York (2009).
+\doi{10.1007/978-0-387-84858-7}
+
+\bibitem{kuhn2013applied}
+Kuhn, M., Johnson, K.: Applied Predictive Modeling.
+Springer, New York (2013).
+\doi{10.1007/978-1-4614-6849-3}
+
+\bibitem{cover1965geometrical}
+Cover, T.M.: Geometrical and statistical properties of systems of linear inequalities with applications in pattern recognition.
+\textit{IEEE Transactions on Electronic Computers} \textbf{EC-14}(3), 326--334 (1965).
+\doi{10.1109/PGEC.1965.264137}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{boland2023health}
+Boland, M.R.: Health Data Analytics with R: An Introduction to Methods and Analysis.
+Springer Nature, Cham (2023).
+\doi{10.1007/978-3-031-31952-5}
 
 \end{thebibliography}
 

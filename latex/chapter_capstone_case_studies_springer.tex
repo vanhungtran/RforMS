@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Proteomics and metabolomics represent distinct biochemical disciplines that converge upon a unified computational grammar in R and Bioconductor. At the raw instrument tier, proteomics relies on peptide-spectrum match (PSM) directed acyclic graphs (\texttt{QFeatures}), whereas metabolomics requires continuous wavelet peak picking and non-linear chromatographic alignment (\texttt{xcms}). However, once raw spectra are converted into 2D feature-by-sample matrices, both disciplines converge upon the identical coordinate-invariant container: \texttt{SummarizedExperiment}. Downstream normalization (variance-stabilizing transformation or median centering), missing-data imputation (MinProb or gap filling), empirical Bayes linear modeling (\texttt{limma}), false discovery rate (FDR) control, and FAIR metadata deposition execute using identical syntax. This capstone chapter synthesizes the preceding thirty chapters into two end-to-end case studies executed on real benchmark cohorts: a label-free quantitative proteomics study of ubiquitin pathway disruption in HeLa cells (\texttt{DEP::UbiLength}), and an untargeted metabolomics study of fatty-acid amide accumulation in knockout mice (\texttt{faahKO}) in R 4.6.1.
+Proteomics and metabolomics represent distinct biochemical disciplines that converge upon a unified computational grammar in R and Bioconductor. At the raw instrument tier, proteomics relies on peptide-spectrum match (PSM) directed acyclic graphs (\texttt{QFeatures}) \cite{gatto2023qfeatures}, whereas metabolomics requires continuous wavelet peak picking and non-linear chromatographic alignment (\texttt{xcms}) \cite{smith2006xcms, tautenhahn2008centwave}. However, once raw spectra are converted into 2D feature-by-sample matrices, both disciplines converge upon the identical coordinate-invariant container: \texttt{SummarizedExperiment} \cite{huber2015orchestrating}. Downstream normalization (variance-stabilizing transformation or median centering) \cite{huber2002vsn}, missing-data imputation (MinProb or gap filling) \cite{lazar2016accounting, benton2015evaluating}, empirical Bayes linear modeling (\texttt{limma}) \cite{smyth2004limma, ritchie2015limma}, false discovery rate (FDR) control \cite{benjamini1995controlling}, and FAIR metadata deposition execute using identical syntax \cite{wilkinson2016fair}. This capstone chapter synthesizes the preceding thirty chapters into two end-to-end case studies executed on real benchmark cohorts: a label-free quantitative proteomics study of ubiquitin pathway disruption in HeLa cells (\texttt{DEP::UbiLength}) \cite{zhang2017ubilength, zhang2018dep}, and an untargeted metabolomics study of fatty-acid amide accumulation in knockout mice (\texttt{faahKO}) \cite{cravatt2001faah, saghatelian2004activity} in R 4.6.1.
 \end{abstract}
 
 \vspace{1em}
@@ -41,19 +41,19 @@ Table~\ref{tab:capstone_roadmap} demonstrates the methodological convergence of 
 \toprule
 \textbf{Analytical Stage} & \textbf{Proteomics Pipeline} & \textbf{Metabolomics Pipeline} & \textbf{Computational Status} \\
 \midrule
-\textbf{1. Raw Ingestion} & MaxQuant \texttt{proteinGroups} & CDF/mzML via \texttt{MsExperiment} & Domain-specific \\
+\textbf{1. Raw Ingestion} & MaxQuant \texttt{proteinGroups} & CDF/mzML via \texttt{MsExperiment} \cite{rainer2022msexperiment} & Domain-specific \\
 \addlinespace
-\textbf{2. Feature Extraction} & Database PSM search & CentWave wavelet peak picking & Domain-specific \\
+\textbf{2. Feature Extraction} & Database PSM search & CentWave wavelet peak picking \cite{tautenhahn2008centwave} & Domain-specific \\
 \addlinespace
-\textbf{3. Matrix Container} & \texttt{SummarizedExperiment} & \texttt{SummarizedExperiment} & \textbf{Identical container} \\
+\textbf{3. Matrix Container} & \texttt{SummarizedExperiment} \cite{huber2015orchestrating} & \texttt{SummarizedExperiment} \cite{huber2015orchestrating} & \textbf{Identical container} \\
 \addlinespace
-\textbf{4. Normalization} & VSN / median centering & Log2 + median sweep & \textbf{Identical grammar} \\
+\textbf{4. Normalization} & VSN \cite{huber2002vsn} / median centering & Log2 + median sweep & \textbf{Identical grammar} \\
 \addlinespace
-\textbf{5. Missingness} & MinProb MNAR imputation & Raw signal gap filling & Domain-tailored \\
+\textbf{5. Missingness} & MinProb MNAR imputation \cite{lazar2016accounting} & Raw signal gap filling \cite{benton2015evaluating} & Domain-tailored \\
 \addlinespace
-\textbf{6. Statistical Model} & \texttt{limma} empirical Bayes & \texttt{limma} empirical Bayes & \textbf{Identical code} \\
+\textbf{6. Statistical Model} & \texttt{limma} empirical Bayes \cite{smyth2004limma} & \texttt{limma} empirical Bayes \cite{smyth2004limma} & \textbf{Identical code} \\
 \addlinespace
-\textbf{7. Dissemination} & PRIDE / SDRF format & MetaboLights / ISA-Tab & FAIR deposition \\
+\textbf{7. Dissemination} & PRIDE / SDRF format \cite{deutsch2020pride} & MetaboLights / ISA-Tab \cite{haug2020metabolights} & FAIR deposition \cite{wilkinson2016fair} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -67,9 +67,9 @@ While the computational grammar (\texttt{SummarizedExperiment} $\to$ \texttt{lim
 \section{Case Study 1: Label-Free Proteomics (UbiLength HeLa Perturbation)}
 \label{sec:case_study_proteomics}
 
-The \texttt{UbiLength} study evaluates ubiquitin-specific protease disruption in human HeLa cells. The experimental design comprises 12 analytical runs across four conditions: untreated controls (\texttt{Ctrl}) and three time-course perturbation states (\texttt{Ubi1}, \texttt{Ubi4}, \texttt{Ubi6}), with three biological replicates each.
+The \texttt{UbiLength} study evaluates ubiquitin-specific protease disruption in human HeLa cells \cite{zhang2017ubilength, zhang2018dep}. The experimental design comprises 12 analytical runs across four conditions: untreated controls (\texttt{Ctrl}) and three time-course perturbation states (\texttt{Ubi1}, \texttt{Ubi4}, \texttt{Ubi6}), with three biological replicates each.
 
-Listing~31.1 executes the end-to-end label-free proteomics pipeline: filtering reverse hits and contaminants, constructing the \texttt{SummarizedExperiment}, applying variance-stabilizing normalization (VSN), imputing left-censored missing values via MinProb, and fitting empirical Bayes linear models.
+Listing~31.1 executes the end-to-end label-free proteomics pipeline: filtering reverse hits and contaminants, constructing the \texttt{SummarizedExperiment} \cite{huber2015orchestrating}, applying variance-stabilizing normalization (VSN) \cite{huber2002vsn}, imputing left-censored missing values via MinProb \cite{lazar2016accounting}, and fitting empirical Bayes linear models \cite{smyth2004limma}.
 
 \begin{rchunk}{Listing 31.1: End-to-End Proteomics Pipeline (DEP::UbiLength)}
 library(DEP)
@@ -146,9 +146,9 @@ The primary deubiquitinating enzyme target, USP5, demonstrates an $11.50$ $\log_
 \section{Case Study 2: Untargeted Metabolomics (faahKO Murine Spinal Extracts)}
 \label{sec:case_study_metabolomics}
 
-The \texttt{faahKO} study profiles spinal cord extracts from fatty-acid amide hydrolase knockout ($\text{FAAH}^{-/-}$) mice versus wild-type littermates. Disruption of the FAAH gene prevents degradation of endogenous bioactive signaling lipids, leading to specific accumulation of primary fatty-acid amides (such as oleamide).
+The \texttt{faahKO} study profiles spinal cord extracts from fatty-acid amide hydrolase knockout ($\text{FAAH}^{-/-}$) mice versus wild-type littermates \cite{cravatt2001faah, saghatelian2004activity}. Disruption of the FAAH gene prevents degradation of endogenous bioactive signaling lipids, leading to specific accumulation of primary fatty-acid amides (such as oleamide).
 
-Listing~31.2 processes an 827-feature consensus metabolomics matrix, applies median-centered log2 normalization, fits empirical Bayes contrasts, and calculates theoretical monoisotopic adduct masses for the primary substrate oleamide ($\text{C}_{18}\text{H}_{35}\text{NO}$).
+Listing~31.2 processes an 827-feature consensus metabolomics matrix extracted via \texttt{xcms} \cite{smith2006xcms, tautenhahn2008centwave}, applies median-centered log2 normalization, fits empirical Bayes contrasts via \texttt{limma} \cite{smyth2004limma, ritchie2015limma}, and calculates theoretical monoisotopic adduct masses for the primary substrate oleamide ($\text{C}_{18}\text{H}_{35}\text{NO}$).
 
 \begin{rchunk}{Listing 31.2: End-to-End Metabolomics Pipeline and Adduct Calculation}
 library(SummarizedExperiment)
@@ -200,14 +200,14 @@ The top differential feature, FT\_0009, exhibits strong positive accumulation in
 
 Comparing Listings 31.1 and 31.2 reveals that the computational core of mass spectrometry is domain-invariant:
 \begin{enumerate}
-\item \textbf{Container Invariance}: Both workflows manipulate biological abundance matrices via \texttt{Summarized\allowbreak Experiment}, guaranteeing that row annotations (\texttt{rowData}) and column annotations (\texttt{colData}) remain synchronized under arbitrary subsetting operations.
+\item \textbf{Container Invariance}: Both workflows manipulate biological abundance matrices via \texttt{Summarized\allowbreak Experiment} \cite{huber2015orchestrating}, guaranteeing that row annotations (\texttt{rowData}) and column annotations (\texttt{colData}) remain synchronized under arbitrary subsetting operations.
 \item \textbf{Statistical Unity}: Both pipelines formulate differential hypotheses using identical linear design matrices:
 \begin{equation}
 \mathbf{Y}_{p \times n} = \mathbf{X}_{n \times k} \boldsymbol{\beta}_{k \times p} + \boldsymbol{\varepsilon}_{p \times n}
 \label{eq:unified_linear_model}
 \end{equation}
-Variance estimates are moderated toward global empirical Bayes priors ($\tilde{s}_g^2$), and false discovery rates are controlled via Benjamini-Hochberg adjustment.
-\item \textbf{Dissemination Coherence}: Both workflows capture software dependencies via \texttt{renv.lock}, cache execution graphs via \texttt{targets}, and export parameterized reports in Quarto.
+Variance estimates are moderated toward global empirical Bayes priors ($\tilde{s}_g^2$) using \texttt{limma} \cite{smyth2004limma, ritchie2015limma}, and false discovery rates are controlled via Benjamini-Hochberg adjustment \cite{benjamini1995controlling}.
+\item \textbf{Dissemination Coherence}: Both workflows capture software dependencies via \texttt{renv.lock} \cite{ushey2024renv}, cache execution graphs via \texttt{targets} \cite{landau2021targets}, and export parameterized reports in Quarto \cite{allaire2022quarto} following FAIR data principles \cite{wilkinson2016fair}.
 \end{enumerate}
 
 \FloatBarrier
@@ -261,7 +261,7 @@ The mass measurement error for the detected peak at $282.2785$ Th is:
 Because $|\Delta m_{\text{ppm}}| \le 5.0$ ppm, the feature matches the theoretical $[M+\text{H}]^+$ adduct within high-resolution mass spectrometer tolerance.
 
 \FloatBarrier
-\begin{thebibliography}{10}
+\begin{thebibliography}{99}
 
 \bibitem{zhang2017ubilength}
 Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
@@ -269,17 +269,23 @@ Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
 \newblock \emph{Molecular Cell}, 65(3):541--555, 2017.
 \newblock \url{https://doi.org/10.1016/j.molcel.2016.12.023}.
 
+\bibitem{zhang2018dep}
+Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
+\newblock Proteome-wide identification of ubiquitin interactions using {DEP}.
+\newblock \emph{Nature Protocols}, 13(3):530--550, 2018.
+\newblock \url{https://doi.org/10.1038/nprot.2017.147}.
+
 \bibitem{cravatt2001faah}
 Cravatt, B.F., Demarest, K., Patricelli, M.P., et~al.
 \newblock Supersensitivity to anandamide and cognitive impairments in mice lacking fatty acid amide hydrolase.
 \newblock \emph{Proceedings of the National Academy of Sciences}, 98(16):9371--9376, 2001.
 \newblock \url{https://doi.org/10.1073/pnas.161191698}.
 
-\bibitem{zhang2018dep}
-Zhang, X., Smits, A.H., van~Teeffelen, H.A., et~al.
-\newblock Proteome-wide identification of ubiquitin interactions using {DEP}.
-\newblock \emph{Nature Protocols}, 13(3):530--550, 2018.
-\newblock \url{https://doi.org/10.1038/nprot.2017.147}.
+\bibitem{saghatelian2004activity}
+Saghatelian, A., Trauger, S.A., Want, E.J., Hawkins, E.G., Siuzdak, G., Cravatt, B.F.
+\newblock Assignment of endogenous substrates to enzymes by global metabolite profiling.
+\newblock \emph{Biochemistry}, 43(45):14332--14339, 2004.
+\newblock \url{https://doi.org/10.1021/bi0480335}.
 
 \bibitem{smith2006xcms}
 Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.
@@ -287,17 +293,86 @@ Smith, C.A., Want, E.J., O'Maille, G., Abagyan, R., Siuzdak, G.
 \newblock \emph{Analytical Chemistry}, 78(3):779--787, 2006.
 \newblock \url{https://doi.org/10.1021/ac051437y}.
 
+\bibitem{tautenhahn2008centwave}
+Tautenhahn, R., B\"ottcher, C., Neumann, S.
+\newblock Highly sensitive feature detection for high resolution {LC/MS}.
+\newblock \emph{BMC Bioinformatics}, 9:504, 2008.
+\newblock \url{https://doi.org/10.1186/1471-2105-9-504}.
+
+\bibitem{rainer2022msexperiment}
+Rainer, J., Vicini, A., Salzer, L., et~al.
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites}, 12(2):173, 2022.
+\newblock \url{https://doi.org/10.3390/metabo12020173}.
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods}, 12(2):115--121, 2015.
+\newblock \url{https://doi.org/10.1038/nmeth.3252}.
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., \& Breckels, L.~M. (2023). A foundation for reproducible single-cell and bulk proteomics data analysis in Bioconductor. \textit{Nature Communications}, 14, 5698. \url{https://doi.org/10.1038/s41467-023-41556-2}.
+
 \bibitem{huber2002vsn}
 Huber, W., von Heydebreck, A., S\"ultmann, H., Poustka, A., Vingron, M.
 \newblock Variance stabilization applied to microarray data calibration and to the quantification of differential expression.
 \newblock \emph{Bioinformatics}, 18(Suppl 1):S96--S104, 2002.
 \newblock \url{https://doi.org/10.1093/bioinformatics/18.suppl_1.s96}.
 
+\bibitem{lazar2016accounting}
+Lazar, C., Gatto, L., Ferro, M., Bruley, C., \& Burger, T. (2016). Accounting for the multiple natures of missing values in label-free quantitative proteomics data sets to compare imputation strategies. \textit{Journal of Proteome Research}, 15(4), 1116--1125. \url{https://doi.org/10.1021/acs.jproteome.5b00981}.
+
+\bibitem{benton2015evaluating}
+Benton, H.~P., Wong, D.~M., Trauger, S.~A., \& Siuzdak, G. (2015). XCMS2: processing tandem mass spectrometry data for metabolite identification and pathway mapping. \textit{Analytical Chemistry}, 87(2), 884--891. \url{https://doi.org/10.1021/ac502570n}.
+
 \bibitem{smyth2004limma}
 Smyth, G.K.
 \newblock Linear models and empirical bayes methods for assessing differential expression in microarray experiments.
 \newblock \emph{Statistical Applications in Genetics and Molecular Biology}, 3(1):Article 3, 2004.
 \newblock \url{https://doi.org/10.2202/1544-6115.1027}.
+
+\bibitem{ritchie2015limma}
+Ritchie, M.~E., Phipson, B., Wu, D., Hu, Y., Law, C.~W., Shi, W., \& Smyth, G.~K. (2015). \textit{limma} powers differential expression analyses for RNA-sequencing and microarray studies. \textit{Nucleic Acids Research}, 43(7), e47. \url{https://doi.org/10.1093/nar/gkv007}.
+
+\bibitem{benjamini1995controlling}
+Benjamini, Y., \& Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. \textit{Journal of the Royal Statistical Society: Series B (Methodological)}, 57(1), 289--300. \url{https://doi.org/10.1111/j.2517-6161.1995.tb02031.x}.
+
+\bibitem{ushey2024renv}
+Ushey, K., Wickham, H.
+\newblock \emph{renv: Project Environments for R}.
+\newblock R package version 1.0.7, 2024.
+\newblock \url{https://CRAN.R-project.org/package=renv}.
+
+\bibitem{landau2021targets}
+Landau, W.M.
+\newblock The targets {R} package: a dynamic Make-like function-oriented pipeline toolkit for reproducible workflows.
+\newblock \emph{Journal of Open Source Software}, 6(57):2959, 2021.
+\newblock \url{https://doi.org/10.21105/joss.02959}.
+
+\bibitem{allaire2022quarto}
+Allaire, J.J., Teague, C., Scheidegger, C., Xie, Y., Dervieux, C.
+\newblock \emph{Quarto: An open-source scientific and technical publishing system}.
+\newblock Posit Software, PBC, 2022.
+\newblock \url{https://quarto.org}.
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D1145--D1152, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz984}.
+
+\bibitem{haug2020metabolights}
+Haug, K., Cochrane, K., Nainala, V.C., et~al.
+\newblock {MetaboLights}: a resource evolving in response to the needs of its scientific community.
+\newblock \emph{Nucleic Acids Research}, 48(D1):D440--D444, 2020.
+\newblock \url{https://doi.org/10.1093/nar/gkz1019}.
+
+\bibitem{wilkinson2016fair}
+Wilkinson, M.D., Dumontier, M., Aalbersberg, I.J., et~al.
+\newblock The {FAIR} Guiding Principles for scientific data management and stewardship.
+\newblock \emph{Scientific Data}, 3:160018, 2016.
+\newblock \url{https://doi.org/10.1038/sdata.2016.18}.
 
 \end{thebibliography}
 

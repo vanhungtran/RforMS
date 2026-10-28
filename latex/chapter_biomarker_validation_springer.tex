@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Cross-validation within a discovery cohort estimates how well a biomarker model generalizes to new patients drawn from the same clinical recruitment process. It cannot determine whether the signature retains diagnostic utility when deployed at an independent medical center, on different mass spectrometers, or across distinct patient demographics. True clinical translation requires validating a locked biomarker signature on an external cohort without refitting, auditing candidate proteins for demographic and physiological confounders, and benchmarking performance against established standard-of-care clinical tests. This chapter establishes the mathematical principles, statistical tests, and regulatory standards required for external biomarker validation in mass spectrometry omics. Using open source data from a multicenter clinical trial investigating systemic vasculitis remission (Jerke et al., \textit{Nature Communications}, 2026; PRIDE PXD079232), we evaluate a locked 7-protein plasma biomarker panel across discovery, internal validation, and independent external cohorts. We formulate partial correlation deconfounding to screen candidates against age and renal clearance, derive DeLong's test for correlated receiver operating characteristic (ROC) curves, and assess probability calibration via calibration slopes, intercepts, and Brier scores. We demonstrate that while discrimination transfers across clinical centers ($\text{AUC} = 0.938$), probability calibration degrades (calibration slope $= 0.44$), requiring Platt scaling recalibration. The chapter concludes with the Five Deadly Sins of external validation, a diagnostic checklist, and four multi-tier exercises with complete worked solutions.
+Cross-validation within a discovery cohort estimates how well a biomarker model generalizes to new patients drawn from the same clinical recruitment process. It cannot determine whether the signature retains diagnostic utility when deployed at an independent medical center, on different mass spectrometers, or across distinct patient demographics. True clinical translation requires validating a locked biomarker signature on an external cohort without refitting \cite{steyerberg2010towards, collins2015transparent}, auditing candidate proteins for demographic and physiological confounders \cite{birkner2026metadeconfoundr, leek2010tackling}, and benchmarking performance against established standard-of-care clinical tests \cite{mcshane2005reporting, collins2024tripod}. This chapter establishes the mathematical principles, statistical tests, and regulatory standards required for external biomarker validation in mass spectrometry omics \cite{kuhn2013applied, huber2015orchestrating}. Using open source data from a multicenter clinical trial investigating systemic vasculitis remission (Jerke et al., \textit{Nature Communications}, 2026 \cite{jerke2026vasculitis}; PRIDE PXD079232), we evaluate a locked 7-protein plasma biomarker panel across discovery, internal validation, and independent external cohorts \cite{ambroise2002selection, varma2006bias}. We formulate partial correlation deconfounding to screen candidates against age and renal clearance \cite{birkner2026metadeconfoundr}, derive DeLong's test for correlated receiver operating characteristic (ROC) curves \cite{delong1988comparing, robin2011proc}, and assess probability calibration via calibration slopes, intercepts, and Brier scores \cite{brier1950verification, van2016calibration}. We demonstrate that while discrimination transfers across clinical centers ($\text{AUC} = 0.938$), probability calibration degrades (calibration slope $= 0.44$), requiring Platt scaling recalibration \cite{platt1999probabilistic, steyerberg2010towards}. Following the health data analytics pedagogy \cite{boland2023health}, the chapter concludes with the Five Deadly Sins of external validation, a diagnostic checklist, and four multi-tier exercises with complete worked solutions.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Cross-validation within a discovery cohort estimates how well a biomarker model 
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Confounder Audit} & Partial rank correlation adjusting for age, sex, and organ function. & Screen out candidate markers that reflect non-disease physiology. & Selecting demographic proxies (e.g., age-driven proteins). Remedy: Partial correlation filtering before feature selection. \\
+\textbf{1. Confounder Audit} & Partial rank correlation adjusting for age, sex, and organ function \cite{birkner2026metadeconfoundr, leek2010tackling}. & Screen out candidate markers that reflect non-disease physiology. & Selecting demographic proxies (e.g., age-driven proteins). Remedy: Partial correlation filtering before feature selection. \\
 \addlinespace
-\textbf{2. Model Freezing} & Locking intercept $\beta_0$ and slope vector $\boldsymbol{\beta}$ on discovery cohort. & Fix model architecture completely before evaluating external cohorts. & Refitting coefficients on external data. Remedy: Deploy frozen model unrefit using strictly locked parameters. \\
+\textbf{2. Model Freezing} & Locking intercept $\beta_0$ and slope vector $\boldsymbol{\beta}$ on discovery cohort \cite{collins2015transparent, steyerberg2010towards}. & Fix model architecture completely before evaluating external cohorts. & Refitting coefficients on external data. Remedy: Deploy frozen model unrefit using strictly locked parameters \cite{varma2006bias}. \\
 \addlinespace
-\textbf{3. Correlated ROC Testing} & DeLong structural variance estimator for paired AUC comparisons. & Benchmark locked panel against clinical standards (CRP, ANCA) on same patients. & Using unpaired tests on correlated patient predictions. Remedy: Paired DeLong test accounting for score covariance. \\
+\textbf{3. Correlated ROC Testing} & DeLong structural variance estimator for paired AUC comparisons \cite{delong1988comparing, robin2011proc}. & Benchmark locked panel against clinical standards (CRP, ANCA) on same patients. & Using unpaired tests on correlated patient predictions. Remedy: Paired DeLong test accounting for score covariance \cite{mcshane2005reporting}. \\
 \addlinespace
-\textbf{4. Calibration Audit} & Logistic calibration model $\text{logit}(p) = \alpha + \beta \text{logit}(\hat{p})$. & Assess risk probability reliability via slope $\beta$, intercept $\alpha$, and Brier score. & Over-confident external probabilities ($\beta \ll 1.0$). Remedy: Platt scaling recalibration on external target cohort. \\
+\textbf{4. Calibration Audit} & Logistic calibration model $\text{logit}(p) = \alpha + \beta \text{logit}(\hat{p})$ \cite{steyerberg2010towards, van2016calibration}. & Assess risk probability reliability via slope $\beta$, intercept $\alpha$, and Brier score \cite{brier1950verification}. & Over-confident external probabilities ($\beta \ll 1.0$). Remedy: Platt scaling recalibration on external target cohort \cite{platt1999probabilistic}. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -541,30 +541,96 @@ Discrimination is invariant under Platt scaling because the logistic function $g
 % =============================================================================
 
 \begin{thebibliography}{99}
-
-\bibitem{birkner2026metadeconfoundr}
-Birkner, T., et al. (2026). Fast and comprehensive deconfounding of omics data using metadeconfoundR. \textit{Nature Communications}, 17, 1024. \doi{10.1038/s41467-026-68112-4}.
-
-\bibitem{boland2023health}
-Boland, M.~R. (2023). \textit{Health Data Analytics with R: An Introduction to Methods and Analysis}. Springer Nature.
-
-\bibitem{collins2015transparent}
-Collins, G.~S., Reitsma, J.~B., Altman, D.~G., \& Moons, K.~G. (2015). Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement. \textit{Annals of Internal Medicine}, 162(1), 55--63. \doi{10.7326/M14-0697}.
-
-\bibitem{delong1988comparing}
-DeLong, E.~R., DeLong, D.~M., \& Clarke-Pearson, D.~L. (1988). Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach. \textit{Biometrics}, 44(3), 837--845. \doi{10.2307/2531595}.
+\small
 
 \bibitem{jerke2026vasculitis}
-Jerke, U., et al. (2026). Towards a proteomic plasma biomarker panel for diagnosing vasculitis remission. \textit{Nature Communications}, 17, 6825. \doi{10.1038/s41467-026-75755-6}.
+Jerke, U., et al.: Towards a proteomic plasma biomarker panel for diagnosing vasculitis remission.
+\textit{Nature Communications} \textbf{17}, 6825 (2026).
+\doi{10.1038/s41467-026-75755-6}
+
+\bibitem{birkner2026metadeconfoundr}
+Birkner, T., et al.: Fast and comprehensive deconfounding of omics data using metadeconfoundR.
+\textit{Nature Communications} \textbf{17}, 1024 (2026).
+\doi{10.1038/s41467-026-68112-4}
+
+\bibitem{collins2015transparent}
+Collins, G.S., Reitsma, J.B., Altman, D.G., Moons, K.G.: Transparent reporting of a multivariable prediction model for individual prognosis or diagnosis (TRIPOD): the TRIPOD statement.
+\textit{Annals of Internal Medicine} \textbf{162}(1), 55--63 (2015).
+\doi{10.7326/M14-0697}
+
+\bibitem{collins2024tripod}
+Collins, G.S., Moons, K.G., Dhiman, P., et al.: Protocol for TRIPOD-AI and PROBAST-AI: developing reporting guidelines and risk of bias tools for artificial intelligence in medicine.
+\textit{BMJ Open} \textbf{14}(4), e082226 (2024).
+\doi{10.1136/bmjopen-2023-082226}
+
+\bibitem{mcshane2005reporting}
+McShane, L.M., Altman, D.G., Sauerbrei, W., et al.: Reporting recommendations for tumor marker prognostic studies (REMARK).
+\textit{Journal of Clinical Oncology} \textbf{23}(36), 9067--9072 (2005).
+\doi{10.1200/JCO.2005.08.545}
+
+\bibitem{delong1988comparing}
+DeLong, E.R., DeLong, D.M., Clarke-Pearson, D.L.: Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach.
+\textit{Biometrics} \textbf{44}(3), 837--845 (1988).
+\doi{10.2307/2531595}
+
+\bibitem{robin2011proc}
+Robin, X., Turck, N., Hainard, A., et al.: pROC: an open-source package for R and S+ to analyze and compare ROC curves.
+\textit{BMC Bioinformatics} \textbf{12}, 77 (2011).
+\doi{10.1186/1471-2105-12-77}
 
 \bibitem{platt1999probabilistic}
-Platt, J. (1999). Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. \textit{Advances in Large Margin Classifiers}, 10(3), 61--74.
+Platt, J.: Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods.
+\textit{Advances in Large Margin Classifiers} \textbf{10}(3), 61--74 (1999).
 
 \bibitem{steyerberg2010towards}
-Steyerberg, E.~W., et al. (2010). Towards better clinical prediction models: seven steps for development and an ABCD for validation. \textit{European Heart Journal}, 35(29), 1925--1931. \doi{10.1093/eurheartj/eht565}.
+Steyerberg, E.W., et al.: Towards better clinical prediction models: seven steps for development and an ABCD for validation.
+\textit{European Heart Journal} \textbf{35}(29), 1925--1931 (2014).
+\doi{10.1093/eurheartj/eht565}
 
 \bibitem{van2016calibration}
-Van Calster, B., et al. (2016). A calibration hierarchy for risk models was defined: from utopia to empirical data. \textit{Journal of Clinical Epidemiology}, 74, 167--176. \doi{10.1016/j.jclinepi.2015.12.005}.
+Van Calster, B., Nieboer, D., Vergouwe, Y., De Cock, B., Pencina, M.J., Steyerberg, E.W.: A calibration hierarchy for risk models was defined: from utopia to empirical data.
+\textit{Journal of Clinical Epidemiology} \textbf{74}, 167--176 (2016).
+\doi{10.1016/j.jclinepi.2015.12.005}
+
+\bibitem{brier1950verification}
+Brier, G.W.: Verification of forecasts expressed in terms of probability.
+\textit{Monthly Weather Review} \textbf{78}(1), 1--3 (1950).
+\doi{10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}
+
+\bibitem{leek2010tackling}
+Leek, J.T., Scharpf, R.B., Bravo, H.C., et al.: Tackling the widespread and critical impact of batch effects in high-throughput data.
+\textit{Nature Reviews Genetics} \textbf{11}(10), 733--739 (2010).
+\doi{10.1038/nrg2825}
+
+\bibitem{varma2006bias}
+Varma, S., Simon, R.: Bias in error estimation when using cross-validation for model selection.
+\textit{BMC Bioinformatics} \textbf{7}, 91 (2006).
+\doi{10.1186/1471-2105-7-91}
+
+\bibitem{ambroise2002selection}
+Ambroise, C., McLachlan, G.J.: Selection bias in gene extraction on the basis of microarray gene expression data.
+\textit{Proceedings of the National Academy of Sciences} \textbf{99}(10), 6562--6566 (2002).
+\doi{10.1073/pnas.102102699}
+
+\bibitem{kuhn2013applied}
+Kuhn, M., Johnson, K.: Applied Predictive Modeling.
+Springer, New York (2013).
+\doi{10.1007/978-1-4614-6849-3}
+
+\bibitem{tibshirani1996regression}
+Tibshirani, R.: Regression shrinkage and selection via the lasso.
+\textit{Journal of the Royal Statistical Society: Series B (Methodological)} \textbf{58}(1), 267--288 (1996).
+\doi{10.1111/j.2517-6161.1996.tb02080.x}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{boland2023health}
+Boland, M.R.: Health Data Analytics with R: An Introduction to Methods and Analysis.
+Springer Nature, Cham (2023).
+\doi{10.1007/978-3-031-31952-5}
 
 \end{thebibliography}
 

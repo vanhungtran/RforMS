@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Targeted mass spectrometry quantifies predefined metabolites and peptides with high analytical selectivity, sensitivity, and dynamic range. Selected reaction monitoring (SRM) on triple quadrupoles, parallel reaction monitoring (PRM) on high-resolution hybrid instruments, and data-independent acquisition (DIA) measure transition chromatograms rather than survey full scans. Converting raw peak areas into verified molar concentrations requires calibrated regression models, stable isotope-labeled internal standards, and empirical detection limits. In mass spectrometry, measurement variance scales proportionally with analyte concentration, violating the homoscedasticity assumption of ordinary least squares (OLS) regression. Unweighted regression biases low-concentration estimates by up to $95\%$. This chapter establishes the biophysical principles, error-weighting mathematics, and Bioconductor implementations for targeted quantitation. We formulate isotope dilution mass spectrometry (IDMS), derive weighted least squares (WLS) regression with $1/x^2$ empirical weighting, and evaluate the Clinical and Laboratory Standards Institute (CLSI EP17-A2) and IUPAC definitions of limit of blank (LoB), limit of detection (LoD), and limit of quantitation (LoQ). Using an end-to-end laboratory script in R 4.6.1, we simulate multi-point calibration curves across five orders of magnitude, compute analytical detection limits, quantify study samples, and test differential pathway activation in the tryptophan-kynurenine axis. The chapter details the Five Deadly Sins of targeted quantitation, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
+Targeted mass spectrometry quantifies predefined metabolites and peptides with high analytical selectivity, sensitivity, and dynamic range. Selected reaction monitoring (SRM) on triple quadrupoles \cite{picotti2012selected, lange2008selected}, parallel reaction monitoring (PRM) on high-resolution hybrid instruments \cite{gallien2012targeted, peterson2012parallel}, and data-independent acquisition (DIA) \cite{gillet2012targeted} measure transition chromatograms rather than survey full scans. Converting raw peak areas into verified molar concentrations requires calibrated regression models, stable isotope-labeled internal standards \cite{matuszewski2003strategies, ong2002stable}, and empirical detection limits \cite{currie1968limits, clsi2012ep17}. In mass spectrometry, measurement variance scales proportionally with analyte concentration, violating the homoscedasticity assumption of ordinary least squares (OLS) regression. Unweighted regression biases low-concentration estimates by up to $95\%$. This chapter establishes the biophysical principles, error-weighting mathematics, and Bioconductor implementations for targeted quantitation. We formulate isotope dilution mass spectrometry (IDMS) \cite{matuszewski2003strategies, carr2014targeted}, derive weighted least squares (WLS) regression with $1/x^2$ empirical weighting \cite{mani2012statistical}, and evaluate the Clinical and Laboratory Standards Institute (CLSI EP17-A2 \cite{clsi2012ep17}) and IUPAC definitions of limit of blank (LoB), limit of detection (LoD), and limit of quantitation (LoQ) \cite{currie1968limits, fda2018bioanalytical, ema2011guideline}. Using an end-to-end laboratory script in R 4.6.1 with Bioconductor \cite{huber2015orchestrating, choi2014msstats, gatto2023qfeatures} and Skyline outputs \cite{maclean2010skyline, liebler2013targeted}, we simulate multi-point calibration curves across five orders of magnitude, compute analytical detection limits, quantify study samples, and test differential pathway activation in the tryptophan-kynurenine axis. The chapter details the Five Deadly Sins of targeted quantitation, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical derivations and verified executable R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Targeted mass spectrometry quantifies predefined metabolites and peptides with h
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Normalization} & Isotope dilution ratio: $R = A_{\text{analyte}} / A_{\text{IS}}$. & Correct for electrospray matrix effects and injection volume drift. & Internal standard cross-talk or high CV ($>15\%$). Remedy: Audit SIL-IS area stability. \\
+\textbf{1. Normalization} & Isotope dilution ratio: $R = A_{\text{analyte}} / A_{\text{IS}}$ \cite{matuszewski2003strategies, ong2002stable}. & Correct for electrospray matrix effects and injection volume drift. & Internal standard cross-talk or high CV ($>15\%$). Remedy: Audit SIL-IS area stability. \\
 \addlinespace
-\textbf{2. Calibration} & Weighted linear regression: $\min \sum w_i (y_i - \hat{y}_i)^2$ with $w_i = 1/x^2$. & Eliminate low-concentration bias across multi-decade linear ranges. & OLS regression skewing LLOQ by $>50\%$. Remedy: Apply $1/x^2$ variance weighting. \\
+\textbf{2. Calibration} & Weighted linear regression: $\min \sum w_i (y_i - \hat{y}_i)^2$ with $w_i = 1/x^2$ \cite{mani2012statistical, fda2018bioanalytical}. & Eliminate low-concentration bias across multi-decade linear ranges. & OLS regression skewing LLOQ by $>50\%$. Remedy: Apply $1/x^2$ variance weighting. \\
 \addlinespace
-\textbf{3. Thresholding} & CLSI EP17-A2 parametric limits (LoB, LoD, LoQ). & Establish boundary between instrument noise and quantifiable signal. & Reporting values below validated LoQ. Remedy: Apply analytical status flags ($<\text{LoQ}$). \\
+\textbf{3. Thresholding} & CLSI EP17-A2 parametric limits (LoB, LoD, LoQ) \cite{clsi2012ep17, currie1968limits}. & Establish boundary between instrument noise and quantifiable signal. & Reporting values below validated LoQ. Remedy: Apply analytical status flags ($<\text{LoQ}$). \\
 \addlinespace
-\textbf{4. QC Auditing} & Qualifier/Quantifier transition area ratio verification ($\pm 20\%$). & Confirm chemical identity and detect isobaric chromatographic co-elution. & False positive peak integration. Remedy: Enforce transition ion ratio confirmation. \\
+\textbf{4. QC Auditing} & Qualifier/Quantifier transition area ratio verification ($\pm 20\%$) \cite{carr2014targeted, maclean2010skyline}. & Confirm chemical identity and detect isobaric chromatographic co-elution. & False positive peak integration. Remedy: Enforce transition ion ratio confirmation. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -76,9 +76,9 @@ An analytical measurement is valid only within the validated calibration range b
 \subsection{Targeted Mass Spectrometry Modalities: SRM, PRM, and DIA}
 Targeted mass spectrometry restricts instrument acquisition to predefined molecular targets, maximizing ion sampling time and signal-to-noise ratios. Three primary acquisition modalities dominate targeted bioanalysis:
 \begin{enumerate}
-    \item \textbf{Selected Reaction Monitoring (SRM/MRM):} Executed on triple quadrupole (QqQ) mass spectrometers. The first quadrupole (Q1) acts as a mass filter selecting the precursor ion ($m/z_{\text{prec}}$). The collision cell (q2) fragments the precursor via collision-induced dissociation. The third quadrupole (Q3) filters a specific diagnostic fragment ion ($m/z_{\text{frag}}$). Continuous scanning of predefined precursor-fragment transition pairs provides high sensitivity (sub-femtomolar) and wide linear dynamic range ($10^4$ to $10^6$).
-    \item \textbf{Parallel Reaction Monitoring (PRM):} Executed on hybrid quadrupole-Orbitrap or quadrupole-time-of-flight instruments. Q1 isolates the precursor ion, but all product ions are acquired simultaneously at high mass resolving power ($R \ge 30,000$). High resolution resolves target fragments from isobaric chemical background interferences that co-elute in triple quadrupole SRM.
-    \item \textbf{Data-Independent Acquisition (DIA/SWATH):} Transmits sequential wide precursor isolation windows ($10$ to $25$ Da) across the full mass range. Target analytes are quantified post-acquisition by extracting chromatograms of verified fragment ions.
+    \item \textbf{Selected Reaction Monitoring (SRM/MRM):} Executed on triple quadrupole (QqQ) mass spectrometers \cite{picotti2012selected, lange2008selected}. The first quadrupole (Q1) acts as a mass filter selecting the precursor ion ($m/z_{\text{prec}}$). The collision cell (q2) fragments the precursor via collision-induced dissociation. The third quadrupole (Q3) filters a specific diagnostic fragment ion ($m/z_{\text{frag}}$). Continuous scanning of predefined precursor-fragment transition pairs provides high sensitivity (sub-femtomolar) and wide linear dynamic range ($10^4$ to $10^6$).
+    \item \textbf{Parallel Reaction Monitoring (PRM):} Executed on hybrid quadrupole-Orbitrap or quadrupole-time-of-flight instruments \cite{gallien2012targeted, peterson2012parallel}. Q1 isolates the precursor ion, but all product ions are acquired simultaneously at high mass resolving power ($R \ge 30,000$). High resolution resolves target fragments from isobaric chemical background interferences that co-elute in triple quadrupole SRM.
+    \item \textbf{Data-Independent Acquisition (DIA/SWATH):} Transmits sequential wide precursor isolation windows ($10$ to $25$ Da) across the full mass range \cite{gillet2012targeted}. Target analytes are quantified post-acquisition by extracting chromatograms of verified fragment ions.
 \end{enumerate}
 
 \subsection{Transition Architecture and Confirmation Ratios}
@@ -92,12 +92,12 @@ The transition confirmation ratio is:
 \rho = \frac{\text{Area}_{\text{qualifier}}}{\text{Area}_{\text{quantifier}}}
 \label{eq:transition_ratio}
 \end{equation}
-In authentic biological samples, $\rho$ must match the transition ratio established from pure calibration standards within $\pm 20\%$ relative tolerance. A deviation outside this acceptance window indicates isobaric chromatographic interference or incorrect baseline integration.
+In authentic biological samples, $\rho$ must match the transition ratio established from pure calibration standards within $\pm 20\%$ relative tolerance \cite{carr2014targeted, maclean2010skyline}. A deviation outside this acceptance window indicates isobaric chromatographic interference or incorrect baseline integration.
 
 \subsection{Isotope Dilution Mass Spectrometry (IDMS)}
-Electrospray ionization is prone to matrix effects: co-eluting biological species (salts, phospholipids) alter droplet surface tension and charge transfer, causing severe signal suppression or enhancement.
+Electrospray ionization is prone to matrix effects: co-eluting biological species (salts, phospholipids) alter droplet surface tension and charge transfer, causing severe signal suppression or enhancement \cite{matuszewski2003strategies}.
 
-Isotope Dilution Mass Spectrometry (IDMS) spikes a fixed concentration of a stable isotope-labeled internal standard (SIL-IS; enriched with $^{13}\text{C}$, $^{15}\text{N}$, or $^{2}\text{H}$) into every sample prior to extraction. Because the SIL-IS shares identical chemical structure, chromatographic retention, and ionization properties with the endogenous analyte, matrix effects and extraction losses affect both species identically.
+Isotope Dilution Mass Spectrometry (IDMS) spikes a fixed concentration of a stable isotope-labeled internal standard (SIL-IS; enriched with $^{13}\text{C}$, $^{15}\text{N}$, or $^{2}\text{H}$) into every sample prior to extraction \cite{matuszewski2003strategies, ong2002stable, carr2014targeted}. Because the SIL-IS shares identical chemical structure, chromatographic retention, and ionization properties with the endogenous analyte, matrix effects and extraction losses affect both species identically.
 
 The normalized response variable is the peak area ratio:
 \begin{equation}
@@ -136,10 +136,10 @@ The closed-form WLS estimator is:
 \hat{\boldsymbol{\beta}} = (\mathbf{X}^T \mathbf{W} \mathbf{X})^{-1} \mathbf{X}^T \mathbf{W} \mathbf{y}
 \label{eq:wls_matrix}
 \end{equation}
-where $\mathbf{W} = \text{diag}(w_1, w_2, \dots, w_n)$. Weighting with $w_i = 1/x_i^2$ provides uniform percentage accuracy across multiple orders of magnitude.
+where $\mathbf{W} = \text{diag}(w_1, w_2, \dots, w_n)$. Weighting with $w_i = 1/x_i^2$ provides uniform percentage accuracy across multiple orders of magnitude \cite{mani2012statistical, fda2018bioanalytical}.
 
 \subsection{Detection and Quantitation Limits: CLSI EP17-A2 and IUPAC}
-The Clinical and Laboratory Standards Institute (CLSI EP17-A2) and IUPAC establish formal statistical definitions for detection limits:
+The Clinical and Laboratory Standards Institute (CLSI EP17-A2 \cite{clsi2012ep17}) and IUPAC \cite{currie1968limits} establish formal statistical definitions for detection limits:
 \begin{itemize}
     \item \textbf{Limit of Blank (LoB):} The highest apparent signal expected in zero-analyte blank samples:
     \begin{equation}
@@ -169,7 +169,7 @@ The Clinical and Laboratory Standards Institute (CLSI EP17-A2) and IUPAC establi
 \section{Algorithmic Architecture: Skyline and R Integration}
 % =============================================================================
 
-Targeted metabolomics and proteomics data pipelines link automated chromatographic peak integration with statistical regression modeling in R.
+Targeted metabolomics and proteomics data pipelines link automated chromatographic peak integration with statistical regression modeling in R \cite{maclean2010skyline, choi2014msstats, liebler2013targeted, huber2015orchestrating, gatto2023qfeatures}.
 
 \subsection{Transition Table Architecture}
 Targeted platforms export long-format transition tables containing:
@@ -186,7 +186,7 @@ Targeted platforms export long-format transition tables containing:
 \end{itemize}
 
 \subsection{Back-Calculation and Accuracy Screening}
-Bioanalytical validation guidelines (FDA, 2018; EMA, 2011) mandate that calibration standards be back-calculated using the fitted regression curve:
+Bioanalytical validation guidelines (FDA, 2018 \cite{fda2018bioanalytical}; EMA, 2011 \cite{ema2011guideline}) mandate that calibration standards be back-calculated using the fitted regression curve:
 \begin{equation}
 \hat{x}_i = \frac{y_i - \hat{\beta}_0}{\hat{\beta}_1}
 \label{eq:back_calc}
@@ -629,6 +629,11 @@ Because $12.00\% \le 20.0\%$, the autosampler carryover meets bioanalytical acce
 \begin{thebibliography}{99}
 \small
 
+\bibitem{picotti2012selected}
+Picotti, P., Aebersold, R.: Selected reaction monitoring-based proteomics: workflows, potential, and limitations.
+\textit{Nature Methods} \textbf{9}(6), 555--566 (2012).
+\doi{10.1038/nmeth.2015}
+
 \bibitem{lange2008selected}
 Lange, V., Picotti, P., Domon, B., Aebersold, R.: Selected reaction monitoring for quantitative proteomics: a tutorial.
 \textit{Molecular Systems Biology} \textbf{4}, 222 (2008).
@@ -639,13 +644,58 @@ MacLean, B., Tomazela, D.M., Shulman, N., Chambers, M., Finney, G.L., Frewen, B.
 \textit{Bioinformatics} \textbf{26}(7), 966--968 (2010).
 \doi{10.1093/bioinformatics/btq054}
 
+\bibitem{gallien2012targeted}
+Gallien, S., Duriez, E., Crone, C., Bourmaud, A., Duncan, M., Domon, B.: Targeted proteomic quantification on quadrupole-orbitrap mass spectrometer.
+\textit{Molecular \& Cellular Proteomics} \textbf{11}(12), 1709--1723 (2012).
+\doi{10.1074/mcp.O112.019802}
+
+\bibitem{peterson2012parallel}
+Peterson, A.C., Russell, J.D., Bailey, D.J., Westphall, M.S., Coon, J.J.: Parallel reaction monitoring for high resolution and high mass accuracy quantitative, targeted proteomics.
+\textit{Molecular \& Cellular Proteomics} \textbf{11}(11), 1475--1488 (2012).
+\doi{10.1074/mcp.O112.020131}
+
+\bibitem{gillet2012targeted}
+Gillet, L.C., Navarro, P., Tate, S., R{\"o}st, H., Selevsek, N., Reiter, L., Bonner, R., Aebersold, R.: Targeted data extraction of the MS/MS spectra generated by data-independent acquisition: a new concept for consistent and accurate proteome analysis.
+\textit{Molecular \& Cellular Proteomics} \textbf{11}(6), O111.016717 (2012).
+\doi{10.1074/mcp.O111.016717}
+
+\bibitem{carr2014targeted}
+Carr, S.A., Abbatiello, S.E., Ackermann, B.L., et al.: Targeted peptide measurements in biology and medicine: best practices for method development using a fit-for-purpose approach.
+\textit{Molecular \& Cellular Proteomics} \textbf{13}(3), 907--917 (2014).
+\doi{10.1074/mcp.M113.036095}
+
+\bibitem{mani2012statistical}
+Mani, D.R., Abbatiello, S.E., Carr, S.A.: Statistical characterization of multiple-reaction monitoring assays for large-scale targeted proteomics.
+\textit{BMC Bioinformatics} \textbf{13}(Suppl 16), S9 (2012).
+\doi{10.1186/1471-2105-13-S16-S9}
+
 \bibitem{fda2018bioanalytical}
 US Food and Drug Administration: Bioanalytical Method Validation Guidance for Industry.
-Biopharmaceutics, FDA, Silver Spring (2018).
+FDA, Silver Spring (2018).
+\url{https://www.fda.gov/regulatory-information/search-fda-guidance-documents/bioanalytical-method-validation-guidance-industry}
+
+\bibitem{ema2011guideline}
+European Medicines Agency: Guideline on bioanalytical method validation.
+Committee for Medicinal Products for Human Use (CHMP), EMA, London (2011).
 
 \bibitem{clsi2012ep17}
 Clinical and Laboratory Standards Institute: Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures; Approved Guideline---Second Edition.
 CLSI Document EP17-A2, Wayne (2012).
+
+\bibitem{currie1968limits}
+Currie, L.A.: Limits for qualitative detection and quantitative determination. Application to radiochemistry.
+\textit{Analytical Chemistry} \textbf{40}(3), 586--593 (1968).
+\doi{10.1021/ac60259a007}
+
+\bibitem{matuszewski2003strategies}
+Matuszewski, B.K., Constanzer, M.L., Chavez-Eng, C.M.: Strategies for the assessment of matrix effect in quantitative bioanalytical methods based on HPLC-MS/MS.
+\textit{Analytical Chemistry} \textbf{75}(13), 3019--3030 (2003).
+\doi{10.1021/ac020361s}
+
+\bibitem{ong2002stable}
+Ong, S.E., Blagoev, B., Kratchmarova, I., Kristensen, D.B., Steen, H., Pandey, A., Mann, M.: Stable isotope labeling by amino acids in cell culture, SILAC, as a simple and accurate approach to expression proteomics.
+\textit{Molecular \& Cellular Proteomics} \textbf{1}(5), 376--386 (2002).
+\doi{10.1074/mcp.M200025-MCP200}
 
 \bibitem{liebler2013targeted}
 Liebler, D.C., Zimmerman, L.J.: Targeted peptide analysis for biomarker evaluation and validation.
@@ -656,6 +706,16 @@ Liebler, D.C., Zimmerman, L.J.: Targeted peptide analysis for biomarker evaluati
 Choi, M., Chang, C.Y., Clough, T., Broudy, D., Killeen, T., MacLean, B., Vitek, O.: MSstats: an R package for statistical relative quantification of proteins in mass spectrometry-based proteomic experiments.
 \textit{Bioinformatics} \textbf{30}(17), 2524--2526 (2014).
 \doi{10.1093/bioinformatics/btu305}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et al.: Orchestrating high-throughput genomic analysis with Bioconductor.
+\textit{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\doi{10.1038/nmeth.3252}
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C.: QFeatures: Quantitative features for mass spectrometry data.
+\textit{Bioconductor Package} (2023).
+\doi{10.18129/B9.bioc.QFeatures}
 
 \end{thebibliography}
 

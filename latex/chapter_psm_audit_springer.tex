@@ -29,7 +29,7 @@
 
 \begin{abstract}
 \noindent
-Database search engines match tandem mass spectra against in silico digested protein sequences to produce candidate peptide-spectrum matches (PSMs). Raw search scores cannot differentiate true biological peptides from random spectral overlaps without a calibrated statistical null model. The target-decoy competition strategy provides an empirical false discovery rate (FDR) estimator by searching query spectra against a combined database of real target proteins and inverted decoy sequences. This chapter establishes the mathematical principles, error rate formulations, and Bioconductor implementations for auditing PSM datasets. We derive the empirical false discovery rate, Storey's $q$-value, and posterior error probability (PEP) mixture models. We prove the PSM-to-Protein FDR Inflation Theorem, demonstrating why controlling error rates at the spectrum level permits higher false discovery rates at the protein level. Using an mzIdentML benchmark dataset from an \textit{Erwinia} proteome digest analyzed on a Top10-HCD Orbitrap, we implement a verified auditing workflow in R 4.6.1 using the \texttt{PSMatch} package. We audit precursor charge distributions, quantify tryptic missed cleavages, detect adventitious contaminants, and resolve bipartite peptide-protein graphs into connected components. The chapter details the Five Deadly Sins of PSM filtering, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical proofs and verified executable R code.
+Database search engines match tandem mass spectra against in silico digested protein sequences to produce candidate peptide-spectrum matches (PSMs) \cite{eng1994approach, perkins1999probability, kim2014ms}. Raw search scores cannot differentiate true biological peptides from random spectral overlaps without a calibrated statistical null model. The target-decoy competition strategy provides an empirical false discovery rate (FDR) estimator by searching query spectra against a combined database of real target proteins and inverted decoy sequences \cite{elias2007target}. This chapter establishes the mathematical principles, error rate formulations, and Bioconductor implementations for auditing PSM datasets. We derive the empirical false discovery rate, Storey's $q$-value \cite{storey2002direct, benjamini1995controlling}, and posterior error probability (PEP) mixture models \cite{kall2007semi, kall2008posterior}. We prove the PSM-to-Protein FDR Inflation Theorem \cite{nesvizhskii2005interpretation, savitski2015measuring, gupta2009false}, demonstrating why controlling error rates at the spectrum level permits higher false discovery rates at the protein level. Using an mzIdentML benchmark dataset \cite{jones2012mzidentml} from an \textit{Erwinia} proteome digest analyzed on a Top10-HCD Orbitrap, we implement a verified auditing workflow in R 4.6.1 using the \texttt{PSMatch} package \cite{gatto2023psmatch, gatto2023qfeatures, huber2015orchestrating}. We audit precursor charge distributions, quantify tryptic missed cleavages, detect adventitious contaminants \cite{mellacheruvu2013crapome}, and resolve bipartite peptide-protein graphs into connected components. The chapter details the Five Deadly Sins of PSM filtering, provides an auditing diagnostic checklist, and presents four worked exercises with complete mathematical proofs and verified executable R code.
 \end{abstract}
 
 \noindent
@@ -51,13 +51,13 @@ Database search engines match tandem mass spectra against in silico digested pro
 \toprule
 \textbf{Stage} & \textbf{Statistical Mechanism} & \textbf{Key Analytical Objective} & \textbf{Primary Failure Mode \& Remedy} \\
 \midrule
-\textbf{1. Ingestion} & Parse mzIdentML schema into tabular \texttt{PSM} container. & Extract sequence, precursor charge, raw scores, and target/decoy tags. & Decoy prefix parsing failure. Remedy: Verify \texttt{isDecoy} logical flag concordance. \\
+\textbf{1. Ingestion} & Parse mzIdentML schema \cite{jones2012mzidentml} into tabular \texttt{PSM} container \cite{gatto2023psmatch}. & Extract sequence, precursor charge, raw scores, and target/decoy tags. & Decoy prefix parsing failure. Remedy: Verify \texttt{isDecoy} logical flag concordance. \\
 \addlinespace
-\textbf{2. Target-Decoy} & Rank filtering and score thresholding via $N_{\text{decoy}} / N_{\text{target}}$. & Determine score cutoffs achieving $\le 1.0\%$ empirical PSM-level FDR. & Raw score thresholding without decoy calibration. Remedy: Walk target-decoy empirical FDR curve. \\
+\textbf{2. Target-Decoy} & Rank filtering and score thresholding via $N_{\text{decoy}} / N_{\text{target}}$ \cite{elias2007target}. & Determine score cutoffs achieving $\le 1.0\%$ empirical PSM-level FDR \cite{storey2002direct}. & Raw score thresholding without decoy calibration. Remedy: Walk target-decoy empirical FDR curve. \\
 \addlinespace
-\textbf{3. Diagnostics} & Tryptic cleavage audit, charge distribution, and contaminant search. & Identify incomplete digestion, electrospray anomalies, and autolysis peaks. & Unchecked trypsin autolysis or keratin contamination. Remedy: Screen against cRAP database. \\
+\textbf{3. Diagnostics} & Tryptic cleavage audit, charge distribution, and contaminant search \cite{mellacheruvu2013crapome}. & Identify incomplete digestion, electrospray anomalies, and autolysis peaks. & Unchecked trypsin autolysis or keratin contamination. Remedy: Screen against cRAP database. \\
 \addlinespace
-\textbf{4. Graph Audit} & Bipartite adjacency matrix and connected component analysis. & Separate unique peptides from shared degenerate sequences. & Silent protein inference inflation from shared peptides. Remedy: Filter shared PSMs before quantification. \\
+\textbf{4. Graph Audit} & Bipartite adjacency matrix and connected component analysis \cite{nesvizhskii2005interpretation}. & Separate unique peptides from shared degenerate sequences \cite{nesvizhskii2010survey}. & Silent protein inference inflation from shared peptides. Remedy: Filter shared PSMs before quantification. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -74,7 +74,7 @@ A database search engine score measures spectral similarity against a candidate 
 % =============================================================================
 
 \subsection{Database Searching and Score Statistics}
-Bottom-up proteomics digests proteins into peptides using site-specific endoproteases (predominantly porcine trypsin). Liquid chromatography separates the resulting peptide mixture, and tandem mass spectrometry isolates and fragments precursor ions. Database search engines (including Mascot, SEQUEST, Andromeda, and MS-GF+) compare observed fragment mass-to-charge ($m/z$) values against theoretical $b$- and $y$-ion series generated from protein sequence databases.
+Bottom-up proteomics digests proteins into peptides using site-specific endoproteases (predominantly porcine trypsin). Liquid chromatography separates the resulting peptide mixture, and tandem mass spectrometry isolates and fragments precursor ions. Database search engines (including Mascot \cite{perkins1999probability}, SEQUEST \cite{eng1994approach}, Andromeda \cite{cox2011andromeda}, and MS-GF+ \cite{kim2014ms}) compare observed fragment mass-to-charge ($m/z$) values against theoretical $b$- and $y$-ion series generated from protein sequence databases.
 
 For an observed spectrum $S$ and candidate peptide sequence $P$, the search engine computes a raw matching score $s(S, P)$. In cross-correlation algorithms (SEQUEST), $s$ represents the dot product between the experimental spectrum and a shifted theoretical template. In probabilistic engines (MS-GF+), $s$ reflects a log-likelihood ratio comparing the probability of observing spectrum $S$ given sequence $P$ against a random cleavage null model:
 \begin{equation}
@@ -84,7 +84,7 @@ s(S, P) = \ln \left( \frac{P(S \mid P)}{P(S \mid \text{Random})} \right)
 Because search engines score millions of spectrum-peptide pairs, top-ranked matches inevitably contain false positive assignments originating from unmodeled chemical modifications, chimeric precursors, and baseline instrument noise.
 
 \subsection{The Target-Decoy Competition Framework}
-Elias and Gygi (2007) introduced the target-decoy competition (TDC) framework to provide a rigorous, non-parametric false discovery rate estimate. The search database is constructed by concatenating authentic protein sequences (targets, $\mathcal{D}_{\text{target}}$) with reversed or shuffled sequences (decoys, $\mathcal{D}_{\text{decoy}}$):
+Elias and Gygi (2007) \cite{elias2007target} introduced the target-decoy competition (TDC) framework to provide a rigorous, non-parametric false discovery rate estimate. The search database is constructed by concatenating authentic protein sequences (targets, $\mathcal{D}_{\text{target}}$) with reversed or shuffled sequences (decoys, $\mathcal{D}_{\text{decoy}}$):
 \begin{equation}
 \mathcal{D}_{\text{combined}} = \mathcal{D}_{\text{target}} \cup \mathcal{D}_{\text{decoy}}
 \label{eq:target_decoy_db}
@@ -111,7 +111,7 @@ where $N_{\text{decoy}}(s \ge t)$ and $N_{\text{target}}(s \ge t)$ are the count
 \end{equation}
 
 \subsection{Storey's Q-Value and Posterior Error Probability}
-Because empirical FDR estimates fluctuate locally due to discrete counting noise, Storey (2002) formulated the $q$-value. The $q$-value of a PSM with score $s_i$ is the minimum false discovery rate at which that match is accepted:
+Because empirical FDR estimates fluctuate locally due to discrete counting noise, Storey (2002) \cite{storey2002direct} formulated the $q$-value. The $q$-value of a PSM with score $s_i$ is the minimum false discovery rate at which that match is accepted:
 \begin{equation}
 q(s_i) = \min_{t \le s_i} \widehat{\text{FDR}}(t)
 \label{eq:q_value}
@@ -123,10 +123,10 @@ While the $q$-value measures the global false discovery rate across a population
 \text{PEP}(s) = P(\text{False} \mid S = s) = \frac{\pi_0 f_{\text{decoy}}(s)}{f_{\text{target}}(s)}
 \label{eq:pep_formula}
 \end{equation}
-where $\pi_0$ is the prior probability of an incorrect match, $f_{\text{decoy}}(s)$ is the score probability density function of decoy matches, and $f_{\text{target}}(s)$ is the marginal density of all target matches. Advanced post-processing tools, such as Percolator (K\"all et al., 2008), fit semi-supervised support vector machines to combine multiple spectral features (delta score, precursor mass error, charge, retention time) into calibrated PEP estimates.
+where $\pi_0$ is the prior probability of an incorrect match, $f_{\text{decoy}}(s)$ is the score probability density function of decoy matches, and $f_{\text{target}}(s)$ is the marginal density of all target matches. Advanced post-processing tools, such as Percolator (K\"all et al., 2007, 2008) \cite{kall2007semi, kall2008posterior}, fit semi-supervised support vector machines to combine multiple spectral features (delta score, precursor mass error, charge, retention time) into calibrated PEP estimates.
 
 \subsection{The PSM-to-Protein FDR Inflation Theorem}
-A central pitfall in quantitative proteomics is assuming that a $1.0\%$ FDR filter at the PSM level yields a $1.0\%$ FDR at the protein level. In practice, protein-level FDR exceeds PSM-level FDR.
+A central pitfall in quantitative proteomics is assuming that a $1.0\%$ FDR filter at the PSM level yields a $1.0\%$ FDR at the protein level. In practice, protein-level FDR exceeds PSM-level FDR \cite{nesvizhskii2005interpretation, savitski2015measuring, gupta2009false}.
 
 \noindent\textbf{Theorem 11.1 (PSM-to-Protein FDR Inflation).}\enspace\textit{Let a proteomics experiment identify $M$ confident PSMs mapping to $K$ distinct proteins, filtered at PSM-level false discovery rate $\alpha_{\text{PSM}} = \frac{N_{\text{false}}}{M}$. Suppose true positive PSMs cluster redundantly onto true proteins with mean coverage $\mu_{\text{true}} = \frac{M_{\text{true}}}{K_{\text{true}}} > 1$, while false positive PSMs distribute uniformly across the unexpressed proteome with mean coverage $\mu_{\text{false}} = \frac{N_{\text{false}}}{K_{\text{false}}} \approx 1$. Then the protein-level false discovery rate $\alpha_{\text{protein}}$ is strictly inflated relative to $\alpha_{\text{PSM}}$:}
 \begin{equation}
@@ -162,10 +162,10 @@ The protein-level false discovery rate is inflated by a factor of five. \qed
 \section{Algorithmic Architecture: The PSMatch Ecosystem}
 % =============================================================================
 
-The Bioconductor \texttt{PSMatch} package formalizes the analysis and auditing of peptide-spectrum matches.
+The Bioconductor \texttt{PSMatch} package formalizes the analysis and auditing of peptide-spectrum matches \cite{gatto2023psmatch}, operating within the broader S4 mass spectrometry architecture \cite{huber2015orchestrating, gatto2023qfeatures}.
 
 \subsection{Data Representation and mzIdentML Standards}
-The standard exchange format for proteomics search engine output is mzIdentML (\texttt{.mzid}), developed by the Human Proteome Organization Proteomics Standards Initiative (HUPO-PSI). The \texttt{PSMatch::readPSMs} function parses the XML schema of mzIdentML files into a structured \texttt{PSM} object inheriting from \texttt{DFrame}.
+The standard exchange format for proteomics search engine output is mzIdentML (\texttt{.mzid}), developed by the Human Proteome Organization Proteomics Standards Initiative (HUPO-PSI) \cite{jones2012mzidentml}. The \texttt{PSMatch::readPSMs} function parses the XML schema of mzIdentML files into a structured \texttt{PSM} object inheriting from \texttt{DFrame}.
 
 The core attributes recorded for every match include:
 \begin{itemize}
@@ -184,8 +184,8 @@ A search result filtered purely by score can harbor systematic biochemical and a
 \begin{enumerate}
     \item \textbf{Missed Cleavages:} Trypsin specifically cleaves C-terminal to lysine ($\text{K}$) and arginine ($\text{R}$), unless immediately followed by proline ($\text{P}$). Internal un-cleaved basic residues signify incomplete enzymatic digestion. High missed-cleavage rates dilute analytical sensitivity across multiple peptide forms.
     \item \textbf{Charge-State Anomalies:} Tryptic peptides typically possess a basic N-terminus and a basic C-terminal $\text{K}$ or $\text{R}$, generating $2+$ or $3+$ ions in positive-mode electrospray. Singly charged ($1+$) or high-charge ($\ge 5+$) matches frequently represent chemical contaminants, non-peptide polymers, or poorly fragmented precursors.
-    \item \textbf{Adventitious Contaminants:} Common laboratory reagents (porcine trypsin autolysis products, human keratins from skin shedding, bovine serum albumin) contaminate sample preparations. Searching against the Common Repository of Adventitious Proteins (cRAP) allows explicit identification and segregation of these artifacts.
-    \item \textbf{Shared Peptides:} Because gene duplication and homologous domains generate identical sequence segments across distinct proteins, a single peptide can map to multiple accessions. In \texttt{PSMatch}, \texttt{makeAdjacencyMatrix} and \texttt{ConnectedComponents} construct bipartite graphs linking peptides to proteins, partitioning the identification space into independent clusters.
+    \item \textbf{Adventitious Contaminants:} Common laboratory reagents (porcine trypsin autolysis products, human keratins from skin shedding, bovine serum albumin) contaminate sample preparations. Searching against the Common Repository of Adventitious Proteins (cRAP) \cite{mellacheruvu2013crapome} allows explicit identification and segregation of these artifacts.
+    \item \textbf{Shared Peptides:} Because gene duplication and homologous domains generate identical sequence segments across distinct proteins, a single peptide can map to multiple accessions. In \texttt{PSMatch}, \texttt{makeAdjacencyMatrix} and \texttt{ConnectedComponents} construct bipartite graphs linking peptides to proteins \cite{nesvizhskii2005interpretation, nesvizhskii2010survey}, partitioning the identification space into independent clusters.
 \end{enumerate}
 
 % =============================================================================
@@ -567,39 +567,112 @@ Although complex $n \times n$ multi-protein components represent under $1\%$ of 
 \small
 
 \bibitem{elias2007target}
-Elias, J.E., Gygi, S.P.: Target-decoy search strategy for increased confidence in large-scale protein identifications by mass spectrometry.
-\textit{Nature Methods} \textbf{4}(3), 207--214 (2007).
-\doi{10.1038/nmeth1019}
+Elias, J.E., Gygi, S.P.:
+\newblock Target-decoy search strategy for increased confidence in large-scale protein identifications by mass spectrometry.
+\newblock \emph{Nature Methods} \textbf{4}(3), 207--214 (2007).
+\newblock \doi{10.1038/nmeth1019}
 
 \bibitem{kim2014ms}
-Kim, S., Pevzner, P.A.: MS-GF+ makes progress towards a universal database search tool for proteomics.
-\textit{Nature Communications} \textbf{5}, 5277 (2014).
-\doi{10.1038/ncomms6277}
+Kim, S., Pevzner, P.A.:
+\newblock {MS-GF+} makes progress towards a universal database search tool for proteomics.
+\newblock \emph{Nature Communications} \textbf{5}, 5277 (2014).
+\newblock \doi{10.1038/ncomms6277}
+
+\bibitem{kall2007semi}
+K\"all, L., Canterbury, J.D., Weston, J., Noble, W.S., MacCoss, M.J.:
+\newblock Semi-supervised learning for peptide identification from shotgun proteomics datasets.
+\newblock \emph{Nature Methods} \textbf{4}(11), 923--925 (2007).
+\newblock \doi{10.1038/nmeth1113}
 
 \bibitem{kall2008posterior}
-K\"all, L., Storey, J.D., MacCoss, M.J., Noble, W.S.: Posterior error probabilities and false discovery rates: two sides of the same coin.
-\textit{Journal of Proteome Research} \textbf{7}(1), 40--44 (2008).
-\doi{10.1021/pr700739d}
-
-\bibitem{nesvizhskii2005interpretation}
-Nesvizhskii, A.I., Aebersold, R.: Interpretation of shotgun proteomic data: the protein inference problem.
-\textit{Molecular \& Cellular Proteomics} \textbf{4}(10), 1419--1440 (2005).
-\doi{10.1074/mcp.R500012-MCP200}
+K\"all, L., Storey, J.D., MacCoss, M.J., Noble, W.S.:
+\newblock Posterior error probabilities and false discovery rates: two sides of the same coin.
+\newblock \emph{Journal of Proteome Research} \textbf{7}(1), 40--44 (2008).
+\newblock \doi{10.1021/pr700739d}
 
 \bibitem{storey2002direct}
-Storey, J.D.: A direct approach to false discovery rates.
-\textit{Journal of the Royal Statistical Society: Series B (Statistical Methodology)} \textbf{64}(3), 479--498 (2002).
-\doi{10.1111/1467-9868.00346}
+Storey, J.D.:
+\newblock A direct approach to false discovery rates.
+\newblock \emph{Journal of the Royal Statistical Society: Series B (Statistical Methodology)} \textbf{64}(3), 479--498 (2002).
+\newblock \doi{10.1111/1467-9868.00346}
+
+\bibitem{benjamini1995controlling}
+Benjamini, Y., Hochberg, Y.:
+\newblock Controlling the false discovery rate: A practical and powerful approach to multiple testing.
+\newblock \emph{Journal of the Royal Statistical Society: Series B (Methodological)} \textbf{57}(1), 289--300 (1995).
+\newblock \doi{10.1111/j.2517-6161.1995.tb02031.x}
+
+\bibitem{nesvizhskii2005interpretation}
+Nesvizhskii, A.I., Aebersold, R.:
+\newblock Interpretation of shotgun proteomic data: the protein inference problem.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{4}(10), 1419--1440 (2005).
+\newblock \doi{10.1074/mcp.R500012-MCP200}
+
+\bibitem{nesvizhskii2010survey}
+Nesvizhskii, A.I.:
+\newblock A survey of progress in tools and procedures for analysis of shotgun proteomics data.
+\newblock \emph{Nature Methods} \textbf{7}(3), S17--S25 (2010).
+\newblock \doi{10.1038/nmeth.1431}
+
+\bibitem{gupta2009false}
+Gupta, N., Pevzner, P.A.:
+\newblock False discovery rates of protein identifications: a strike against the two-peptide rule.
+\newblock \emph{Journal of Proteome Research} \textbf{8}(9), 4173--4181 (2009).
+\newblock \doi{10.1021/pr9004794}
 
 \bibitem{savitski2015measuring}
-Savitski, M.M., Wilhelm, M., Hahne, H., Kuster, B., Bantscheff, M.: A scalable approach for protein false discovery rate estimation in large proteomic data sets.
-\textit{Molecular \& Cellular Proteomics} \textbf{14}(9), 2394--2404 (2015).
-\doi{10.1074/mcp.M114.046995}
+Savitski, M.M., Wilhelm, M., Hahne, H., Kuster, B., Bantscheff, M.:
+\newblock A scalable approach for protein false discovery rate estimation in large proteomic data sets.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{14}(9), 2394--2404 (2015).
+\newblock \doi{10.1074/mcp.M114.046995}
 
 \bibitem{gatto2023psmatch}
-Gatto, L., Rainer, J.: PSMatch: Handling and Managing Peptide-Spectrum Matches in R.
-\textit{Bioconductor Package} (2023).
-\doi{10.18129/B9.bioc.PSMatch}
+Gatto, L., Rainer, J.:
+\newblock \emph{PSMatch: Handling and Managing Peptide-Spectrum Matches in R}.
+\newblock R package version 1.6.0 (2023).
+\newblock \doi{10.18129/B9.bioc.PSMatch}
+
+\bibitem{gatto2023qfeatures}
+Gatto, L., Vanderaa, C., Breckels, L.M.:
+\newblock A foundation for reproducible single-cell and bulk proteomics data analysis in {Bioconductor}.
+\newblock \emph{Nature Communications} \textbf{14}, 5698 (2023).
+\newblock \doi{10.1038/s41467-023-41556-2}
+
+\bibitem{jones2012mzidentml}
+Jones, A.R., Eisenacher, M., Mayer, G., et~al.:
+\newblock The {mzIdentML} data standard for mass spectrometry-based proteomics results.
+\newblock \emph{Molecular \& Cellular Proteomics} \textbf{11}(7), M111.014381 (2012).
+\newblock \doi{10.1074/mcp.M111.014381}
+
+\bibitem{mellacheruvu2013crapome}
+Mellacheruvu, D., Wright, Z., Couzens, A.L., et~al.:
+\newblock The {CRAPome}: a contaminant repository for affinity purification-mass spectrometry data.
+\newblock \emph{Nature Methods} \textbf{10}(8), 730--736 (2013).
+\newblock \doi{10.1038/nmeth.2557}
+
+\bibitem{eng1994approach}
+Eng, J.K., McCormack, A.L., Yates, J.R.:
+\newblock An approach to correlate tandem mass spectral data of peptides with amino acid sequences in a protein database.
+\newblock \emph{Journal of the American Society for Mass Spectrometry} \textbf{5}(11), 976--989 (1994).
+\newblock \doi{10.1016/1044-0305(94)87002-0}
+
+\bibitem{perkins1999probability}
+Perkins, D.N., Pappin, D.J.C., Creasy, D.M., Cottrell, J.S.:
+\newblock Probability-based protein identification by searching sequence databases using mass spectrometry data.
+\newblock \emph{Electrophoresis} \textbf{20}(18), 3551--3567 (1999).
+\newblock \doi{10.1002/(SICI)1522-2683(19991201)20:18<3551::AID-ELPS3551>3.0.CO;2-2}
+
+\bibitem{cox2011andromeda}
+Cox, J., Neuhauser, N., Michalski, A., et~al.:
+\newblock Andromeda: a peptide search engine integrated into the {MaxQuant} environment.
+\newblock \emph{Journal of Proteome Research} \textbf{10}(4), 1794--1805 (2011).
+\newblock \doi{10.1021/pr101065j}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.:
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\newblock \doi{10.1038/nmeth.3252}
 
 \end{thebibliography}
 

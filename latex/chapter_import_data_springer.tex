@@ -21,7 +21,7 @@
 
 \begin{abstract}
 \noindent
-Raw mass spectrometry data files must be parsed accurately before downstream identification, feature extraction, or quantification can occur. Proprietary vendor file formats store spectral arrays in closed binary containers that restrict cross-platform computing and require specialized converter engines. The HUPO Proteomics Standards Initiative established open XML schemas (\texttt{mzML}) and controlled vocabularies (\texttt{PSI-MS}) to standardize scan-level metadata and binary peak representations. In R 4.6.1 and Bioconductor 3.20, the \texttt{mzR} package provides low-level C++ file handles that read headers on-demand without memory overhead. The modern \texttt{Spectra} container builds on this architecture, offering a modular backend system that separates data manipulation logic from physical storage. Using on-disk backends (\texttt{MsBackendMzR}), large analytical cohorts can be manipulated with minimal RAM footprints, avoiding out-of-memory crashes while enabling lazy execution queues for peak cleaning and extraction. This chapter details the physical architecture of mass spectrometry files, the mechanics of centroiding conversion via ProteoWizard \texttt{msconvert}, low-level handle seeking in \texttt{mzR}, and high-level stream processing in \texttt{Spectra}.
+Raw mass spectrometry data files must be parsed accurately before downstream identification, feature extraction, or quantification can occur. Proprietary vendor file formats store spectral arrays in closed binary containers that restrict cross-platform computing and require specialized converter engines. The HUPO Proteomics Standards Initiative established open XML schemas (\texttt{mzML}) and controlled vocabularies (\texttt{PSI-MS}) to standardize scan-level metadata and binary peak representations \cite{martens2011mzml, deutsch2010psi}. In R 4.6.1 and Bioconductor 3.20 \cite{gentleman2004bioconductor, huber2015orchestrating}, the \texttt{mzR} package provides low-level C++ file handles via Rcpp \cite{eddelbuettel2011rcpp} and ProteoWizard \cite{chambers2012proteowizard} that read headers on-demand without memory overhead. The modern \texttt{Spectra} container builds on this architecture \cite{gatto2021spectra, rainer2022msexperiment}, offering a modular backend system that separates data manipulation logic from physical storage. Using on-disk backends (\texttt{MsBackendMzR} or \texttt{MsBackendHdf5Peaks} \cite{bhamber2021mzmlb, fischer2020rhdf5}), large analytical cohorts can be manipulated with minimal RAM footprints, preserving FAIR principles \cite{wilkinson2016fair, deutsch2020pride} and avoiding out-of-memory crashes while enabling lazy execution queues for peak cleaning and extraction. This chapter details the physical architecture of mass spectrometry files, the mechanics of centroiding conversion via ProteoWizard \texttt{msconvert} \cite{chambers2012proteowizard, hulstaert2020thermorawfileparser}, low-level handle seeking in \texttt{mzR}, and high-level stream processing in \texttt{Spectra}.
 \end{abstract}
 
 \vspace{1em}
@@ -41,15 +41,15 @@ Table~\ref{tab:ingestion_roadmap} outlines the methodological and computational 
 \toprule
 \textbf{Stage} & \textbf{Core Operation} & \textbf{Algorithmic Mechanism} & \textbf{Bioc / Tool} \\
 \midrule
-\textbf{1. Conversion} & Proprietary to open format & Vendor DLL centroiding, zlib compression & \texttt{msconvert} \\
+\textbf{1. Conversion} & Proprietary to open format \cite{martens2011mzml} & Vendor DLL centroiding, zlib compression & \texttt{msconvert} \cite{chambers2012proteowizard} \\
 \addlinespace
-\textbf{2. Low-Level Handle} & Random access scan header & C++ ProteoWizard parser, $O(1)$ seek & \texttt{mzR} \\
+\textbf{2. Low-Level Handle} & Random access scan header & C++ ProteoWizard parser, $O(1)$ seek \cite{eddelbuettel2011rcpp} & \texttt{mzR} \\
 \addlinespace
-\textbf{3. On-Disk Abstraction} & Lazy spectral streaming & Pointer mapping, zero RAM peak load & \texttt{MsBackendMzR} \\
+\textbf{3. On-Disk Abstraction} & Lazy spectral streaming & Pointer mapping, zero RAM peak load \cite{bhamber2021mzmlb} & \texttt{MsBackendMzR} \cite{gatto2021spectra} \\
 \addlinespace
-\textbf{4. Trace Extraction} & Chromatographic extraction & Summed/base peak intensity against RT & \texttt{Spectra::tic} \\
+\textbf{4. Trace Extraction} & Chromatographic extraction & Summed/base peak intensity against RT & \texttt{Spectra::tic} \cite{rainer2022msexperiment} \\
 \addlinespace
-\textbf{5. Queue Processing} & Noise removal and filtering & Lazy processing queue, transient chunking & \texttt{filterIntensity} \\
+\textbf{5. Queue Processing} & Noise removal and filtering & Lazy processing queue, transient chunking & \texttt{filterIntensity} \cite{gatto2012msnbase} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -68,10 +68,10 @@ Mass spectrometry instruments generate high-dimensional time-series data consist
 
 These closed formats prevent transparent inspection and cross-platform high-performance computing on Linux clusters. To resolve vendor fragmentation, the Human Proteome Organization Proteomics Standards Initiative (HUPO-PSI) developed open, standardized XML-based formats:
 \begin{enumerate}
-    \item \textbf{mzXML:} An early XML format developed by the Seattle Proteome Center to standardize data exchange for the Trans-Proteomic Pipeline.
-    \item \textbf{mzML:} The definitive community standard established in 2008 by HUPO-PSI, merging mzData and mzXML. It utilizes the PSI-MS Controlled Vocabulary to encode instrument parameters, scan configurations, and data arrays unambiguously.
-    \item \textbf{mzMLb:} A modern container that embeds the mzML XML metadata document alongside native HDF5 binary datasets, achieving high-speed chunked I/O and lossless compression.
-    \item \textbf{imzML:} A dual-file architecture for mass spectrometry imaging, separating spatial XML metadata from high-throughput imaging binary data (\texttt{.ibd}).
+    \item \textbf{mzXML:} An early XML format developed by the Seattle Proteome Center to standardize data exchange for the Trans-Proteomic Pipeline \cite{pedrioli2004mzxml}.
+    \item \textbf{mzML:} The definitive community standard established in 2008 by HUPO-PSI, merging mzData and mzXML \cite{martens2011mzml, deutsch2010psi}. It utilizes the PSI-MS Controlled Vocabulary to encode instrument parameters, scan configurations, and data arrays unambiguously.
+    \item \textbf{mzMLb:} A modern container that embeds the mzML XML metadata document alongside native HDF5 binary datasets, achieving high-speed chunked I/O and lossless compression \cite{bhamber2021mzmlb}.
+    \item \textbf{imzML:} A dual-file architecture for mass spectrometry imaging, separating spatial XML metadata from high-throughput imaging binary data (\texttt{.ibd}) \cite{schramm2012imzml}.
 \end{enumerate}
 
 % =============================================================================
@@ -85,14 +85,14 @@ A mass spectrometer detects ion beams as continuous analog voltages or discrete 
     \item \textbf{Centroid Mode:} A mathematical peak-detection algorithm identifies the center of gravity and integrated area of each profile envelope, reducing it to a single discrete $(m/z, \text{intensity})$ pair. Centroiding reduces raw data volume by 15- to 20-fold.
 \end{itemize}
 
-Most downstream search engines (Mascot, Comet, MS-GF+) and feature-detection algorithms (\texttt{centWave} in \texttt{xcms}) require centroided peak lists. Applying an external, open-source centroiding algorithm to profile data after conversion often degrades mass accuracy. Conversion tools must employ vendor-native algorithms (via dynamically linked libraries on Windows or Wine) during file generation.
+Most downstream search engines (Mascot, Comet, MS-GF+) and feature-detection algorithms (\texttt{centWave} in \texttt{xcms} \cite{tautenhahn2008centwave, cox2008maxquant}) require centroided peak lists. Applying an external, open-source centroiding algorithm to profile data after conversion often degrades mass accuracy. Conversion tools must employ vendor-native algorithms (via dynamically linked libraries on Windows or Wine) during file generation.
 
 % =============================================================================
 \section{Data Conversion Engineering with ProteoWizard msconvert}
 \label{sec:msconvert_engineering}
 % =============================================================================
 
-The open-source ProteoWizard project provides the industry-standard converter \texttt{msconvert}. When converting vendor raw files, the order of command-line filters is critical:
+The open-source ProteoWizard project provides the industry-standard converter \texttt{msconvert} \cite{chambers2012proteowizard}, complemented in cross-platform pipelines by ThermoRawFileParser \cite{hulstaert2020thermorawfileparser}. When converting vendor raw files, the order of command-line filters is critical:
 \begin{lstlisting}[language=bash]
 msconvert.exe "input_sample.raw" ^
     --filter "peakPicking vendor true 1-" ^
@@ -115,7 +115,7 @@ msconvert.exe "input_sample.raw" ^
 \label{sec:mzr_handles}
 % =============================================================================
 
-The Bioconductor package \texttt{mzR} provides a C++ interface to ProteoWizard libraries. It separates metadata header extraction from binary peak loading. Opening a file via \texttt{mzR::openMSfile()} creates a lightweight file pointer without reading spectral arrays into R:
+The Bioconductor package \texttt{mzR} provides a C++ interface to ProteoWizard libraries via Rcpp \cite{eddelbuettel2011rcpp, chambers2012proteowizard}. It separates metadata header extraction from binary peak loading. Opening a file via \texttt{mzR::openMSfile()} creates a lightweight file pointer without reading spectral arrays into R:
 \begin{equation}
 \text{RAM}_{\text{handle}} = O(1) \ll \text{File Size}
 \end{equation}
@@ -127,11 +127,11 @@ Calling \texttt{header(ms)} queries the binary seek table, returning an annotate
 \label{sec:spectra_architecture}
 % =============================================================================
 
-The \texttt{Spectra} package modernizes mass spectrometry data analysis in R. It separates user-facing methods from physical storage mechanisms via interchangeable backends:
+The \texttt{Spectra} package modernizes mass spectrometry data analysis in R \cite{gatto2021spectra, rainer2022msexperiment}, advancing the infrastructure established by \texttt{MSnbase} \cite{gatto2012msnbase}. It separates user-facing methods from physical storage mechanisms via interchangeable backends:
 \begin{itemize}
     \item \texttt{MsBackendMzR:} Stores scan metadata in memory while reading peak arrays on-the-fly from original mzML, mzXML, or CDF files.
     \item \texttt{MsBackendMemory:} Holds all metadata and peak arrays in memory as nested lists, optimizing speed for small datasets at the cost of high RAM consumption.
-    \item \texttt{MsBackendHdf5Peaks:} Stores peak arrays in structured HDF5 binary files on disk, supporting multi-gigabyte cohorts with fast chunked retrieval.
+    \item \texttt{MsBackendHdf5Peaks:} Stores peak arrays in structured HDF5 binary files on disk via \texttt{rhdf5} \cite{fischer2020rhdf5}, supporting multi-gigabyte cohorts with fast chunked retrieval.
     \item \texttt{MsBackendSql:} Maps spectral records into a relational database (PostgreSQL, SQLite), facilitating multi-user laboratory data management.
 \end{itemize}
 
@@ -412,8 +412,7 @@ In standard full-length LC-MS runs (which contain 30,000--60,000 scans per file 
 In an unindexed 2 GB file, scanning through $1.9$ GB of XML text requires disk reads and string tokenization taking approximately $8.5$ seconds. In an indexed file, seeking directly to the byte address executes in under $0.2$ milliseconds, an acceleration factor exceeding $40,000\times$.
 
 % =============================================================================
-\begin{thebibliography}{10}
-% =============================================================================
+\begin{thebibliography}{99}
 
 \bibitem{martens2011mzml}
 Martens, L., Chambers, M., Hermjakob, H., et~al.:
@@ -421,17 +420,11 @@ Martens, L., Chambers, M., Hermjakob, H., et~al.:
 \newblock \emph{Molecular \& Cellular Proteomics} \textbf{10}(1), R110.000133 (2011).
 \newblock \doi{10.1074/mcp.R110.000133}
 
-\bibitem{chambers2012proteowizard}
-Chambers, M.C., Maclean, B., Burke, R., et~al.:
-\newblock A cross-platform toolkit for mass spectrometry and proteomics.
-\newblock \emph{Nature Biotechnology} \textbf{30}(10), 918--920 (2012).
-\newblock \doi{10.1038/nbt.2377}
-
-\bibitem{gatto2021spectra}
-Gatto, L., Rainer, J., Gibb, S.:
-\newblock MSnbase, Spectra, and QFeatures: Modern mass spectrometry data structures in Bioconductor.
-\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
-\newblock \doi{10.1021/acs.jproteome.0c00864}
+\bibitem{pedrioli2004mzxml}
+Pedrioli, P.G.A., Eng, J.K., Hubley, R., et~al.:
+\newblock A common open representation of mass spectrometry data and its application in a modular software pipeline.
+\newblock \emph{Nature Biotechnology} \textbf{22}(11), 1459--1466 (2004).
+\newblock \doi{10.1038/nbt1031}
 
 \bibitem{deutsch2010psi}
 Deutsch, E.W.:
@@ -439,11 +432,95 @@ Deutsch, E.W.:
 \newblock \emph{Experimental Review of Proteomics} \textbf{7}(2), 179--181 (2010).
 \newblock \doi{10.1586/epr.09.108}
 
+\bibitem{chambers2012proteowizard}
+Chambers, M.C., Maclean, B., Burke, R., et~al.:
+\newblock A cross-platform toolkit for mass spectrometry and proteomics.
+\newblock \emph{Nature Biotechnology} \textbf{30}(10), 918--920 (2012).
+\newblock \doi{10.1038/nbt.2377}
+
+\bibitem{bhamber2021mzmlb}
+Bhamber, R.S., Jankevics, A., Deutsch, E.W., Jones, A.R., Dowsey, A.W.:
+\newblock mzMLb: A versatile, modern, and open binary mass spectrometry data format.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 172--183 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00192}
+
+\bibitem{schramm2012imzml}
+Schramm, T., Hester, A., Klinkert, I., et~al.:
+\newblock imzML---a common data format for the flexible exchange and processing of mass spectrometry imaging data.
+\newblock \emph{Journal of Proteomics} \textbf{75}(16), 5106--5110 (2012).
+\newblock \doi{10.1016/j.jprot.2012.07.026}
+
 \bibitem{hulstaert2020thermorawfileparser}
 Hulstaert, N., Shofstahl, J., Sachsenberg, T., et~al.:
 \newblock ThermoRawFileParser: modular, scalable, and cross-platform RAW file conversion.
 \newblock \emph{Journal of Proteome Research} \textbf{19}(1), 537--542 (2020).
 \newblock \doi{10.1021/acs.jproteome.9b00328}
+
+\bibitem{gatto2012msnbase}
+Gatto, L., Lilley, K.S.:
+\newblock {MSnbase}---an {R/Bioconductor} package for isobaric tagged and label-free mass spectrometry data processing.
+\newblock \emph{Bioinformatics} \textbf{28}(2), 288--289 (2012).
+\newblock \doi{10.1093/bioinformatics/btr645}
+
+\bibitem{gatto2021spectra}
+Gatto, L., Rainer, J., Gibb, S.:
+\newblock {MSnbase}, {Spectra}, and {QFeatures}: Modern mass spectrometry data structures in {Bioconductor}.
+\newblock \emph{Journal of Proteome Research} \textbf{20}(1), 1063--1069 (2021).
+\newblock \doi{10.1021/acs.jproteome.0c00864}
+
+\bibitem{rainer2022msexperiment}
+Rainer, J., Vicini, A., Salzer, L., et~al.:
+\newblock A modular and expandable ecosystem for metabolomics data annotation in {R}.
+\newblock \emph{Metabolites} \textbf{12}(2), 173 (2022).
+\newblock \doi{10.3390/metabo12020173}
+
+\bibitem{huber2015orchestrating}
+Huber, W., Carey, V.J., Gentleman, R., et~al.:
+\newblock Orchestrating high-throughput genomic analysis with {Bioconductor}.
+\newblock \emph{Nature Methods} \textbf{12}(2), 115--121 (2015).
+\newblock \doi{10.1038/nmeth.3252}
+
+\bibitem{gentleman2004bioconductor}
+Gentleman, R.C., Carey, V.J., Bates, D.M., et~al.:
+\newblock Bioconductor: open software development for computational biology and bioinformatics.
+\newblock \emph{Genome Biology} \textbf{5}(10), R80 (2004).
+\newblock \doi{10.1186/gb-2004-5-10-r80}
+
+\bibitem{eddelbuettel2011rcpp}
+Eddelbuettel, D., Fran\c{c}ois, R.:
+\newblock {Rcpp}: Seamless {R} and {C++} integration.
+\newblock \emph{Journal of Statistical Software} \textbf{40}(8), 1--18 (2011).
+\newblock \doi{10.18637/jss.v040.i08}
+
+\bibitem{fischer2020rhdf5}
+Fischer, B., Pau, G., Smith, M.:
+\newblock \emph{rhdf5: R Interface to HDF5}.
+\newblock R package version 2.40.0 (2020).
+\newblock \doi{10.18129/B9.bioc.rhdf5}
+
+\bibitem{tautenhahn2008centwave}
+Tautenhahn, R., B\"ottcher, C., Neumann, S.:
+\newblock Highly sensitive feature detection for high resolution {LC/MS}.
+\newblock \emph{BMC Bioinformatics} \textbf{9}, 504 (2008).
+\newblock \doi{10.1186/1471-2105-9-504}
+
+\bibitem{cox2008maxquant}
+Cox, J., Mann, M.:
+\newblock {MaxQuant} enables high peptide identification rates, individualized p.p.b.-range mass accuracies and proteome-wide protein quantification.
+\newblock \emph{Nature Biotechnology} \textbf{26}(12), 1367--1372 (2008).
+\newblock \doi{10.1038/nbt.1511}
+
+\bibitem{wilkinson2016fair}
+Wilkinson, M.D., Dumontier, M., Aalbersberg, I.J., et~al.:
+\newblock The {FAIR} Guiding Principles for scientific data management and stewardship.
+\newblock \emph{Scientific Data} \textbf{3}, 160018 (2016).
+\newblock \doi{10.1038/sdata.2016.18}
+
+\bibitem{deutsch2020pride}
+Deutsch, E.W., Bandeira, N., Sharma, V., et~al.:
+\newblock The {ProteomeXchange} consortium in 2020: enabling 'big data' approaches in proteomics.
+\newblock \emph{Nucleic Acids Research} \textbf{48}(D1), D1145--D1152 (2020).
+\newblock \doi{10.1093/nar/gkz984}
 
 \end{thebibliography}
 
